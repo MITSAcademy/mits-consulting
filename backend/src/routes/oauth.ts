@@ -19,6 +19,17 @@ export const oauthRouter = Router();
 const ALLOWED_DOMAIN = '@mitssolution.com';
 const STATE_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
+// Cache successful token exchanges by code so duplicate callback hits
+// (browser prefetch, link-preview scanners, etc.) reuse the result instead
+// of trying to exchange a now-consumed code with Google.
+type CodeCacheEntry = { token: string; redirectTo: string; ts: number };
+const codeCache = new Map<string, CodeCacheEntry>();
+const codeInFlight = new Map<string, Promise<CodeCacheEntry>>();
+function gcCodeCache() {
+  const cutoff = Date.now() - 60_000;
+  for (const [k, v] of codeCache) if (v.ts < cutoff) codeCache.delete(k);
+}
+
 // Scopes:
 //   openid email profile               — identity (mandatory for SSO)
 //   calendar.readonly                  — read user's events into our My Calendar grid
@@ -75,10 +86,27 @@ oauthRouter.get('/google/callback', async (req, res) => {
     return res.status(400).send('State invalid or expired — please try again.');
   }
 
-  // Exchange code → tokens
-  console.log('[oauth] callback hit', { codeLen: code?.length, ua: req.get('user-agent')?.slice(0, 40), ts: Date.now() });
-  let tokenResp: any;
-  try {
+  // Idempotency: replay cached or in-flight result if same code arrives twice
+  // (browser prefetch/prerender duplicates, link-preview scanners, etc.).
+  gcCodeCache();
+  const cached = codeCache.get(code);
+  if (cached) {
+    setAuthCookie(res, cached.token);
+    return res.redirect(cached.redirectTo);
+  }
+  const inFlight = codeInFlight.get(code);
+  if (inFlight) {
+    try {
+      const result = await inFlight;
+      setAuthCookie(res, result.token);
+      return res.redirect(result.redirectTo);
+    } catch (e: any) {
+      return res.status(502).send('OAuth token exchange failed: ' + e.message);
+    }
+  }
+
+  const origin = process.env.CLIENT_ORIGIN || '';
+  const exchangePromise = (async (): Promise<CodeCacheEntry> => {
     const resp = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -90,59 +118,67 @@ oauthRouter.get('/google/callback', async (req, res) => {
         grant_type: 'authorization_code',
       }).toString(),
     });
-    tokenResp = await resp.json();
-    console.log('[oauth] token response', { status: resp.status, body: tokenResp });
+    const tokenResp: any = await resp.json();
     if (!resp.ok) {
       const errCode = tokenResp.error || 'unknown';
       const errDesc = tokenResp.error_description || 'no description';
       throw new Error(`${errCode}: ${errDesc} (status ${resp.status})`);
     }
+
+    const idToken: string | undefined = tokenResp.id_token;
+    if (!idToken) throw new Error('No id_token returned from Google');
+    const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString());
+    const { email, sub: googleId, picture, hd } = payload;
+    const refreshToken: string | undefined = tokenResp.refresh_token;
+
+    if (!email || !email.toLowerCase().endsWith(ALLOWED_DOMAIN)) {
+      const redirectTo = `${origin}/login?error=` + encodeURIComponent(`Only ${ALLOWED_DOMAIN} accounts are allowed.`);
+      return { token: '', redirectTo, ts: Date.now() };
+    }
+    if (hd && hd !== 'mitssolution.com') {
+      const redirectTo = `${origin}/login?error=` + encodeURIComponent('Only mitssolution.com Google Workspace accounts are allowed.');
+      return { token: '', redirectTo, ts: Date.now() };
+    }
+
+    let user = await prisma.user.findFirst({
+      where: { OR: [{ googleId }, { gmailAddress: email.toLowerCase() }, { email: email.toLowerCase() }] },
+    });
+    if (!user) {
+      const redirectTo = `${origin}/login?error=` + encodeURIComponent(
+        `No MITS portal account for ${email}. Ask Vaibhav to create one, then try again.`,
+      );
+      return { token: '', redirectTo, ts: Date.now() };
+    }
+
+    const updates: any = {};
+    if (!user.googleId) updates.googleId = googleId;
+    if (!user.avatarUrl && picture) updates.avatarUrl = picture;
+    if (!user.gmailAddress) updates.gmailAddress = email.toLowerCase();
+    if (refreshToken) {
+      updates.googleRefreshToken = encryptSecret(refreshToken);
+      updates.googleCalendarConnectedAt = new Date();
+    }
+    if (Object.keys(updates).length > 0) {
+      user = await prisma.user.update({ where: { id: user.id }, data: updates });
+    }
+
+    const token = signToken({ id: user.id });
+    await audit(user.id, user.name, refreshToken ? 'LOGIN_GOOGLE_CAL' : 'LOGIN_GOOGLE_SSO', email);
+    const entry: CodeCacheEntry = { token, redirectTo: `${origin}/my-calendar`, ts: Date.now() };
+    codeCache.set(code, entry);
+    return entry;
+  })();
+  codeInFlight.set(code, exchangePromise);
+
+  try {
+    const result = await exchangePromise;
+    if (result.token) setAuthCookie(res, result.token);
+    res.redirect(result.redirectTo);
   } catch (e: any) {
-    return res.status(502).send('OAuth token exchange failed: ' + e.message);
+    res.status(502).send('OAuth token exchange failed: ' + e.message);
+  } finally {
+    codeInFlight.delete(code);
   }
-
-  const idToken: string | undefined = tokenResp.id_token;
-  if (!idToken) return res.status(502).send('No id_token returned from Google');
-  const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString());
-  const { email, sub: googleId, name, picture, hd } = payload;
-  const refreshToken: string | undefined = tokenResp.refresh_token;
-
-  if (!email || !email.toLowerCase().endsWith(ALLOWED_DOMAIN)) {
-    const origin = process.env.CLIENT_ORIGIN || '';
-    return res.redirect(`${origin}/login?error=` + encodeURIComponent(`Only ${ALLOWED_DOMAIN} accounts are allowed.`));
-  }
-  if (hd && hd !== 'mitssolution.com') {
-    const origin = process.env.CLIENT_ORIGIN || '';
-    return res.redirect(`${origin}/login?error=` + encodeURIComponent('Only mitssolution.com Google Workspace accounts are allowed.'));
-  }
-
-  let user = await prisma.user.findFirst({
-    where: { OR: [{ googleId }, { gmailAddress: email.toLowerCase() }, { email: email.toLowerCase() }] },
-  });
-  if (!user) {
-    const origin = process.env.CLIENT_ORIGIN || '';
-    return res.redirect(`${origin}/login?error=` + encodeURIComponent(
-      `No MITS portal account for ${email}. Ask Vaibhav to create one, then try again.`,
-    ));
-  }
-
-  const updates: any = {};
-  if (!user.googleId) updates.googleId = googleId;
-  if (!user.avatarUrl && picture) updates.avatarUrl = picture;
-  if (!user.gmailAddress) updates.gmailAddress = email.toLowerCase();
-  if (refreshToken) {
-    updates.googleRefreshToken = encryptSecret(refreshToken);
-    updates.googleCalendarConnectedAt = new Date();
-  }
-  if (Object.keys(updates).length > 0) {
-    user = await prisma.user.update({ where: { id: user.id }, data: updates });
-  }
-
-  const token = signToken({ id: user.id });
-  setAuthCookie(res, token);
-  await audit(user.id, user.name, refreshToken ? 'LOGIN_GOOGLE_CAL' : 'LOGIN_GOOGLE_SSO', email);
-  const origin = process.env.CLIENT_ORIGIN || '';
-  res.redirect(`${origin}/my-calendar`);
 });
 
 // Status — frontend uses to know whether to render the Google button
