@@ -68,6 +68,7 @@ oauthRouter.get('/google/callback', async (req, res) => {
   }
 
   // Exchange code → tokens
+  console.log('[oauth] callback hit', { codeLen: code?.length, ua: req.get('user-agent')?.slice(0, 40), ts: Date.now() });
   let tokenResp: any;
   try {
     const resp = await fetch('https://oauth2.googleapis.com/token', {
@@ -82,6 +83,7 @@ oauthRouter.get('/google/callback', async (req, res) => {
       }).toString(),
     });
     tokenResp = await resp.json();
+    console.log('[oauth] token response', { status: resp.status, body: tokenResp });
     if (!resp.ok) {
       const errCode = tokenResp.error || 'unknown';
       const errDesc = tokenResp.error_description || 'no description';
