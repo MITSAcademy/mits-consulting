@@ -54,6 +54,14 @@ oauthRouter.get('/google/start', (req, res) => {
 });
 
 oauthRouter.get('/google/callback', async (req, res) => {
+  // Reject browser prefetch/prerender — Chrome speculatively fetches this URL
+  // and burns our single-use OAuth code before the real navigation lands.
+  const secPurpose = (req.get('Sec-Purpose') || req.get('Purpose') || '').toLowerCase();
+  if (secPurpose.includes('prefetch') || secPurpose.includes('prerender')) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(204).end();
+  }
+  res.setHeader('Cache-Control', 'no-store');
   if (!googleConfigured()) return res.status(503).send('Google SSO not configured.');
   const { code, state, error } = req.query as Record<string, string>;
   if (error) return res.redirect(`${process.env.CLIENT_ORIGIN || ''}/login?error=` + encodeURIComponent(error));
