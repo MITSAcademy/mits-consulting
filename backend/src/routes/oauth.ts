@@ -41,7 +41,7 @@ oauthRouter.get('/google/start', (req, res) => {
   res.cookie(STATE_COOKIE, state, {
     httpOnly: true,
     secure: isProd,
-    sameSite: 'lax',
+    sameSite: isProd ? 'none' : 'lax',
     maxAge: 5 * 60 * 1000,
   });
   const params = new URLSearchParams({
