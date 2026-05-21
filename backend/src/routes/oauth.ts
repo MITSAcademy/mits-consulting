@@ -75,7 +75,7 @@ oauthRouter.get('/google/callback', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   if (!googleConfigured()) return res.status(503).send('Google SSO not configured.');
   const { code, state, error } = req.query as Record<string, string>;
-  if (error) return res.redirect(`${process.env.CLIENT_ORIGIN || ''}/login?error=` + encodeURIComponent(error));
+  if (error) return res.redirect(`${(process.env.CLIENT_ORIGIN || '').trim()}/login?error=` + encodeURIComponent(error));
   if (!code) return res.status(400).send('Missing authorization code');
   if (!state) {
     return res.status(400).send('Missing state parameter.');
@@ -105,7 +105,7 @@ oauthRouter.get('/google/callback', async (req, res) => {
     }
   }
 
-  const origin = process.env.CLIENT_ORIGIN || '';
+  const origin = (process.env.CLIENT_ORIGIN || '').trim();
   const exchangePromise = (async (): Promise<CodeCacheEntry> => {
     const resp = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
