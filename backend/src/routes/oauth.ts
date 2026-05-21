@@ -82,7 +82,11 @@ oauthRouter.get('/google/callback', async (req, res) => {
       }).toString(),
     });
     tokenResp = await resp.json();
-    if (!resp.ok) throw new Error(tokenResp.error_description || tokenResp.error || 'token exchange failed');
+    if (!resp.ok) {
+      const errCode = tokenResp.error || 'unknown';
+      const errDesc = tokenResp.error_description || 'no description';
+      throw new Error(`${errCode}: ${errDesc} (status ${resp.status})`);
+    }
   } catch (e: any) {
     return res.status(502).send('OAuth token exchange failed: ' + e.message);
   }
