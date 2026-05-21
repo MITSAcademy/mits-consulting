@@ -70,7 +70,6 @@ services:
   - type: web
     name: mits-frontend
     runtime: static
-    plan: free
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
