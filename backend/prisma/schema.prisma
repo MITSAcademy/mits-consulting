@@ -1,0 +1,628 @@
+// MITS Consulting Hub schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------- ROLES --------
+enum Role {
+  founder
+  demo_lead
+  demo_intake
+  recruiter
+  sales_closer
+  manager
+  lead
+  staff
+  accounts
+  payment_processor
+}
+
+enum Lifecycle {
+  Lead
+  IntakeSent
+  IntakeReceived
+  InternalSearch
+  WithRecruiters
+  VerificationPending
+  TrainerMatched
+  DemoScheduled
+  DemoDone
+  FeedbackPending
+  SaleClosing
+  SaleWon
+  Active
+  LeverageGranted
+  Hold
+  Dormant
+  Churned
+  Completed
+}
+
+enum EngagementType {
+  Support
+  Training
+  TaskBased
+}
+
+enum PaymentModel {
+  Weekly
+  BiWeekly
+  Monthly
+  None
+}
+
+enum Currency {
+  USD
+  CAD
+  INR
+  EUR
+  GBP
+  AUD
+  AED
+}
+
+enum SourcingStatus {
+  Open
+  Proposed
+  Verified
+  Closed
+}
+
+enum VerificationStatus {
+  Pending
+  Pass
+  Fail
+}
+
+enum LeverageStatus {
+  PendingVaibhav
+  Approved
+  Rejected
+  AutoApproved
+}
+
+enum SessionStatus {
+  Logged
+  ReadyForFinal
+  PaymentApproved
+  Paid
+  Rejected
+}
+
+enum AccountsStatus {
+  Pending
+  InvoiceSent
+  ReceiptSent
+  Booked
+  Done
+}
+
+enum TaskStatus {
+  Pending
+  Done
+  Cancelled
+}
+
+enum EditRequestStatus {
+  Pending
+  Approved
+  Rejected
+}
+
+enum FunderType {
+  Self
+  Partner
+}
+
+enum RateModel {
+  hourly
+  per_session
+}
+
+// -------- USERS --------
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         Role
+  reportsToId  String?
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  // Phone (E.164 or formatted; shown on outgoing email signature blocks)
+  phone             String?
+  // Per-user Google Workspace identity (must be @mitssolution.com)
+  gmailAddress      String?   @unique
+  smtpAppPassword   String?   // encrypted with SMTP_USER_ENCRYPTION_KEY env var
+  smtpConfiguredAt  DateTime?
+  // Google SSO linkage — populated on first OAuth login
+  googleId             String?   @unique
+  avatarUrl            String?
+  // Google Calendar OAuth — populated when user grants calendar scope
+  googleRefreshToken   String?   // AES-256-GCM encrypted (same key as smtpAppPassword)
+  googleCalendarConnectedAt DateTime?
+
+  reportsTo    User?     @relation("Reports", fields: [reportsToId], references: [id], onDelete: SetNull)
+  reports      User[]    @relation("Reports")
+
+  createdClients     Client[]         @relation("LeadOwner")
+  intakeClients      Client[]         @relation("IntakeOwner")
+  salesClients       Client[]         @relation("SalesOwner")
+  hostClients        Client[]         @relation("HostOwner")
+  recruitedTrainers  Trainer[]        @relation("Recruiter")
+  trainerLeads       TrainerLead[]
+  sourcingSent       SourcingRequest[] @relation("SourcingSentBy")
+  sourcingTo         SourcingRequest[] @relation("SourcingSentTo")
+  proposalsBy        Proposal[]
+  tasks              Task[]
+  paymentsReceived   Payment[]
+  auditLog           AuditLog[]
+  dailyReports       DailyReport[]
+  editRequests       EditRequest[]    @relation("EditRequestBy")
+  editReviewed       EditRequest[]    @relation("EditReviewedBy")
+  outboundMessages   OutboundMessage[]
+  demosConducted     Demo[]
+}
+
+// -------- BANK ACCOUNTS --------
+model BankAccount {
+  id        String    @id
+  label     String
+  bank      String
+  last4     String
+  active    Boolean   @default(true)
+  clients   Client[]
+  payments  Payment[]
+}
+
+// -------- PARTNERS --------
+model Partner {
+  id            String   @id @default(cuid())
+  name          String
+  contact       String?
+  email         String?
+  phone         String?
+  billingCycle  String?
+  paymentTerms  String?
+  notes         String?
+  active        Boolean  @default(true)
+  clients       Client[]
+  createdAt     DateTime @default(now())
+}
+
+// -------- TRAINERS --------
+model Trainer {
+  id                  String   @id @default(cuid())
+  name                String
+  email               String?
+  phoneCode           String?
+  phoneDigits         String?
+  whatsappGroupName   String?
+  whatsappGroupLink   String?
+  rateModel           RateModel @default(hourly)
+  defaultRateInr      Int      @default(0)
+  paymentMethod       String?
+  upiId               String?
+  bankAccount         String?
+  skills              String?
+  experienceYears     Int      @default(0)
+  active              Boolean  @default(true)
+  requiresVerification Boolean @default(false)
+  recruitedById       String?
+  recruitedBy         User?    @relation("Recruiter", fields: [recruitedById], references: [id], onDelete: SetNull)
+  createdAt           DateTime @default(now())
+
+  clients        Client[]
+  proposals      Proposal[]
+  sessionLogs    SessionLog[]
+  tasks          Task[]
+  outboundMessages OutboundMessage[]
+  demos            Demo[]
+}
+
+// -------- TRAINER LEADS (recruiter pipeline) --------
+model TrainerLead {
+  id              String  @id @default(cuid())
+  name            String
+  skills          String?
+  source          String?
+  expectedRateInr Int     @default(0)
+  stage           String  @default("New") // New, Contacted, Vetting, Approved, Rejected
+  notes           String?
+  recruiterId     String?
+  recruiter       User?   @relation(fields: [recruiterId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+}
+
+// -------- CLIENTS --------
+model Client {
+  id                       String         @id @default(cuid())
+  name                     String
+  email                    String?
+  phoneCode                String?
+  phoneDigits              String?
+  whatsappGroupName        String?
+  whatsappGroupLink        String?
+  country                  String?
+  engagementType           EngagementType @default(Support)
+  paymentModel             PaymentModel?
+  currency                 Currency       @default(USD)
+  cycleAmount              Int            @default(0)
+  lifecycle                Lifecycle      @default(Lead)
+  funderType               FunderType     @default(Self)
+  partnerId                String?
+  partner                  Partner?       @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  source                   String?
+  leadOwnerId              String?
+  leadOwner                User?          @relation("LeadOwner", fields: [leadOwnerId], references: [id], onDelete: SetNull)
+  intakeOwnerId            String?
+  intakeOwner              User?          @relation("IntakeOwner", fields: [intakeOwnerId], references: [id], onDelete: SetNull)
+  salesOwnerId             String?
+  salesOwner               User?          @relation("SalesOwner", fields: [salesOwnerId], references: [id], onDelete: SetNull)
+  hostOwnerId              String?
+  hostOwner                User?          @relation("HostOwner", fields: [hostOwnerId], references: [id], onDelete: SetNull)
+  primaryTrainerId         String?
+  primaryTrainer           Trainer?       @relation(fields: [primaryTrainerId], references: [id], onDelete: SetNull)
+  engagementTrainerRateInr Int            @default(0)
+  preferredTimeIst         String?
+  feedbackDay              String?
+  bankAccountId            String?
+  bankAccount              BankAccount?   @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  accountNameRaw           String?
+  freshPaymentReceived     Boolean        @default(false)
+  freshPaymentDate         String?
+  freshPaymentAmount       Int            @default(0)
+  cycleStart               String?
+  cycleEnd                 String?
+  nextRenewalDue           String?
+  sessionsPerCycle         Int            @default(0)
+  sessionsUsed             Int            @default(0)
+  churnRisk                String         @default("Green")
+  paymentPendingVaibhav    Boolean        @default(false)
+  pendingVaibhavSince      String?
+  requiresVerification     Boolean        @default(true)
+  intakeData               Json?
+  intakeSkillHint          String?
+  intakeReceivedAt         String?
+  demoDate                 String?
+  demoTimeIst              String?
+  demoActualDate           String?
+  demoActualTimeIst        String?
+  demoOutcome              String?    // Positive | Neutral | Negative
+  demoFeedback             String?
+  demoNextSteps            String?
+  // Dormant tracking — client went silent / stopped responding
+  dormantSince             String?
+  dormantReason            String?
+  dormantCheckBackOn       String?    // when to follow up
+  dormantResumeFromStage   String?    // stage they were at before going dormant
+  // Hold tracking — client said "need time to decide" post-demo. Roshni follows up after 3 days.
+  holdSince                String?
+  holdReason               String?
+  holdCheckBackOn          String?    // +3 days from holdSince by default
+  holdResumeFromStage      String?
+  // Post-demo feedback — recorded by Samita after Anjali marks DemoDone
+  postDemoFeedbackBy       String?    // user id of person who recorded it (typically Samita)
+  postDemoFeedbackAt       String?    // ISO date when feedback was recorded
+  postDemoFeedbackNote     String?    // Samita's notes on the post-demo conversation
+  // Skill matrix gating — Anjali must send the skill matrix to client BEFORE scheduling demo
+  skillMatrixSentAt        String?    // ISO date when matrix was sent
+  skillMatrixSentById      String?    // user id of sender
+  notes                    String?
+  createdAt                DateTime       @default(now())
+
+  sourcingRequests SourcingRequest[]
+  payments         Payment[]
+  tasks            Task[]
+  sessionLogs      SessionLog[]
+  leverageRequests LeverageRequest[]
+  accountsQueue    AccountsQueueItem[]
+  feedback         Feedback[]
+  outboundMessages OutboundMessage[]
+  demos            Demo[]
+}
+
+// -------- SOURCING REQUESTS --------
+model SourcingRequest {
+  id        String          @id @default(cuid())
+  clientId  String
+  client    Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status    SourcingStatus  @default(Open)
+  sentById  String?
+  sentBy    User?           @relation("SourcingSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  sentToId  String?
+  sentTo    User?           @relation("SourcingSentTo", fields: [sentToId], references: [id], onDelete: SetNull)
+  sentAt    String?
+  proposals Proposal[]
+  createdAt DateTime        @default(now())
+}
+
+enum ConfirmationKind {
+  Audio
+  Screenshot
+}
+
+model Proposal {
+  id                String             @id @default(cuid())
+  requestId         String
+  request           SourcingRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  trainerId         String?
+  trainer           Trainer?           @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  trainerName       String?
+  trainerSkills     String?
+  trainerPhone      String?
+  trainerEmail      String?
+  rateInr           Int                @default(0)
+  experienceYears   Int                @default(0)
+  notes             String?
+  proposedById      String?
+  proposedBy        User?              @relation(fields: [proposedById], references: [id], onDelete: SetNull)
+  proposedAt        String?
+  verification      VerificationStatus @default(Pending)
+  verificationNotes String?
+  // Compulsory proof of trainer confirmation: audio recording of call OR WhatsApp screenshot.
+  confirmationKind  ConfirmationKind?
+  confirmationUrl   String?
+  // Optional skill matrix file (legacy — PDF / image / spreadsheet upload, kept for backward compat)
+  skillMatrixUrl    String?
+  // Structured skill matrix per the MITS template (rendered into the side-by-side matrix).
+  // mustHaveSkills: [{ skill: string, proficiency: number /* 0-5 */ }]
+  // softSkills:     [{ item: string, value: string /* "Yes" | "No" | "Installed" | "Active" | … */ }]
+  mustHaveSkills    Json?
+  softSkills        Json?
+  // Compulsory recruiter notification — the proposal cannot Pass verification until this is set.
+  // Stamped automatically by the trainer-outreach email or WhatsApp endpoint.
+  trainerNotifiedAt   String?   // ISO date when Aman/Kanchan notified the trainer
+  trainerNotifiedById String?   // user id who triggered the notification
+}
+
+// -------- PAYMENTS --------
+model Payment {
+  id              String      @id @default(cuid())
+  clientId        String
+  client          Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  kind            String      // Fresh | Renewal | Other
+  amount          Int
+  currency        Currency
+  paymentDate     String
+  bankAccountId   String?
+  bankAccount     BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  paymentMode     String?
+  receivedById    String?
+  receivedBy      User?       @relation(fields: [receivedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime    @default(now())
+
+  accountsQueue   AccountsQueueItem[]
+}
+
+// -------- TASKS --------
+model Task {
+  id              String      @id @default(cuid())
+  clientId        String?
+  client          Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  ownerId         String?
+  owner           User?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  trainerId       String?
+  trainer         Trainer?    @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  title           String
+  dueDate         String?
+  status          TaskStatus  @default(Pending)
+  priority        String      @default("Normal")
+  estimatedHours  Float       @default(1)
+  type            String      @default("SESSION")
+  engagementRateInr Int       @default(0)
+  completedAt     String?
+  createdAt       DateTime    @default(now())
+
+  sessionLogs     SessionLog[]
+}
+
+// -------- SESSION LOGS --------
+model SessionLog {
+  id            String        @id @default(cuid())
+  trainerId     String
+  trainer       Trainer       @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  clientId      String?
+  client        Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  date          String
+  hours         Float
+  rateSnapshot  Int
+  rateModel     RateModel
+  amountInr     Int
+  status        SessionStatus @default(Logged)
+  taskId        String?
+  task          Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  notes         String?
+  createdAt     DateTime      @default(now())
+}
+
+// -------- LEVERAGE --------
+model LeverageRequest {
+  id                String         @id @default(cuid())
+  clientId          String
+  client            Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  daysRequested     Int
+  reasonStated      String
+  newCommittedDate  String
+  status            LeverageStatus @default(PendingVaibhav)
+  isAutoApproved    Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+}
+
+// -------- ACCOUNTS QUEUE --------
+model AccountsQueueItem {
+  id         String         @id @default(cuid())
+  clientId   String
+  client     Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  paymentId  String?
+  payment    Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  status     AccountsStatus @default(Pending)
+  createdAt  DateTime       @default(now())
+}
+
+// -------- FEEDBACK --------
+model Feedback {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  weekStart String
+  rating    Int
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+// -------- DEMO HISTORY --------
+// One row per demo attempt. Lets us show full demo history per client + per trainer,
+// even when a client gets re-matched to different trainers across attempts.
+enum DemoStatus {
+  Scheduled
+  Done
+  Cancelled
+  Rescheduled
+}
+
+model Demo {
+  id               String     @id @default(cuid())
+  clientId         String
+  client           Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  trainerId        String?
+  trainer          Trainer?   @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  scheduledDate    String?
+  scheduledTimeIst String?
+  actualDate       String?
+  actualTimeIst    String?
+  outcome          String?    // Positive | Neutral | Negative
+  feedback         String?
+  nextSteps        String?
+  status           DemoStatus @default(Scheduled)
+  conductedById    String?
+  conductedBy      User?      @relation(fields: [conductedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+}
+
+// -------- PAYOUT BATCHES --------
+model PayoutBatch {
+  id          String   @id @default(cuid())
+  weekStart   String
+  totalInr    Int      @default(0)
+  status      String   @default("Pending") // Pending, Approved, Paid
+  sessionIds  String[]
+  createdAt   DateTime @default(now())
+  approvedAt  DateTime?
+  paidAt      DateTime?
+}
+
+// -------- AUDIT LOG --------
+model AuditLog {
+  id        String   @id @default(cuid())
+  byId      String?
+  by        User?    @relation(fields: [byId], references: [id], onDelete: SetNull)
+  byName    String
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+}
+
+// -------- DAILY REPORTS --------
+model DailyReport {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String
+  content   String
+  createdAt DateTime @default(now())
+}
+
+// -------- RAW LEADS --------
+model RawLead {
+  id         String   @id @default(cuid())
+  raw        String
+  status     String   @default("Pending") // Pending, Processed, Discarded
+  cleanedName String?
+  cleanedPhone String?
+  cleanedSkill String?
+  createdAt  DateTime @default(now())
+}
+
+// -------- OUTBOUND MESSAGES (email + whatsapp send/log) --------
+enum MessageKind {
+  Email
+  WhatsApp
+}
+
+enum MessageStatus {
+  Queued    // waiting to be sent
+  Sent      // SMTP/API delivered
+  Logged    // wa.me link generated (free-path WhatsApp) — no API send
+  Failed    // SMTP/API error
+}
+
+model OutboundMessage {
+  id         String        @id @default(cuid())
+  kind       MessageKind
+  templateId String?
+  toEmail    String?
+  toPhone    String?       // E.164-ish digits for wa.me
+  toName     String?
+  subject    String?
+  body       String
+  clientId   String?
+  client     Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  trainerId  String?
+  trainer    Trainer?      @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  status     MessageStatus @default(Queued)
+  provider   String?       // 'smtp' | 'wa-link' | 'twilio' | 'meta' | etc.
+  providerMessageId String?
+  errorText  String?
+  sentById   String?
+  sentBy     User?         @relation(fields: [sentById], references: [id], onDelete: SetNull)
+  sentAt     DateTime      @default(now())
+}
+
+// -------- EMAIL TEMPLATES --------
+model EmailTemplate {
+  id        String   @id
+  kind      String   // Email | WhatsApp
+  stage     String?
+  name      String
+  subject   String?
+  body      String
+  variables String[]
+}
+
+// -------- LEAD SOURCES --------
+model LeadSource {
+  id    String @id @default(cuid())
+  name  String @unique
+}
+
+// -------- FEATURE FLAGS --------
+model FeatureFlag {
+  key   String  @id
+  value Boolean
+}
+
+// -------- EDIT REQUESTS --------
+model EditRequest {
+  id          String            @id @default(cuid())
+  entity      String            // "client" | "trainer"
+  entityId    String
+  category    String
+  field       String
+  oldValue    String?
+  newValue    String?
+  requestedById String?
+  requestedBy User?             @relation("EditRequestBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  reviewedById String?
+  reviewedBy  User?             @relation("EditReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  status      EditRequestStatus @default(Pending)
+  reason      String?
+  createdAt   DateTime          @default(now())
+  reviewedAt  DateTime?
+}

@@ -1,0 +1,93 @@
+# Render Blueprint — MITS Consulting Hub
+# Deploy with:  https://dashboard.render.com/blueprints  →  "New Blueprint Instance" → point at this repo
+#
+# Creates:
+#   • Postgres database  (mits-postgres, free 256 MB plan)
+#   • Backend web service (mits-backend, Node 20 + Express + Prisma)
+#   • Frontend static site (mits-frontend, Vite build)
+#
+# After the blueprint provisions, set the *sync: false* env vars in the Render dashboard
+# (CLIENT_ORIGIN, VITE_API_URL, SMTP creds, GOOGLE OAuth creds). See DEPLOY.md.
+
+databases:
+  - name: mits-postgres
+    plan: free                # 90-day free tier; upgrade to Basic-256MB ($7/mo) for prod
+    databaseName: mits
+    user: mits
+
+services:
+  # ─── Backend API ────────────────────────────────────────────────────
+  - type: web
+    name: mits-backend
+    runtime: node
+    plan: free                # cold-start friendly; bump to Starter ($7/mo) for no-sleep
+    region: oregon
+    rootDir: backend
+    # Build: install deps, generate Prisma client, apply migrations, then compile TS → dist/
+    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      # ── Database (auto-wired from the database block above) ─────────
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mits-postgres
+          property: connectionString
+      # ── Core auth + runtime ─────────────────────────────────────────
+      - key: JWT_SECRET
+        generateValue: true   # Render generates a strong secret on first deploy
+      - key: SMTP_USER_ENCRYPTION_KEY
+        generateValue: true   # Used to AES-encrypt per-user Gmail App Passwords + Google refresh tokens
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # ── Frontend origin (CORS) ──────────────────────────────────────
+      - key: CLIENT_ORIGIN
+        sync: false           # Set in dashboard: https://mits-frontend.onrender.com
+      # ── System SMTP fallback (used until each user adds their own gmail) ─
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_USER
+        sync: false           # vaibhav.aggarwal@mitssolution.com
+      - key: SMTP_PASS
+        sync: false           # 16-char Gmail App Password (no spaces)
+      - key: SMTP_FROM
+        sync: false           # "MITS Consulting Portal <vaibhav.aggarwal@mitssolution.com>"
+      # ── Google OAuth + Calendar sync ─────────────────────────────────
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false           # https://mits-backend.onrender.com/api/oauth/google/callback
+
+  # ─── Frontend static site ──────────────────────────────────────────
+  - type: web
+    name: mits-frontend
+    runtime: static
+    plan: free
+    region: oregon
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        sync: false           # https://mits-backend.onrender.com
+    # SPA: every unknown path serves index.html so React Router takes over client-side.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # Tighter security headers for the SPA shell.
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
