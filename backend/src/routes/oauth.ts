@@ -8,6 +8,7 @@
  */
 import { Router } from 'express';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { signToken, setAuthCookie } from '../lib/auth';
 import { audit } from '../lib/audit';
@@ -16,7 +17,7 @@ import { encryptSecret } from '../lib/mailer';
 export const oauthRouter = Router();
 
 const ALLOWED_DOMAIN = '@mitssolution.com';
-const STATE_COOKIE = 'mits_oauth_state';
+const STATE_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
 // Scopes:
 //   openid email profile               — identity (mandatory for SSO)
@@ -36,14 +37,8 @@ oauthRouter.get('/google/start', (req, res) => {
   if (!googleConfigured()) {
     return res.status(503).send('Google SSO not configured. Set GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI in backend/.env.');
   }
-  const state = crypto.randomBytes(16).toString('hex');
-  const isProd = process.env.NODE_ENV === 'production';
-  res.cookie(STATE_COOKIE, state, {
-    httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
-    maxAge: 5 * 60 * 1000,
-  });
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const state = jwt.sign({ n: nonce }, STATE_SECRET, { expiresIn: '5m' });
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: process.env.GOOGLE_CLIENT_ID!,
@@ -63,10 +58,14 @@ oauthRouter.get('/google/callback', async (req, res) => {
   const { code, state, error } = req.query as Record<string, string>;
   if (error) return res.redirect(`${process.env.CLIENT_ORIGIN || ''}/login?error=` + encodeURIComponent(error));
   if (!code) return res.status(400).send('Missing authorization code');
-  if (!state || state !== req.cookies?.[STATE_COOKIE]) {
-    return res.status(400).send('State mismatch — possible CSRF, please try again.');
+  if (!state) {
+    return res.status(400).send('Missing state parameter.');
   }
-  res.clearCookie(STATE_COOKIE);
+  try {
+    jwt.verify(state, STATE_SECRET);
+  } catch {
+    return res.status(400).send('State invalid or expired — please try again.');
+  }
 
   // Exchange code → tokens
   let tokenResp: any;
