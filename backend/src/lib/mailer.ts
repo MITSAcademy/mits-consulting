@@ -38,9 +38,12 @@ export function getUserTransporter(userId: string, gmail: string, plainAppPasswo
   if (cached && cached.gmail === gmail) return cached.tx;
   const tx = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
+    port: 465,
+    secure: true,
     auth: { user: gmail, pass: plainAppPassword.replace(/\s+/g, '') },
+    connectionTimeout: 30_000,
+    greetingTimeout: 30_000,
+    socketTimeout: 60_000,
   });
   userTransporters.set(userId, { gmail, tx });
   return tx;
