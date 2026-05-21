@@ -41,8 +41,8 @@ oauthRouter.get('/google/start', (req, res) => {
   const state = jwt.sign({ n: nonce }, STATE_SECRET, { expiresIn: '5m' });
   const params = new URLSearchParams({
     response_type: 'code',
-    client_id: process.env.GOOGLE_CLIENT_ID!,
-    redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
+    client_id: process.env.GOOGLE_CLIENT_ID!.trim(),
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI!.trim(),
     scope: SCOPES,
     state,
     prompt: 'consent',           // force consent so we always get a refresh_token
@@ -75,9 +75,9 @@ oauthRouter.get('/google/callback', async (req, res) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         code,
-        client_id: process.env.GOOGLE_CLIENT_ID!,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        redirect_uri: process.env.GOOGLE_REDIRECT_URI!,
+        client_id: process.env.GOOGLE_CLIENT_ID!.trim(),
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!.trim(),
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI!.trim(),
         grant_type: 'authorization_code',
       }).toString(),
     });
