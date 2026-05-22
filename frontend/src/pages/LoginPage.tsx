@@ -58,7 +58,7 @@ export function LoginPage() {
           {mode === 'login' ? 'Sign in to continue' : 'Create an account'}
         </p>
 
-        {ssoEnabled && (
+        {ssoEnabled ? (
           <>
             <a
               href={`${API_BASE}/api/oauth/google/start`}
@@ -72,68 +72,57 @@ export function LoginPage() {
               </svg>
               Sign in with Google
             </a>
-            <div className="text-[11px] muted mt-1.5 text-center">
+            <div className="text-[11px] muted mt-3 text-center">
               Restricted to <code>@mitssolution.com</code> accounts
             </div>
-            <div className="flex items-center gap-2 my-4">
-              <div className="flex-1 h-px bg-brand-border"/>
-              <span className="text-[10px] uppercase tracking-wider muted">or</span>
-              <div className="flex-1 h-px bg-brand-border"/>
+          </>
+        ) : (
+          <>
+            <form onSubmit={submit} className="space-y-3">
+              {mode === 'register' && (
+                <div className="form-row">
+                  <Label>Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} required />
+                </div>
+              )}
+              <div className="form-row">
+                <Label>Email</Label>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              </div>
+              <div className="form-row">
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+              <Button type="submit" variant="primary" className="w-full justify-center" disabled={loading}>
+                {loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
+              </Button>
+            </form>
+
+            <div className="mt-4 text-center text-xs text-brand-textMuted">
+              {mode === 'login' ? (
+                <>
+                  No account?{' '}
+                  <button onClick={() => setMode('register')} className="text-brand-blue underline">
+                    Register
+                  </button>
+                </>
+              ) : (
+                <>
+                  Have an account?{' '}
+                  <button onClick={() => setMode('login')} className="text-brand-blue underline">
+                    Sign in
+                  </button>
+                </>
+              )}
             </div>
           </>
         )}
-
-        <form onSubmit={submit} className="space-y-3">
-          {mode === 'register' && (
-            <div className="form-row">
-              <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} required />
-            </div>
-          )}
-          <div className="form-row">
-            <Label>Email</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
-          <div className="form-row">
-            <Label>Password</Label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-          </div>
-          <Button type="submit" variant="primary" className="w-full justify-center" disabled={loading}>
-            {loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
-          </Button>
-        </form>
-
-        <div className="mt-4 text-center text-xs text-brand-textMuted">
-          {mode === 'login' ? (
-            <>
-              No account?{' '}
-              <button onClick={() => setMode('register')} className="text-brand-blue underline">
-                Register
-              </button>
-            </>
-          ) : (
-            <>
-              Have an account?{' '}
-              <button onClick={() => setMode('login')} className="text-brand-blue underline">
-                Sign in
-              </button>
-            </>
-          )}
-        </div>
-
-        <div className="mt-6 p-3 rounded bg-bg-input text-xs text-brand-textMuted">
-          <strong className="text-brand-text">Seeded users</strong>
-          <br />
-          email: <code>vaibhav@mits.local</code> (or samita, anjali, taran, aman, kanchan, roshni, mitali, areena, malika…)
-          <br />
-          password: <code>password123</code>
-        </div>
       </div>
     </div>
   );
