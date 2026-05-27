@@ -116,10 +116,22 @@ export function ClientDetailPage() {
       <Mail size={14}/> Email
     </Button>
   );
+  // Pre-demo lifecycles use the WhatsApp GROUP (intake conversation happens there).
+  // Post-demo (and any stage without a group link) falls back to a 1:1 wa.me message.
+  const preDemoForWA = ['Lead', 'IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters', 'VerificationPending', 'TrainerMatched', 'DemoScheduled'].includes(client.lifecycle);
+  const useGroupForWA = !!client.whatsappGroupLink && preDemoForWA;
   actions.push(
-    <Button key="wa" size="sm" onClick={() => setModal('sendWA')} title="Send WhatsApp via wa.me"
-      style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}>
-      <MessageCircle size={14}/> WhatsApp
+    <Button
+      key="wa"
+      size="sm"
+      onClick={() => {
+        if (useGroupForWA) window.open(client.whatsappGroupLink!, '_blank');
+        else setModal('sendWA');
+      }}
+      title={useGroupForWA ? `Open WhatsApp group: ${client.whatsappGroupName || 'group'}` : 'Send WhatsApp via wa.me'}
+      style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}
+    >
+      <MessageCircle size={14}/> {useGroupForWA ? 'WhatsApp group' : 'WhatsApp'}
     </Button>
   );
   // Assign-owner button: only Vaibhav + Samita, only in pre-demo stages, only when missing/reassignable
