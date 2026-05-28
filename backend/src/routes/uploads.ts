@@ -15,6 +15,8 @@ const ALLOWED_MIME = new Set([
   // audio
   'audio/mpeg', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/webm',
   'audio/x-m4a', 'audio/m4a', 'audio/aac', 'audio/x-aac',
+  // WhatsApp / mobile voice notes commonly arrive as one of these
+  'audio/opus', 'application/ogg', 'audio/3gpp', 'audio/amr',
   // images
   'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif',
   // skill matrix docs
@@ -24,6 +26,14 @@ const ALLOWED_MIME = new Set([
   'text/csv',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
   'application/msword',                                                       // doc
+]);
+
+// File extensions to allow as a fallback when the browser sends a generic
+// mimetype (e.g. application/octet-stream for some WhatsApp .ogg/.opus exports).
+const ALLOWED_EXT = new Set([
+  '.mp3', '.mp4', '.m4a', '.ogg', '.opus', '.wav', '.webm', '.aac', '.amr', '.3gp',
+  '.png', '.jpg', '.jpeg', '.webp', '.gif',
+  '.pdf', '.xlsx', '.xls', '.csv', '.docx', '.doc',
 ]);
 
 const storage = multer.diskStorage({
@@ -37,12 +47,15 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 15 * 1024 * 1024 }, // 15 MB
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB — WhatsApp voice notes can be long
   fileFilter: (_req, file, cb) => {
-    if (!ALLOWED_MIME.has(file.mimetype)) {
-      return cb(new Error(`Unsupported file type: ${file.mimetype}`));
-    }
-    cb(null, true);
+    // Strip MIME parameters: "audio/ogg; codecs=opus" → "audio/ogg"
+    const baseMime = (file.mimetype || '').split(';')[0].trim().toLowerCase();
+    if (ALLOWED_MIME.has(baseMime)) return cb(null, true);
+    // Generic browser-sent MIME on mobile uploads → fall back to file extension
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (ALLOWED_EXT.has(ext)) return cb(null, true);
+    return cb(new Error(`Unsupported file type: ${file.mimetype || 'unknown'} (.${ext.replace('.', '') || '?'})`));
   },
 });
 
