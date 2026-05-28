@@ -369,6 +369,10 @@ model Proposal {
   trainerEmail      String?
   rateInr           Int                @default(0)
   experienceYears   Int                @default(0)
+  // Availability proposed for THIS trainer on THIS request (captured by recruiter,
+  // visible to demo intake). Same shape as Trainer.availabilitySlots.
+  // [{ "window": "Morning"|"Evening"|…, "fromIst": "07:00", "toIst": "10:00" }]
+  availabilitySlots Json?
   notes             String?
   proposedById      String?
   proposedBy        User?              @relation(fields: [proposedById], references: [id], onDelete: SetNull)

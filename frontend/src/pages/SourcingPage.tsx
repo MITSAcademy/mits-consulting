@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, uploadFile, fileUrl } from '@/lib/api';
+import type { AvailabilitySlot } from '@/lib/utils';
+import { AvailabilitySlotsEditor } from '@/components/AvailabilitySlotsEditor';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
@@ -21,6 +23,8 @@ type ProposalDraft = {
   whatsappGroupLink?: string;
   rateInr: number;
   experienceYears: number;
+  // Trainer's availability windows for THIS request (captured by recruiter).
+  availabilitySlots?: AvailabilitySlot[];
   notes?: string;
   // proof of confirmation (compulsory)
   confirmationKind?: 'Audio' | 'Screenshot';
@@ -49,6 +53,7 @@ function newDraft(seedSkills?: string[]): ProposalDraft {
   return {
     rateInr: 1000,
     experienceYears: 0,
+    availabilitySlots: [],
     mustHaveSkills,
     softSkills: DEFAULT_SOFT_SKILLS.map((s) => ({ ...s })),
   };
@@ -198,6 +203,7 @@ function ProposalsCard({ req, trainers, qc, showToast, mode }: any) {
           trainerEmail: p.trainerEmail,
           rateInr: p.rateInr,
           experienceYears: p.experienceYears,
+          availabilitySlots: (p.availabilitySlots || []).filter((s) => s.window || s.fromIst || s.toIst),
           notes: p.notes,
           confirmationKind: p.confirmationKind,
           confirmationUrl: p.confirmationUrl,
@@ -352,6 +358,15 @@ function ProposalsCard({ req, trainers, qc, showToast, mode }: any) {
                     )}
                     <div className="form-row"><Label>Rate ₹</Label><Input type="number" value={p.rateInr} onChange={(e) => updateAt(i, { rateInr: +e.target.value })} /></div>
                     <div className="form-row"><Label>Experience yrs</Label><Input type="number" value={p.experienceYears} onChange={(e) => updateAt(i, { experienceYears: +e.target.value })} /></div>
+
+                    {/* Trainer-confirmed availability (visible to Anjali on the verification card) */}
+                    <div className="form-row md:col-span-2">
+                      <Label>Trainer availability (IST) <span className="muted normal-case">(when can THIS trainer take the session?)</span></Label>
+                      <AvailabilitySlotsEditor
+                        slots={p.availabilitySlots || []}
+                        onChange={(slots) => updateAt(i, { availabilitySlots: slots })}
+                      />
+                    </div>
 
                     {/* Quick-add to pool */}
                     {!p.trainerId && p.trainerName?.trim() && (

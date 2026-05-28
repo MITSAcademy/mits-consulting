@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, fileUrl } from '@/lib/api';
+import { readAvailabilitySlots, formatAvailabilitySlots } from '@/lib/utils';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/store/ui';
@@ -231,6 +232,16 @@ export function VerificationsPage() {
                         <div><span className="muted">Rate:</span> <span className="mono">₹{p.rateInr}</span></div>
                         <div><span className="muted">Phone:</span> <span className="mono">{tPhone || '—'}</span></div>
                         <div><span className="muted">Email:</span> {tEmail || '—'}</div>
+                        {(() => {
+                          const slots = readAvailabilitySlots(p);
+                          if (!slots.length) return null;
+                          return (
+                            <div>
+                              <span className="muted">Availability:</span>{' '}
+                              <span>🕒 {formatAvailabilitySlots(slots)} IST</span>
+                            </div>
+                          );
+                        })()}
                         <div className="mt-1">
                           <span className="muted">Match:</span>{' '}
                           <strong style={{ color: score >= 60 ? '#4ADE80' : score >= 30 ? '#F59E0B' : '#EF4444' }}>{score}%</strong>

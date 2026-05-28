@@ -100,11 +100,24 @@ export function readAvailabilitySlots(t: any): AvailabilitySlot[] {
   return [];
 }
 
-/** Render slots as a short, human-readable line. */
+/** Convert a "HH:MM" 24h string to a 12h "h:MM AM/PM" string. */
+export function to12h(hhmm?: string): string {
+  if (!hhmm) return '?';
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm);
+  if (!m) return hhmm;
+  let h = Number(m[1]);
+  const mm = m[2];
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${mm} ${ampm}`;
+}
+
+/** Render slots as a short, human-readable line in 12h IST. */
 export function formatAvailabilitySlots(slots: AvailabilitySlot[]): string {
   return slots
     .map((s) => {
-      const range = (s.fromIst || s.toIst) ? `${s.fromIst || '?'}–${s.toIst || '?'}` : '';
+      const range = (s.fromIst || s.toIst) ? `${to12h(s.fromIst)}–${to12h(s.toIst)}` : '';
       return [s.window, range].filter(Boolean).join(' ');
     })
     .filter(Boolean)

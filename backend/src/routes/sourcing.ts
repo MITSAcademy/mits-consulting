@@ -226,6 +226,7 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
           trainerEmail: p.trainerEmail || null,
           rateInr: p.rateInr || 0,
           experienceYears: p.experienceYears || 0,
+          availabilitySlots: Array.isArray(p.availabilitySlots) ? p.availabilitySlots : null,
           notes: p.notes || null,
           proposedById: req.user!.id,
           proposedAt: new Date().toISOString().slice(0, 10),
@@ -259,7 +260,7 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
 
 sourcingRouter.patch('/proposal/:proposalId', async (req: AuthedRequest, res) => {
   const data: any = {};
-  for (const f of ['verification', 'verificationNotes', 'notes', 'rateInr']) {
+  for (const f of ['verification', 'verificationNotes', 'notes', 'rateInr', 'availabilitySlots']) {
     if (f in req.body) data[f] = req.body[f];
   }
   const p = await prisma.proposal.update({ where: { id: req.params.proposalId }, data });
