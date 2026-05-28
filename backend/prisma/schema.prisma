@@ -212,8 +212,12 @@ model Trainer {
   skills              String?
   experienceYears     Int      @default(0)
   // Availability — recruiter captures when the trainer can take sessions (IST).
-  // availabilityWindow is a coarse bucket ("Morning" / "Evening" / "Both"); the
-  // From/To pair is the precise window if the trainer is more specific.
+  // availabilitySlots is the canonical multi-slot store, e.g.
+  //   [{ "window": "Morning", "fromIst": "07:00", "toIst": "10:00" },
+  //    { "window": "Evening", "fromIst": "19:00", "toIst": "22:00" }]
+  // The flat *Window / *FromIst / *ToIst fields are kept for legacy/data compat
+  // but the UI now reads/writes via availabilitySlots.
+  availabilitySlots   Json?
   availabilityWindow  String?
   availableFromIst    String?  // "HH:MM" 24h
   availableToIst      String?  // "HH:MM" 24h

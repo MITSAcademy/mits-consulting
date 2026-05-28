@@ -416,7 +416,8 @@ function ProposalsCard({ req, trainers, qc, showToast, mode }: any) {
                             <FileAudio size={12}/> Audio recording
                             <input
                               type="file"
-                              accept="audio/*"
+                              // Explicit extensions + audio/* so WhatsApp/mobile voice notes (.ogg, .opus, .m4a, .amr, .3gp) aren't filtered out by the OS file picker.
+                              accept="audio/*,.ogg,.opus,.m4a,.mp3,.aac,.amr,.3gp,.wav,.webm,.mpga"
                               hidden
                               disabled={uploadingIdx === i}
                               onChange={(e) => {

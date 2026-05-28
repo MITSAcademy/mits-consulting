@@ -5,7 +5,8 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
-import { formatPhone } from '@/lib/utils';
+import { formatPhone, readAvailabilitySlots, formatAvailabilitySlots } from '@/lib/utils';
+import { AvailabilitySlotsEditor } from '@/components/AvailabilitySlotsEditor';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
@@ -72,19 +73,10 @@ export function TrainerDetailPage() {
                 <div className="form-row"><Label>Default rate ₹</Label><Input type="number" value={form.defaultRateInr || 0} onChange={(e) => setForm({ ...form, defaultRateInr: +e.target.value })} /></div>
                 <div className="form-row">
                   <Label>Availability (IST)</Label>
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <select className="rounded border px-2 py-1 text-sm bg-bg-input border-brand-border" value={form.availabilityWindow || ''} onChange={(e) => setForm({ ...form, availabilityWindow: e.target.value })}>
-                      <option value="">— pick —</option>
-                      <option value="Morning">Morning</option>
-                      <option value="Evening">Evening</option>
-                      <option value="Both">Both</option>
-                      <option value="Flexible">Flexible</option>
-                    </select>
-                    <span className="text-xs muted">from</span>
-                    <Input type="time" className="!w-28" value={form.availableFromIst || ''} onChange={(e) => setForm({ ...form, availableFromIst: e.target.value })} />
-                    <span className="text-xs muted">to</span>
-                    <Input type="time" className="!w-28" value={form.availableToIst || ''} onChange={(e) => setForm({ ...form, availableToIst: e.target.value })} />
-                  </div>
+                  <AvailabilitySlotsEditor
+                    slots={readAvailabilitySlots(form)}
+                    onChange={(slots) => setForm({ ...form, availabilitySlots: slots })}
+                  />
                 </div>
               </div>
             ) : (
@@ -97,14 +89,11 @@ export function TrainerDetailPage() {
                 <div><span className="muted">Recruiter:</span> {t.recruitedBy?.name || '—'}</div>
                 <div>
                   <span className="muted">Availability:</span>{' '}
-                  {t.availabilityWindow || t.availableFromIst || t.availableToIst ? (
-                    <>
-                      {t.availabilityWindow || '—'}
-                      {(t.availableFromIst || t.availableToIst) && (
-                        <span className="mono ml-1">{t.availableFromIst || '?'}–{t.availableToIst || '?'} IST</span>
-                      )}
-                    </>
-                  ) : <span className="muted">not set</span>}
+                  {(() => {
+                    const slots = readAvailabilitySlots(t);
+                    if (!slots.length) return <span className="muted">not set</span>;
+                    return <span>{formatAvailabilitySlots(slots)} IST</span>;
+                  })()}
                 </div>
               </div>
             )}

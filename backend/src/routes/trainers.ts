@@ -213,6 +213,7 @@ const fields = [
   'rateModel', 'defaultRateInr', 'paymentMethod', 'upiId', 'bankAccount',
   'skills', 'experienceYears', 'active', 'requiresVerification', 'recruitedById',
   'availabilityWindow', 'availableFromIst', 'availableToIst',
+  'availabilitySlots',
 ];
 
 trainersRouter.post('/', async (req: AuthedRequest, res) => {

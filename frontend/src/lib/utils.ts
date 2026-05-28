@@ -87,6 +87,30 @@ export function waLink(code?: string | null, digits?: string | null, message?: s
   return `https://wa.me/${clean}${message ? '?text=' + encodeURIComponent(message) : ''}`;
 }
 
+export type AvailabilitySlot = { window?: string; fromIst?: string; toIst?: string };
+
+/** Normalize whatever's stored (array, single legacy fields, null) into AvailabilitySlot[]. */
+export function readAvailabilitySlots(t: any): AvailabilitySlot[] {
+  if (Array.isArray(t?.availabilitySlots) && t.availabilitySlots.length) {
+    return t.availabilitySlots.filter((s: any) => s && (s.window || s.fromIst || s.toIst));
+  }
+  if (t?.availabilityWindow || t?.availableFromIst || t?.availableToIst) {
+    return [{ window: t.availabilityWindow || '', fromIst: t.availableFromIst || '', toIst: t.availableToIst || '' }];
+  }
+  return [];
+}
+
+/** Render slots as a short, human-readable line. */
+export function formatAvailabilitySlots(slots: AvailabilitySlot[]): string {
+  return slots
+    .map((s) => {
+      const range = (s.fromIst || s.toIst) ? `${s.fromIst || '?'}–${s.toIst || '?'}` : '';
+      return [s.window, range].filter(Boolean).join(' ');
+    })
+    .filter(Boolean)
+    .join(' · ');
+}
+
 // Role-based landing page. Mirrors the original `homePageFor()` in source.html.
 // Each role lands on the screen most relevant to their job.
 export function homePathFor(role?: string): string {
