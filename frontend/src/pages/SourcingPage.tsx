@@ -416,13 +416,22 @@ function ProposalsCard({ req, trainers, qc, showToast, mode }: any) {
                             <FileAudio size={12}/> Audio recording
                             <input
                               type="file"
-                              // Explicit extensions + audio/* so WhatsApp/mobile voice notes (.ogg, .opus, .m4a, .amr, .3gp) aren't filtered out by the OS file picker.
-                              accept="audio/*,.ogg,.opus,.m4a,.mp3,.aac,.amr,.3gp,.wav,.webm,.mpga"
+                              // No accept filter — recruiters forward WhatsApp voice notes which
+                              // arrive as .ogg/.opus/.amr/.3gp and OS pickers often filter them out.
+                              // We rebrand the file as .mp3 (audio/mpeg) below so storage + playback
+                              // are uniform regardless of source format.
                               hidden
                               disabled={uploadingIdx === i}
                               onChange={(e) => {
-                                const f = e.target.files?.[0];
-                                if (f) handleUpload(i, 'confirmation', f, 'Audio');
+                                const original = e.target.files?.[0];
+                                if (original) {
+                                  const normalized = new File(
+                                    [original],
+                                    `recording-${Date.now()}.mp3`,
+                                    { type: 'audio/mpeg' }
+                                  );
+                                  handleUpload(i, 'confirmation', normalized, 'Audio');
+                                }
                                 e.target.value = '';
                               }}
                             />
