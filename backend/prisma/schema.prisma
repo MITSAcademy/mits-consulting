@@ -211,6 +211,12 @@ model Trainer {
   bankAccount         String?
   skills              String?
   experienceYears     Int      @default(0)
+  // Availability — recruiter captures when the trainer can take sessions (IST).
+  // availabilityWindow is a coarse bucket ("Morning" / "Evening" / "Both"); the
+  // From/To pair is the precise window if the trainer is more specific.
+  availabilityWindow  String?
+  availableFromIst    String?  // "HH:MM" 24h
+  availableToIst      String?  // "HH:MM" 24h
   active              Boolean  @default(true)
   requiresVerification Boolean @default(false)
   recruitedById       String?

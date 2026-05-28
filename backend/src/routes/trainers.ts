@@ -212,6 +212,7 @@ const fields = [
   'name', 'email', 'phoneCode', 'phoneDigits', 'whatsappGroupName', 'whatsappGroupLink',
   'rateModel', 'defaultRateInr', 'paymentMethod', 'upiId', 'bankAccount',
   'skills', 'experienceYears', 'active', 'requiresVerification', 'recruitedById',
+  'availabilityWindow', 'availableFromIst', 'availableToIst',
 ];
 
 trainersRouter.post('/', async (req: AuthedRequest, res) => {

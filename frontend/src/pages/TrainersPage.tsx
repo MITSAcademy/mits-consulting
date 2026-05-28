@@ -104,6 +104,7 @@ export function TrainersPage() {
     skills: '', defaultRateInr: 1000, rateModel: 'hourly',
     experienceYears: 0, paymentMethod: 'UPI', upiId: '',
     whatsappGroupLink: '',
+    availabilityWindow: '', availableFromIst: '', availableToIst: '',
   });
   const create = useMutation({
     mutationFn: () => api.post('/trainers', { ...form, defaultRateInr: +form.defaultRateInr, experienceYears: +form.experienceYears }),
@@ -191,6 +192,22 @@ export function TrainersPage() {
                   <div className="form-row md:col-span-2">
                     <Label>WhatsApp group link <span className="muted normal-case">(optional · preferred channel)</span></Label>
                     <Input value={form.whatsappGroupLink} onChange={(e) => setForm({ ...form, whatsappGroupLink: e.target.value })} placeholder="https://chat.whatsapp.com/…" />
+                  </div>
+                  <div className="form-row md:col-span-2">
+                    <Label>Availability (IST) <span className="muted normal-case">(when can this trainer take sessions?)</span></Label>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <Select className="!w-32" value={form.availabilityWindow} onChange={(e) => setForm({ ...form, availabilityWindow: e.target.value })}>
+                        <option value="">— pick —</option>
+                        <option value="Morning">Morning</option>
+                        <option value="Evening">Evening</option>
+                        <option value="Both">Both</option>
+                        <option value="Flexible">Flexible</option>
+                      </Select>
+                      <span className="text-xs muted">from</span>
+                      <Input type="time" className="!w-28" value={form.availableFromIst} onChange={(e) => setForm({ ...form, availableFromIst: e.target.value })} />
+                      <span className="text-xs muted">to</span>
+                      <Input type="time" className="!w-28" value={form.availableToIst} onChange={(e) => setForm({ ...form, availableToIst: e.target.value })} />
+                    </div>
                   </div>
                 </div>
                 <DialogFooter>
@@ -341,7 +358,17 @@ export function TrainersPage() {
                         </div>
                       ) : <span className="muted">—</span>}
                     </td>
-                    <td className="text-xs max-w-[260px]" title={t.skills}>{t.skills}</td>
+                    <td className="text-xs max-w-[260px]">
+                      <div title={t.skills}>{t.skills}</div>
+                      {(t.availabilityWindow || t.availableFromIst || t.availableToIst) && (
+                        <div className="muted text-[10px] mt-0.5">
+                          🕒 {t.availabilityWindow || '—'}
+                          {(t.availableFromIst || t.availableToIst) && (
+                            <> · {t.availableFromIst || '?'}–{t.availableToIst || '?'} IST</>
+                          )}
+                        </div>
+                      )}
+                    </td>
                     <td className="mono">₹{t.defaultRateInr} <span className="muted text-xs">{t.rateModel === 'hourly' ? '/hr' : '/sess'}</span></td>
                     <td className="mono">{t.experienceYears}y</td>
                     <td>{t.recruitedBy?.name || '—'}</td>
