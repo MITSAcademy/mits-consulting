@@ -325,39 +325,50 @@ sourcingRouter.post('/proposal/:proposalId/pass', async (req: AuthedRequest, res
       data: { verification: 'Pass', verificationNotes: null },
     });
 
-    // 2. Auto-fail any other still-Pending proposals on this request
-    const others = proposal.request.proposals.filter((p) => p.id !== proposal.id && p.verification === 'Pending');
-    if (others.length > 0) {
-      await tx.proposal.updateMany({
-        where: { id: { in: others.map((p) => p.id) } },
-        data: { verification: 'Fail', verificationNotes: 'Another proposal was chosen' },
-      });
-    }
+    // 2. (Removed) — we no longer auto-fail sibling Pending proposals.
+    // Anjali/Taran routinely Pass multiple trainers per request so the client can
+    // see two or three options on the skillset matrix and we can run more than
+    // one demo. If a recruiter needs a specific proposal failed, they Fail it
+    // explicitly.
 
-    // 4. Update client: primaryTrainer + rate + lifecycle
+    // 3. Update client: primaryTrainer (the most recent Pass becomes the
+    // default for downstream actions like Schedule demo). The skill matrix
+    // includes every Pass'd trainer regardless of which one is primary.
+    // Only set lifecycle → TrainerMatched on the FIRST pass (don't regress).
+    const client = await tx.client.findUnique({
+      where: { id: proposal.request.clientId },
+      select: { lifecycle: true },
+    });
     await tx.client.update({
       where: { id: proposal.request.clientId },
       data: {
         primaryTrainerId: trainerId,
         engagementTrainerRateInr: proposal.rateInr || 0,
-        lifecycle: 'TrainerMatched',
+        // Only advance to TrainerMatched if the client isn't already past that stage.
+        ...(client?.lifecycle && ['Lead', 'IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters', 'VerificationPending'].includes(client.lifecycle)
+          ? { lifecycle: 'TrainerMatched' as const }
+          : {}),
       },
     });
 
-    // 5. Close the request
+    // 4. Close the request once at least one proposal has passed. (Subsequent
+    // Pass calls are still allowed since /pass operates on the proposal id, not
+    // the request status — Closed here just means "we found at least one match".)
     await tx.sourcingRequest.update({
       where: { id: proposal.requestId },
       data: { status: 'Closed' },
     });
 
-    return { trainerId, otherFailedCount: others.length };
+    // Count concurrent passes for the audit line
+    const totalPassed = await tx.proposal.count({ where: { requestId: proposal.requestId, verification: 'Pass' } });
+    return { trainerId, totalPassed };
   });
 
   await audit(
     req.user!.id,
     req.user!.name,
     'PROPOSAL_PASS',
-    `${proposal.trainerName || proposal.trainerId} for ${proposal.request.client.name}${result.otherFailedCount > 0 ? ` · auto-failed ${result.otherFailedCount}` : ''}`,
+    `${proposal.trainerName || proposal.trainerId} for ${proposal.request.client.name}${result.totalPassed > 1 ? ` · ${result.totalPassed} total passed on this request` : ''}`,
   );
   res.json({ ok: true, ...result });
 });
