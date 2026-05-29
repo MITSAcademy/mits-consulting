@@ -1020,14 +1020,19 @@ const DEFAULT_RECRUITER_FOR: Record<string, string> = {
   'u-taran':  'u-kanchan',
 };
 
+// Default weighting — heavy on skill match, cost as the secondary lever, rest small.
+// Only founder/demo_lead can tune these; the demo intake team gets the result as-is.
+const DEFAULT_MATCH_WEIGHTS = { skill: 55, cost: 18, demoSuccess: 10, pastClients: 8, sessionCount: 5, teamSessions: 4 };
+const canTuneMatchWeights = (role: string) => ['founder', 'demo_lead'].includes(role);
+
 function InternalSearchModal({ client, onClose }: any) {
   const qc = useQueryClient(); const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user)!;
   const [rateById, setRateById] = useState<Record<string, number>>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [weights, setWeights] = useState({
-    skill: 40, cost: 15, sessionCount: 12, teamSessions: 10, demoSuccess: 13, pastClients: 10,
-  });
+  const [weights, setWeights] = useState({ ...DEFAULT_MATCH_WEIGHTS });
+  const [trainerSearch, setTrainerSearch] = useState('');
+  const adminTune = canTuneMatchWeights(user.role);
   // Pre-fill recruiter based on the current user (Anjali→Aman, Taran→Kanchan),
   // falling back to the client's intake-owner's partner.
   const defaultRecruiter =
@@ -1080,33 +1085,59 @@ function InternalSearchModal({ client, onClose }: any) {
         description={`Required: ${skillRaw || '(none captured)'}${showBudget ? ` · Budget: ${client.currency} ${client.cycleAmount || '—'}` : ''}`}
         className="max-w-4xl"
       >
-        {/* Weight tuning */}
-        <div className="callout blue mb-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="text-xs">
-              <strong>Weighted score:</strong> skill {weights.skill} · cost {weights.cost} · sessions {weights.sessionCount} · Team-5 sessions {weights.teamSessions} · demo success {weights.demoSuccess} · past clients {weights.pastClients}
-            </div>
-            <Button size="sm" onClick={() => setShowAdvanced(!showAdvanced)}>
-              {showAdvanced ? 'Hide weights' : 'Tune weights'}
-            </Button>
+        {/* Search any trainer (always visible — direct pool allocation) */}
+        <div className="mb-3">
+          <Input
+            placeholder="Search any trainer by name, skill, or phone…"
+            value={trainerSearch}
+            onChange={(e) => setTrainerSearch(e.target.value)}
+          />
+          <div className="text-[10px] muted mt-1">
+            {trainerSearch
+              ? 'Showing all trainers in the pool that match your search (sorted by score).'
+              : 'Top matches ranked by current weighting. Type to search the full pool.'}
           </div>
-          {showAdvanced && (
-            <div className="grid md:grid-cols-3 gap-2 mt-3">
-              {Object.entries(weights).map(([k, v]) => (
-                <div key={k} className="bg-bg-input rounded p-2">
-                  <Label>{k}</Label>
-                  <Input type="number" min={0} max={100} value={v} onChange={(e) => setWeights({ ...weights, [k]: Math.max(0, Math.min(100, +e.target.value)) })} />
-                </div>
-              ))}
-              <Button size="sm" onClick={() => setWeights({ skill: 40, cost: 15, sessionCount: 12, teamSessions: 10, demoSuccess: 13, pastClients: 10 })}>Reset defaults</Button>
-            </div>
-          )}
         </div>
+
+        {/* Weight tuning — admins only (founder + demo_lead). Anjali/Taran see the result, not the dials. */}
+        {adminTune && (
+          <div className="callout blue mb-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="text-xs">
+                <strong>Weighted score:</strong> skill {weights.skill} · cost {weights.cost} · sessions {weights.sessionCount} · Team-5 sessions {weights.teamSessions} · demo success {weights.demoSuccess} · past clients {weights.pastClients}
+              </div>
+              <Button size="sm" onClick={() => setShowAdvanced(!showAdvanced)}>
+                {showAdvanced ? 'Hide weights' : 'Tune weights'}
+              </Button>
+            </div>
+            {showAdvanced && (
+              <div className="grid md:grid-cols-3 gap-2 mt-3">
+                {Object.entries(weights).map(([k, v]) => (
+                  <div key={k} className="bg-bg-input rounded p-2">
+                    <Label>{k}</Label>
+                    <Input type="number" min={0} max={100} value={v} onChange={(e) => setWeights({ ...weights, [k]: Math.max(0, Math.min(100, +e.target.value)) })} />
+                  </div>
+                ))}
+                <Button size="sm" onClick={() => setWeights({ ...DEFAULT_MATCH_WEIGHTS })}>Reset defaults</Button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="max-h-[460px] overflow-y-auto space-y-2">
           {isLoading && <div className="muted text-center py-4">Scoring…</div>}
           {!isLoading && results.length === 0 && <div className="muted text-center py-6">No active trainers in pool.</div>}
-          {results.slice(0, 12).map(({ trainer: t, total, breakdown }: any) => {
+          {(() => {
+            const q = trainerSearch.trim().toLowerCase();
+            const filtered = q
+              ? results.filter(({ trainer: t }: any) => {
+                  const hay = `${t.name || ''} ${t.skills || ''} ${t.phoneDigits || ''} ${t.email || ''}`.toLowerCase();
+                  return hay.includes(q);
+                })
+              : results.slice(0, 12);
+            if (q && filtered.length === 0) return <div className="muted text-center py-6">No trainers match "{trainerSearch}".</div>;
+            return filtered;
+          })().map(({ trainer: t, total, breakdown }: any) => {
             const rate = rateById[t.id] ?? t.defaultRateInr;
             return (
               <div key={t.id} className={`border rounded-md p-3 ${total >= 60 ? 'border-brand-green bg-brand-green/5' : 'border-brand-border'}`}>
