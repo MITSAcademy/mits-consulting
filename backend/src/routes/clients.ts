@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
+import { notify } from '../lib/notify';
 import { sendEmail, decryptSecret } from '../lib/mailer';
 import { buildIcsInvite } from '../lib/ical';
 import { buildWelcomeEmailHtml, WELCOME_EMAIL_SUBJECT } from '../lib/welcomeEmail';
@@ -360,6 +361,15 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
           req.user!.id, req.user!.name, 'SOURCING_AUTOCREATE',
           `${client.name} → ${sentToId} (re-opened on stage move to WithRecruiters)`,
         );
+        if (sentToId) {
+          await notify({
+            userId: sentToId,
+            kind: 'SourcingAssigned',
+            title: `New sourcing request — ${client.name}`,
+            body: `${req.user!.name} pushed this client to you. Open Sourcing to propose trainers.`,
+            link: `/sourcing`,
+          });
+        }
       }
     }
   } catch (e) {

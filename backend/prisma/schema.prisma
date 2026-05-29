@@ -167,6 +167,26 @@ model User {
   editReviewed       EditRequest[]    @relation("EditReviewedBy")
   outboundMessages   OutboundMessage[]
   demosConducted     Demo[]
+  notifications      Notification[]
+}
+
+// -------- NOTIFICATIONS --------
+// Lightweight in-app alerts. Created when a client transitions to a stage owned
+// by a different role/user (e.g. WithRecruiters → notify the routed recruiter).
+// User opens the bell icon, sees recent items, click marks as read.
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind       String    // 'StageChange' | 'ProposalReceived' | 'DemoScheduled' | …
+  title      String
+  body       String?
+  link       String?   // e.g. '/clients/<id>'
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
 }
 
 // -------- BANK ACCOUNTS --------

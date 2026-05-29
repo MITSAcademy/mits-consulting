@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
+import { notify } from '../lib/notify';
 import { sendEmail, decryptSecret } from '../lib/mailer';
 import {
   buildTrainerOutreachText,
@@ -159,13 +160,34 @@ sourcingRouter.post('/', async (req: AuthedRequest, res) => {
   });
   await prisma.client.update({ where: { id: clientId }, data: { lifecycle: 'WithRecruiters' } });
   await audit(req.user!.id, req.user!.name, 'SOURCING_CREATE', r.client.name);
+  // Ping the recruiter the request was routed to.
+  if (sentToId) {
+    await notify({
+      userId: sentToId,
+      kind: 'SourcingAssigned',
+      title: `New sourcing request — ${r.client.name}`,
+      body: `${req.user!.name} sent a new client your way. Open the sourcing page to propose trainers.`,
+      link: `/sourcing`,
+    });
+  }
   res.status(201).json(r);
 });
 
 sourcingRouter.patch('/:id', async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of ['status', 'sentToId', 'sentAt']) if (f in req.body) data[f] = req.body[f];
+  const prior = await prisma.sourcingRequest.findUnique({ where: { id: req.params.id }, select: { sentToId: true, client: { select: { name: true } } } });
   const r = await prisma.sourcingRequest.update({ where: { id: req.params.id }, data, include });
+  // If routing changed, notify the new recruiter.
+  if (data.sentToId && data.sentToId !== prior?.sentToId) {
+    await notify({
+      userId: data.sentToId,
+      kind: 'SourcingReassigned',
+      title: `Sourcing request reassigned to you — ${prior?.client?.name || r.client.name}`,
+      body: `${req.user!.name} routed this client to you.`,
+      link: `/sourcing`,
+    });
+  }
   res.json(r);
 });
 
@@ -255,6 +277,22 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
     req.user!.id, req.user!.name, 'PROPOSALS_ADD',
     `${created.length} proposal(s) → ${existing.client?.name || existing.clientId}${existing.status === 'Proposed' ? ' (appended)' : ''}`,
   );
+  // Notify the demo intake owner that they have proposals to verify.
+  // Falls back to whichever Team-2 user originally captured the lead.
+  const fullClient = await prisma.client.findUnique({
+    where: { id: existing.clientId },
+    select: { name: true, intakeOwnerId: true, leadOwnerId: true },
+  });
+  const notifyTarget = fullClient?.intakeOwnerId || fullClient?.leadOwnerId;
+  if (notifyTarget && notifyTarget !== req.user!.id) {
+    await notify({
+      userId: notifyTarget,
+      kind: 'ProposalReceived',
+      title: `${created.length} trainer proposal${created.length === 1 ? '' : 's'} for ${fullClient?.name || existing.clientId}`,
+      body: `${req.user!.name} proposed candidates — review on the verifications page.`,
+      link: `/verifications`,
+    });
+  }
   res.status(201).json(created);
 });
 

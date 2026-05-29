@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Toaster } from '@/components/ui/toast';
+import { NotificationBell } from '@/components/NotificationBell';
 
 export function AppLayout() {
   return (
@@ -31,7 +32,10 @@ export function Topbar({
           <span className="text-brand-textMuted font-normal text-[13px] ml-2">· {subtitle}</span>
         )}
       </div>
-      {actions && <div className="flex gap-1.5 items-center flex-wrap">{actions}</div>}
+      <div className="flex gap-1.5 items-center flex-wrap">
+        {actions}
+        <NotificationBell />
+      </div>
     </div>
   );
 }
