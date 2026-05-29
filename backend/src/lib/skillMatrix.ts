@@ -58,76 +58,122 @@ function esc(s: string): string {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/** Render one candidate's two stacked tables (header + must-have + soft skills). */
-function renderCandidateTable(c: CandidateMatrix, idx: number): string {
-  const labelBg = '#e9e9ec';
-  const cellBorder = '1px solid #1A1B1E';
-  return `
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;width:100%;font-size:13px;">
-      <tr><td colspan="2" style="background:${labelBg};border:${cellBorder};padding:6px 8px;text-align:center;font-weight:700;">Candidate · ${idx + 1}</td></tr>
-      <tr><td style="background:${labelBg};border:${cellBorder};padding:5px 8px;font-weight:600;">Name</td><td style="border:${cellBorder};padding:5px 8px;">${esc(c.name)}</td></tr>
-      <tr><td style="background:${labelBg};border:${cellBorder};padding:5px 8px;font-weight:600;">Total IT Experience</td><td style="border:${cellBorder};padding:5px 8px;">${esc(c.totalExperience || '—')}</td></tr>
-      <tr><td style="background:${labelBg};border:${cellBorder};padding:5px 8px;font-weight:600;">Date for Demo</td><td style="border:${cellBorder};padding:5px 8px;">${esc(c.demoDate || '—')}</td></tr>
-      <tr><td style="background:${labelBg};border:${cellBorder};padding:5px 8px;font-weight:600;">Time for Demo</td><td style="border:${cellBorder};padding:5px 8px;">${esc(c.demoTimeIst || '—')}</td></tr>
-      <tr><td colspan="2" style="border:${cellBorder};padding:5px 8px;text-align:center;font-size:12px;background:#fafafa;">${esc(c.zoneTimes || '')}</td></tr>
-    </table>
-
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;width:100%;margin-top:14px;font-size:13px;">
-      <tr><td colspan="2" style="background:${labelBg};border:${cellBorder};padding:6px 8px;text-align:center;font-weight:700;">${esc(c.name)}</td></tr>
-      <tr>
-        <td style="background:${labelBg};border:${cellBorder};padding:5px 8px;text-align:center;font-weight:700;">Must Have Skills</td>
-        <td style="background:${labelBg};border:${cellBorder};padding:5px 8px;text-align:center;font-weight:700;">Soft Skills &amp; Checklist</td>
-      </tr>
-      <tr>
-        <td style="background:#f5f5f7;border:${cellBorder};padding:4px 8px;text-align:center;font-style:italic;">Proficiency (Out of 5)</td>
-        <td style="background:#f5f5f7;border:${cellBorder};padding:4px 8px;text-align:center;font-style:italic;">Yes / No</td>
-      </tr>
-      ${renderSkillRows(c)}
-    </table>
-  `;
-}
-
-function renderSkillRows(c: CandidateMatrix): string {
-  const labelBg = '#e9e9ec';
-  const cellBorder = '1px solid #1A1B1E';
-  const mh = c.mustHaveSkills || [];
-  const ss = c.softSkills && c.softSkills.length ? c.softSkills : DEFAULT_SOFT_SKILLS;
-  const rows = Math.max(mh.length, ss.length);
-  const out: string[] = [];
-  for (let i = 0; i < rows; i++) {
-    const m = mh[i];
-    const s = ss[i];
-    const lhs = m
-      ? `<td style="background:${labelBg};border:${cellBorder};padding:4px 8px;font-weight:600;">${esc(m.skill)}</td><td style="border:${cellBorder};padding:4px 8px;text-align:center;font-weight:600;">${m.proficiency.toFixed(1)}</td>`
-      : `<td style="border:${cellBorder};padding:4px 8px;">&nbsp;</td><td style="border:${cellBorder};padding:4px 8px;">&nbsp;</td>`;
-    const rhs = s
-      ? `<td style="background:${labelBg};border:${cellBorder};padding:4px 8px;">${esc(s.item)}</td><td style="border:${cellBorder};padding:4px 8px;text-align:center;">${esc(s.value)}</td>`
-      : `<td style="border:${cellBorder};padding:4px 8px;">&nbsp;</td><td style="border:${cellBorder};padding:4px 8px;">&nbsp;</td>`;
-    out.push(`<tr><td style="padding:0;border:none;"><table style="width:100%;border-collapse:collapse;"><tr>${lhs}</tr></table></td><td style="padding:0;border:none;"><table style="width:100%;border-collapse:collapse;"><tr>${rhs}</tr></table></td></tr>`);
-  }
-  return out.join('\n');
-}
-
 export interface BuildSkillMatrixOpts {
   clientName: string;
   candidates: CandidateMatrix[];
   introNote?: string;
 }
 
-/** Render the full email-ready HTML matrix (multiple candidates side-by-side, up to 3 per row). */
+/**
+ * Build the email-ready HTML matrix.
+ *
+ * Renders ALL candidates inside a SINGLE outer table so rows line up
+ * across columns (was previously one table per candidate which caused
+ * "Date for Demo" / "Time for Demo" rows to drift out of sync when
+ * candidates had different content lengths).
+ *
+ * Each candidate occupies 4 sub-columns (label-MustHave, value-MustHave,
+ * label-Soft, value-Soft). Multiple candidates sit beside each other,
+ * separated by a thin spacer column.
+ */
 export function buildSkillMatrixHtml(opts: BuildSkillMatrixOpts): string {
-  const cols = Math.min(opts.candidates.length, 3);
-  const widthPct = Math.floor(100 / cols);
-  const cards = opts.candidates.map((c, i) =>
-    `<td style="vertical-align:top;padding:0 6px;width:${widthPct}%;">${renderCandidateTable(c, i)}</td>`,
-  ).join('');
+  const labelBg = '#e9e9ec';
+  const cellBorder = '1px solid #1A1B1E';
+  const cellPad = '5px 8px';
+  const skillPad = '4px 8px';
+  const lightBg = '#fafafa';
+  const subHeadBg = '#f5f5f7';
+
+  const cands = opts.candidates;
+  if (cands.length === 0) {
+    return wrapEmail(opts, `<tr><td style="padding:24px 0;text-align:center;color:#6B6F78;">No candidates to display.</td></tr>`);
+  }
+
+  // Each candidate = 4 sub-cols (mh-label, mh-val, soft-label, soft-val).
+  // Spacer between candidates = 1 col with background:white, no border.
+  const SPACER_WIDTH = 12;
+  const candidateColspan = 4;
+
+  // ---- Top info section: header + 4 info rows + zone-times row ----
+  const headerCells = cands.map((_, i) => `
+    <td colspan="${candidateColspan}" style="background:${labelBg};border:${cellBorder};padding:6px 8px;text-align:center;font-weight:700;font-size:13px;">Candidate · ${i + 1}</td>
+  `).join(`<td style="width:${SPACER_WIDTH}px;border:none;"></td>`);
+
+  const labelValueRow = (label: string, valueOf: (c: CandidateMatrix) => string, isItalic = false) => cands.map((c) => `
+    <td colspan="2" style="background:${labelBg};border:${cellBorder};padding:${cellPad};font-weight:600;font-size:13px;${isItalic ? 'font-style:italic;' : ''}">${esc(label)}</td>
+    <td colspan="2" style="border:${cellBorder};padding:${cellPad};font-size:13px;">${esc(valueOf(c) || '—')}</td>
+  `).join(`<td style="width:${SPACER_WIDTH}px;border:none;"></td>`);
+
+  const zoneRow = cands.map((c) => `
+    <td colspan="${candidateColspan}" style="border:${cellBorder};padding:${cellPad};text-align:center;font-size:12px;background:${lightBg};">${esc(c.zoneTimes || '')}</td>
+  `).join(`<td style="width:${SPACER_WIDTH}px;border:none;"></td>`);
+
+  // ---- Name banners before the skills block ----
+  const nameBanner = cands.map((c) => `
+    <td colspan="${candidateColspan}" style="background:${labelBg};border:${cellBorder};padding:6px 8px;text-align:center;font-weight:700;font-size:13px;">${esc(c.name)}</td>
+  `).join(`<td style="width:${SPACER_WIDTH}px;border:none;"></td>`);
+
+  const skillsHeader = cands.map(() => `
+    <td colspan="2" style="background:${labelBg};border:${cellBorder};padding:${cellPad};text-align:center;font-weight:700;font-size:13px;">Must Have Skills</td>
+    <td colspan="2" style="background:${labelBg};border:${cellBorder};padding:${cellPad};text-align:center;font-weight:700;font-size:13px;">Soft Skills &amp; Checklist</td>
+  `).join(`<td style="width:${SPACER_WIDTH}px;border:none;"></td>`);
+
+  const skillsSubHeader = cands.map(() => `
+    <td colspan="2" style="background:${subHeadBg};border:${cellBorder};padding:${skillPad};text-align:center;font-style:italic;font-size:12px;">Proficiency (Out of 5)</td>
+    <td colspan="2" style="background:${subHeadBg};border:${cellBorder};padding:${skillPad};text-align:center;font-style:italic;font-size:12px;">Yes / No</td>
+  `).join(`<td style="width:${SPACER_WIDTH}px;border:none;"></td>`);
+
+  // ---- Skill rows — pad each candidate to the MAX number of rows across all candidates ----
+  const maxRows = cands.reduce((acc, c) => {
+    const mh = (c.mustHaveSkills || []).length;
+    const ss = (c.softSkills && c.softSkills.length ? c.softSkills : DEFAULT_SOFT_SKILLS).length;
+    return Math.max(acc, mh, ss);
+  }, 0);
+
+  const skillRows: string[] = [];
+  for (let r = 0; r < maxRows; r++) {
+    const perCandidate = cands.map((c) => {
+      const mh = (c.mustHaveSkills || [])[r];
+      const ss = (c.softSkills && c.softSkills.length ? c.softSkills : DEFAULT_SOFT_SKILLS)[r];
+      const mhLabel = mh ? `<td style="background:${labelBg};border:${cellBorder};padding:${skillPad};font-weight:600;font-size:13px;">${esc(mh.skill)}</td>` : `<td style="border:${cellBorder};padding:${skillPad};">&nbsp;</td>`;
+      const mhVal = mh ? `<td style="border:${cellBorder};padding:${skillPad};text-align:center;font-weight:600;font-size:13px;">${mh.proficiency.toFixed(1)}</td>` : `<td style="border:${cellBorder};padding:${skillPad};">&nbsp;</td>`;
+      const ssLabel = ss ? `<td style="background:${labelBg};border:${cellBorder};padding:${skillPad};font-size:13px;">${esc(ss.item)}</td>` : `<td style="border:${cellBorder};padding:${skillPad};">&nbsp;</td>`;
+      const ssVal = ss ? `<td style="border:${cellBorder};padding:${skillPad};text-align:center;font-size:13px;">${esc(ss.value)}</td>` : `<td style="border:${cellBorder};padding:${skillPad};">&nbsp;</td>`;
+      return mhLabel + mhVal + ssLabel + ssVal;
+    }).join(`<td style="width:${SPACER_WIDTH}px;border:none;"></td>`);
+    skillRows.push(`<tr>${perCandidate}</tr>`);
+  }
+
+  // Vertical gap between info and skills sections — empty spacer row.
+  const spacerRow = `<tr><td colspan="${cands.length * candidateColspan + Math.max(0, cands.length - 1)}" style="height:14px;border:none;"></td></tr>`;
+
+  const matrix = `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;font-family:'Inter','Helvetica Neue',Arial,sans-serif;">
+      <tr>${headerCells}</tr>
+      <tr>${labelValueRow('Name', (c) => c.name)}</tr>
+      <tr>${labelValueRow('Total IT Experience', (c) => c.totalExperience || '')}</tr>
+      <tr>${labelValueRow('Date for Demo', (c) => c.demoDate || '')}</tr>
+      <tr>${labelValueRow('Time for Demo', (c) => c.demoTimeIst || '')}</tr>
+      <tr>${zoneRow}</tr>
+      ${spacerRow}
+      <tr>${nameBanner}</tr>
+      <tr>${skillsHeader}</tr>
+      <tr>${skillsSubHeader}</tr>
+      ${skillRows.join('')}
+    </table>
+  `;
+
+  return wrapEmail(opts, `<tr><td style="padding:14px 0;">${matrix}</td></tr>`);
+}
+
+function wrapEmail(opts: BuildSkillMatrixOpts, bodyRows: string): string {
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>MITS Skillset Matrix · ${esc(opts.clientName)}</title></head>
 <body style="margin:0;padding:0;background:#ffffff;font-family:'Inter','Helvetica Neue',Arial,sans-serif;color:#1A1B1E;">
   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#ffffff;padding:24px 0;">
     <tr><td align="center">
-      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="900" style="max-width:900px;width:100%;background:#ffffff;padding:24px 28px;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="960" style="max-width:960px;width:100%;background:#ffffff;padding:24px 28px;">
 
         <tr><td style="padding:0 0 10px;text-align:center;">
           <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;font-size:36px;color:#1A1B1E;line-height:1;letter-spacing:-1px;">MITS</div>
@@ -139,11 +185,7 @@ export function buildSkillMatrixHtml(opts: BuildSkillMatrixOpts): string {
 
         ${opts.introNote ? `<tr><td style="padding:14px 0 6px;font-size:14px;line-height:1.6;">${esc(opts.introNote)}</td></tr>` : ''}
 
-        <tr><td style="padding:14px 0;">
-          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-collapse:separate;border-spacing:8px 0;">
-            <tr>${cards}</tr>
-          </table>
-        </td></tr>
+        ${bodyRows}
 
         <tr><td style="padding:14px 0 0;font-size:12px;color:#6B6F78;line-height:1.5;">
           This skillset matrix is shared by <b>MITS Consulting</b> for your review. Please confirm your preferred candidate and demo slot by reply.
