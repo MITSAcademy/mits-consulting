@@ -698,6 +698,7 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
   const qc = useQueryClient();
 
   // Editable overrides — recruiter can tweak before sending
+  const [pricingMode, setPricingMode] = useState<'session' | 'oneShot'>('session');
   const [rateInr, setRateInr] = useState<number>(proposal.rateInr || 0);
   const [hoursPerSession, setHoursPerSession] = useState<number>(2);
   const [paymentClearanceDay, setPaymentClearanceDay] = useState('Every Wednesday');
@@ -733,12 +734,15 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
   useEffect(() => {
     if (!initial?.text || manualEdit) return;
     let txt: string = initial.text;
-    txt = txt.replace(/Payment:\s+₹[^\n]*/, `Payment:         ₹${rateInr.toLocaleString('en-IN')} for ${hoursPerSession} hour${hoursPerSession === 1 ? '' : 's'}`);
+    const paymentLine = pricingMode === 'oneShot'
+      ? `Payment:         ₹${rateInr.toLocaleString('en-IN')} (one-shot · full engagement)`
+      : `Payment:         ₹${rateInr.toLocaleString('en-IN')} for ${hoursPerSession} hour${hoursPerSession === 1 ? '' : 's'}`;
+    txt = txt.replace(/Payment:\s+₹[^\n]*/, paymentLine);
     txt = txt.replace(/Payment clearance:\s+[^\n]*/, `Payment clearance: ${paymentClearanceDay}`);
     if (demoCallTime.trim()) txt = txt.replace(/Demo call time:\s+[^\n]*/, `Demo call time:  ${demoCallTime}`);
     setMessageText(txt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rateInr, hoursPerSession, paymentClearanceDay, demoCallTime, initial?.text, manualEdit]);
+  }, [pricingMode, rateInr, hoursPerSession, paymentClearanceDay, demoCallTime, initial?.text, manualEdit]);
 
   function resetMessageToAuto() {
     setManualEdit(false);
@@ -747,7 +751,7 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
   }
 
   function buildOverrides() {
-    const o: any = { rateInr, hoursPerSession, paymentClearanceDay };
+    const o: any = { rateInr, hoursPerSession, paymentClearanceDay, pricingMode };
     if (demoCallTime.trim()) o.demoCallTime = demoCallTime.trim();
     if (guidelinesLink.trim()) o.guidelinesLink = guidelinesLink.trim();
     // Pass the recruiter's edited subject/body verbatim — backend uses these as-is when present.
@@ -784,14 +788,31 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
         className="max-w-2xl"
       >
         <div className="grid md:grid-cols-2 gap-3 mb-3">
+          <div className="form-row md:col-span-2">
+            <Label>Pricing mode</Label>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={pricingMode === 'session' ? 'primary' : 'default'}
+                onClick={() => setPricingMode('session')}
+              >Per session</Button>
+              <Button
+                size="sm"
+                variant={pricingMode === 'oneShot' ? 'primary' : 'default'}
+                onClick={() => setPricingMode('oneShot')}
+              >One-shot (full project)</Button>
+            </div>
+          </div>
           <div className="form-row">
-            <Label>Rate (₹)</Label>
+            <Label>{pricingMode === 'oneShot' ? 'Total project cost (₹)' : 'Rate (₹)'}</Label>
             <Input type="number" value={rateInr} onChange={(e) => setRateInr(+e.target.value)} />
           </div>
-          <div className="form-row">
-            <Label>Hours / session</Label>
-            <Input type="number" min={0.5} step={0.5} value={hoursPerSession} onChange={(e) => setHoursPerSession(+e.target.value)} />
-          </div>
+          {pricingMode === 'session' && (
+            <div className="form-row">
+              <Label>Hours / session</Label>
+              <Input type="number" min={0.5} step={0.5} value={hoursPerSession} onChange={(e) => setHoursPerSession(+e.target.value)} />
+            </div>
+          )}
           <div className="form-row">
             <Label>Payment clearance day</Label>
             <Input value={paymentClearanceDay} onChange={(e) => setPaymentClearanceDay(e.target.value)} placeholder="Every Wednesday" />
