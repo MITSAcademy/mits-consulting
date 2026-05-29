@@ -69,8 +69,47 @@ export function TrainerDetailPage() {
               <div className="space-y-2">
                 <div className="form-row"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
                 <div className="form-row"><Label>Email</Label><Input value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+                <div className="form-row">
+                  <Label>Phone</Label>
+                  <div className="flex gap-1">
+                    <select
+                      className="rounded border px-2 py-1 text-sm bg-bg-input border-brand-border h-9 w-20"
+                      value={form.phoneCode || '+91'}
+                      onChange={(e) => setForm({ ...form, phoneCode: e.target.value })}
+                    >
+                      <option value="+91">+91</option>
+                      <option value="+1">+1</option>
+                      <option value="+44">+44</option>
+                    </select>
+                    <Input
+                      value={form.phoneDigits || ''}
+                      onChange={(e) => setForm({ ...form, phoneDigits: e.target.value.replace(/\D/g, '') })}
+                      placeholder="10 digits"
+                    />
+                  </div>
+                </div>
                 <div className="form-row"><Label>Skills</Label><Input value={form.skills || ''} onChange={(e) => setForm({ ...form, skills: e.target.value })} /></div>
-                <div className="form-row"><Label>Default rate ₹</Label><Input type="number" value={form.defaultRateInr || 0} onChange={(e) => setForm({ ...form, defaultRateInr: +e.target.value })} /></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="form-row">
+                    <Label>Rate model</Label>
+                    <select
+                      className="rounded border px-2 py-1 text-sm bg-bg-input border-brand-border h-9 w-full"
+                      value={form.rateModel || 'hourly'}
+                      onChange={(e) => setForm({ ...form, rateModel: e.target.value })}
+                    >
+                      <option value="hourly">Hourly</option>
+                      <option value="per_session">Per session</option>
+                    </select>
+                  </div>
+                  <div className="form-row"><Label>Default rate ₹</Label><Input type="number" value={form.defaultRateInr || 0} onChange={(e) => setForm({ ...form, defaultRateInr: +e.target.value })} /></div>
+                </div>
+                <div className="form-row"><Label>Experience (years)</Label><Input type="number" value={form.experienceYears || 0} onChange={(e) => setForm({ ...form, experienceYears: +e.target.value })} /></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="form-row"><Label>Payment method</Label><Input value={form.paymentMethod || ''} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })} placeholder="UPI / Bank / …" /></div>
+                  <div className="form-row"><Label>UPI ID</Label><Input value={form.upiId || ''} onChange={(e) => setForm({ ...form, upiId: e.target.value })} placeholder="name@bank" /></div>
+                </div>
+                <div className="form-row"><Label>Bank account (optional)</Label><Input value={form.bankAccount || ''} onChange={(e) => setForm({ ...form, bankAccount: e.target.value })} placeholder="A/c · IFSC" /></div>
+                <div className="form-row"><Label>WhatsApp group link</Label><Input value={form.whatsappGroupLink || ''} onChange={(e) => setForm({ ...form, whatsappGroupLink: e.target.value })} placeholder="https://chat.whatsapp.com/…" /></div>
                 <div className="form-row">
                   <Label>Availability (IST)</Label>
                   <AvailabilitySlotsEditor

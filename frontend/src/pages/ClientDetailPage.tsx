@@ -477,6 +477,12 @@ export function ClientDetailPage() {
                                 <div className="text-[11px] mt-1">🕒 {formatAvailabilitySlots(slots)} IST</div>
                               )}
                             </div>
+                            {/* Allow Anjali/Taran to flip non-Pass'd proposals to Pass so they all
+                                land in the skill matrix. Useful for legacy Fail'd rows from before
+                                multi-pass was enabled, or for Pending ones picked up from this card. */}
+                            {canIntake(user.role) && p.verification !== 'Pass' && (
+                              <PromoteToPassButton proposalId={p.id} clientId={client.id} />
+                            )}
                           </div>
                           {/* Proof + skill matrix */}
                           {(p.confirmationUrl || p.skillMatrixUrl) && (
@@ -1857,6 +1863,27 @@ function PreDemoReminderModal({ client, onClose }: any) {
 }
 
 // ─── Send Skill Matrix modal (Anjali → client) ────────────────────────────
+/** Small inline button to promote a Pending/Failed proposal to Pass — so it lands
+ *  in the skill-matrix candidate set on the client page. */
+function PromoteToPassButton({ proposalId, clientId }: { proposalId: string; clientId: string }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const m = useMutation({
+    mutationFn: () => api.post(`/sourcing/proposal/${proposalId}/pass`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', clientId] });
+      qc.invalidateQueries({ queryKey: ['skill-matrix-preview', clientId] });
+      showToast('Trainer added to skill matrix as Pass');
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+  return (
+    <Button size="sm" variant="success" disabled={m.isPending} onClick={() => m.mutate()} title="Promote this trainer to Pass — they'll be included in the skill matrix">
+      <Check size={11}/> {m.isPending ? '…' : 'Pass'}
+    </Button>
+  );
+}
+
 function SendSkillMatrixModal({ client, onClose }: any) {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
