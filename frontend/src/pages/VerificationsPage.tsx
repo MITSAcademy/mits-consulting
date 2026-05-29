@@ -68,7 +68,7 @@ export function VerificationsPage() {
   });
 
   // Pass: single atomic server-side endpoint handles everything —
-  // marks Pass, auto-fails others, creates trainer if new, sets primary trainer,
+  // marks Pass, creates trainer if new, sets primary trainer (most recent Pass wins),
   // moves client to TrainerMatched, closes request.
   const pass = useMutation({
     mutationFn: ({ proposal }: any) => api.post(`/sourcing/proposal/${proposal.id}/pass`),
@@ -132,7 +132,7 @@ export function VerificationsPage() {
       />
       <Page>
         <div className="callout">
-          Recruiters propose trainers — sometimes 3 or 4 options. Pass/Fail each one. First Pass becomes the matched trainer and the rest auto-close.
+          Recruiters propose trainers — sometimes 3 or 4 options. Pass each trainer you want to demo, Fail the rest. You can Pass multiple per client (we routinely run more than one demo). The most recent Pass becomes the default primary trainer for Schedule demo; you can run additional demos by re-selecting from the Pass'd set on the client page.
         </div>
 
         {orphans.length > 0 && (

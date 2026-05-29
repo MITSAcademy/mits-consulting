@@ -351,17 +351,23 @@ sourcingRouter.post('/proposal/:proposalId/pass', async (req: AuthedRequest, res
       },
     });
 
-    // 4. Close the request once at least one proposal has passed. (Subsequent
-    // Pass calls are still allowed since /pass operates on the proposal id, not
-    // the request status — Closed here just means "we found at least one match".)
-    await tx.sourcingRequest.update({
-      where: { id: proposal.requestId },
-      data: { status: 'Closed' },
+    // 4. Close the request ONLY when no Pending proposals remain — i.e. every
+    // proposal has been explicitly Pass'd or Fail'd. With multi-pass enabled,
+    // closing on the first Pass would hide remaining Pending proposals from the
+    // Verifications page (which filters by status = Proposed) and Anjali would
+    // lose the ability to Pass them.
+    const remainingPending = await tx.proposal.count({
+      where: { requestId: proposal.requestId, verification: 'Pending' },
     });
+    if (remainingPending === 0) {
+      await tx.sourcingRequest.update({
+        where: { id: proposal.requestId },
+        data: { status: 'Closed' },
+      });
+    }
 
-    // Count concurrent passes for the audit line
     const totalPassed = await tx.proposal.count({ where: { requestId: proposal.requestId, verification: 'Pass' } });
-    return { trainerId, totalPassed };
+    return { trainerId, totalPassed, remainingPending };
   });
 
   await audit(
