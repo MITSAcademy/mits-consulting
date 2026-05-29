@@ -1,6 +1,7 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, fileUrl } from '@/lib/api';
+import { readAvailabilitySlots, formatAvailabilitySlots } from '@/lib/utils';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
@@ -425,6 +426,86 @@ export function ClientDetailPage() {
                 </div>
               </div>
             )}
+
+            {/* Proposed trainers — all proposals (Pass/Pending/Fail) for this client.
+                Anjali/Taran rely on this to review recordings, availability, rate, and
+                who they've Pass'd without leaving the client page. */}
+            {(() => {
+              const allProposals = (client.sourcingRequests || []).flatMap((r: any) =>
+                (r.proposals || []).map((p: any) => ({ ...p, _request: r })),
+              );
+              if (!allProposals.length) return null;
+              const sortRank = (v: string) => (v === 'Pass' ? 0 : v === 'Pending' ? 1 : 2);
+              allProposals.sort((a: any, b: any) => sortRank(a.verification) - sortRank(b.verification));
+              const passed = allProposals.filter((p: any) => p.verification === 'Pass');
+              return (
+                <div className="card">
+                  <div className="card-h">
+                    Proposed trainers · {allProposals.length}
+                    {passed.length > 0 && (
+                      <span className="ml-2"><Pill color="green">{passed.length} passed</Pill></span>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {allProposals.map((p: any) => {
+                      const tName = p.trainer?.name || p.trainerName || '—';
+                      const tExp = p.trainer?.experienceYears ?? p.experienceYears ?? 0;
+                      const tSkills = p.trainer?.skills || p.trainerSkills || '';
+                      const slots = readAvailabilitySlots(p);
+                      const isPrimary = client.primaryTrainerId && p.trainer?.id === client.primaryTrainerId;
+                      const vColor = p.verification === 'Pass' ? 'green' : p.verification === 'Fail' ? 'red' : 'amber';
+                      return (
+                        <div key={p.id} className={`border rounded p-2.5 ${p.verification === 'Pass' ? 'border-brand-green/50 bg-brand-green/5' : 'border-brand-border'}`}>
+                          <div className="flex items-start justify-between gap-2 flex-wrap">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {p.trainer?.id ? (
+                                  <Link to={`/trainers/${p.trainer.id}`} className="font-medium text-brand-blue">{tName}</Link>
+                                ) : (
+                                  <span className="font-medium">{tName}</span>
+                                )}
+                                <Pill color={vColor as any}>{p.verification}</Pill>
+                                {isPrimary && <Pill color="blue">★ primary</Pill>}
+                                <span className="muted text-[11px]">{tExp}y · ₹{p.rateInr}</span>
+                              </div>
+                              {tSkills && <div className="muted text-xs mt-0.5">{tSkills}</div>}
+                              <div className="muted text-[10px] mt-1">
+                                Proposed by <strong>{p.proposedBy?.name || '—'}</strong>
+                                {p.proposedAt && <> · {p.proposedAt}</>}
+                              </div>
+                              {slots.length > 0 && (
+                                <div className="text-[11px] mt-1">🕒 {formatAvailabilitySlots(slots)} IST</div>
+                              )}
+                            </div>
+                          </div>
+                          {/* Proof + skill matrix */}
+                          {(p.confirmationUrl || p.skillMatrixUrl) && (
+                            <div className="mt-2 space-y-1">
+                              {p.confirmationUrl && (
+                                <div className="flex items-center gap-2 bg-bg-input rounded p-1.5">
+                                  <Pill color={p.confirmationKind === 'Audio' ? 'purple' : 'blue'}>{p.confirmationKind}</Pill>
+                                  {p.confirmationKind === 'Audio' ? (
+                                    <audio controls src={fileUrl(p.confirmationUrl)} style={{ height: 28, flex: 1 }} />
+                                  ) : (
+                                    <a href={fileUrl(p.confirmationUrl)} target="_blank" rel="noreferrer" className="text-brand-blue text-xs underline">View screenshot</a>
+                                  )}
+                                </div>
+                              )}
+                              {p.skillMatrixUrl && (
+                                <a href={fileUrl(p.skillMatrixUrl)} target="_blank" rel="noreferrer" className="text-brand-blue text-xs underline">View skill matrix →</a>
+                              )}
+                            </div>
+                          )}
+                          {p.verificationNotes && (
+                            <div className="muted text-[11px] italic mt-1">Note: {p.verificationNotes}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {showAmt && (
               <div className="card">
