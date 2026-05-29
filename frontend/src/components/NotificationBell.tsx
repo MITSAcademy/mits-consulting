@@ -32,18 +32,25 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
+  // Polling cadences are deliberately slow — the backend is on Render free tier
+  // (256 MB / 0.1 CPU) and aggressive polling was slowing every page. Window
+  // focus refetch keeps things feeling live without constant network chatter.
   const { data: list } = useQuery<Notification[]>({
     queryKey: ['notifications'],
+    // Only fetch the list when the dropdown is open OR on a fresh page load —
+    // otherwise rely on refetchOnWindowFocus.
     queryFn: () => api.get('/notifications').then((r) => r.data),
-    refetchInterval: 60_000,
+    refetchInterval: open ? 60_000 : false,
     refetchOnWindowFocus: true,
+    staleTime: 30_000,
   });
 
   const { data: countData } = useQuery<{ count: number }>({
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => api.get('/notifications/unread-count').then((r) => r.data),
-    refetchInterval: 30_000,
+    refetchInterval: 120_000, // 2 min — was 30s
     refetchOnWindowFocus: true,
+    staleTime: 60_000,
   });
 
   const unread = countData?.count ?? 0;
