@@ -768,6 +768,21 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
   if (!toEmail) return res.status(400).json({ error: 'No email on file for this client' });
 
+  // Caller can pass demoDate/demoTimeIst so the matrix populates Date/Time for Demo
+  // even before the demo is formally scheduled. Persist them on the client too.
+  const demoDateOverride = (req.body?.demoDate as string) || client.demoDate || '';
+  const demoTimeOverride = (req.body?.demoTimeIst as string) || client.demoTimeIst || '';
+  if ((req.body?.demoDate && req.body.demoDate !== client.demoDate)
+      || (req.body?.demoTimeIst && req.body.demoTimeIst !== client.demoTimeIst)) {
+    await prisma.client.update({
+      where: { id: client.id },
+      data: {
+        demoDate: req.body?.demoDate || client.demoDate || null,
+        demoTimeIst: req.body?.demoTimeIst || client.demoTimeIst || null,
+      },
+    });
+  }
+
   // Pull all proposals for this client and assemble the matrix
   const reqs = await prisma.sourcingRequest.findMany({
     where: { clientId: client.id, status: { in: ['Open', 'Proposed', 'Closed'] } },
@@ -790,9 +805,9 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
   const candidates = baseList.map((p: any) => ({
     name: p.trainer?.name || p.trainerName || '—',
     totalExperience: p.experienceYears ? `${p.experienceYears} Years` : '—',
-    demoDate: client.demoDate || '',
-    demoTimeIst: client.demoTimeIst ? `${client.demoTimeIst} IST` : '',
-    zoneTimes: istToUsZones(client.demoTimeIst, client.demoDate),
+    demoDate: demoDateOverride,
+    demoTimeIst: demoTimeOverride ? `${demoTimeOverride} IST` : '',
+    zoneTimes: istToUsZones(demoTimeOverride, demoDateOverride),
     mustHaveSkills: p.mustHaveSkills,
     softSkills: Array.isArray(p.softSkills) && p.softSkills.length > 0 ? p.softSkills : DEFAULT_SOFT_SKILLS,
   }));
@@ -872,6 +887,20 @@ clientsRouter.post('/:id/send-skill-matrix-whatsapp', async (req: AuthedRequest,
   const digits = `${client.phoneCode || ''}${client.phoneDigits || ''}`.replace(/[^0-9]/g, '');
   if (!digits) return res.status(400).json({ error: 'No phone on file for this client' });
 
+  // Same date/time override pattern as the email send — persists to client too.
+  const demoDateUse = (req.body?.demoDate as string) || client.demoDate || '';
+  const demoTimeUse = (req.body?.demoTimeIst as string) || client.demoTimeIst || '';
+  if ((req.body?.demoDate && req.body.demoDate !== client.demoDate)
+      || (req.body?.demoTimeIst && req.body.demoTimeIst !== client.demoTimeIst)) {
+    await prisma.client.update({
+      where: { id: client.id },
+      data: {
+        demoDate: req.body?.demoDate || client.demoDate || null,
+        demoTimeIst: req.body?.demoTimeIst || client.demoTimeIst || null,
+      },
+    });
+  }
+
   // Pull proposals + assemble compact list
   const reqs = await prisma.sourcingRequest.findMany({
     where: { clientId: client.id, status: { in: ['Open', 'Proposed', 'Closed'] } },
@@ -900,9 +929,9 @@ clientsRouter.post('/:id/send-skill-matrix-whatsapp', async (req: AuthedRequest,
     lines.push(`${i + 1}. ${name}${exp ? ' · ' + exp : ''}`);
     if (skills) lines.push(`   Skills: ${skills}`);
   });
-  if (client.demoDate) {
+  if (demoDateUse) {
     lines.push('');
-    lines.push(`Proposed demo: ${client.demoDate}${client.demoTimeIst ? ' · ' + client.demoTimeIst + ' IST' : ''}`);
+    lines.push(`Proposed demo: ${demoDateUse}${demoTimeUse ? ' · ' + demoTimeUse + ' IST' : ''}`);
   }
   lines.push('');
   lines.push(`The detailed skillset matrix has been shared on your email — please review and confirm your preferred candidate.`);
@@ -923,8 +952,41 @@ clientsRouter.post('/:id/send-skill-matrix-whatsapp', async (req: AuthedRequest,
       provider: 'wa-link',
     },
   });
+  // Mark on the client that the matrix has been shared — unlocks Schedule demo even
+  // when the WhatsApp channel was used standalone (e.g. client has no email).
+  await prisma.client.update({
+    where: { id: client.id },
+    data: { skillMatrixSentAt: new Date().toISOString().slice(0, 10), skillMatrixSentById: req.user!.id },
+  });
   await audit(req.user!.id, req.user!.name, 'SKILL_MATRIX_SENT_WA', `${client.name} · ${digits}`);
   res.json({ ok: true, url, text });
+});
+
+// Manual "mark as sent" — Anjali/Taran sometimes share the matrix outside the portal
+// (e.g. WhatsApp on their phone). They can click this to unlock Schedule demo without
+// triggering an email or WhatsApp tab.
+clientsRouter.post('/:id/mark-skill-matrix-sent', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'demo_lead', 'demo_intake'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only Samita, Anjali, Taran or admin can mark the skill matrix sent' });
+  }
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, name: true, demoDate: true, demoTimeIst: true },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  await prisma.client.update({
+    where: { id: client.id },
+    data: {
+      skillMatrixSentAt: new Date().toISOString().slice(0, 10),
+      skillMatrixSentById: req.user!.id,
+      // Save demo date/time if the caller passed them (so the audit + downstream steps have context).
+      demoDate: req.body?.demoDate || client.demoDate || null,
+      demoTimeIst: req.body?.demoTimeIst || client.demoTimeIst || null,
+    },
+  });
+  await audit(req.user!.id, req.user!.name, 'SKILL_MATRIX_MARK_SENT', `${client.name} · manual`);
+  res.json({ ok: true });
 });
 
 // ─── Welcome email (Samita / Anjali) ───────────────────────────────────────

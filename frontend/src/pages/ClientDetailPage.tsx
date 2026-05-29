@@ -1784,28 +1784,55 @@ function SendSkillMatrixModal({ client, onClose }: any) {
   const [introNote, setIntroNote] = useState(
     `Dear ${client.name || 'Client'}, please find below the proposed trainer profiles for your review.`,
   );
+  // Demo date / time fields — pre-fill from client if already scheduled, otherwise blank.
+  // These are also persisted to the client on send/mark so downstream steps see them.
+  const [demoDate, setDemoDate] = useState<string>(client.demoDate || '');
+  const [demoTimeIst, setDemoTimeIst] = useState<string>(client.demoTimeIst || '');
 
   const { data: preview, isLoading } = useQuery({
-    queryKey: ['skill-matrix-preview', client.id],
-    queryFn: () => api.get(`/sourcing/clients/${client.id}/skill-matrix`).then((r) => r.data),
+    queryKey: ['skill-matrix-preview', client.id, demoDate, demoTimeIst],
+    queryFn: () => api.get(`/sourcing/clients/${client.id}/skill-matrix`, {
+      params: { demoDate: demoDate || undefined, demoTimeIst: demoTimeIst || undefined },
+    }).then((r) => r.data),
   });
 
-  // Compulsory dual-send: email goes immediately + WhatsApp opens as a pre-filled tab for the client
-  const send = useMutation({
-    mutationFn: async () => {
-      const e = await api.post(`/clients/${client.id}/send-skill-matrix`, { introNote });
-      const w = await api.post(`/clients/${client.id}/send-skill-matrix-whatsapp`, {});
-      return { email: e.data, wa: w.data };
+  // Email only — fails fast if no email on file.
+  const sendEmailOnly = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/send-skill-matrix`, { introNote, demoDate, demoTimeIst }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      qc.invalidateQueries({ queryKey: ['messages'] });
+      showToast('Email sent · matrix marked as shared');
+      onClose();
     },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Email send failed', 'error'),
+  });
+
+  // WhatsApp only — opens wa.me tab; marks matrix as sent server-side so demo schedule unlocks.
+  const sendWAOnly = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/send-skill-matrix-whatsapp`, { demoDate, demoTimeIst }),
     onSuccess: (r: any) => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['messages'] });
-      if (r.wa?.url) window.open(r.wa.url, '_blank', 'noopener');
-      showToast(`Email sent · WhatsApp opened — tap Send in WhatsApp tab to complete`);
+      if (r.data?.url) window.open(r.data.url, '_blank', 'noopener');
+      showToast('WhatsApp opened · matrix marked as shared');
       onClose();
     },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+    onError: (e: any) => showToast(e.response?.data?.error || 'WhatsApp build failed', 'error'),
   });
+
+  // Sent it outside the portal already — just unlock the next step.
+  const markSent = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/mark-skill-matrix-sent`, { demoDate, demoTimeIst }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      showToast('Marked as sent — Schedule demo unlocked');
+      onClose();
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Mark failed', 'error'),
+  });
+
+  const anyPending = sendEmailOnly.isPending || sendWAOnly.isPending || markSent.isPending;
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -1814,13 +1841,29 @@ function SendSkillMatrixModal({ client, onClose }: any) {
         description='Compulsory step before scheduling demo. Sends the side-by-side trainer profile matrix to the client.'
         className="max-w-3xl"
       >
-        {!toEmail && (
-          <div className="callout amber mb-2">No email on file for this client — please add one before sending.</div>
+        {!toEmail && !hasPhone && (
+          <div className="callout amber mb-2">No email or phone on file. Add one to send via email/WhatsApp, or use "Mark as sent" if you shared it manually.</div>
+        )}
+        {!toEmail && hasPhone && (
+          <div className="callout amber mb-2">No email on file — Email send is disabled. WhatsApp + Mark-as-sent still work.</div>
+        )}
+        {toEmail && !hasPhone && (
+          <div className="callout amber mb-2">No phone on file — WhatsApp send is disabled. Email + Mark-as-sent still work.</div>
         )}
 
-        <div className="form-row">
-          <Label>To</Label>
-          <Input value={toEmail} readOnly />
+        <div className="grid md:grid-cols-3 gap-2 mb-2">
+          <div className="form-row">
+            <Label>Email (to)</Label>
+            <Input value={toEmail || '—'} readOnly />
+          </div>
+          <div className="form-row">
+            <Label>Demo date</Label>
+            <Input type="date" value={demoDate} onChange={(e) => setDemoDate(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <Label>Demo time (IST)</Label>
+            <Input type="time" value={demoTimeIst} onChange={(e) => setDemoTimeIst(e.target.value)} />
+          </div>
         </div>
 
         <div className="form-row">
@@ -1846,22 +1889,32 @@ function SendSkillMatrixModal({ client, onClose }: any) {
         </div>
 
         <DialogFooter>
-          {(!toEmail || !hasPhone) && (
-            <div className="text-xs text-brand-amber mr-auto self-center">
-              {!toEmail && '⚠ No client email. '}
-              {!hasPhone && '⚠ No client phone. '}
-              Both required to send.
-            </div>
-          )}
           <Button onClick={onClose}>Cancel</Button>
           <Button
-            variant="primary"
-            disabled={!toEmail || !hasPhone || send.isPending || !preview?.candidates?.length}
-            onClick={() => send.mutate()}
-            title='Sends branded email matrix AND opens WhatsApp with the candidate summary — both are compulsory'
+            disabled={anyPending || !preview?.candidates?.length}
+            onClick={() => markSent.mutate()}
+            title='Already shared outside the portal? Mark as sent to unlock Schedule demo.'
           >
-            <Mail size={12}/><MessageCircle size={12}/>{' '}
-            {send.isPending ? 'Sending…' : 'Send (Email + WhatsApp)'}
+            {markSent.isPending ? 'Marking…' : 'Mark as sent'}
+          </Button>
+          <Button
+            variant="default"
+            style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}
+            disabled={!hasPhone || anyPending || !preview?.candidates?.length}
+            onClick={() => sendWAOnly.mutate()}
+            title={hasPhone ? 'Open WhatsApp with the candidate summary (also marks as sent)' : 'No phone on file'}
+          >
+            <MessageCircle size={12}/>{' '}
+            {sendWAOnly.isPending ? 'Opening…' : 'Send WhatsApp'}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!toEmail || anyPending || !preview?.candidates?.length}
+            onClick={() => sendEmailOnly.mutate()}
+            title={toEmail ? 'Send the matrix as a branded email' : 'No email on file'}
+          >
+            <Mail size={12}/>{' '}
+            {sendEmailOnly.isPending ? 'Sending…' : 'Send Email'}
           </Button>
         </DialogFooter>
       </DialogContent>

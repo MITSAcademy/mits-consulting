@@ -648,6 +648,10 @@ sourcingRouter.get('/clients/:clientId/skill-matrix', async (req: AuthedRequest,
     select: { id: true, name: true, demoDate: true, demoTimeIst: true },
   });
   if (!client) return res.status(404).json({ error: 'Client not found' });
+  // Allow caller (the modal) to override demoDate/demoTimeIst at preview time
+  // so the recruiter sees the matrix populated even before the demo is scheduled.
+  const demoDateUse = (req.query.demoDate as string) || client.demoDate || '';
+  const demoTimeUse = (req.query.demoTimeIst as string) || client.demoTimeIst || '';
   // Collect all proposals from this client's currently-open or proposed sourcing requests.
   const reqs = await prisma.sourcingRequest.findMany({
     where: { clientId: client.id, status: { in: ['Open', 'Proposed', 'Closed'] } },
@@ -660,9 +664,9 @@ sourcingRouter.get('/clients/:clientId/skill-matrix', async (req: AuthedRequest,
   const candidates = (passed.length > 0 ? passed : allProposals).map((p: any) => ({
     name: p.trainer?.name || p.trainerName || '—',
     totalExperience: p.experienceYears ? `${p.experienceYears} Years` : (p.trainer?.experienceYears ? `${p.trainer.experienceYears} Years` : '—'),
-    demoDate: client.demoDate || '',
-    demoTimeIst: client.demoTimeIst ? `${client.demoTimeIst} IST` : '',
-    zoneTimes: istToUsZones(client.demoTimeIst, client.demoDate),
+    demoDate: demoDateUse,
+    demoTimeIst: demoTimeUse ? `${demoTimeUse} IST` : '',
+    zoneTimes: istToUsZones(demoTimeUse, demoDateUse),
     mustHaveSkills: Array.isArray(p.mustHaveSkills) ? p.mustHaveSkills : [],
     softSkills: Array.isArray(p.softSkills) && p.softSkills.length > 0 ? p.softSkills : DEFAULT_SOFT_SKILLS,
   }));
