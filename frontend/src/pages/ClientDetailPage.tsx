@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, fileUrl } from '@/lib/api';
+import { api, fileUrl, uploadFile } from '@/lib/api';
 import { readAvailabilitySlots, formatAvailabilitySlots } from '@/lib/utils';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Pill } from '@/components/ui/pill';
@@ -11,7 +11,7 @@ import { formatPhone, waLink, todayISO, stageLabel, backStagesFor, addDays } fro
 import { useUI } from '@/store/ui';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/store/auth';
-import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play } from 'lucide-react';
+import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play, X } from 'lucide-react';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 
@@ -1448,7 +1448,26 @@ function DemoDoneModal({ client, onClose }: any) {
     demoOutcome: client.demoOutcome || 'Positive',
     demoFeedback: client.demoFeedback || '',
     demoNextSteps: client.demoNextSteps || '',
+    demoEvidenceUrl: client.demoEvidenceUrl || '',
+    demoEvidenceKind: client.demoEvidenceKind || '',
   });
+  const [uploading, setUploading] = useState(false);
+  async function pickEvidence(file: File, kind: 'Audio' | 'Screenshot') {
+    setUploading(true);
+    try {
+      // Normalize audio recordings to .mp3 — same pattern as the proposal flow.
+      const final = kind === 'Audio'
+        ? new File([file], `demo-evidence-${Date.now()}.mp3`, { type: 'audio/mpeg' })
+        : file;
+      const r = await uploadFile(final);
+      setF((prev) => ({ ...prev, demoEvidenceUrl: r.url, demoEvidenceKind: kind }));
+      showToast(`${kind} attached — will be sent to recruiter on save`);
+    } catch (e: any) {
+      showToast(e.response?.data?.error || 'Upload failed', 'error');
+    } finally {
+      setUploading(false);
+    }
+  }
   const save = useMutation({
     mutationFn: async () => {
       // 1. workflow PATCH (actuals + feedback) — Anjali/Taran allowed
@@ -1510,6 +1529,43 @@ function DemoDoneModal({ client, onClose }: any) {
           <Textarea rows={2} value={f.demoNextSteps} onChange={(e) => setF({ ...f, demoNextSteps: e.target.value })}
             placeholder="What's the follow-up? e.g. 'Roshni to send engagement letter by EOD', 'Trainer to share sample plan', etc." />
         </div>
+        {/* Evidence upload — show when the demo didn't go well. Auto-notifies
+            the proposing recruiter (Aman/Kanchan) on save. */}
+        {(f.demoOutcome === 'Negative' || f.demoOutcome === 'Neutral') && (
+          <div className="form-row">
+            <Label>
+              Evidence (audio / screenshot)
+              <span className="muted normal-case ml-1">— shared with the recruiter to explain why the demo didn't land</span>
+            </Label>
+            {f.demoEvidenceUrl ? (
+              <div className="flex items-center gap-2 bg-bg-input rounded p-2 text-xs">
+                <Pill color={f.demoEvidenceKind === 'Audio' ? 'purple' : 'blue'}>{f.demoEvidenceKind}</Pill>
+                {f.demoEvidenceKind === 'Audio' ? (
+                  <audio controls src={fileUrl(f.demoEvidenceUrl)} style={{ height: 28, flex: 1 }} />
+                ) : (
+                  <a href={fileUrl(f.demoEvidenceUrl)} target="_blank" rel="noreferrer" className="text-brand-blue flex-1 underline">View screenshot</a>
+                )}
+                <button onClick={() => setF({ ...f, demoEvidenceUrl: '', demoEvidenceKind: '' })} className="text-brand-textMuted hover:text-brand-red p-1" title="Remove">
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <label className="btn btn-sm cursor-pointer">
+                  🎙 Audio recording
+                  <input type="file" hidden disabled={uploading}
+                    onChange={(e) => { const fl = e.target.files?.[0]; if (fl) pickEvidence(fl, 'Audio'); e.target.value = ''; }} />
+                </label>
+                <label className="btn btn-sm cursor-pointer">
+                  🖼 Screenshot
+                  <input type="file" accept="image/*" hidden disabled={uploading}
+                    onChange={(e) => { const fl = e.target.files?.[0]; if (fl) pickEvidence(fl, 'Screenshot'); e.target.value = ''; }} />
+                </label>
+                {uploading && <span className="text-xs muted self-center">Uploading…</span>}
+              </div>
+            )}
+          </div>
+        )}
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="success" disabled={!f.demoFeedback.trim()} onClick={() => save.mutate()}>

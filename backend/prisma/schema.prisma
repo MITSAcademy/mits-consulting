@@ -326,6 +326,11 @@ model Client {
   demoOutcome              String?    // Positive | Neutral | Negative
   demoFeedback             String?
   demoNextSteps            String?
+  // Evidence file (audio recording / screenshot) attached to the last demo —
+  // Anjali uploads when sharing with the recruiter (Aman/Kanchan) about why
+  // a demo didn't go well.
+  demoEvidenceUrl          String?
+  demoEvidenceKind         String?    // 'Audio' | 'Screenshot' | 'Video'
   // Dormant tracking — client went silent / stopped responding
   dormantSince             String?
   dormantReason            String?

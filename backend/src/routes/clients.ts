@@ -94,6 +94,7 @@ const allowedFields = [
   'intakeData', 'intakeSkillHint', 'intakeReceivedAt',
   'demoDate', 'demoTimeIst', 'demoActualDate', 'demoActualTimeIst',
   'demoOutcome', 'demoFeedback', 'demoNextSteps',
+  'demoEvidenceUrl', 'demoEvidenceKind',
   'dormantSince', 'dormantReason', 'dormantCheckBackOn', 'dormantResumeFromStage',
   'notes',
 ];
@@ -121,6 +122,7 @@ const FIELD_CATEGORY: Record<string, string> = {
   demoDate: 'workflow', demoTimeIst: 'workflow',
   demoActualDate: 'workflow', demoActualTimeIst: 'workflow',
   demoOutcome: 'workflow', demoFeedback: 'workflow', demoNextSteps: 'workflow',
+  demoEvidenceUrl: 'workflow', demoEvidenceKind: 'workflow',
   dormantSince: 'workflow', dormantReason: 'workflow',
   dormantCheckBackOn: 'workflow', dormantResumeFromStage: 'workflow',
   bankAccountId: 'financial', paymentPendingVaibhav: 'financial',
@@ -179,6 +181,34 @@ clientsRouter.patch('/:id', async (req: AuthedRequest, res) => {
   }
   const client = await prisma.client.update({ where: { id: req.params.id }, data, include });
   await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${client.name} · ${Object.keys(data).join(',')}`);
+
+  // If Anjali/Taran just attached demo evidence AND the outcome is not Positive,
+  // ping the proposing recruiter so they can react. The notification carries the
+  // client link; recipient can play the audio / view the screenshot inline.
+  if (data.demoEvidenceUrl
+      && (client.demoOutcome === 'Negative' || client.demoOutcome === 'Neutral')) {
+    try {
+      const primaryProposal = await prisma.proposal.findFirst({
+        where: { trainerId: client.primaryTrainerId || undefined, request: { clientId: client.id } },
+        orderBy: { proposedAt: 'desc' },
+        select: { proposedById: true },
+      });
+      const recruiterId = primaryProposal?.proposedById;
+      if (recruiterId && recruiterId !== req.user!.id) {
+        await notify({
+          userId: recruiterId,
+          kind: 'DemoEvidenceShared',
+          title: `Demo evidence from ${client.name} (${client.demoOutcome})`,
+          body: `${req.user!.name} attached ${client.demoEvidenceKind || 'evidence'} from the demo. Outcome: ${client.demoOutcome}. ${client.demoFeedback ? '\n\nFeedback: ' + client.demoFeedback : ''}`,
+          link: `/clients/${client.id}`,
+          email: true,
+        });
+      }
+    } catch (e) {
+      console.warn('[demo-evidence notify] failed:', (e as any)?.message);
+    }
+  }
+
   res.json(client);
 });
 
@@ -368,6 +398,7 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
             title: `New sourcing request — ${client.name}`,
             body: `${req.user!.name} pushed this client to you. Open Sourcing to propose trainers.`,
             link: `/sourcing`,
+            email: true,
           });
         }
       }

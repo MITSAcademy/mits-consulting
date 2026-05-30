@@ -168,6 +168,7 @@ sourcingRouter.post('/', async (req: AuthedRequest, res) => {
       title: `New sourcing request — ${r.client.name}`,
       body: `${req.user!.name} sent a new client your way. Open the sourcing page to propose trainers.`,
       link: `/sourcing`,
+      email: true,
     });
   }
   res.status(201).json(r);
@@ -186,6 +187,7 @@ sourcingRouter.patch('/:id', async (req: AuthedRequest, res) => {
       title: `Sourcing request reassigned to you — ${prior?.client?.name || r.client.name}`,
       body: `${req.user!.name} routed this client to you.`,
       link: `/sourcing`,
+      email: true,
     });
   }
   res.json(r);
@@ -291,6 +293,7 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
       title: `${created.length} trainer proposal${created.length === 1 ? '' : 's'} for ${fullClient?.name || existing.clientId}`,
       body: `${req.user!.name} proposed candidates — review on the verifications page.`,
       link: `/verifications`,
+      email: true,
     });
   }
   res.status(201).json(created);
