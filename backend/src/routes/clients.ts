@@ -540,6 +540,50 @@ clientsRouter.get('/:id/demos', async (req, res) => {
   res.json(demos);
 });
 
+// Backfill a past demo that happened OUTSIDE the portal (e.g. before the team
+// onboarded, or an offline session that wasn't logged at the time). Creates a
+// Demo row with status='Done' so the history reflects reality. Does NOT touch
+// the client's lifecycle — strictly an audit/history entry.
+clientsRouter.post('/:id/demos/backfill', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'demo_lead', 'demo_intake'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only Samita, Anjali, Taran or admin can backfill demos' });
+  }
+  const { trainerId, actualDate, actualTimeIst, outcome, feedback, nextSteps } = req.body || {};
+  if (!actualDate) return res.status(400).json({ error: 'actualDate required' });
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, name: true },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  const demo = await prisma.demo.create({
+    data: {
+      clientId: req.params.id,
+      trainerId: trainerId || null,
+      // Use the same date for both fields so the card renders cleanly.
+      scheduledDate: actualDate,
+      scheduledTimeIst: actualTimeIst || null,
+      actualDate,
+      actualTimeIst: actualTimeIst || null,
+      outcome: outcome || null,
+      feedback: feedback || null,
+      nextSteps: nextSteps || null,
+      status: 'Done',
+      conductedById: req.user!.id,
+    },
+    include: {
+      trainer: { select: { id: true, name: true, skills: true } },
+      conductedBy: { select: { id: true, name: true } },
+    },
+  });
+  await audit(
+    req.user!.id, req.user!.name, 'DEMO_BACKFILL',
+    `${client.name} · ${actualDate}${outcome ? ' · ' + outcome : ''}`,
+  );
+  res.status(201).json(demo);
+});
+
 // ─── Engagement letter (Roshni → client on SaleWon) + handover trigger ─────
 // Sent by Roshni when the deal closes. Auto-CCs Mitali so she's aware.
 // Compulsory dual-send: email + WhatsApp (UI calls both endpoints in sequence).

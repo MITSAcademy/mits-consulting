@@ -1,8 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Pill } from '@/components/ui/pill';
 import { Link } from 'react-router-dom';
-import { Calendar, CheckCircle2, XCircle, CircleDot } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, CircleDot, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { useUI } from '@/store/ui';
 
 interface Props {
   /** Use one or the other */
@@ -10,7 +15,92 @@ interface Props {
   trainerId?: string;
 }
 
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+
+function BackfillDemoModal({ clientId, onClose }: { clientId: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [f, setF] = useState({
+    trainerId: '',
+    actualDate: todayISO(),
+    actualTimeIst: '',
+    outcome: 'Positive',
+    feedback: '',
+    nextSteps: '',
+  });
+  // Trainer pool for the dropdown.
+  const { data: trainers } = useQuery<any[]>({
+    queryKey: ['trainers'],
+    queryFn: () => api.get('/trainers').then((r) => r.data),
+  });
+  const save = useMutation({
+    mutationFn: () => api.post(`/clients/${clientId}/demos/backfill`, {
+      ...f,
+      trainerId: f.trainerId || undefined,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['demos', { clientId, trainerId: undefined }] });
+      qc.invalidateQueries({ queryKey: ['client', clientId] });
+      showToast('Past demo added to history');
+      onClose();
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        title="Add past demo"
+        description="Log a demo that happened offline or before the portal was in use. This is recorded as a history entry — it doesn't change the client's current lifecycle."
+        className="max-w-2xl"
+      >
+        <div className="grid md:grid-cols-2 gap-2.5">
+          <div className="form-row">
+            <Label>Actual date *</Label>
+            <Input type="date" value={f.actualDate} onChange={(e) => setF({ ...f, actualDate: e.target.value })} />
+          </div>
+          <div className="form-row">
+            <Label>Actual time (IST)</Label>
+            <Input type="time" value={f.actualTimeIst} onChange={(e) => setF({ ...f, actualTimeIst: e.target.value })} />
+          </div>
+        </div>
+        <div className="form-row">
+          <Label>Trainer (optional)</Label>
+          <Select value={f.trainerId} onChange={(e) => setF({ ...f, trainerId: e.target.value })}>
+            <option value="">— pick from pool —</option>
+            {(trainers || []).map((t) => (
+              <option key={t.id} value={t.id}>{t.name}{t.skills ? ` · ${t.skills.slice(0, 50)}` : ''}</option>
+            ))}
+          </Select>
+        </div>
+        <div className="form-row">
+          <Label>Outcome</Label>
+          <Select value={f.outcome} onChange={(e) => setF({ ...f, outcome: e.target.value })}>
+            <option value="Positive">Positive</option>
+            <option value="Neutral">Neutral</option>
+            <option value="Negative">Negative</option>
+          </Select>
+        </div>
+        <div className="form-row">
+          <Label>Feedback / what happened</Label>
+          <Textarea rows={3} value={f.feedback} onChange={(e) => setF({ ...f, feedback: e.target.value })} placeholder="What did the client say? Any notable points?" />
+        </div>
+        <div className="form-row">
+          <Label>Next steps (optional)</Label>
+          <Textarea rows={2} value={f.nextSteps} onChange={(e) => setF({ ...f, nextSteps: e.target.value })} placeholder="Follow-ups, if any" />
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!f.actualDate || save.isPending} onClick={() => save.mutate()}>
+            {save.isPending ? 'Saving…' : 'Add to history'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function DemoHistoryCard({ clientId, trainerId }: Props) {
+  const [backfillOpen, setBackfillOpen] = useState(false);
   const path = clientId ? `/clients/${clientId}/demos` : `/trainers/${trainerId}/demos`;
   const { data } = useQuery({
     queryKey: ['demos', { clientId, trainerId }],
@@ -37,7 +127,15 @@ export function DemoHistoryCard({ clientId, trainerId }: Props) {
           {counts.cancelled > 0 && ` · ${counts.cancelled} cancelled`}
           {counts.scheduled > 0 && ` · ${counts.scheduled} upcoming`}
         </span>
+        {clientId && (
+          <Button size="sm" className="ml-auto" onClick={() => setBackfillOpen(true)} title="Log a demo that happened offline / before the portal">
+            <Plus size={12}/> Add past demo
+          </Button>
+        )}
       </div>
+      {backfillOpen && clientId && (
+        <BackfillDemoModal clientId={clientId} onClose={() => setBackfillOpen(false)} />
+      )}
 
       {demos.length === 0 ? (
         <div className="muted text-sm">No demos yet.</div>
