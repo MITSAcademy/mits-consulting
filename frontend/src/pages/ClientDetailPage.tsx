@@ -1601,13 +1601,62 @@ function MoveBackwardsModal({ client, onClose }: any) {
   const [target, setTarget] = useState(options[0] || '');
   const [reason, setReason] = useState('');
 
+  // Per-trainer feedback rows — populated from existing Pass'd proposals so Anjali
+  // can capture WHY each specific trainer didn't work + optionally attach evidence.
+  // Saved to Proposal.postDemoNote / postDemoEvidence* on submit.
+  const passedProposals: any[] = (client.sourcingRequests || [])
+    .flatMap((r: any) => (r.proposals || []))
+    .filter((p: any) => p.verification === 'Pass');
+  const [feedbacks, setFeedbacks] = useState<Record<string, { note: string; url: string; kind: string }>>(
+    () => Object.fromEntries(passedProposals.map((p) => [p.id, {
+      note: p.postDemoNote || '',
+      url: p.postDemoEvidenceUrl || '',
+      kind: p.postDemoEvidenceKind || '',
+    }])),
+  );
+  const [uploadingFor, setUploadingFor] = useState<string | null>(null);
+
+  async function pickEvidence(pid: string, file: File, kind: 'Audio' | 'Screenshot') {
+    setUploadingFor(pid);
+    try {
+      const final = kind === 'Audio'
+        ? new File([file], `trainer-feedback-${Date.now()}.mp3`, { type: 'audio/mpeg' })
+        : file;
+      const r = await uploadFile(final);
+      setFeedbacks((prev) => ({ ...prev, [pid]: { ...prev[pid], url: r.url, kind } }));
+      showToast(`${kind} attached`);
+    } catch (e: any) {
+      showToast(e.response?.data?.error || 'Upload failed', 'error');
+    } finally {
+      setUploadingFor(null);
+    }
+  }
+
   const m = useMutation({
-    mutationFn: () => api.post(`/clients/${client.id}/stage`, { lifecycle: target, reason }),
+    mutationFn: async () => {
+      // 1. Save per-trainer feedback to each Pass'd proposal
+      for (const p of passedProposals) {
+        const fb = feedbacks[p.id];
+        if (!fb) continue;
+        const hasChange = fb.note !== (p.postDemoNote || '')
+          || fb.url !== (p.postDemoEvidenceUrl || '')
+          || fb.kind !== (p.postDemoEvidenceKind || '');
+        if (hasChange) {
+          await api.patch(`/sourcing/proposal/${p.id}`, {
+            postDemoNote: fb.note || null,
+            postDemoEvidenceUrl: fb.url || null,
+            postDemoEvidenceKind: fb.kind || null,
+          });
+        }
+      }
+      // 2. Transition the stage
+      await api.post(`/clients/${client.id}/stage`, { lifecycle: target, reason });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['clients'] });
       qc.invalidateQueries({ queryKey: ['nav-badges'] });
-      showToast(`Moved back to ${stageLabel(target)}`);
+      showToast(`Moved back to ${stageLabel(target)}${passedProposals.length ? ' · feedback saved' : ''}`);
       onClose();
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
@@ -1617,7 +1666,8 @@ function MoveBackwardsModal({ client, onClose }: any) {
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         title={`Move back · ${client.name}`}
-        description={`Currently at ${stageLabel(client.lifecycle)}. Pick an earlier stage to roll back to.`}
+        description={`Currently at ${stageLabel(client.lifecycle)}. Pick an earlier stage to roll back to. If trainers were Pass'd, give per-trainer feedback so recruiters know what to improve.`}
+        className="max-w-3xl"
       >
         {options.length === 0 ? (
           <div className="muted">No valid back-options from this stage.</div>
@@ -1631,15 +1681,68 @@ function MoveBackwardsModal({ client, onClose }: any) {
             </div>
             <div className="form-row">
               <Label>Reason (logged in audit trail) *</Label>
-              <Textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)}
-                placeholder="e.g. Client rejected this trainer after demo, wants someone with banking-domain experience" />
+              <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)}
+                placeholder="e.g. Client rejected after demo, wants someone with banking-domain experience" />
             </div>
+
+            {passedProposals.length > 0 && (
+              <div className="form-row">
+                <Label>Per-trainer feedback <span className="muted normal-case ml-1">— sent to the recruiter who proposed each trainer</span></Label>
+                <div className="space-y-3">
+                  {passedProposals.map((p: any) => {
+                    const fb = feedbacks[p.id] || { note: '', url: '', kind: '' };
+                    const tName = p.trainer?.name || p.trainerName || '—';
+                    return (
+                      <div key={p.id} className="border border-brand-border rounded p-2.5 bg-bg-input">
+                        <div className="text-xs font-medium mb-1.5">
+                          {tName}
+                          <span className="muted ml-2">· proposed by {p.proposedBy?.name || '—'}</span>
+                        </div>
+                        <Textarea
+                          rows={2}
+                          value={fb.note}
+                          onChange={(e) => setFeedbacks({ ...feedbacks, [p.id]: { ...fb, note: e.target.value } })}
+                          placeholder="What didn't work with this trainer? (specific feedback for the recruiter)"
+                        />
+                        {fb.url ? (
+                          <div className="flex items-center gap-2 bg-bg-page rounded p-1.5 mt-2 text-xs">
+                            <Pill color={fb.kind === 'Audio' ? 'purple' : 'blue'}>{fb.kind}</Pill>
+                            {fb.kind === 'Audio' ? (
+                              <audio controls src={fileUrl(fb.url)} style={{ height: 26, flex: 1 }} />
+                            ) : (
+                              <a href={fileUrl(fb.url)} target="_blank" rel="noreferrer" className="text-brand-blue underline flex-1">View screenshot</a>
+                            )}
+                            <button onClick={() => setFeedbacks({ ...feedbacks, [p.id]: { ...fb, url: '', kind: '' } })} className="text-brand-textMuted hover:text-brand-red p-1" title="Remove">
+                              <X size={12}/>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            <label className="btn btn-sm cursor-pointer text-xs">
+                              🎙 Audio
+                              <input type="file" hidden disabled={uploadingFor === p.id}
+                                onChange={(e) => { const fl = e.target.files?.[0]; if (fl) pickEvidence(p.id, fl, 'Audio'); e.target.value = ''; }} />
+                            </label>
+                            <label className="btn btn-sm cursor-pointer text-xs">
+                              🖼 Screenshot
+                              <input type="file" accept="image/*" hidden disabled={uploadingFor === p.id}
+                                onChange={(e) => { const fl = e.target.files?.[0]; if (fl) pickEvidence(p.id, fl, 'Screenshot'); e.target.value = ''; }} />
+                            </label>
+                            {uploadingFor === p.id && <span className="text-[11px] muted self-center">Uploading…</span>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </>
         )}
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="amber" disabled={!target || !reason.trim() || m.isPending} onClick={() => m.mutate()}>
-            <Undo2 size={14}/> Move back to {target ? stageLabel(target) : '—'}
+          <Button variant="amber" disabled={!target || !reason.trim() || m.isPending || !!uploadingFor} onClick={() => m.mutate()}>
+            <Undo2 size={14}/> {m.isPending ? 'Saving…' : `Move back to ${target ? stageLabel(target) : '—'}`}
           </Button>
         </DialogFooter>
       </DialogContent>

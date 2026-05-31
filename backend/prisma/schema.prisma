@@ -398,6 +398,12 @@ model Proposal {
   // visible to demo intake). Same shape as Trainer.availabilitySlots.
   // [{ "window": "Morning"|"Evening"|…, "fromIst": "07:00", "toIst": "10:00" }]
   availabilitySlots Json?
+  // Post-demo per-trainer feedback (captured by Anjali when she moves a client
+  // back to recruiters). Each Pass'd trainer gets their own note + optional
+  // evidence file so Aman/Kanchan know specifically what went wrong with each.
+  postDemoNote          String?
+  postDemoEvidenceUrl   String?
+  postDemoEvidenceKind  String?  // 'Audio' | 'Screenshot' | 'Video'
   notes             String?
   proposedById      String?
   proposedBy        User?              @relation(fields: [proposedById], references: [id], onDelete: SetNull)

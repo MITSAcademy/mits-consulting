@@ -301,7 +301,11 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
 
 sourcingRouter.patch('/proposal/:proposalId', async (req: AuthedRequest, res) => {
   const data: any = {};
-  for (const f of ['verification', 'verificationNotes', 'notes', 'rateInr', 'availabilitySlots']) {
+  for (const f of [
+    'verification', 'verificationNotes', 'notes', 'rateInr',
+    'availabilitySlots',
+    'postDemoNote', 'postDemoEvidenceUrl', 'postDemoEvidenceKind',
+  ]) {
     if (f in req.body) data[f] = req.body[f];
   }
   const p = await prisma.proposal.update({ where: { id: req.params.proposalId }, data });
