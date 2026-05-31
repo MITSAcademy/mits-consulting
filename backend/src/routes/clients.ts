@@ -441,6 +441,27 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
       if (sendInvite !== false) {
         await sendDemoInvite(req, newDemo.id, client).catch((e) => console.error('Demo invite failed:', e));
       }
+      // Notify the recruiter who proposed this trainer that their candidate is doing a demo.
+      // Includes email so Aman/Kanchan see it in inbox even if not in portal.
+      try {
+        const proposal = await prisma.proposal.findFirst({
+          where: { trainerId: current.primaryTrainerId || undefined, request: { clientId: req.params.id } },
+          orderBy: { proposedAt: 'desc' },
+          select: { proposedById: true, trainer: { select: { name: true } } },
+        });
+        if (proposal?.proposedById && proposal.proposedById !== req.user!.id) {
+          await notify({
+            userId: proposal.proposedById,
+            kind: 'DemoScheduled',
+            title: `Your trainer is on demo — ${client.name}`,
+            body: `${proposal.trainer?.name || 'Trainer'} is doing the demo on ${client.demoDate || 'TBD'}${client.demoTimeIst ? ' at ' + client.demoTimeIst + ' IST' : ''}. Heads up so you can stay in the loop.`,
+            link: `/clients/${req.params.id}`,
+            email: true,
+          });
+        }
+      } catch (e) {
+        console.warn('[demo-scheduled notify recruiter] failed:', (e as any)?.message);
+      }
     } else if (lifecycle === 'DemoDone') {
       const latest = await prisma.demo.findFirst({
         where: { clientId: req.params.id, status: { in: ['Scheduled', 'Rescheduled'] } },

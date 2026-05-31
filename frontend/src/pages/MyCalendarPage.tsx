@@ -28,7 +28,13 @@ interface Event {
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function ymd(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  // Build YYYY-MM-DD from LOCAL date parts. toISOString() shifts to UTC,
+  // which for IST (+5:30) turns "May 31 12:00am local" into "May 30 18:30 UTC"
+  // → wrong date label on the grid. Use local getters to keep alignment.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 function firstOfMonth(year: number, month: number): Date {
   return new Date(year, month, 1);
