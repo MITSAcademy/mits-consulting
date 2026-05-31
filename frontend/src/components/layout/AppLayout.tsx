@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Toaster } from '@/components/ui/toast';
 import { NotificationBell } from '@/components/NotificationBell';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export function AppLayout() {
   return (
@@ -34,6 +35,7 @@ export function Topbar({
       </div>
       <div className="flex gap-1.5 items-center flex-wrap">
         {actions}
+        <ThemeToggle />
         <NotificationBell />
       </div>
     </div>

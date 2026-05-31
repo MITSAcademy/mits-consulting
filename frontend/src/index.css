@@ -2,29 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Theme variables ────────────────────────────────────────────────────
+   Default = dark (matches the original visual). Setting data-theme="light"
+   on <html> swaps to a light palette. The toggle in the topbar persists
+   the choice in localStorage.                                              */
+:root {
+  --bg-page:      #1A1B1E;
+  --bg-sidebar:   #141518;
+  --bg-card:      #26282E;
+  --bg-input:     #1E2024;
+  --brand-border: #33363D;
+  --brand-text:           #E8E8EA;
+  --brand-textSecondary:  #9CA0A8;
+  --brand-textMuted:      #6B6F78;
+  --pill-grey-bg: #1E2024;
+  --scrollbar-track: #1A1B1E;
+  --scrollbar-thumb: #33363D;
+  --scrollbar-thumb-hover: #6B6F78;
+}
+:root[data-theme="light"] {
+  --bg-page:      #FFFFFF;
+  --bg-sidebar:   #F5F5F7;
+  --bg-card:      #FFFFFF;
+  --bg-input:     #F5F5F7;
+  --brand-border: #E5E5EA;
+  --brand-text:           #1A1B1E;
+  --brand-textSecondary:  #4A4D54;
+  --brand-textMuted:      #8A8E96;
+  --pill-grey-bg: #ECECF0;
+  --scrollbar-track: #F5F5F7;
+  --scrollbar-thumb: #C5C8CE;
+  --scrollbar-thumb-hover: #8A8E96;
+}
+
 @layer base {
   html, body, #root {
     height: 100%;
-    background: #1A1B1E;
-    color: #E8E8EA;
+    background: var(--bg-page);
+    color: var(--brand-text);
     font-family: 'Inter', system-ui, sans-serif;
     font-size: 14px;
     line-height: 1.5;
   }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-track { background: #1A1B1E; }
-  ::-webkit-scrollbar-thumb { background: #33363D; border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: #6B6F78; }
+  ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 }
 
 @layer components {
   .mono { font-family: 'JetBrains Mono', monospace; }
-  .muted { color: #6B6F78; }
+  .muted { color: var(--brand-textMuted); }
 
   .pill {
     @apply inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full font-medium whitespace-nowrap;
   }
-  .pill-grey   { background: #1E2024; color: #9CA0A8; }
+  .pill-grey   { background: var(--pill-grey-bg); color: var(--brand-textSecondary); }
   .pill-green  { background: rgba(74,222,128,0.12); color: #4ADE80; }
   .pill-amber  { background: rgba(245,158,11,0.12); color: #F59E0B; }
   .pill-red    { background: rgba(239,68,68,0.12); color: #EF4444; }
@@ -34,8 +67,8 @@
   .pill-teal   { background: rgba(20,184,166,0.12); color: #14B8A6; }
 
   .card {
-    background: #26282E;
-    border: 1px solid #33363D;
+    background: var(--bg-card);
+    border: 1px solid var(--brand-border);
     border-radius: 10px;
     padding: 16px;
   }
@@ -46,13 +79,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    color: #9CA0A8;
+    color: var(--brand-textSecondary);
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
   .table-card {
-    background: #26282E;
-    border: 1px solid #33363D;
+    background: var(--bg-card);
+    border: 1px solid var(--brand-border);
     border-radius: 10px;
     overflow: hidden;
     overflow-x: auto;

@@ -6,19 +6,21 @@ export default {
     container: { center: true, padding: '1rem' },
     extend: {
       colors: {
+        // Surface tokens reference CSS vars so [data-theme="light"] swaps them.
         bg: {
-          page: '#1A1B1E',
-          sidebar: '#141518',
-          card: '#26282E',
+          page:      'var(--bg-page)',
+          sidebar:   'var(--bg-sidebar)',
+          card:      'var(--bg-card)',
           cardHover: '#2D2F36',
-          input: '#1E2024',
+          input:     'var(--bg-input)',
         },
         brand: {
-          border: '#33363D',
+          border:     'var(--brand-border)',
           borderSoft: '#2A2D33',
-          text: '#E8E8EA',
-          textSecondary: '#9CA0A8',
-          textMuted: '#6B6F78',
+          text:           'var(--brand-text)',
+          textSecondary:  'var(--brand-textSecondary)',
+          textMuted:      'var(--brand-textMuted)',
+          // Accent colours stay static — work on both themes.
           green: '#4ADE80',
           amber: '#F59E0B',
           blue: '#3B82F6',
