@@ -350,9 +350,39 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
   const client = await prisma.client.update({ where: { id: req.params.id }, data, include });
 
   // ─── Sourcing side-effects ────────────────────────────────────────────────
-  // When a client lands at WithRecruiters and has no active sourcing request,
-  // auto-create one routed to the right recruiter. This catches the case where
-  // a client got back-moved post-demo and otherwise would be invisible to recruiters.
+  // When a client moves OUT of the recruiter flow (Dormant / Hold / pulled-back to
+  // InternalSearch / Churned / back to Lead-stages), close any active sourcing
+  // requests so they vanish from the recruiter's queue. Without this, requests
+  // routed to Aman/Kanchan keep showing even after Samita marks the client dormant
+  // or Anjali pulls them back to handle herself.
+  const removeFromRecruiterQueue = [
+    'Dormant', 'Hold', 'InternalSearch', 'Churned',
+    'Lead', 'IntakeSent', 'IntakeReceived',
+  ];
+  try {
+    if (
+      removeFromRecruiterQueue.includes(lifecycle)
+      && !removeFromRecruiterQueue.includes(current.lifecycle)
+    ) {
+      const active = await prisma.sourcingRequest.findMany({
+        where: { clientId: req.params.id, status: { in: ['Open', 'Proposed'] } },
+        select: { id: true, sentToId: true },
+      });
+      if (active.length > 0) {
+        await prisma.sourcingRequest.updateMany({
+          where: { id: { in: active.map((a) => a.id) } },
+          data: { status: 'Closed' },
+        });
+        await audit(
+          req.user!.id, req.user!.name, 'SOURCING_AUTOCLOSE',
+          `${client.name}: ${active.length} sourcing request(s) closed (stage → ${lifecycle})`,
+        );
+      }
+    }
+  } catch (e) {
+    console.error('Auto-close sourcing requests failed (non-fatal):', e);
+  }
+
   try {
     if (lifecycle === 'WithRecruiters' && current.lifecycle !== 'WithRecruiters') {
       const existing = await prisma.sourcingRequest.findFirst({
