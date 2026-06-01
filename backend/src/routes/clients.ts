@@ -1361,6 +1361,135 @@ clientsRouter.post('/:id/demo-invite', async (req: AuthedRequest, res) => {
   }
 });
 
+// Multi-trainer demo scheduling. Anjali can schedule demos for 2+ trainers at once,
+// each with their own date/time (matching each trainer's availability). Creates one
+// Demo row per slot and sends a separate, per-trainer calendar invite.
+clientsRouter.post('/:id/schedule-multi-demo', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'demo_lead', 'demo_intake'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only Samita, Anjali, Taran or admin can schedule demos.' });
+  }
+  const { slots, sendInvite = true } = req.body as {
+    slots: { trainerId: string; date: string; timeIst: string }[];
+    sendInvite?: boolean;
+  };
+  if (!Array.isArray(slots) || slots.length === 0) {
+    return res.status(400).json({ error: 'At least one slot required.' });
+  }
+  for (const s of slots) {
+    if (!s.trainerId || !s.date || !s.timeIst) {
+      return res.status(400).json({ error: 'Every slot needs trainerId, date and timeIst.' });
+    }
+  }
+
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    include: { primaryTrainer: true },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  // Sort by date+time → earliest is the headline
+  const sorted = [...slots].sort((a, b) => `${a.date} ${a.timeIst}`.localeCompare(`${b.date} ${b.timeIst}`));
+  const earliest = sorted[0];
+
+  const results: { trainerId: string; trainerName: string; demoId: string; date: string; timeIst: string }[] = [];
+
+  for (const slot of sorted) {
+    const trainer = await prisma.trainer.findUnique({ where: { id: slot.trainerId } });
+    if (!trainer) {
+      console.warn(`[schedule-multi-demo] trainer ${slot.trainerId} not found, skipping`);
+      continue;
+    }
+
+    // Find existing scheduled demo for this trainer (so updates don't duplicate)
+    const existing = await prisma.demo.findFirst({
+      where: { clientId: client.id, trainerId: slot.trainerId, status: { in: ['Scheduled', 'Rescheduled'] } },
+      orderBy: { createdAt: 'desc' },
+    });
+    let demo;
+    if (existing) {
+      demo = await prisma.demo.update({
+        where: { id: existing.id },
+        data: {
+          scheduledDate: slot.date,
+          scheduledTimeIst: slot.timeIst,
+          status: 'Rescheduled',
+        },
+      });
+    } else {
+      demo = await prisma.demo.create({
+        data: {
+          clientId: client.id,
+          trainerId: slot.trainerId,
+          scheduledDate: slot.date,
+          scheduledTimeIst: slot.timeIst,
+          status: 'Scheduled',
+        },
+      });
+    }
+
+    if (sendInvite) {
+      try {
+        await sendDemoInvite(req, demo.id, client, { trainer, date: slot.date, timeIst: slot.timeIst });
+      } catch (e: any) {
+        console.error(`[schedule-multi-demo] invite failed for ${trainer.name}:`, e?.message || e);
+      }
+    }
+
+    // Notify the recruiter who proposed this trainer (if different from caller)
+    try {
+      const proposal = await prisma.proposal.findFirst({
+        where: { trainerId: slot.trainerId, request: { clientId: client.id } },
+        orderBy: { proposedAt: 'desc' },
+        select: { proposedById: true },
+      });
+      if (proposal?.proposedById && proposal.proposedById !== req.user!.id) {
+        await notify({
+          userId: proposal.proposedById,
+          kind: 'DemoScheduled',
+          title: `Your trainer is on demo — ${client.name}`,
+          body: `${trainer.name} is doing the demo on ${slot.date} at ${slot.timeIst} IST. Heads up so you can stay in the loop.`,
+          link: `/clients/${client.id}`,
+          email: true,
+        });
+      }
+    } catch (e) {
+      console.warn('[schedule-multi-demo] notify recruiter failed:', (e as any)?.message);
+    }
+
+    results.push({ trainerId: slot.trainerId, trainerName: trainer.name, demoId: demo.id, date: slot.date, timeIst: slot.timeIst });
+  }
+
+  // Update headline fields on client (earliest demo = the public-facing date/time)
+  await prisma.client.update({
+    where: { id: client.id },
+    data: {
+      demoDate: earliest.date,
+      demoTimeIst: earliest.timeIst,
+      ...(client.primaryTrainerId ? {} : { primaryTrainerId: earliest.trainerId }),
+    },
+  });
+
+  // Move to DemoScheduled if not already there
+  if (client.lifecycle !== 'DemoScheduled') {
+    await prisma.client.update({
+      where: { id: client.id },
+      data: { lifecycle: 'DemoScheduled' },
+    });
+    await audit(
+      req.user!.id, req.user!.name, 'STAGE_CHANGE',
+      `${client.name}: ${client.lifecycle} → DemoScheduled (multi-trainer · ${results.length} slot${results.length === 1 ? '' : 's'})`,
+    );
+  } else {
+    await audit(
+      req.user!.id, req.user!.name, 'DEMO_RESCHEDULED',
+      `${client.name}: multi-trainer reschedule · ${results.length} slot${results.length === 1 ? '' : 's'}`,
+    );
+  }
+
+  res.json({ ok: true, scheduled: results });
+});
+
 // ─── Demo invite (ICS) helper ───────────────────────────────────────────────
 //
 // Privacy model: Client and trainer emails are NEVER shared with each other.
@@ -1375,17 +1504,23 @@ function formatDemoDateLong(yyyyMmDd: string): string {
   } catch { return yyyyMmDd; }
 }
 
-async function sendDemoInvite(req: AuthedRequest, demoId: string, client: any) {
-  if (!client.demoDate) return; // need a date to build an ICS
+async function sendDemoInvite(
+  req: AuthedRequest,
+  demoId: string,
+  client: any,
+  overrides?: { trainer?: any; date?: string; timeIst?: string },
+) {
+  // Per-slot overrides (multi-trainer scheduling) — fall back to client fields.
+  const date = overrides?.date || client.demoDate;
+  if (!date) return; // need a date to build an ICS
 
-  // Build start time. demoTimeIst (HH:MM) is IST = +05:30
-  const time = (client.demoTimeIst || '20:00').padEnd(5, '0').slice(0, 5);
-  const startISO = `${client.demoDate}T${time}:00+05:30`;
+  const time = (overrides?.timeIst || client.demoTimeIst || '20:00').padEnd(5, '0').slice(0, 5);
+  const startISO = `${date}T${time}:00+05:30`;
 
-  // Resolve emails
-  const trainer = client.primaryTrainer || (client.primaryTrainerId
+  // Resolve trainer (override > primary)
+  const trainer = overrides?.trainer ?? (client.primaryTrainer || (client.primaryTrainerId
     ? await prisma.trainer.findUnique({ where: { id: client.primaryTrainerId } })
-    : null);
+    : null));
   const clientEmail = client.email || (client.intakeData as any)?.client_email || '';
   const trainerEmail = trainer?.email || '';
   if (!clientEmail && !trainerEmail) {
@@ -1410,7 +1545,7 @@ async function sendDemoInvite(req: AuthedRequest, demoId: string, client: any) {
 
   const skills = (client.intakeData as any)?.detailed_skill_set || client.intakeSkillHint || '';
   const meetingTool = (client.intakeData as any)?.meeting_tool || 'Zoom (joining link will be shared separately)';
-  const longDate = formatDemoDateLong(client.demoDate);
+  const longDate = formatDemoDateLong(date);
   const subject = `Demo Session Invitation · ${longDate} at ${time} IST`;
   const ics_summary = `MITS Demo · ${client.name}${trainer ? ' × ' + trainer.name : ''}`;
 
@@ -1520,6 +1655,6 @@ async function sendDemoInvite(req: AuthedRequest, demoId: string, client: any) {
 
   await audit(
     req.user!.id, req.user!.name, 'DEMO_INVITE_SENT',
-    `${client.name} · ${client.demoDate} ${time} IST · To ${sentTo.join(', ')}`,
+    `${client.name} · ${date} ${time} IST${trainer ? ' · trainer ' + trainer.name : ''} · To ${sentTo.join(', ')}`,
   );
 }

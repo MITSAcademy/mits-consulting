@@ -9,7 +9,7 @@ import { Input, Textarea, Label, Select } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { formatPhone, waLink, todayISO, stageLabel, backStagesFor, addDays } from '@/lib/utils';
 import { useUI } from '@/store/ui';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/store/auth';
 import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play, X } from 'lucide-react';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
@@ -1305,41 +1305,137 @@ function InternalSearchModal({ client, onClose }: any) {
   );
 }
 
+type DemoSlot = { trainerId: string; trainerName: string; date: string; timeIst: string; include: boolean };
+
 function ScheduleDemoModal({ client, onClose }: any) {
   const qc = useQueryClient(); const showToast = useUI((s) => s.showToast);
-  const [date, setDate] = useState(client.demoDate || todayISO());
-  const [time, setTime] = useState(client.demoTimeIst || '20:00');
   const [sendInvite, setSendInvite] = useState(true);
+
+  // Build the candidate list from passed proposals + primary trainer fallback.
+  // Each candidate gets its own date/time slot so Anjali can match each trainer's availability.
+  const candidates: { trainerId: string; trainerName: string; suggestedDate?: string; suggestedTime?: string }[] = useMemo(() => {
+    const out: { trainerId: string; trainerName: string; suggestedDate?: string; suggestedTime?: string }[] = [];
+    const seen = new Set<string>();
+    // Pull passed proposals across all sourcing requests
+    for (const r of (client.sourcingRequests || [])) {
+      for (const p of (r.proposals || [])) {
+        if (p.verification === 'Pass' && p.trainer?.id && !seen.has(p.trainer.id)) {
+          seen.add(p.trainer.id);
+          out.push({ trainerId: p.trainer.id, trainerName: p.trainer.name });
+        }
+      }
+    }
+    // Primary trainer fallback (Internal Search path — no proposal)
+    if (client.primaryTrainerId && !seen.has(client.primaryTrainerId)) {
+      out.push({
+        trainerId: client.primaryTrainerId,
+        trainerName: client.primaryTrainer?.name || 'Primary trainer',
+      });
+    }
+    return out;
+  }, [client]);
+
+  // Initial slots: pre-check primary trainer if it exists, otherwise the first one.
+  const [slots, setSlots] = useState<DemoSlot[]>(() => {
+    const baseDate = client.demoDate || todayISO();
+    const baseTime = client.demoTimeIst || '20:00';
+    return candidates.map((c, i) => ({
+      trainerId: c.trainerId,
+      trainerName: c.trainerName,
+      date: baseDate,
+      timeIst: baseTime,
+      include: client.primaryTrainerId ? c.trainerId === client.primaryTrainerId : i === 0,
+    }));
+  });
+
+  function patchSlot(idx: number, patch: Partial<DemoSlot>) {
+    setSlots((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+  }
+
+  const activeSlots = slots.filter((s) => s.include && s.date && s.timeIst);
+
   const save = useMutation({
     mutationFn: async () => {
-      // 1. Persist date/time (workflow PATCH — Anjali/Taran allowed)
-      await api.patch(`/clients/${client.id}`, { demoDate: date, demoTimeIst: time });
-      // 2. Move stage to DemoScheduled (only if not already) — pass sendInvite flag
-      if (client.lifecycle !== 'DemoScheduled') {
-        await api.post(`/clients/${client.id}/stage`, { lifecycle: 'DemoScheduled', sendInvite });
-      } else if (sendInvite) {
-        // Already in DemoScheduled — manually trigger a fresh invite for the new time
-        await api.post(`/clients/${client.id}/demo-invite`).catch(() => {});
-      }
+      const payload = {
+        slots: activeSlots.map((s) => ({ trainerId: s.trainerId, date: s.date, timeIst: s.timeIst })),
+        sendInvite,
+      };
+      await api.post(`/clients/${client.id}/schedule-multi-demo`, payload);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['clients'] });
       qc.invalidateQueries({ queryKey: ['my-calendar'] });
-      showToast(`Demo scheduled ${date} ${time} IST${sendInvite ? ' · invite sent' : ''}`);
+      const n = activeSlots.length;
+      showToast(`Demo scheduled · ${n} trainer${n === 1 ? '' : 's'}${sendInvite ? ' · invites sent' : ''}`);
       onClose();
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
+
   const hasClientEmail = !!(client.email || client.intakeData?.client_email);
+  const hasAnyCandidate = candidates.length > 0;
+
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title={`Schedule demo · ${client.name}`} description="Date + IST time get saved on the client. Shown on the Demo schedule page.">
-        <div className="grid md:grid-cols-2 gap-2.5">
-          <div className="form-row"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-          <div className="form-row"><Label>Time (IST)</Label><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></div>
-        </div>
-        <div className="mt-3 p-2.5 bg-bg-input rounded">
+      <DialogContent
+        title={`Schedule demo · ${client.name}`}
+        description={hasAnyCandidate
+          ? 'Tick each trainer you want to schedule. Each can have its own date/time — invites and calendar entries are created per trainer.'
+          : 'Set the demo date + IST time. Saved on the client and shown on the Demo schedule page.'
+        }
+        className="max-w-2xl"
+      >
+        {!hasAnyCandidate && (
+          <div className="callout amber mb-2">
+            No trainer on file yet. Pick a trainer via Internal Search first, or wait for a recruiter proposal.
+          </div>
+        )}
+
+        {hasAnyCandidate && (
+          <div className="space-y-2 mb-3">
+            {slots.map((s, idx) => (
+              <div
+                key={s.trainerId}
+                className={`border rounded-md p-2.5 ${s.include ? 'border-brand-amber bg-bg-input' : 'border-brand-border'}`}
+              >
+                <label className="flex items-center gap-2 cursor-pointer mb-2">
+                  <input
+                    type="checkbox"
+                    checked={s.include}
+                    onChange={(e) => patchSlot(idx, { include: e.target.checked })}
+                  />
+                  <span className="text-sm font-medium">{s.trainerName}</span>
+                  {client.primaryTrainerId === s.trainerId && (
+                    <span className="text-[10px] muted">· primary</span>
+                  )}
+                </label>
+                {s.include && (
+                  <div className="grid md:grid-cols-2 gap-2 pl-6">
+                    <div className="form-row">
+                      <Label>Date</Label>
+                      <Input
+                        type="date"
+                        value={s.date}
+                        onChange={(e) => patchSlot(idx, { date: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-row">
+                      <Label>Time (IST)</Label>
+                      <Input
+                        type="time"
+                        value={s.timeIst}
+                        onChange={(e) => patchSlot(idx, { timeIst: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-1 p-2.5 bg-bg-input rounded">
           <label className="flex items-start gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -1348,18 +1444,27 @@ function ScheduleDemoModal({ client, onClose }: any) {
               className="mt-0.5"
             />
             <div className="text-sm">
-              <div className="font-medium">Send calendar invite (.ics) to client + trainer</div>
+              <div className="font-medium">Send calendar invite (.ics) to client + trainer{activeSlots.length > 1 ? '(s)' : ''}</div>
               <div className="text-xs muted mt-0.5">
-                Email goes from your @mitssolution.com address (configure in Settings → My email).
-                {!hasClientEmail && <span className="text-brand-amber"> · No client email on file — only trainer will receive.</span>}
+                One invite per trainer at their own time. You'll also get a copy on your own calendar.
+                {!hasClientEmail && <span className="text-brand-amber"> · No client email on file — only trainer(s) will receive.</span>}
               </div>
             </div>
           </label>
         </div>
+
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!date || !time} onClick={() => save.mutate()}>
-            {client.lifecycle === 'DemoScheduled' ? 'Update demo time' : 'Schedule demo'}
+          <Button
+            variant="primary"
+            disabled={!hasAnyCandidate || activeSlots.length === 0 || save.isPending}
+            onClick={() => save.mutate()}
+          >
+            {save.isPending
+              ? 'Scheduling…'
+              : activeSlots.length > 1
+                ? `Schedule ${activeSlots.length} demos`
+                : client.lifecycle === 'DemoScheduled' ? 'Update demo time' : 'Schedule demo'}
           </Button>
         </DialogFooter>
       </DialogContent>
