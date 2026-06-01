@@ -52,7 +52,7 @@ function canEditClient(role: string, cat: 'identity' | 'contact' | 'engagement' 
 type ModalKind =
   | null | 'editContact' | 'editEngagement' | 'assignOwner'
   | 'sendIntake' | 'recordIntake' | 'internalSearch'
-  | 'scheduleDemo' | 'demoDone' | 'freshPayment' | 'leverage' | 'hold' | 'renewal' | 'welcomeEmail' | 'postDemoFeedback' | 'sendSkillMatrix' | 'preDemoReminder'
+  | 'scheduleDemo' | 'demoDone' | 'freshPayment' | 'leverage' | 'hold' | 'renewal' | 'welcomeEmail' | 'postDemoFeedback' | 'sendSkillMatrix' | 'skipMatrix' | 'preDemoReminder'
   | 'engagementLetter' | 'handoverWelcome'
   | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume';
 
@@ -184,9 +184,10 @@ export function ClientDetailPage() {
           <Mail size={12}/> Pre-demo reminder (locked) 🔒
         </Button>
       );
+      // Bypass: shared outside the portal (or matrix not needed for this client) — unlock scheduling
       actions.push(
-        <Button key="sched-locked" disabled title="Send the skill matrix first">
-          <CalendarPlus size={14}/> Schedule demo (locked)
+        <Button key="sched-skip" variant="amber" onClick={() => setModal('skipMatrix')} title="Already shared the matrix outside the portal, or skipping the step for this client? Unlock Schedule demo now.">
+          <CalendarPlus size={14}/> Skip matrix · Schedule demo
         </Button>
       );
     } else {
@@ -650,6 +651,7 @@ export function ClientDetailPage() {
         {modal === 'welcomeEmail' && <WelcomeEmailModal client={client} onClose={() => setModal(null)} />}
         {modal === 'postDemoFeedback' && <PostDemoFeedbackModal client={client} onClose={() => setModal(null)} />}
         {modal === 'sendSkillMatrix' && <SendSkillMatrixModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'skipMatrix' && <SkipMatrixModal client={client} onClose={() => setModal(null)} onProceed={() => { setModal('scheduleDemo'); }} />}
         {modal === 'preDemoReminder' && <PreDemoReminderModal client={client} onClose={() => setModal(null)} />}
         {modal === 'engagementLetter' && <EngagementLetterModal client={client} onClose={() => setModal(null)} />}
         {modal === 'handoverWelcome' && <HandoverWelcomeModal client={client} onClose={() => setModal(null)} />}
@@ -2043,6 +2045,49 @@ function PromoteToPassButton({ proposalId, clientId }: { proposalId: string; cli
   );
 }
 
+/** Bypass the skill-matrix step entirely — Anjali shared it outside the portal,
+ *  or the client doesn't need a formal matrix. Marks "sent" and jumps to Schedule demo. */
+function SkipMatrixModal({ client, onClose, onProceed }: { client: any; onClose: () => void; onProceed: () => void }) {
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
+  const [reason, setReason] = useState('');
+  const m = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/mark-skill-matrix-sent`, { reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      showToast('Matrix step bypassed · Schedule demo unlocked');
+      onClose();
+      // Caller pivots to scheduleDemo modal
+      setTimeout(onProceed, 50);
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        title={`Skip skill matrix · ${client.name}`}
+        description='Unlocks Schedule demo without sending the in-portal matrix. Use this when you have already shared the profile externally, or the client does not need a formal matrix.'
+      >
+        <div className="form-row">
+          <Label>Note (optional)</Label>
+          <Textarea
+            rows={3}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. shared profile via WhatsApp on personal phone"
+          />
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="amber" disabled={m.isPending} onClick={() => m.mutate()}>
+            {m.isPending ? 'Unlocking…' : 'Skip & schedule demo'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function SendSkillMatrixModal({ client, onClose }: any) {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
@@ -2150,7 +2195,10 @@ function SendSkillMatrixModal({ client, onClose }: any) {
               />
             )}
             {preview && preview.candidates?.length === 0 && (
-              <div className="muted text-sm p-3">No proposed trainers yet. Ask Aman/Kanchan to propose trainers first.</div>
+              <div className="muted text-sm p-3">
+                No trainer profile available to render. Pick a trainer (Internal Search) or have Aman/Kanchan propose one.
+                You can still click <strong>Mark as sent</strong> if you shared the matrix manually.
+              </div>
             )}
           </div>
         </div>
@@ -2158,9 +2206,9 @@ function SendSkillMatrixModal({ client, onClose }: any) {
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
           <Button
-            disabled={anyPending || !preview?.candidates?.length}
+            disabled={anyPending}
             onClick={() => markSent.mutate()}
-            title='Already shared outside the portal? Mark as sent to unlock Schedule demo.'
+            title='Already shared outside the portal (or skipping the matrix step)? Mark as sent to unlock Schedule demo.'
           >
             {markSent.isPending ? 'Marking…' : 'Mark as sent'}
           </Button>

@@ -868,7 +868,7 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
   }
   const client = await prisma.client.findUnique({
     where: { id: req.params.id },
-    select: { id: true, name: true, email: true, intakeData: true, demoDate: true, demoTimeIst: true },
+    select: { id: true, name: true, email: true, intakeData: true, demoDate: true, demoTimeIst: true, primaryTrainerId: true },
   });
   if (!client) return res.status(404).json({ error: 'Client not found' });
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
@@ -898,25 +898,56 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
   const allProposals = reqs.flatMap((r) => r.proposals);
   const passed = allProposals.filter((p: any) => p.verification === 'Pass');
   const baseList = passed.length > 0 ? passed : allProposals;
+  let candidates: any[];
   if (baseList.length === 0) {
-    return res.status(400).json({ error: 'No proposals found for this client — recruiters must propose trainers first.' });
-  }
-  // Require at least one mustHaveSkills entry per candidate before sending (compulsory criteria)
-  const missing = baseList.filter((p: any) => !Array.isArray(p.mustHaveSkills) || p.mustHaveSkills.length === 0);
-  if (missing.length > 0) {
-    return res.status(400).json({
-      error: `Skill matrix incomplete — ${missing.length} proposed trainer(s) have no "Must Have Skills" filled in. Ask Aman/Kanchan to fill them.`,
+    // Internal Search fallback — Anjali picked from the pool, no Proposal exists.
+    // Synthesize from the client's primary trainer so the matrix can still go out.
+    if (!client.primaryTrainerId) {
+      return res.status(400).json({ error: 'No trainer on file for this client — pick a trainer first.' });
+    }
+    const t = await prisma.trainer.findUnique({
+      where: { id: client.primaryTrainerId },
+      select: { name: true, experienceYears: true, skills: true },
     });
+    if (!t) {
+      return res.status(400).json({ error: 'Primary trainer not found.' });
+    }
+    const skillList = (t.skills || '')
+      .split(/[,;\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 12)
+      .map((skill) => ({ skill, proficiency: 4 }));
+    if (skillList.length === 0) {
+      return res.status(400).json({ error: 'No skills listed on this trainer — add skills to the trainer profile before sending.' });
+    }
+    candidates = [{
+      name: t.name || '—',
+      totalExperience: t.experienceYears ? `${t.experienceYears} Years` : '—',
+      demoDate: demoDateOverride,
+      demoTimeIst: demoTimeOverride ? `${demoTimeOverride} IST` : '',
+      zoneTimes: istToUsZones(demoTimeOverride, demoDateOverride),
+      mustHaveSkills: skillList,
+      softSkills: DEFAULT_SOFT_SKILLS,
+    }];
+  } else {
+    // Require at least one mustHaveSkills entry per candidate before sending (compulsory criteria)
+    const missing = baseList.filter((p: any) => !Array.isArray(p.mustHaveSkills) || p.mustHaveSkills.length === 0);
+    if (missing.length > 0) {
+      return res.status(400).json({
+        error: `Skill matrix incomplete — ${missing.length} proposed trainer(s) have no "Must Have Skills" filled in. Ask Aman/Kanchan to fill them.`,
+      });
+    }
+    candidates = baseList.map((p: any) => ({
+      name: p.trainer?.name || p.trainerName || '—',
+      totalExperience: p.experienceYears ? `${p.experienceYears} Years` : '—',
+      demoDate: demoDateOverride,
+      demoTimeIst: demoTimeOverride ? `${demoTimeOverride} IST` : '',
+      zoneTimes: istToUsZones(demoTimeOverride, demoDateOverride),
+      mustHaveSkills: p.mustHaveSkills,
+      softSkills: Array.isArray(p.softSkills) && p.softSkills.length > 0 ? p.softSkills : DEFAULT_SOFT_SKILLS,
+    }));
   }
-  const candidates = baseList.map((p: any) => ({
-    name: p.trainer?.name || p.trainerName || '—',
-    totalExperience: p.experienceYears ? `${p.experienceYears} Years` : '—',
-    demoDate: demoDateOverride,
-    demoTimeIst: demoTimeOverride ? `${demoTimeOverride} IST` : '',
-    zoneTimes: istToUsZones(demoTimeOverride, demoDateOverride),
-    mustHaveSkills: p.mustHaveSkills,
-    softSkills: Array.isArray(p.softSkills) && p.softSkills.length > 0 ? p.softSkills : DEFAULT_SOFT_SKILLS,
-  }));
   const subject = `MITS · Proposed trainer profiles for ${client.name}`;
   const html = buildSkillMatrixHtml({ clientName: client.name, candidates, introNote: req.body?.introNote });
   const text = buildSkillMatrixText({ clientName: client.name, candidates, introNote: req.body?.introNote });
@@ -987,7 +1018,7 @@ clientsRouter.post('/:id/send-skill-matrix-whatsapp', async (req: AuthedRequest,
   }
   const client = await prisma.client.findUnique({
     where: { id: req.params.id },
-    select: { id: true, name: true, phoneCode: true, phoneDigits: true, demoDate: true, demoTimeIst: true },
+    select: { id: true, name: true, phoneCode: true, phoneDigits: true, demoDate: true, demoTimeIst: true, primaryTrainerId: true },
   });
   if (!client) return res.status(404).json({ error: 'Client not found' });
   const digits = `${client.phoneCode || ''}${client.phoneDigits || ''}`.replace(/[^0-9]/g, '');
@@ -1016,8 +1047,32 @@ clientsRouter.post('/:id/send-skill-matrix-whatsapp', async (req: AuthedRequest,
   const allProposals = reqs.flatMap((r) => r.proposals);
   const passed = allProposals.filter((p: any) => p.verification === 'Pass');
   const baseList = passed.length > 0 ? passed : allProposals;
+
+  // Internal Search fallback — synthesize from primary trainer when no proposals exist.
+  type WaItem = { name: string; experienceYears?: number | null; mustHaveSkills: any[] };
+  let waItems: WaItem[];
   if (baseList.length === 0) {
-    return res.status(400).json({ error: 'No proposals found for this client.' });
+    if (!client.primaryTrainerId) {
+      return res.status(400).json({ error: 'No trainer on file for this client — pick a trainer first.' });
+    }
+    const t = await prisma.trainer.findUnique({
+      where: { id: client.primaryTrainerId },
+      select: { name: true, experienceYears: true, skills: true },
+    });
+    if (!t) return res.status(400).json({ error: 'Primary trainer not found.' });
+    const skillList = (t.skills || '')
+      .split(/[,;\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 12)
+      .map((skill) => ({ skill, proficiency: 4 }));
+    waItems = [{ name: t.name || '—', experienceYears: t.experienceYears, mustHaveSkills: skillList }];
+  } else {
+    waItems = baseList.map((p: any) => ({
+      name: p.trainer?.name || p.trainerName || '—',
+      experienceYears: p.experienceYears ?? p.trainer?.experienceYears ?? null,
+      mustHaveSkills: Array.isArray(p.mustHaveSkills) ? p.mustHaveSkills : [],
+    }));
   }
 
   // Compact text summary (WhatsApp message body)
@@ -1026,10 +1081,10 @@ clientsRouter.post('/:id/send-skill-matrix-whatsapp', async (req: AuthedRequest,
   lines.push('');
   lines.push(`MITS Consulting — proposed trainer profiles for your review:`);
   lines.push('');
-  baseList.forEach((p: any, i: number) => {
-    const name = p.trainer?.name || p.trainerName || `Candidate ${i + 1}`;
+  waItems.forEach((p, i) => {
+    const name = p.name || `Candidate ${i + 1}`;
     const exp = p.experienceYears ? `${p.experienceYears} yrs exp` : '';
-    const skills = (Array.isArray(p.mustHaveSkills) ? p.mustHaveSkills : [])
+    const skills = (p.mustHaveSkills || [])
       .map((s: any) => `${s.skill} (${(s.proficiency ?? 0).toFixed(1)}/5)`)
       .join(', ');
     lines.push(`${i + 1}. ${name}${exp ? ' · ' + exp : ''}`);

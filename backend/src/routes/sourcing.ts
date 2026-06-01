@@ -707,7 +707,7 @@ sourcingRouter.get('/clients/:clientId/skill-matrix', async (req: AuthedRequest,
   const { buildSkillMatrixHtml, buildSkillMatrixText, istToUsZones, DEFAULT_SOFT_SKILLS } = await import('../lib/skillMatrix');
   const client = await prisma.client.findUnique({
     where: { id: req.params.clientId },
-    select: { id: true, name: true, demoDate: true, demoTimeIst: true },
+    select: { id: true, name: true, demoDate: true, demoTimeIst: true, primaryTrainerId: true },
   });
   if (!client) return res.status(404).json({ error: 'Client not found' });
   // Allow caller (the modal) to override demoDate/demoTimeIst at preview time
@@ -723,7 +723,7 @@ sourcingRouter.get('/clients/:clientId/skill-matrix', async (req: AuthedRequest,
   // Prefer Passed proposals; fall back to all if none passed yet.
   const allProposals = reqs.flatMap((r) => r.proposals);
   const passed = allProposals.filter((p: any) => p.verification === 'Pass');
-  const candidates = (passed.length > 0 ? passed : allProposals).map((p: any) => ({
+  let candidates = (passed.length > 0 ? passed : allProposals).map((p: any) => ({
     name: p.trainer?.name || p.trainerName || '—',
     totalExperience: p.experienceYears ? `${p.experienceYears} Years` : (p.trainer?.experienceYears ? `${p.trainer.experienceYears} Years` : '—'),
     demoDate: demoDateUse,
@@ -732,6 +732,32 @@ sourcingRouter.get('/clients/:clientId/skill-matrix', async (req: AuthedRequest,
     mustHaveSkills: Array.isArray(p.mustHaveSkills) ? p.mustHaveSkills : [],
     softSkills: Array.isArray(p.softSkills) && p.softSkills.length > 0 ? p.softSkills : DEFAULT_SOFT_SKILLS,
   }));
+  // Internal Search fallback: when Anjali picks a trainer directly from the pool we
+  // never create a Proposal — so the matrix would render empty and the Send buttons
+  // would stay disabled. Synthesize a single candidate from the client's primary trainer.
+  if (candidates.length === 0 && client.primaryTrainerId) {
+    const t = await prisma.trainer.findUnique({
+      where: { id: client.primaryTrainerId },
+      select: { name: true, experienceYears: true, skills: true },
+    });
+    if (t) {
+      const skillList = (t.skills || '')
+        .split(/[,;\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 12)
+        .map((skill) => ({ skill, proficiency: 4 }));
+      candidates = [{
+        name: t.name || '—',
+        totalExperience: t.experienceYears ? `${t.experienceYears} Years` : '—',
+        demoDate: demoDateUse,
+        demoTimeIst: demoTimeUse ? `${demoTimeUse} IST` : '',
+        zoneTimes: istToUsZones(demoTimeUse, demoDateUse),
+        mustHaveSkills: skillList,
+        softSkills: DEFAULT_SOFT_SKILLS,
+      }];
+    }
+  }
   const opts = {
     clientName: client.name,
     candidates,
