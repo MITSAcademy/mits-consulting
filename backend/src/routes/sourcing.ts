@@ -424,6 +424,103 @@ sourcingRouter.post('/proposal/:proposalId/pass', async (req: AuthedRequest, res
   res.json({ ok: true, ...result });
 });
 
+// Single-click "Notify + Pass" — Anjali's escape hatch when the recruiter has
+// notified the trainer outside the portal (WhatsApp call, manual email) but the
+// trainerNotifiedAt flag wasn't set. Same allowed roles as /pass; stamps the
+// notified flag with the caller's id (so the audit log shows who self-attested)
+// and then runs the standard Pass logic. Distinct audit action from PROPOSAL_PASS.
+sourcingRouter.post('/proposal/:proposalId/notify-and-pass', async (req: AuthedRequest, res) => {
+  const proposal = await prisma.proposal.findUnique({
+    where: { id: req.params.proposalId },
+    include: { request: { include: { client: true } } },
+  });
+  if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+
+  const ALLOWED = ['founder', 'manager', 'demo_lead', 'demo_intake'];
+  if (!ALLOWED.includes(req.user!.role)) {
+    return res.status(403).json({ error: `Your role (${req.user!.role}) cannot verify proposals.` });
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  const result = await prisma.$transaction(async (tx) => {
+    // Stamp notified (if not already) — the caller self-attests that the trainer was notified outside the portal.
+    const selfNotified = !proposal.trainerNotifiedAt;
+    if (selfNotified) {
+      await tx.proposal.update({
+        where: { id: proposal.id },
+        data: {
+          trainerNotifiedAt: today,
+          trainerNotifiedById: req.user!.id,
+        },
+      });
+    }
+
+    // Create trainer record if proposal was for a "new" trainer not yet in the pool
+    let trainerId = proposal.trainerId;
+    if (!trainerId) {
+      const newTrainer = await tx.trainer.create({
+        data: {
+          name: proposal.trainerName || 'Unnamed',
+          email: proposal.trainerEmail,
+          phoneCode: '+91',
+          phoneDigits: (proposal.trainerPhone || '').replace(/[^0-9]/g, '').slice(-10) || null,
+          skills: proposal.trainerSkills,
+          defaultRateInr: proposal.rateInr || 0,
+          experienceYears: proposal.experienceYears || 0,
+          rateModel: 'hourly',
+          paymentMethod: 'UPI',
+          recruitedById: proposal.proposedById,
+          active: true,
+        },
+      });
+      trainerId = newTrainer.id;
+      await tx.proposal.update({ where: { id: proposal.id }, data: { trainerId } });
+    }
+
+    await tx.proposal.update({
+      where: { id: proposal.id },
+      data: { verification: 'Pass', verificationNotes: null },
+    });
+
+    const client = await tx.client.findUnique({
+      where: { id: proposal.request.clientId },
+      select: { lifecycle: true },
+    });
+    await tx.client.update({
+      where: { id: proposal.request.clientId },
+      data: {
+        primaryTrainerId: trainerId,
+        engagementTrainerRateInr: proposal.rateInr || 0,
+        ...(client?.lifecycle && ['Lead', 'IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters', 'VerificationPending'].includes(client.lifecycle)
+          ? { lifecycle: 'TrainerMatched' as const }
+          : {}),
+      },
+    });
+
+    const remainingPending = await tx.proposal.count({
+      where: { requestId: proposal.requestId, verification: 'Pending' },
+    });
+    if (remainingPending === 0) {
+      await tx.sourcingRequest.update({
+        where: { id: proposal.requestId },
+        data: { status: 'Closed' },
+      });
+    }
+
+    const totalPassed = await tx.proposal.count({ where: { requestId: proposal.requestId, verification: 'Pass' } });
+    return { trainerId, totalPassed, remainingPending, selfNotified };
+  });
+
+  await audit(
+    req.user!.id,
+    req.user!.name,
+    'PROPOSAL_NOTIFY_AND_PASS',
+    `${proposal.trainerName || proposal.trainerId} for ${proposal.request.client.name}${result.selfNotified ? ' · trainer self-attested notified' : ''}${result.totalPassed > 1 ? ` · ${result.totalPassed} total passed` : ''}`,
+  );
+  res.json({ ok: true, ...result });
+});
+
 sourcingRouter.delete('/:id', async (req: AuthedRequest, res) => {
   await prisma.sourcingRequest.delete({ where: { id: req.params.id } });
   res.json({ ok: true });

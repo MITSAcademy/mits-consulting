@@ -82,6 +82,20 @@ export function VerificationsPage() {
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
+  // Notify+Pass: same outcome as Pass, but ALSO self-attests the trainer-notified flag.
+  // Used when Aman/Kanchan notified the trainer outside the portal and forgot to click Notify.
+  const notifyAndPass = useMutation({
+    mutationFn: ({ proposal }: any) => api.post(`/sourcing/proposal/${proposal.id}/notify-and-pass`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sourcing'] });
+      qc.invalidateQueries({ queryKey: ['clients'] });
+      qc.invalidateQueries({ queryKey: ['trainers'] });
+      qc.invalidateQueries({ queryKey: ['nav-badges'] });
+      showToast('Trainer marked notified + verified → trainer matched');
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
   const fail = useMutation({
     mutationFn: ({ proposalId, reason }: any) =>
       api.patch(`/sourcing/proposal/${proposalId}`, {
@@ -287,10 +301,18 @@ export function VerificationsPage() {
 
                       {v === 'Pending' && (
                         <div className="flex gap-1.5 mt-2.5">
-                          <Button size="sm" variant="success" className="flex-1 justify-center"
-                            onClick={() => pass.mutate({ request: req, proposal: p })}>
-                            <Check size={12}/> Pass
-                          </Button>
+                          {p.trainerNotifiedAt ? (
+                            <Button size="sm" variant="success" className="flex-1 justify-center"
+                              onClick={() => pass.mutate({ request: req, proposal: p })}>
+                              <Check size={12}/> Pass
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="amber" className="flex-1 justify-center"
+                              onClick={() => notifyAndPass.mutate({ request: req, proposal: p })}
+                              title="Stamps the trainer as notified (you self-attest the recruiter reached them outside the portal) and passes in one click.">
+                              <Check size={12}/> Notify + Pass
+                            </Button>
+                          )}
                           <Button size="sm" variant="danger" className="flex-1 justify-center"
                             onClick={() => setFailingProposal({ requestId: req.id, proposalId: p.id, trainerName: tName })}>
                             <X size={12}/> Fail

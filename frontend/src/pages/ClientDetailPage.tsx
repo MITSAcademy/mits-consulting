@@ -490,7 +490,7 @@ export function ClientDetailPage() {
                                 land in the skill matrix. Useful for legacy Fail'd rows from before
                                 multi-pass was enabled, or for Pending ones picked up from this card. */}
                             {canIntake(user.role) && p.verification !== 'Pass' && (
-                              <PromoteToPassButton proposalId={p.id} clientId={client.id} />
+                              <PromoteToPassButton proposalId={p.id} clientId={client.id} trainerNotifiedAt={p.trainerNotifiedAt} />
                             )}
                           </div>
                           {/* Proof + skill matrix */}
@@ -2138,22 +2138,34 @@ function PreDemoReminderModal({ client, onClose }: any) {
 
 // ─── Send Skill Matrix modal (Anjali → client) ────────────────────────────
 /** Small inline button to promote a Pending/Failed proposal to Pass — so it lands
- *  in the skill-matrix candidate set on the client page. */
-function PromoteToPassButton({ proposalId, clientId }: { proposalId: string; clientId: string }) {
+ *  in the skill-matrix candidate set on the client page. When the proposal hasn't
+ *  been notified yet, uses the notify-and-pass endpoint to self-attest + pass in one click. */
+function PromoteToPassButton({ proposalId, clientId, trainerNotifiedAt }: { proposalId: string; clientId: string; trainerNotifiedAt?: string | null }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const notified = !!trainerNotifiedAt;
   const m = useMutation({
-    mutationFn: () => api.post(`/sourcing/proposal/${proposalId}/pass`),
+    mutationFn: () => api.post(notified
+      ? `/sourcing/proposal/${proposalId}/pass`
+      : `/sourcing/proposal/${proposalId}/notify-and-pass`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['client', clientId] });
       qc.invalidateQueries({ queryKey: ['skill-matrix-preview', clientId] });
-      showToast('Trainer added to skill matrix as Pass');
+      showToast(notified ? 'Trainer added to skill matrix as Pass' : 'Trainer marked notified + added as Pass');
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
   return (
-    <Button size="sm" variant="success" disabled={m.isPending} onClick={() => m.mutate()} title="Promote this trainer to Pass — they'll be included in the skill matrix">
-      <Check size={11}/> {m.isPending ? '…' : 'Pass'}
+    <Button
+      size="sm"
+      variant={notified ? 'success' : 'amber'}
+      disabled={m.isPending}
+      onClick={() => m.mutate()}
+      title={notified
+        ? 'Promote this trainer to Pass — they\'ll be included in the skill matrix'
+        : 'Trainer not notified yet. This will self-attest the notification + Pass in one click.'}
+    >
+      <Check size={11}/> {m.isPending ? '…' : (notified ? 'Pass' : 'Notify + Pass')}
     </Button>
   );
 }
