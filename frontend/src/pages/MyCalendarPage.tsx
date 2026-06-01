@@ -5,7 +5,8 @@ import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
-import { Calendar, Video, ClipboardList, ChevronLeft, ChevronRight, RefreshCw, Cloud, X } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Calendar, Video, ClipboardList, ChevronLeft, ChevronRight, RefreshCw, Cloud, X, ExternalLink } from 'lucide-react';
 import { todayISO } from '@/lib/utils';
 
 interface Event {
@@ -50,6 +51,7 @@ export function MyCalendarPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth()); // 0-indexed
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [openEvent, setOpenEvent] = useState<Event | null>(null);
 
   // Range for query: from = 1st of month visible, to = last day of next month so spill-over weeks load
   const monthStart = firstOfMonth(year, month);
@@ -198,7 +200,7 @@ export function MyCalendarPage() {
                         {dayEvents.slice(0, 3).map((e) => (
                           <div
                             key={e.id}
-                            className="text-[10px] px-1 py-0.5 rounded truncate"
+                            className="text-[10px] px-1 py-0.5 rounded truncate cursor-pointer hover:brightness-125"
                             style={{
                               background:
                                 e.source === 'google' ? 'rgba(66, 133, 244, 0.18)' :
@@ -209,14 +211,24 @@ export function MyCalendarPage() {
                                 e.kind === 'demo' ? '#9EC0F8' :
                                 '#FBC56B',
                             }}
-                            title={e.title}
+                            title={e.title + ' — click to view details'}
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              setOpenEvent(e);
+                            }}
                           >
                             {e.timeIst && <span className="mono">{e.timeIst} </span>}
                             {e.title.length > 22 ? e.title.slice(0, 22) + '…' : e.title}
                           </div>
                         ))}
                         {dayEvents.length > 3 && (
-                          <div className="text-[9px] muted">+{dayEvents.length - 3} more</div>
+                          <div
+                            className="text-[9px] muted cursor-pointer hover:text-brand-text"
+                            onClick={(ev) => { ev.stopPropagation(); setSelectedDay(dISO); }}
+                            title="See all events on this day"
+                          >
+                            +{dayEvents.length - 3} more
+                          </div>
                         )}
                       </div>
                     </div>
@@ -242,7 +254,7 @@ export function MyCalendarPage() {
                     <span className="muted text-xs">{dayEvents.length} {dayEvents.length === 1 ? 'event' : 'events'}</span>
                   </div>
                   <div className="space-y-2">
-                    {dayEvents.map((e) => <EventRow key={e.id} e={e}/>)}
+                    {dayEvents.map((e) => <EventRow key={e.id} e={e} onOpen={() => setOpenEvent(e)} />)}
                   </div>
                 </div>
               );
@@ -271,24 +283,109 @@ export function MyCalendarPage() {
               <div className="muted text-sm">Nothing scheduled.</div>
             ) : (
               <div className="space-y-2">
-                {selectedEvents.map((e) => <EventRow key={e.id} e={e}/>)}
+                {selectedEvents.map((e) => <EventRow key={e.id} e={e} onOpen={() => setOpenEvent(e)} />)}
               </div>
             )}
           </div>
         )}
+
+        {openEvent && <EventDetailModal e={openEvent} onClose={() => setOpenEvent(null)} />}
       </Page>
     </>
   );
 }
 
-function EventRow({ e }: { e: Event }) {
+function EventDetailModal({ e, onClose }: { e: Event; onClose: () => void }) {
+  const dateLabel = e.date
+    ? new Date(e.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    : '';
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        title={e.title}
+        description={`${dateLabel}${e.timeIst ? ' · ' + e.timeIst + (e.source !== 'google' ? ' IST' : '') : ''}`}
+        className="max-w-lg"
+      >
+        <div className="space-y-2 text-sm">
+          {e.source === 'google' && (
+            <div><Pill color="grey">Google calendar</Pill></div>
+          )}
+          {e.kind && (
+            <div className="text-xs muted">
+              <strong>Type:</strong>{' '}
+              {e.kind === 'demo' ? 'Demo session' : e.kind === 'session' ? 'Training session' : e.kind === 'google' ? 'Google event' : e.kind}
+            </div>
+          )}
+          {e.clientName && (
+            <div>
+              <strong>Client:</strong>{' '}
+              {e.clientId
+                ? <Link to={`/clients/${e.clientId}`} className="text-brand-blue hover:underline">{e.clientName}</Link>
+                : e.clientName}
+            </div>
+          )}
+          {e.trainerName && (
+            <div>
+              <strong>Trainer:</strong>{' '}
+              {e.trainerId
+                ? <Link to={`/trainers/${e.trainerId}`} className="text-brand-blue hover:underline">{e.trainerName}</Link>
+                : e.trainerName}
+            </div>
+          )}
+          {e.status && e.source !== 'google' && (
+            <div>
+              <strong>Status:</strong>{' '}
+              <Pill color={
+                e.status === 'Done' ? 'green' :
+                e.status === 'Cancelled' ? 'red' :
+                e.status === 'Scheduled' || e.status === 'Rescheduled' ? 'amber' : 'grey'
+              }>{e.status}</Pill>
+            </div>
+          )}
+          {e.outcome && (
+            <div>
+              <strong>Outcome:</strong>{' '}
+              <Pill color={e.outcome === 'Positive' ? 'green' : e.outcome === 'Negative' ? 'red' : 'amber'}>
+                {e.outcome}
+              </Pill>
+            </div>
+          )}
+          {e.source === 'google' && !e.clientName && !e.trainerName && (
+            <div className="muted text-xs">
+              Synced from your Google Calendar. Open in Google to view the full invite (attendees, location, description).
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Close</Button>
+          {e.htmlLink && (
+            <a href={e.htmlLink} target="_blank" rel="noreferrer">
+              <Button variant="primary"><ExternalLink size={12}/> Open in Google</Button>
+            </a>
+          )}
+          {e.clientId && (
+            <Link to={`/clients/${e.clientId}`}>
+              <Button variant="primary"><ExternalLink size={12}/> Open client</Button>
+            </Link>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EventRow({ e, onOpen }: { e: Event; onOpen?: () => void }) {
   const icon = e.source === 'google'
     ? <Cloud size={16} className="text-brand-blue"/>
     : e.kind === 'demo'
     ? <Video size={16} className="text-brand-blue"/>
     : <ClipboardList size={16} className="text-brand-amber"/>;
   return (
-    <div className="bg-bg-input rounded p-3 flex items-start gap-3">
+    <div
+      className={`bg-bg-input rounded p-3 flex items-start gap-3 ${onOpen ? 'cursor-pointer hover:bg-bg-card' : ''}`}
+      onClick={onOpen}
+      title={onOpen ? 'Click to view details' : undefined}
+    >
       <div className="pt-0.5">{icon}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">

@@ -1468,9 +1468,14 @@ async function sendDemoInvite(req: AuthedRequest, demoId: string, client: any) {
     return { text: lines.join('\n'), ics_desc };
   }
 
-  // Helper to send to one party with the recipient ONLY in BCC (privacy: no cross-visibility)
-  async function deliverOne(recipientName: string, recipientEmail: string, role: 'client' | 'trainer') {
-    const { text, ics_desc } = buildBody(recipientName, role);
+  // Helper to deliver to one party. Puts the recipient in "To" (not BCC) so Gmail's
+  // auto-add-to-Calendar treats it as a real invite addressed to them.
+  // Per recipient, only that recipient is listed as the ICS attendee (privacy preserved —
+  // the other party's email is never disclosed across recipients).
+  async function deliverOne(recipientName: string, recipientEmail: string, role: 'client' | 'trainer' | 'organizer') {
+    // Reuse the client/trainer body for the organizer copy (treat them as 'client' POV is closest).
+    const bodyRole: 'client' | 'trainer' = role === 'trainer' ? 'trainer' : 'client';
+    const { text, ics_desc } = buildBody(recipientName, bodyRole);
     const ics = buildIcsInvite({
       uid: `${demoId}-${role}`,
       summary: ics_summary,
@@ -1480,13 +1485,11 @@ async function sendDemoInvite(req: AuthedRequest, demoId: string, client: any) {
       organizerEmail: orgEmail,
       startISO,
       durationMinutes: 60,
-      // Only this recipient as attendee in their ICS — the other party is never disclosed
       attendees: [{ name: recipientName, email: recipientEmail }],
       method: 'REQUEST',
     });
     await sendEmail({
-      to: orgEmail,                // organizer's own address — the visible "To" header
-      bcc: recipientEmail,         // recipient gets it but their address is not visible to others
+      to: recipientEmail,           // recipient in To so Gmail auto-adds the ICS to their Calendar
       subject,
       body: text,
       icsAttachment: { filename: 'mits-demo-session.ics', content: ics, method: 'REQUEST' },
@@ -1503,9 +1506,20 @@ async function sendDemoInvite(req: AuthedRequest, demoId: string, client: any) {
     await deliverOne(trainer.name, trainerEmail, 'trainer');
     sentTo.push(`trainer(${trainerEmail})`);
   }
+  // Also deliver an invite to the scheduler (organizer) so the demo lands on THEIR
+  // Google Calendar too — fixes "calendar invites not syncing with email calendar".
+  // Only if the organizer has a real email and it's not the same as client/trainer already on the list.
+  if (orgEmail && orgEmail !== clientEmail && orgEmail !== trainerEmail) {
+    try {
+      await deliverOne(orgName, orgEmail, 'organizer');
+      sentTo.push(`organizer(${orgEmail})`);
+    } catch (e) {
+      console.warn('[demo invite] organizer copy failed:', (e as any)?.message);
+    }
+  }
 
   await audit(
     req.user!.id, req.user!.name, 'DEMO_INVITE_SENT',
-    `${client.name} · ${client.demoDate} ${time} IST · BCC ${sentTo.join(', ')}`,
+    `${client.name} · ${client.demoDate} ${time} IST · To ${sentTo.join(', ')}`,
   );
 }

@@ -152,6 +152,14 @@ export function ClientDetailPage() {
   }
   if (canIntake(user.role) && client.lifecycle === 'IntakeReceived') {
     actions.push(<Button key="srch" variant="primary" onClick={() => setModal('internalSearch')}><Search size={14}/> Internal search</Button>);
+  }
+  // Edit intake — available at every stage AFTER intake is completed (Anjali can add/update info shared later by client).
+  // Excludes Lead/IntakeSent (intake not yet recorded — they get the "Record replies" button) and Dormant (read-only).
+  if (
+    canIntake(user.role)
+    && !['Lead', 'IntakeSent', 'Dormant'].includes(client.lifecycle)
+    && client.intakeData && Object.keys(client.intakeData as object).length > 0
+  ) {
     actions.push(<Button key="erec" onClick={() => setModal('recordIntake')}><EditIcon size={14}/> Edit intake</Button>);
   }
   // Welcome email auto-fires when intake replies are recorded (via checkbox in RecordIntakeModal).
