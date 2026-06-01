@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Pill } from '@/components/ui/pill';
@@ -28,11 +28,22 @@ function BackfillDemoModal({ clientId, onClose }: { clientId: string; onClose: (
     feedback: '',
     nextSteps: '',
   });
+  const [trainerSearch, setTrainerSearch] = useState('');
   // Trainer pool for the dropdown.
   const { data: trainers } = useQuery<any[]>({
     queryKey: ['trainers'],
     queryFn: () => api.get('/trainers').then((r) => r.data),
   });
+  const filteredTrainers = useMemo(() => {
+    const all = trainers || [];
+    const q = trainerSearch.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((t: any) => {
+      const hay = `${t.name || ''} ${t.skills || ''} ${t.phoneDigits || ''} ${t.email || ''}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [trainers, trainerSearch]);
+  const selectedTrainer = (trainers || []).find((t: any) => t.id === f.trainerId);
   const save = useMutation({
     mutationFn: () => api.post(`/clients/${clientId}/demos/backfill`, {
       ...f,
@@ -65,12 +76,30 @@ function BackfillDemoModal({ clientId, onClose }: { clientId: string; onClose: (
         </div>
         <div className="form-row">
           <Label>Trainer (optional)</Label>
+          <Input
+            placeholder="Search trainer by name, skill, or phone…"
+            value={trainerSearch}
+            onChange={(e) => setTrainerSearch(e.target.value)}
+            className="mb-1.5"
+          />
           <Select value={f.trainerId} onChange={(e) => setF({ ...f, trainerId: e.target.value })}>
             <option value="">— pick from pool —</option>
-            {(trainers || []).map((t) => (
+            {/* Keep selected trainer visible even if filtered out, so the chosen value isn't lost */}
+            {selectedTrainer && !filteredTrainers.some((t) => t.id === selectedTrainer.id) && (
+              <option key={selectedTrainer.id} value={selectedTrainer.id}>
+                {selectedTrainer.name}{selectedTrainer.skills ? ` · ${selectedTrainer.skills.slice(0, 50)}` : ''}
+              </option>
+            )}
+            {filteredTrainers.map((t: any) => (
               <option key={t.id} value={t.id}>{t.name}{t.skills ? ` · ${t.skills.slice(0, 50)}` : ''}</option>
             ))}
           </Select>
+          <div className="text-[10px] muted mt-1">
+            {trainerSearch
+              ? `${filteredTrainers.length} match${filteredTrainers.length === 1 ? '' : 'es'}${filteredTrainers.length === 0 ? ' — clear search to see all' : ''}`
+              : `${(trainers || []).length} trainers in pool · type to filter`}
+            {selectedTrainer && <> · Selected: <strong>{selectedTrainer.name}</strong></>}
+          </div>
         </div>
         <div className="form-row">
           <Label>Outcome</Label>
