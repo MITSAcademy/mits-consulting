@@ -99,6 +99,8 @@ export function TrainerDetailPage() {
                     >
                       <option value="hourly">Hourly</option>
                       <option value="per_session">Per session</option>
+                      <option value="training_one_shot">Training (one-shot)</option>
+                      <option value="training_monthly">Training (monthly)</option>
                     </select>
                   </div>
                   <div className="form-row"><Label>Default rate ₹</Label><Input type="number" value={form.defaultRateInr || 0} onChange={(e) => setForm({ ...form, defaultRateInr: +e.target.value })} /></div>

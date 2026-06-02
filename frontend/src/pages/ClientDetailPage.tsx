@@ -19,6 +19,7 @@ const INTAKE_FIELDS = [
   { key: 'detailed_skill_set', label: 'Detailed skill set', required: true },
   { key: 'current_priority_task', label: 'Current priority task' },
   { key: 'client_email', label: 'Email' },
+  { key: 'client_timezone', label: 'Client time zone' },
   { key: 'demo_timing_ist', label: 'Demo timing (IST)' },
   { key: 'session_timing_ist', label: 'Session timing (IST)' },
   { key: 'trainer_preference', label: 'Trainer preference' },

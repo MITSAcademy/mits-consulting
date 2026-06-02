@@ -122,6 +122,8 @@ enum FunderType {
 enum RateModel {
   hourly
   per_session
+  training_one_shot
+  training_monthly
 }
 
 // -------- USERS --------

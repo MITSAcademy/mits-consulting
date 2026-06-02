@@ -177,6 +177,8 @@ export function TrainersPage() {
                     <Select value={form.rateModel} onChange={(e) => setForm({ ...form, rateModel: e.target.value })}>
                       <option value="hourly">Hourly</option>
                       <option value="per_session">Per session</option>
+                      <option value="training_one_shot">Training (one-shot)</option>
+                      <option value="training_monthly">Training (monthly)</option>
                     </Select>
                   </div>
                   <div className="form-row">
