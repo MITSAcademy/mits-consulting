@@ -44,6 +44,7 @@ import { DormantClientsPage } from '@/pages/DormantClientsPage';
 import { MyCalendarPage } from '@/pages/MyCalendarPage';
 import { HoldClientsPage } from '@/pages/HoldClientsPage';
 import { FeedbackPendingPage } from '@/pages/FeedbackPendingPage';
+import { RoshniFollowUpsPage } from '@/pages/RoshniFollowUpsPage';
 import { homePathFor, HOME_ROLES } from '@/lib/utils';
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
@@ -119,6 +120,7 @@ export default function App() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/my-calendar" element={<MyCalendarPage />} />
         <Route path="/hold" element={<HoldClientsPage />} />
+        <Route path="/roshni/follow-ups" element={<RoshniFollowUpsPage />} />
         <Route path="/feedback-pending" element={<FeedbackPendingPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

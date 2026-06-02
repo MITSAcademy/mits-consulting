@@ -54,7 +54,7 @@ type ModalKind =
   | null | 'editContact' | 'editEngagement' | 'assignOwner'
   | 'sendIntake' | 'recordIntake' | 'internalSearch'
   | 'scheduleDemo' | 'demoDone' | 'noShow' | 'freshPayment' | 'leverage' | 'hold' | 'renewal' | 'welcomeEmail' | 'postDemoFeedback' | 'sendSkillMatrix' | 'skipMatrix' | 'preDemoReminder'
-  | 'engagementLetter' | 'handoverWelcome' | 'subStatus'
+  | 'engagementLetter' | 'handoverWelcome' | 'subStatus' | 'paymentConfirmation' | 'groupRename'
   | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume';
 
 export function ClientDetailPage() {
@@ -273,6 +273,21 @@ export function ClientDetailPage() {
         <Mail size={12}/> Engagement letter + handover
       </Button>
     );
+  }
+  // Roshni post-payment actions (SaleWon)
+  if (canClose(user.role) && client.lifecycle === 'SaleWon') {
+    actions.push(
+      <Button key="paymentconfirm" size="sm" variant={client.paymentConfirmationPostedAt ? 'default' : 'primary'} onClick={() => setModal('paymentConfirmation')} title="Upload payment screenshot + post to MITS payment-confirmation group">
+        <Wallet size={12}/> {client.paymentConfirmationPostedAt ? 'Re-post confirmation' : 'Confirm payment received'}
+      </Button>
+    );
+    if (client.freshPaymentReceived) {
+      actions.push(
+        <Button key="grouprename" size="sm" variant={client.whatsappGroupRenamedAt ? 'default' : 'primary'} onClick={() => setModal('groupRename')} title="Rename client's WA group to Training / JBT + share Mitali intro message">
+          <MessageCircle size={12}/> {client.whatsappGroupRenamedAt ? 'Rename group again' : 'Rename group → Training/JBT'}
+        </Button>
+      );
+    }
   }
   if (canActivate(user.role) && client.lifecycle === 'SaleWon') {
     actions.push(<Button key="act" variant="primary" onClick={() => stageM.mutate('Active')}><ArrowRight size={14}/> {isTraining ? 'Start training' : 'Handover · activate'}</Button>);
@@ -687,6 +702,8 @@ export function ClientDetailPage() {
         {modal === 'skipMatrix' && <SkipMatrixModal client={client} onClose={() => setModal(null)} onProceed={() => { setModal('scheduleDemo'); }} />}
         {modal === 'noShow' && <NoShowModal client={client} onClose={() => setModal(null)} />}
         {modal === 'subStatus' && <SubStatusModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'paymentConfirmation' && <PaymentConfirmationModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'groupRename' && <GroupRenameModal client={client} onClose={() => setModal(null)} />}
         {modal === 'preDemoReminder' && <PreDemoReminderModal client={client} onClose={() => setModal(null)} />}
         {modal === 'engagementLetter' && <EngagementLetterModal client={client} onClose={() => setModal(null)} />}
         {modal === 'handoverWelcome' && <HandoverWelcomeModal client={client} onClose={() => setModal(null)} />}
@@ -2447,6 +2464,200 @@ function SubStatusModal({ client, onClose }: any) {
           <Button variant="primary" disabled={m.isPending} onClick={() => m.mutate()}>
             {m.isPending ? 'Saving…' : 'Save sub-status'}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Roshni payment-confirmation modal. Upload screenshot from client, generate the
+ *  coordination message (Support vs Training variant), then post to the MITS
+ *  payment-confirmation WhatsApp group via deep-link. */
+function PaymentConfirmationModal({ client, onClose }: any) {
+  const PAYMENT_GROUP_LINK = 'https://chat.whatsapp.com/EYcbMxrIYtZ4lExFkX3SAO';
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [screenshotUrl, setScreenshotUrl] = useState<string>(client.paymentScreenshotUrl || '');
+  const [uploading, setUploading] = useState(false);
+  const [generatedMsg, setGeneratedMsg] = useState<string>('');
+  const [posted, setPosted] = useState<boolean>(!!client.paymentConfirmationPostedAt);
+
+  async function pickFile(file: File) {
+    setUploading(true);
+    try {
+      const r = await uploadFile(file);
+      setScreenshotUrl(r.url);
+      showToast('Screenshot uploaded');
+    } catch (e: any) {
+      showToast(e.response?.data?.error || 'Upload failed', 'error');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const recordScreenshot = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/payment-confirmation`, { screenshotUrl }),
+    onSuccess: (r: any) => {
+      setGeneratedMsg(r.data?.groupMessage || '');
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      showToast('Confirmation recorded · message generated below');
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const markPosted = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/payment-confirmation`, { screenshotUrl, postedToGroup: true }),
+    onSuccess: () => {
+      setPosted(true);
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      showToast('Marked as posted to group');
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        title={`Payment confirmation · ${client.name}`}
+        description="Upload the client's payment screenshot, then post the auto-generated coordination message in the MITS payment-confirmation WhatsApp group."
+        className="max-w-2xl"
+      >
+        <div className="form-row">
+          <Label>Payment screenshot</Label>
+          {screenshotUrl ? (
+            <div className="bg-bg-input rounded p-2 flex items-center gap-2">
+              <a href={fileUrl(screenshotUrl)} target="_blank" rel="noreferrer" className="text-brand-blue underline text-sm flex-1">View screenshot →</a>
+              <button onClick={() => setScreenshotUrl('')} className="text-xs muted hover:text-brand-red"><X size={12}/> Replace</button>
+            </div>
+          ) : (
+            <label className="block">
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                disabled={uploading}
+                onChange={(e) => e.target.files?.[0] && pickFile(e.target.files[0])}
+              />
+              <Button size="sm" disabled={uploading} onClick={(e) => { e.preventDefault(); (e.currentTarget.previousElementSibling as HTMLInputElement)?.click(); }}>
+                {uploading ? 'Uploading…' : 'Pick screenshot file'}
+              </Button>
+            </label>
+          )}
+        </div>
+
+        {!generatedMsg && (
+          <Button variant="primary" disabled={!screenshotUrl || recordScreenshot.isPending} onClick={() => recordScreenshot.mutate()}>
+            {recordScreenshot.isPending ? 'Generating…' : 'Record confirmation + generate group message'}
+          </Button>
+        )}
+
+        {generatedMsg && (
+          <div className="form-row mt-3">
+            <Label>Group coordination message</Label>
+            <Textarea rows={4} value={generatedMsg} onChange={(e) => setGeneratedMsg(e.target.value)} className="mono text-xs" />
+            <div className="flex gap-2 mt-2 flex-wrap">
+              <Button
+                size="sm"
+                onClick={() => { navigator.clipboard?.writeText(generatedMsg); showToast('Message copied to clipboard'); }}
+              >
+                Copy message
+              </Button>
+              <a href={PAYMENT_GROUP_LINK} target="_blank" rel="noreferrer">
+                <Button size="sm" variant="default" style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}>
+                  <MessageCircle size={12}/> Open payment-confirmation group
+                </Button>
+              </a>
+              {!posted && (
+                <Button size="sm" variant="primary" disabled={markPosted.isPending} onClick={() => markPosted.mutate()}>
+                  {markPosted.isPending ? 'Marking…' : 'Mark as posted'}
+                </Button>
+              )}
+            </div>
+            {posted && <div className="text-xs text-brand-green mt-2">✓ Marked as posted to group</div>}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button onClick={onClose}>{generatedMsg ? 'Done' : 'Cancel'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Group-rename modal — Roshni's handover step. Suggests "Training {client} {trainer} Z"
+ *  or "JBT {...} Z" + shows the Mitali intro message to share in the renamed group. */
+function GroupRenameModal({ client, onClose }: any) {
+  const MITALI_INTRO = `I am pleased to introduce Miss Mitali as your primary contact for managing any issues or escalations going forward.
+
+Ms. Mitali serves as our dedicated Client Service Manager and is available to assist you with inquiries or support related to our services. Please feel free to reach out to her directly for any assistance you may require.
+
+You can contact Ms. Mitali at +91 9779530773.
+
+Thank you,`;
+
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const isTraining = client.engagementType === 'Training' || client.engagementType === 'TaskBased';
+  // "Training Dinesh Rahul Z" / "JBT Dinesh Rahul Z" — AM initial gets appended by Mitali later.
+  const clientFirst = (client.name || '').split(' ')[0] || client.name || '';
+  const trainerFirst = ((client.primaryTrainer?.name as string) || '').split(' ')[0] || '';
+  const suggested = `${isTraining ? 'Training' : 'JBT'} ${clientFirst}${trainerFirst ? ' ' + trainerFirst : ''} Z`;
+  const [newName, setNewName] = useState<string>(suggested);
+
+  const rename = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/group-rename`, { newName }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      showToast(`Group renamed to "${newName}"`);
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const waLinkToGroup = client.whatsappGroupLink || '';
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        title={`Rename group · ${client.name}`}
+        description="Renames the WhatsApp group in our system + gives you the Mitali intro message to share in the group."
+        className="max-w-2xl"
+      >
+        <div className="form-row">
+          <Label>Current group name</Label>
+          <Input value={client.whatsappGroupName || '—'} readOnly />
+        </div>
+        <div className="form-row">
+          <Label>New name <span className="muted normal-case ml-1">(Mitali/Bhavneet will append the AM initial later)</span></Label>
+          <Input value={newName} onChange={(e) => setNewName(e.target.value)} />
+          <div className="text-[10px] muted mt-1">
+            Convention: <code>{isTraining ? 'Training' : 'JBT'}</code> &lt;Client first&gt; &lt;Trainer first&gt; Z&lt;AM initial: M=Muskan, K=Kashish&gt;
+          </div>
+        </div>
+
+        <Button variant="primary" disabled={!newName.trim() || rename.isPending} onClick={() => rename.mutate()}>
+          {rename.isPending ? 'Renaming…' : 'Save new group name'}
+        </Button>
+
+        <div className="form-row mt-4">
+          <Label>Mitali introduction message <span className="muted normal-case ml-1">(share in the renamed group)</span></Label>
+          <Textarea rows={9} value={MITALI_INTRO} readOnly className="text-xs" />
+          <div className="flex gap-2 mt-2 flex-wrap">
+            <Button size="sm" onClick={() => { navigator.clipboard?.writeText(MITALI_INTRO); showToast('Mitali intro copied'); }}>
+              Copy intro message
+            </Button>
+            {waLinkToGroup && (
+              <a href={waLinkToGroup} target="_blank" rel="noreferrer">
+                <Button size="sm" variant="default" style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}>
+                  <MessageCircle size={12}/> Open client group
+                </Button>
+              </a>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button onClick={onClose}>Done</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

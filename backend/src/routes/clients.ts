@@ -64,6 +64,49 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
   res.json(clients.map((c) => redactClient(c, req.user!)));
 });
 
+// Roshni follow-ups list — clients in SaleClosing/SaleWon with sub-status RP or CP,
+// bucketed by roshniNextCallOn relative to today. MUST be registered BEFORE GET /:id
+// or Express will match "roshni" as :id and 404.
+clientsRouter.get('/roshni/follow-ups', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'sales_closer'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only Roshni / managers / founder can view this queue.' });
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const ownerFilter = req.user!.role === 'sales_closer' ? { salesOwnerId: req.user!.id } : {};
+  const clients = await prisma.client.findMany({
+    where: {
+      ...ownerFilter,
+      lifecycle: { in: ['SaleClosing', 'SaleWon'] },
+      saleClosingSubStatus: { in: ['RP', 'CP'] },
+    },
+    select: {
+      id: true, name: true, lifecycle: true,
+      saleClosingSubStatus: true,
+      roshniNextCallOn: true,
+      roshniLastContactAt: true,
+      roshniLastContactOutcome: true,
+      salesOwner: { select: { id: true, name: true } },
+    },
+    orderBy: { roshniNextCallOn: 'asc' },
+  });
+  const items = clients.map((c) => {
+    const due = c.roshniNextCallOn || '';
+    const bucket = !due ? 'unscheduled' : due < today ? 'overdue' : due === today ? 'today' : 'upcoming';
+    const daysOverdue = due && due < today ? Math.floor((Date.parse(today) - Date.parse(due)) / 86_400_000) : 0;
+    return { ...c, bucket, daysOverdue };
+  });
+  res.json({
+    items,
+    counts: {
+      overdue:    items.filter((i) => i.bucket === 'overdue').length,
+      today:      items.filter((i) => i.bucket === 'today').length,
+      upcoming:   items.filter((i) => i.bucket === 'upcoming').length,
+      unscheduled: items.filter((i) => i.bucket === 'unscheduled').length,
+    },
+  });
+});
+
 clientsRouter.get('/:id', async (req: AuthedRequest, res) => {
   const client = await prisma.client.findUnique({
     where: { id: req.params.id },
@@ -578,6 +621,44 @@ clientsRouter.delete('/:id', async (req: AuthedRequest, res) => {
   res.json({ ok: true });
 });
 
+// ─── Roshni follow-up Task helper ─────────────────────────────────────────
+// Creates/updates a single Task per (client, owner) so overdue follow-ups
+// surface on the /tasks page. Title prefixed so we can identify them.
+async function upsertRoshniFollowUpTask(clientId: string, ownerId: string, clientName: string, dueDate: string, kind: string) {
+  const title = `Roshni follow-up · ${clientName} (${kind})`;
+  const existing = await prisma.task.findFirst({
+    where: {
+      clientId,
+      ownerId,
+      type: 'OTHER',
+      status: 'Pending',
+      title: { startsWith: 'Roshni follow-up · ' },
+    },
+  });
+  if (existing) {
+    await prisma.task.update({
+      where: { id: existing.id },
+      data: { dueDate, title, priority: 'High' },
+    });
+  } else {
+    await prisma.task.create({
+      data: { clientId, ownerId, type: 'OTHER', title, dueDate, status: 'Pending', priority: 'High' },
+    });
+  }
+}
+
+async function closeRoshniFollowUpTasks(clientId: string) {
+  await prisma.task.updateMany({
+    where: {
+      clientId,
+      type: 'OTHER',
+      status: 'Pending',
+      title: { startsWith: 'Roshni follow-up · ' },
+    },
+    data: { status: 'Done' },
+  });
+}
+
 // ─── Roshni sub-status (RP / CP / C) ──────────────────────────────────────
 // Sub-status overlay on top of SaleClosing/SaleWon. Doesn't change lifecycle —
 // just marks Roshni's progress: RP=ready-for-payment, CP=closure-pending (no
@@ -622,12 +703,116 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
     },
     include,
   });
+  // Maintain a single follow-up Task per client owned by the actor — RP/CP with a next-call-on
+  // date creates/updates the Task; C or null clears it. Surfaces overdue calls on /tasks.
+  try {
+    if ((subStatus === 'RP' || subStatus === 'CP') && nextCallOn) {
+      const kind = subStatus === 'CP' ? 'no pickup' : 'payment promised';
+      await upsertRoshniFollowUpTask(client.id, req.user!.id, client.name, nextCallOn, kind);
+    } else if (subStatus === 'C' || subStatus === null) {
+      await closeRoshniFollowUpTasks(client.id);
+    }
+  } catch (e) {
+    console.warn('[sub-status] follow-up Task upsert failed:', (e as any)?.message);
+  }
   await audit(
     req.user!.id, req.user!.name, 'ROSHNI_SUB_STATUS',
     `${client.name}: ${subStatus || 'cleared'}${reason ? ' · ' + reason : ''}${nextCallOn ? ' · next call ' + nextCallOn : ''}`,
   );
   res.json(updated);
 });
+
+// ─── Payment confirmation (Roshni's post-payment step) ────────────────────
+// Logs the client's payment screenshot + builds the coordination message
+// for the internal payment-confirmation WhatsApp group.
+clientsRouter.post('/:id/payment-confirmation', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'sales_closer'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: `Your role (${req.user!.role}) cannot record payment confirmation.` });
+  }
+  const { screenshotUrl, postedToGroup } = req.body as {
+    screenshotUrl?: string;
+    postedToGroup?: boolean;
+  };
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    select: {
+      id: true, name: true, lifecycle: true, engagementType: true,
+      cycleAmount: true, currency: true, paymentModel: true,
+      sessionsPerCycle: true,
+      freshPaymentReceived: true, freshPaymentAmount: true, freshPaymentDate: true,
+      primaryTrainer: { select: { name: true } },
+    },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  const today = new Date().toISOString().slice(0, 10);
+  await prisma.client.update({
+    where: { id: client.id },
+    data: {
+      ...(screenshotUrl ? { paymentScreenshotUrl: screenshotUrl, paymentScreenshotReceivedAt: today } : {}),
+      ...(postedToGroup ? { paymentConfirmationPostedAt: today } : {}),
+    },
+  });
+
+  // Build the coordination message (Support vs Training format)
+  const amt = client.freshPaymentAmount ?? client.cycleAmount ?? 0;
+  const cur = (client.currency || 'usd').toLowerCase();
+  const paid = client.freshPaymentReceived ? (client.freshPaymentAmount === client.cycleAmount ? 'full' : 'half') : 'pending';
+  const paidAmt = client.freshPaymentAmount ?? 0;
+  const dt = client.freshPaymentDate || today;
+  const isTraining = client.engagementType === 'Training' || client.engagementType === 'TaskBased';
+
+  let groupMessage: string;
+  if (isTraining) {
+    // "Deepti closed at 350 usd for 1 month training, paid same, 3rd May 2026."
+    groupMessage = `${client.name} closed at ${client.cycleAmount || amt} ${cur} for 1 month training, paid ${paid === 'full' ? 'same' : `${paidAmt} ${cur}`}, ${dt}.`;
+  } else {
+    // "Sruthi closed at 400 usd, 1 month support,1 hour, paid half(200 usd), biweekly payment, 1st June 2026"
+    const sessions = client.sessionsPerCycle || 0;
+    const cycle = client.paymentModel || 'biweekly';
+    groupMessage = `${client.name} closed at ${client.cycleAmount || amt} ${cur}, 1 month support, ${sessions || 1} hour, paid ${paid}(${paidAmt} ${cur}), ${cycle} payment, ${dt}.`;
+  }
+
+  await audit(
+    req.user!.id, req.user!.name, 'PAYMENT_CONFIRMATION',
+    `${client.name}${screenshotUrl ? ' · screenshot uploaded' : ''}${postedToGroup ? ' · posted to group' : ''}`,
+  );
+  res.json({ ok: true, groupMessage, isTraining });
+});
+
+// ─── WhatsApp group rename (post-payment handover to Mitali team) ─────────
+// Roshni renames the client group from "RP" to "Training X Y Z" or "JBT X Y Z".
+clientsRouter.post('/:id/group-rename', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'sales_closer'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: `Your role (${req.user!.role}) cannot rename the group.` });
+  }
+  const { newName } = req.body as { newName: string };
+  if (!newName?.trim()) return res.status(400).json({ error: 'newName is required.' });
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, name: true, whatsappGroupName: true },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const updated = await prisma.client.update({
+    where: { id: client.id },
+    data: {
+      whatsappGroupName: newName.trim(),
+      whatsappGroupRenamedAt: today,
+      whatsappGroupRenamedBy: req.user!.id,
+    },
+    include,
+  });
+  await audit(
+    req.user!.id, req.user!.name, 'WA_GROUP_RENAME',
+    `${client.name}: "${client.whatsappGroupName}" → "${newName.trim()}"`,
+  );
+  res.json(updated);
+});
+
 
 // Demo history for a client (every attempt with the trainer who conducted it)
 clientsRouter.get('/:id/demos', async (req, res) => {
