@@ -240,10 +240,49 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
   const created = await prisma.$transaction(async (tx) => {
     const ps = [];
     for (const p of proposals) {
+      // Auto-add to trainer pool: when the recruiter is proposing a fresh contact
+      // (no trainerId from pool selector), find an existing trainer by phone digits
+      // or create a new one. This ensures every proposed trainer immediately shows
+      // up in the pool and can be reused without re-typing in the next request.
+      let trainerId: string | null = p.trainerId || null;
+      if (!trainerId && (p.trainerName || p.trainerPhone)) {
+        const phoneDigits = (p.trainerPhone || '').replace(/[^0-9]/g, '').slice(-10);
+        // De-dupe: look for an existing trainer with the same phone digits (last 10).
+        // Falls back to exact name match if no phone provided.
+        let existingTrainer = null;
+        if (phoneDigits) {
+          existingTrainer = await tx.trainer.findFirst({ where: { phoneDigits } });
+        }
+        if (!existingTrainer && p.trainerName) {
+          existingTrainer = await tx.trainer.findFirst({
+            where: { name: { equals: p.trainerName.trim(), mode: 'insensitive' } },
+          });
+        }
+        if (existingTrainer) {
+          trainerId = existingTrainer.id;
+        } else {
+          const newTrainer = await tx.trainer.create({
+            data: {
+              name: (p.trainerName || 'Unnamed').trim(),
+              email: p.trainerEmail || null,
+              phoneCode: phoneDigits && (p.trainerPhone || '').startsWith('+1') ? '+1' : '+91',
+              phoneDigits: phoneDigits || null,
+              skills: p.trainerSkills || null,
+              defaultRateInr: p.rateInr || 0,
+              experienceYears: p.experienceYears || 0,
+              rateModel: 'hourly',
+              paymentMethod: 'UPI',
+              recruitedById: req.user!.id,
+              active: true,
+            },
+          });
+          trainerId = newTrainer.id;
+        }
+      }
       const c = await tx.proposal.create({
         data: {
           requestId: req.params.id,
-          trainerId: p.trainerId || null,
+          trainerId,
           trainerName: p.trainerName || null,
           trainerSkills: p.trainerSkills || null,
           trainerPhone: p.trainerPhone || null,
