@@ -9,6 +9,7 @@ import { buildWelcomeEmailHtml, WELCOME_EMAIL_SUBJECT } from '../lib/welcomeEmai
 import { buildSkillMatrixHtml, buildSkillMatrixText, istToUsZones, DEFAULT_SOFT_SKILLS } from '../lib/skillMatrix';
 import { buildPreDemoReminderHtml, buildPreDemoReminderText, PRE_DEMO_REMINDER_SUBJECT } from '../lib/preDemoTrainerReminder';
 import { buildEngagementLetterHtml, buildEngagementLetterText, ENGAGEMENT_LETTER_SUBJECT } from '../lib/engagementLetter';
+import { buildEngagementLetterPdf } from '../lib/engagementLetterPdf';
 import { buildHandoverHtml, buildHandoverText, HANDOVER_SUBJECT } from '../lib/mitaliHandover';
 
 export const clientsRouter = Router();
@@ -1046,10 +1047,33 @@ clientsRouter.post('/:id/engagement-letter', async (req: AuthedRequest, res) => 
     // CC Mitali so she's aware of the incoming handover (her actual email if her gmail is set; else system fallback)
     const mitali = await prisma.user.findFirst({ where: { id: 'u-mitali' }, select: { gmailAddress: true } });
     const cc = mitali?.gmailAddress || undefined;
-    const r = await sendEmail({ to: toEmail, cc, subject, body: text, htmlBody: html, fromUser });
+    // Generate the branded engagement-letter PDF as an attachment. Best-effort —
+    // if PDF generation fails, send the email without the attachment rather than
+    // failing the whole send.
+    let pdfAttachment: { filename: string; content: Buffer; contentType: string } | undefined;
+    try {
+      const pdfBuf = await buildEngagementLetterPdf(vars);
+      const safeName = (client.name || 'client').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40);
+      pdfAttachment = {
+        filename: `MITS_Engagement_Letter_${safeName}.pdf`,
+        content: pdfBuf,
+        contentType: 'application/pdf',
+      };
+    } catch (pdfErr) {
+      console.warn('[engagement-letter] PDF build failed, sending email without attachment:', (pdfErr as any)?.message);
+    }
+    const r = await sendEmail({
+      to: toEmail,
+      cc,
+      subject,
+      body: text,
+      htmlBody: html,
+      fromUser,
+      ...(pdfAttachment ? { attachments: [pdfAttachment] } : {}),
+    });
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Sent', providerMessageId: r.id, provider: r.provider } });
-    await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · ${toEmail}${cc ? ' · cc ' + cc : ''}`);
-    res.status(201).json({ ok: true, messageId: msg.id });
+    await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · ${toEmail}${cc ? ' · cc ' + cc : ''}${pdfAttachment ? ' · pdf attached' : ''}`);
+    res.status(201).json({ ok: true, messageId: msg.id, pdfAttached: !!pdfAttachment });
   } catch (e: any) {
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Failed', errorText: e.message || String(e) } });
     res.status(502).json({ error: 'Engagement letter send failed: ' + (e.message || String(e)), messageId: msg.id });

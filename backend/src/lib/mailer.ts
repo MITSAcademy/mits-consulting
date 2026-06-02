@@ -92,6 +92,8 @@ export interface SendEmailArgs {
   fromUser?: { id: string; name: string; gmailAddress: string; appPasswordPlain: string; sendAsAddress?: string | null };
   /** Optional ICS file to attach (and embed as alternative). */
   icsAttachment?: { filename: string; content: string; method?: string };
+  /** Generic file attachments (e.g. engagement-letter PDF). Sent alongside icsAttachment if both present. */
+  attachments?: { filename: string; content: Buffer | string; contentType?: string }[];
   cc?: string | string[];
   bcc?: string | string[];
   /** When set, use this as the HTML body verbatim instead of auto-wrapping `body` in <pre>. */
@@ -149,6 +151,17 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
         content: args.icsAttachment.content,
         contentType: `text/calendar; charset=utf-8; method=${args.icsAttachment.method || 'REQUEST'}`,
       },
+    ];
+  }
+  // Append generic attachments (engagement-letter PDF, screenshots, etc.)
+  if (args.attachments && args.attachments.length > 0) {
+    mailOpts.attachments = [
+      ...(mailOpts.attachments || []),
+      ...args.attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
     ];
   }
 
