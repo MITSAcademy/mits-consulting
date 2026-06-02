@@ -722,6 +722,76 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   res.json(updated);
 });
 
+// Payment-terms checklist — the 10-item walkthrough Roshni opens on the close call.
+// Reading returns the saved items (or seeds defaults). Writing replaces the array.
+type ChecklistItem = { key: string; label: string; checked: boolean; note?: string; checkedAt?: string; checkedById?: string };
+
+function defaultChecklistItems(): ChecklistItem[] {
+  return [
+    { key: 'demo_feedback',      label: 'Took the client\'s feedback on the demo session',                 checked: false },
+    { key: 'start_date',         label: 'Confirmed preferred start date',                                  checked: false },
+    { key: 'session_timing',     label: 'Confirmed session timings (IST) + days/week',                     checked: false },
+    { key: 'package',            label: 'Explained the support / training package details',               checked: false },
+    { key: 'amount',             label: 'Finalized the cycle amount + currency',                           checked: false },
+    { key: 'cadence',            label: 'Confirmed payment cadence (Weekly / Biweekly / Monthly / One-shot)', checked: false },
+    { key: 'payment_method',     label: 'Discussed payment methods (HDFC wire / GPay / Remitly)',          checked: false },
+    { key: 'screenshot',         label: 'Asked for payment confirmation screenshot post-payment',          checked: false },
+    { key: 'trainer_avail',      label: 'Coordinated with internal team on resource availability',         checked: false },
+    { key: 'mitali_handover',    label: 'Set expectation that Mitali will reach out post-payment',         checked: false },
+  ];
+}
+
+clientsRouter.get('/:id/payment-checklist', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'sales_closer'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, paymentChecklist: true, paymentChecklistCompletedAt: true },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const saved = (client.paymentChecklist as ChecklistItem[] | null) || null;
+  // Merge: keep saved checked-state, but always present the canonical item set
+  // (so adding new items in defaultChecklistItems() rolls out without migration).
+  const defaults = defaultChecklistItems();
+  const items: ChecklistItem[] = defaults.map((d) => {
+    const existing = saved?.find((s) => s.key === d.key);
+    return existing ? { ...d, ...existing } : d;
+  });
+  res.json({ items, completedAt: client.paymentChecklistCompletedAt || null });
+});
+
+clientsRouter.patch('/:id/payment-checklist', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'sales_closer'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  const { items, completed } = req.body as { items: ChecklistItem[]; completed?: boolean };
+  if (!Array.isArray(items)) return res.status(400).json({ error: 'items must be an array' });
+  // Stamp checkedAt/By on items that just got checked
+  const today = new Date().toISOString().slice(0, 10);
+  const stamped = items.map((it) => (it.checked && !it.checkedAt
+    ? { ...it, checkedAt: today, checkedById: req.user!.id }
+    : it));
+  const allChecked = stamped.every((it) => it.checked);
+  const updated = await prisma.client.update({
+    where: { id: req.params.id },
+    data: {
+      paymentChecklist: stamped as any,
+      paymentChecklistCompletedAt: completed || allChecked
+        ? today
+        : null,
+    },
+    select: { id: true, paymentChecklist: true, paymentChecklistCompletedAt: true },
+  });
+  await audit(
+    req.user!.id, req.user!.name, 'PAYMENT_CHECKLIST_UPDATE',
+    `${req.params.id} · ${stamped.filter((it) => it.checked).length}/${stamped.length} checked`,
+  );
+  res.json(updated);
+});
+
 // Generate a personalised "couldn't reach you" WhatsApp message for Roshni to
 // send when client doesn't pick up. Used by the SubStatusModal when she marks
 // CP / NoPickup — gives her a ready-to-paste message including the next-call date.

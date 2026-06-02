@@ -374,6 +374,10 @@ model Client {
   whatsappGroupRenamedBy     String?   // user id
   // Assigned account manager (Mitali/Bhavneet pick post-handover)
   assignedAmId               String?
+  // Payment-terms checklist Roshni walks through on close call.
+  // JSON array: [{ key, label, checked, note, checkedAt, checkedBy }]
+  paymentChecklist           Json?
+  paymentChecklistCompletedAt String?
   notes                    String?
   createdAt                DateTime       @default(now())
 

@@ -54,7 +54,7 @@ type ModalKind =
   | null | 'editContact' | 'editEngagement' | 'assignOwner'
   | 'sendIntake' | 'recordIntake' | 'internalSearch'
   | 'scheduleDemo' | 'demoDone' | 'noShow' | 'freshPayment' | 'leverage' | 'hold' | 'renewal' | 'welcomeEmail' | 'postDemoFeedback' | 'sendSkillMatrix' | 'skipMatrix' | 'preDemoReminder'
-  | 'engagementLetter' | 'handoverWelcome' | 'subStatus' | 'paymentConfirmation' | 'groupRename'
+  | 'engagementLetter' | 'handoverWelcome' | 'subStatus' | 'paymentConfirmation' | 'groupRename' | 'paymentChecklist'
   | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume';
 
 export function ClientDetailPage() {
@@ -263,6 +263,19 @@ export function ClientDetailPage() {
         title="Track Roshni's close progress: RP (ready for payment) → CP (no pickup) → C (client confirmed not starting)"
       >
         {label}
+      </Button>
+    );
+    // Payment-terms checklist — the 10-item walkthrough Roshni opens on the close call
+    const checklistDone = !!client.paymentChecklistCompletedAt;
+    actions.push(
+      <Button
+        key="checklist"
+        size="sm"
+        variant={checklistDone ? 'success' : 'default'}
+        onClick={() => setModal('paymentChecklist')}
+        title="10-point checklist Roshni walks through on the close call"
+      >
+        <ClipboardCheck size={12}/> {checklistDone ? 'Checklist · done' : 'Open call checklist'}
       </Button>
     );
   }
@@ -702,6 +715,7 @@ export function ClientDetailPage() {
         {modal === 'skipMatrix' && <SkipMatrixModal client={client} onClose={() => setModal(null)} onProceed={() => { setModal('scheduleDemo'); }} />}
         {modal === 'noShow' && <NoShowModal client={client} onClose={() => setModal(null)} />}
         {modal === 'subStatus' && <SubStatusModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'paymentChecklist' && <PaymentChecklistModal client={client} onClose={() => setModal(null)} />}
         {modal === 'paymentConfirmation' && <PaymentConfirmationModal client={client} onClose={() => setModal(null)} />}
         {modal === 'groupRename' && <GroupRenameModal client={client} onClose={() => setModal(null)} />}
         {modal === 'preDemoReminder' && <PreDemoReminderModal client={client} onClose={() => setModal(null)} />}
@@ -2504,6 +2518,94 @@ function NoPickupTemplate({ clientId, nextCallOn }: { clientId: string; nextCall
         </a>
       )}
     </div>
+  );
+}
+
+/** Payment-terms checklist Roshni opens on the close call. 10 default items
+ *  (drawn from the engagement letter + SOP); each item has a checkbox + a free-text
+ *  note. Auto-marks the checklist complete when all 10 are ticked. */
+function PaymentChecklistModal({ client, onClose }: any) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  type Item = { key: string; label: string; checked: boolean; note?: string; checkedAt?: string };
+  const { data, isLoading } = useQuery<{ items: Item[]; completedAt: string | null }>({
+    queryKey: ['payment-checklist', client.id],
+    queryFn: () => api.get(`/clients/${client.id}/payment-checklist`).then((r) => r.data),
+  });
+  const [items, setItems] = useState<Item[]>([]);
+  useEffect(() => { if (data?.items) setItems(data.items); }, [data]);
+
+  const save = useMutation({
+    mutationFn: (completed: boolean) =>
+      api.patch(`/clients/${client.id}/payment-checklist`, { items, completed }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      qc.invalidateQueries({ queryKey: ['payment-checklist', client.id] });
+      showToast('Checklist saved');
+      onClose();
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  function toggle(idx: number) {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, checked: !it.checked } : it)));
+  }
+  function patchNote(idx: number, note: string) {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, note } : it)));
+  }
+
+  const checkedCount = items.filter((it) => it.checked).length;
+  const allDone = items.length > 0 && checkedCount === items.length;
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        title={`Close-call checklist · ${client.name}`}
+        description="Tick each item as you walk through it on the call. All 10 ticked = checklist complete. Notes are optional but useful for tracking what the client said."
+        className="max-w-2xl"
+      >
+        <div className="muted text-xs mb-2">{checkedCount}/{items.length} ticked{data?.completedAt ? ` · last completed ${data.completedAt}` : ''}</div>
+        {isLoading && <div className="muted text-sm">Loading checklist…</div>}
+        <div className="space-y-1.5 max-h-[420px] overflow-y-auto">
+          {items.map((it, idx) => (
+            <div
+              key={it.key}
+              className={`rounded border p-2 ${it.checked ? 'border-brand-green bg-brand-green/5' : 'border-brand-border'}`}
+            >
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={it.checked}
+                  onChange={() => toggle(idx)}
+                  className="mt-0.5"
+                />
+                <div className="flex-1">
+                  <div className="text-sm">{it.label}</div>
+                  {it.checked && (
+                    <Input
+                      placeholder="Note (optional) — what did the client say?"
+                      value={it.note || ''}
+                      onChange={(e) => patchNote(idx, e.target.value)}
+                      className="mt-1 !text-xs"
+                    />
+                  )}
+                </div>
+              </label>
+            </div>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant={allDone ? 'success' : 'primary'}
+            disabled={save.isPending}
+            onClick={() => save.mutate(allDone)}
+          >
+            {save.isPending ? 'Saving…' : allDone ? 'Save & mark complete' : 'Save progress'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
