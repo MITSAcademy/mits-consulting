@@ -987,13 +987,15 @@ function RecordIntakeModal({ client, onClose }: any) {
 
   // Welcome email fires automatically on the transition Lead/IntakeSent → IntakeReceived only.
   // Default checked; user can untick. Hidden if client has no email or we're just editing an existing intake.
+  // JBT and existing-engagement leads never get the welcome email — they already know MITS.
   const isFirstReceive = client.lifecycle === 'Lead' || client.lifecycle === 'IntakeSent';
   const clientEmail = client.email || (client.intakeData as any)?.client_email || data.client_email || '';
-  // Default checked when an email is on file; auto-uncheck as soon as the email is removed.
-  const [sendWelcome, setSendWelcome] = useState<boolean>(!!clientEmail);
+  const isJbtOrExisting = client.source === 'JBT' || client.source === 'Existing engagement';
+  // Default checked when an email is on file AND source isn't JBT/Existing; auto-uncheck if either changes.
+  const [sendWelcome, setSendWelcome] = useState<boolean>(!!clientEmail && !isJbtOrExisting);
   useEffect(() => {
-    setSendWelcome((prev) => (clientEmail ? prev : false));
-  }, [clientEmail]);
+    setSendWelcome((prev) => (clientEmail && !isJbtOrExisting ? prev : false));
+  }, [clientEmail, isJbtOrExisting]);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -1091,13 +1093,16 @@ function RecordIntakeModal({ client, onClose }: any) {
                 checked={sendWelcome}
                 onChange={(e) => setSendWelcome(e.target.checked)}
                 className="mt-0.5"
-                disabled={!clientEmail}
+                disabled={!clientEmail || isJbtOrExisting}
               />
               <div className="text-sm">
                 <div className="font-medium">Send welcome email automatically</div>
                 <div className="text-xs muted mt-0.5">
                   Sends the branded <em>"Introducing MITS Solution"</em> email to {clientEmail || '(client)'} with the Client Interest Document, team intro, and Samita's signature.
                   {!clientEmail && <span className="text-brand-amber"> · No client email on file — provide an email above to enable.</span>}
+                  {isJbtOrExisting && (
+                    <span className="text-brand-amber"> · Skipped — client source is <strong>{client.source}</strong>, they already know MITS.</span>
+                  )}
                 </div>
               </div>
             </label>
