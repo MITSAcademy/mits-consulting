@@ -68,6 +68,54 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
 // Roshni follow-ups list — clients in SaleClosing/SaleWon with sub-status RP or CP,
 // bucketed by roshniNextCallOn relative to today. MUST be registered BEFORE GET /:id
 // or Express will match "roshni" as :id and 404.
+// Renewals approaching — Active / LeverageGranted clients with nextRenewalDue
+// within the next 14 days (or already overdue). Surfaced alongside Roshni's
+// payment follow-ups so she has one daily queue.
+clientsRouter.get('/roshni/renewals-approaching', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'sales_closer'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only Roshni / managers / founder can view this queue.' });
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const horizon = new Date(); horizon.setDate(horizon.getDate() + 14);
+  const horizonISO = horizon.toISOString().slice(0, 10);
+  // Roshni sees clients she owns; founder/manager see all
+  const ownerFilter = req.user!.role === 'sales_closer' ? { salesOwnerId: req.user!.id } : {};
+  const clients = await prisma.client.findMany({
+    where: {
+      ...ownerFilter,
+      lifecycle: { in: ['Active', 'LeverageGranted'] },
+      nextRenewalDue: { not: null, lte: horizonISO },
+    },
+    select: {
+      id: true, name: true, lifecycle: true,
+      phoneCode: true, phoneDigits: true, email: true,
+      whatsappGroupLink: true,
+      nextRenewalDue: true,
+      cycleAmount: true, currency: true,
+      sessionsUsed: true, sessionsPerCycle: true,
+      churnRisk: true,
+      primaryTrainer: { select: { id: true, name: true } },
+      salesOwner: { select: { id: true, name: true } },
+    },
+    orderBy: { nextRenewalDue: 'asc' },
+  });
+  const items = clients.map((c) => {
+    const due = c.nextRenewalDue || '';
+    const overdue = !!due && due < today;
+    const daysUntil = due ? Math.floor((Date.parse(due) - Date.parse(today)) / 86_400_000) : 0;
+    return { ...c, overdue, daysUntil };
+  });
+  res.json({
+    items,
+    counts: {
+      overdue: items.filter((i) => i.overdue).length,
+      thisWeek: items.filter((i) => !i.overdue && i.daysUntil <= 7).length,
+      next7to14: items.filter((i) => !i.overdue && i.daysUntil > 7 && i.daysUntil <= 14).length,
+    },
+  });
+});
+
 clientsRouter.get('/roshni/follow-ups', async (req: AuthedRequest, res) => {
   const allowed = ['founder', 'manager', 'sales_closer'];
   if (!allowed.includes(req.user!.role)) {
