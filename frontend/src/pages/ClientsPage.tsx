@@ -37,6 +37,7 @@ export function ClientsPage() {
 
   const [form, setForm] = useState({
     name: '', phoneCode: '+1', phoneDigits: '', email: '',
+    whatsappGroupName: '', whatsappGroupLink: '',
     engagementType: 'Support', currency: 'USD', source: '',
     intakeSkillHint: '', notes: '',
   });
@@ -48,7 +49,7 @@ export function ClientsPage() {
       qc.invalidateQueries({ queryKey: ['metrics/home'] });
       showToast('Lead added');
       setOpen(false);
-      setForm({ name: '', phoneCode: '+1', phoneDigits: '', email: '', engagementType: 'Support', currency: 'USD', source: '', intakeSkillHint: '', notes: '' });
+      setForm({ name: '', phoneCode: '+1', phoneDigits: '', email: '', whatsappGroupName: '', whatsappGroupLink: '', engagementType: 'Support', currency: 'USD', source: '', intakeSkillHint: '', notes: '' });
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
@@ -117,6 +118,14 @@ export function ClientsPage() {
                   <div className="form-row md:col-span-2">
                     <Label>Email</Label>
                     <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                  </div>
+                  <div className="form-row md:col-span-2">
+                    <Label>WhatsApp group name <span className="text-brand-textMuted normal-case ml-1">(optional)</span></Label>
+                    <Input value={form.whatsappGroupName} onChange={(e) => setForm({ ...form, whatsappGroupName: e.target.value })} placeholder="e.g. Acme - Salesforce - MITS" />
+                  </div>
+                  <div className="form-row md:col-span-2">
+                    <Label>WhatsApp group invite link <span className="text-brand-textMuted normal-case ml-1">(optional)</span></Label>
+                    <Input value={form.whatsappGroupLink} onChange={(e) => setForm({ ...form, whatsappGroupLink: e.target.value })} placeholder="https://chat.whatsapp.com/..." />
                   </div>
                   <div className="form-row">
                     <Label>Engagement type</Label>
