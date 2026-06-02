@@ -20,6 +20,7 @@ enum Role {
   staff
   accounts
   payment_processor
+  account_manager
 }
 
 enum Lifecycle {
@@ -142,6 +143,11 @@ model User {
   gmailAddress      String?   @unique
   smtpAppPassword   String?   // encrypted with SMTP_USER_ENCRYPTION_KEY env var
   smtpConfiguredAt  DateTime?
+  // Optional "send as" override — useful for shared aliases (Google Groups) like
+  // mc.sales@mitssolution.com. Authentication still uses gmailAddress + smtpAppPassword,
+  // but the From: header is set to this address. Workspace admin must enable
+  // "Send mail as group address" for this to be accepted by Gmail.
+  sendAsAddress     String?
   // Google SSO linkage — populated on first OAuth login
   googleId             String?   @unique
   avatarUrl            String?
@@ -350,6 +356,24 @@ model Client {
   // Skill matrix gating — Anjali must send the skill matrix to client BEFORE scheduling demo
   skillMatrixSentAt        String?    // ISO date when matrix was sent
   skillMatrixSentById      String?    // user id of sender
+  // Roshni / sales-closer sub-status overlay on SaleClosing/SaleWon
+  // Values: 'RP' (Ready for Payment), 'CP' (Closure Pending — no pickup), 'C' (Complete — client confirmed not starting)
+  saleClosingSubStatus       String?
+  saleClosingSubStatusAt     DateTime?
+  saleClosingSubStatusById   String?
+  // Roshni follow-up tracking (mirrors the hold/dormant pattern)
+  roshniNextCallOn           String?   // ISO date — when to call back
+  roshniLastContactAt        String?   // ISO date — last touch
+  roshniLastContactOutcome   String?   // 'NoPickup' | 'Discussed' | 'PaymentPromised' | 'PaidScreenshotPending'
+  // Payment confirmation tracking
+  paymentScreenshotUrl       String?
+  paymentScreenshotReceivedAt String?
+  paymentConfirmationPostedAt String?  // when Roshni posted in payment-confirmation group
+  // Group rename audit (handover to Mitali team)
+  whatsappGroupRenamedAt     String?   // ISO date
+  whatsappGroupRenamedBy     String?   // user id
+  // Assigned account manager (Mitali/Bhavneet pick post-handover)
+  assignedAmId               String?
   notes                    String?
   createdAt                DateTime       @default(now())
 

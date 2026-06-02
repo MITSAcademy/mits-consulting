@@ -578,6 +578,57 @@ clientsRouter.delete('/:id', async (req: AuthedRequest, res) => {
   res.json({ ok: true });
 });
 
+// ─── Roshni sub-status (RP / CP / C) ──────────────────────────────────────
+// Sub-status overlay on top of SaleClosing/SaleWon. Doesn't change lifecycle —
+// just marks Roshni's progress: RP=ready-for-payment, CP=closure-pending (no
+// pickup after 3 working days), C=client confirmed not starting.
+clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'sales_closer'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: `Your role (${req.user!.role}) cannot set Roshni sub-status.` });
+  }
+  const { subStatus, nextCallOn, lastContactOutcome, reason } = req.body as {
+    subStatus: 'RP' | 'CP' | 'C' | null;
+    nextCallOn?: string;
+    lastContactOutcome?: string;
+    reason?: string;
+  };
+  const allowedSubStatuses = [null, 'RP', 'CP', 'C'];
+  if (!allowedSubStatuses.includes(subStatus)) {
+    return res.status(400).json({ error: `Invalid sub-status: ${subStatus}. Must be RP, CP, C, or null.` });
+  }
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, name: true, lifecycle: true },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  if (!['SaleClosing', 'SaleWon'].includes(client.lifecycle)) {
+    return res.status(409).json({
+      error: `Sub-status only applies to SaleClosing / SaleWon clients (current: ${client.lifecycle}).`,
+    });
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const updated = await prisma.client.update({
+    where: { id: client.id },
+    data: {
+      saleClosingSubStatus: subStatus,
+      saleClosingSubStatusAt: new Date(),
+      saleClosingSubStatusById: req.user!.id,
+      ...(nextCallOn !== undefined ? { roshniNextCallOn: nextCallOn || null } : {}),
+      ...(lastContactOutcome !== undefined ? {
+        roshniLastContactOutcome: lastContactOutcome || null,
+        roshniLastContactAt: today,
+      } : {}),
+    },
+    include,
+  });
+  await audit(
+    req.user!.id, req.user!.name, 'ROSHNI_SUB_STATUS',
+    `${client.name}: ${subStatus || 'cleared'}${reason ? ' · ' + reason : ''}${nextCallOn ? ' · next call ' + nextCallOn : ''}`,
+  );
+  res.json(updated);
+});
+
 // Demo history for a client (every attempt with the trainer who conducted it)
 clientsRouter.get('/:id/demos', async (req, res) => {
   const demos = await prisma.demo.findMany({
@@ -654,7 +705,7 @@ clientsRouter.post('/:id/engagement-letter', async (req: AuthedRequest, res) => 
 
   const me = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
   });
   const vars = {
     clientName: client.name,
@@ -688,7 +739,7 @@ clientsRouter.post('/:id/engagement-letter', async (req: AuthedRequest, res) => 
   if (!toEmail) return res.status(400).json({ error: 'No email on file for this client' });
   let fromUser;
   if (me?.gmailAddress && me?.smtpAppPassword) {
-    fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword) };
+    fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword), sendAsAddress: me.sendAsAddress };
   }
   const msg = await prisma.outboundMessage.create({
     data: { kind: 'Email', toEmail, subject, body: text, clientId: client.id, sentById: req.user!.id, status: 'Queued', provider: 'smtp' },
@@ -750,7 +801,7 @@ clientsRouter.post('/:id/handover-welcome', async (req: AuthedRequest, res) => {
   if (!client) return res.status(404).json({ error: 'Client not found' });
   const me = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
   });
   const vars = {
     clientName: client.name,
@@ -779,7 +830,7 @@ clientsRouter.post('/:id/handover-welcome', async (req: AuthedRequest, res) => {
   if (!toEmail) return res.status(400).json({ error: 'No email on file for this client' });
   let fromUser;
   if (me?.gmailAddress && me?.smtpAppPassword) {
-    fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword) };
+    fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword), sendAsAddress: me.sendAsAddress };
   }
   const msg = await prisma.outboundMessage.create({
     data: { kind: 'Email', toEmail, subject, body: text, clientId: client.id, sentById: req.user!.id, status: 'Queued', provider: 'smtp' },
@@ -823,7 +874,7 @@ clientsRouter.post('/:id/pre-demo-reminder', async (req: AuthedRequest, res) => 
 
   const me = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
   });
 
   const demoCallTime = client.demoDate
@@ -869,7 +920,7 @@ clientsRouter.post('/:id/pre-demo-reminder', async (req: AuthedRequest, res) => 
   if (!trainer.email) return res.status(400).json({ error: 'No email on file for trainer' });
   let fromUser;
   if (me?.gmailAddress && me?.smtpAppPassword) {
-    fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword) };
+    fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword), sendAsAddress: me.sendAsAddress };
   }
   const msg = await prisma.outboundMessage.create({
     data: {
@@ -985,13 +1036,14 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
   // Sender = current user — uses per-user gmail if configured
   const me = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
   });
   let fromUser;
   if (me?.gmailAddress && me?.smtpAppPassword) {
     fromUser = {
       id: me.id, name: me.name, gmailAddress: me.gmailAddress,
       appPasswordPlain: decryptSecret(me.smtpAppPassword),
+      sendAsAddress: me.sendAsAddress,
     };
   }
 
@@ -1200,7 +1252,7 @@ clientsRouter.post('/:id/welcome-email', async (req: AuthedRequest, res) => {
   // Sender = current user. Prefer per-user gmail if configured.
   const me = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, phone: true, role: true },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true, phone: true, role: true },
   });
   const senderEmail = me?.gmailAddress || 'samita@mitssolution.com';
   const senderName = me?.name || 'Samita Gupta';
@@ -1218,6 +1270,7 @@ clientsRouter.post('/:id/welcome-email', async (req: AuthedRequest, res) => {
     fromUser = {
       id: me.id, name: me.name, gmailAddress: me.gmailAddress,
       appPasswordPlain: decryptSecret(me.smtpAppPassword),
+      sendAsAddress: me.sendAsAddress,
     };
   }
 
@@ -1561,15 +1614,16 @@ async function sendDemoInvite(
   // Organizer = the user who scheduled. Use their Gmail if configured.
   const organizer = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
   });
   const orgEmail = organizer?.gmailAddress || process.env.SMTP_FROM?.match(/<([^>]+)>/)?.[1] || process.env.SMTP_USER || 'ops@mitssolution.com';
   const orgName = organizer?.name || 'MITS Consulting';
-  let fromUser: { id: string; name: string; gmailAddress: string; appPasswordPlain: string } | undefined;
+  let fromUser: { id: string; name: string; gmailAddress: string; appPasswordPlain: string; sendAsAddress?: string | null } | undefined;
   if (organizer?.gmailAddress && organizer?.smtpAppPassword) {
     fromUser = {
       id: organizer.id, name: organizer.name, gmailAddress: organizer.gmailAddress,
       appPasswordPlain: decryptSecret(organizer.smtpAppPassword),
+      sendAsAddress: organizer.sendAsAddress,
     };
   }
 

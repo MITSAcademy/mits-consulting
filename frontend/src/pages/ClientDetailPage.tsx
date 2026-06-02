@@ -54,7 +54,7 @@ type ModalKind =
   | null | 'editContact' | 'editEngagement' | 'assignOwner'
   | 'sendIntake' | 'recordIntake' | 'internalSearch'
   | 'scheduleDemo' | 'demoDone' | 'noShow' | 'freshPayment' | 'leverage' | 'hold' | 'renewal' | 'welcomeEmail' | 'postDemoFeedback' | 'sendSkillMatrix' | 'skipMatrix' | 'preDemoReminder'
-  | 'engagementLetter' | 'handoverWelcome'
+  | 'engagementLetter' | 'handoverWelcome' | 'subStatus'
   | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume';
 
 export function ClientDetailPage() {
@@ -246,6 +246,25 @@ export function ClientDetailPage() {
   }
   if (canClose(user.role) && client.lifecycle === 'SaleClosing' && canRecordPayment(user.role)) {
     actions.push(<Button key="pay" variant="success" onClick={() => setModal('freshPayment')}><Wallet size={14}/> Fresh payment</Button>);
+  }
+  // Roshni sub-status (RP / CP / C) — overlay tracker on SaleClosing/SaleWon
+  if (canClose(user.role) && (client.lifecycle === 'SaleClosing' || client.lifecycle === 'SaleWon')) {
+    const ss = client.saleClosingSubStatus;
+    const label = ss === 'RP' ? 'RP · ready for payment'
+      : ss === 'CP' ? 'CP · closure pending'
+      : ss === 'C' ? 'C · not starting'
+      : 'Set sub-status';
+    actions.push(
+      <Button
+        key="substatus"
+        size="sm"
+        variant={ss === 'CP' ? 'amber' : ss === 'C' ? 'danger' : ss === 'RP' ? 'primary' : 'default'}
+        onClick={() => setModal('subStatus')}
+        title="Track Roshni's close progress: RP (ready for payment) → CP (no pickup) → C (client confirmed not starting)"
+      >
+        {label}
+      </Button>
+    );
   }
   // Phase-2: Roshni sends engagement letter + triggers handover-to-Mitali on SaleClosing close-out
   if (phase2 && canClose(user.role) && (client.lifecycle === 'SaleClosing' || client.lifecycle === 'SaleWon')) {
@@ -667,6 +686,7 @@ export function ClientDetailPage() {
         {modal === 'sendSkillMatrix' && <SendSkillMatrixModal client={client} onClose={() => setModal(null)} />}
         {modal === 'skipMatrix' && <SkipMatrixModal client={client} onClose={() => setModal(null)} onProceed={() => { setModal('scheduleDemo'); }} />}
         {modal === 'noShow' && <NoShowModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'subStatus' && <SubStatusModal client={client} onClose={() => setModal(null)} />}
         {modal === 'preDemoReminder' && <PreDemoReminderModal client={client} onClose={() => setModal(null)} />}
         {modal === 'engagementLetter' && <EngagementLetterModal client={client} onClose={() => setModal(null)} />}
         {modal === 'handoverWelcome' && <HandoverWelcomeModal client={client} onClose={() => setModal(null)} />}
@@ -2338,6 +2358,95 @@ function NoShowModal({ client, onClose }: any) {
         </div>
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Roshni sub-status modal — set RP / CP / C overlay on SaleClosing/SaleWon clients.
+ *  RP = ready-for-payment (after the close call). CP = closure-pending (no pickup
+ *  after 3 working days / 6 attempts). C = client confirmed not starting. */
+function SubStatusModal({ client, onClose }: any) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  type Sub = 'RP' | 'CP' | 'C' | null;
+  const [sub, setSub] = useState<Sub>(client.saleClosingSubStatus || null);
+  const [nextCallOn, setNextCallOn] = useState<string>(client.roshniNextCallOn || '');
+  const [reason, setReason] = useState('');
+
+  const m = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/sub-status`, {
+      subStatus: sub,
+      nextCallOn: nextCallOn || null,
+      reason,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      qc.invalidateQueries({ queryKey: ['clients'] });
+      showToast(sub ? `Sub-status set: ${sub}` : 'Sub-status cleared');
+      onClose();
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const opts: { key: Sub; label: string; desc: string; tone: 'amber' | 'danger' | 'primary' | 'success' }[] = [
+    { key: 'RP', label: 'RP · Ready for payment', desc: 'Roshni had the close call; client said yes, payment expected soon.', tone: 'primary' },
+    { key: 'CP', label: 'CP · Closure pending', desc: 'Client took demo + was happy but isn\'t discussing payment. Default after 3 working days / 6 missed attempts.', tone: 'amber' },
+    { key: 'C',  label: 'C · Not starting',     desc: 'Client confirmed they\'re not proceeding. Terminal no-sale state.', tone: 'danger' },
+  ];
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        title={`Sub-status · ${client.name}`}
+        description="Overlay tracker on top of SaleClosing/SaleWon. Doesn't change the lifecycle."
+      >
+        <div className="space-y-2">
+          {opts.map((o) => (
+            <label
+              key={o.key}
+              className={`flex items-start gap-2.5 p-2.5 rounded border cursor-pointer transition-colors ${
+                sub === o.key ? 'border-brand-amber bg-bg-input' : 'border-brand-border hover:bg-bg-input'
+              }`}
+            >
+              <input
+                type="radio"
+                name="sub-status"
+                checked={sub === o.key}
+                onChange={() => setSub(o.key)}
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <div className="text-sm font-medium">{o.label}</div>
+                <div className="text-xs muted mt-0.5">{o.desc}</div>
+              </div>
+            </label>
+          ))}
+          <label className="flex items-center gap-2 p-2 rounded border border-brand-border text-xs muted cursor-pointer">
+            <input type="radio" name="sub-status" checked={sub === null} onChange={() => setSub(null)} />
+            Clear sub-status (back to plain SaleClosing/SaleWon)
+          </label>
+        </div>
+
+        {(sub === 'RP' || sub === 'CP') && (
+          <div className="form-row mt-3">
+            <Label>Next call on (optional)</Label>
+            <Input type="date" value={nextCallOn} onChange={(e) => setNextCallOn(e.target.value)} />
+            <div className="text-[10px] muted mt-1">Used by Roshni's follow-ups view to surface overdue calls.</div>
+          </div>
+        )}
+
+        <div className="form-row mt-2">
+          <Label>Reason / note (optional)</Label>
+          <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. left voicemail, client said next week, etc." />
+        </div>
+
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={m.isPending} onClick={() => m.mutate()}>
+            {m.isPending ? 'Saving…' : 'Save sub-status'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

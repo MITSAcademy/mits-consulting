@@ -86,8 +86,10 @@ export interface SendEmailArgs {
   subject: string;
   body: string;
   replyTo?: string;
-  /** When set, send from this user's own Gmail (must have gmailAddress + decrypted appPassword). */
-  fromUser?: { id: string; name: string; gmailAddress: string; appPasswordPlain: string };
+  /** When set, send from this user's own Gmail (must have gmailAddress + decrypted appPassword).
+   *  If `sendAsAddress` is also set, SMTP auth still uses gmailAddress, but the From: header is
+   *  rewritten to sendAsAddress. Workspace admin must enable "Send mail as group address" first. */
+  fromUser?: { id: string; name: string; gmailAddress: string; appPasswordPlain: string; sendAsAddress?: string | null };
   /** Optional ICS file to attach (and embed as alternative). */
   icsAttachment?: { filename: string; content: string; method?: string };
   cc?: string | string[];
@@ -108,7 +110,10 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
 
   if (args.fromUser?.gmailAddress && args.fromUser?.appPasswordPlain) {
     tx = getUserTransporter(args.fromUser.id, args.fromUser.gmailAddress, args.fromUser.appPasswordPlain);
-    from = `"${args.fromUser.name}" <${args.fromUser.gmailAddress}>`;
+    // Send-as override: if user has sendAsAddress (e.g. Google Group), use it as From header.
+    // SMTP auth still happens with their personal gmailAddress + app password.
+    const fromAddr = args.fromUser.sendAsAddress?.trim() || args.fromUser.gmailAddress;
+    from = `"${args.fromUser.name}" <${fromAddr}>`;
     provider = 'smtp-user';
   } else {
     tx = getSystemTransporter();

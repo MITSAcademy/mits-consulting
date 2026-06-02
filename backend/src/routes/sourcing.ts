@@ -656,7 +656,7 @@ sourcingRouter.post('/proposals/:id/outreach/email', async (req: AuthedRequest, 
   const overrides = (req.body?.overrides || {}) as (Partial<TrainerOutreachVars> & { customSubject?: string; customText?: string });
   const me = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
   });
   const vars = buildVarsFromProposal(p, overrides, me?.name || 'MITS Recruitment');
   const subject = overrides.customSubject?.trim() || TRAINER_OUTREACH_SUBJECT(vars);
@@ -672,6 +672,7 @@ sourcingRouter.post('/proposals/:id/outreach/email', async (req: AuthedRequest, 
     fromUser = {
       id: me.id, name: me.name, gmailAddress: me.gmailAddress,
       appPasswordPlain: decryptSecret(me.smtpAppPassword),
+      sendAsAddress: me.sendAsAddress,
     };
   }
 

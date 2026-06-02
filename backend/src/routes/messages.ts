@@ -122,7 +122,7 @@ messagesRouter.post('/email', async (req: AuthedRequest, res) => {
     // Prefer the current user's own Gmail if configured (so emails go from their address)
     const me = await prisma.user.findUnique({
       where: { id: req.user!.id },
-      select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true },
+      select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
     });
     let fromUser;
     if (me?.gmailAddress && me?.smtpAppPassword) {
@@ -130,6 +130,7 @@ messagesRouter.post('/email', async (req: AuthedRequest, res) => {
       fromUser = {
         id: me.id, name: me.name, gmailAddress: me.gmailAddress,
         appPasswordPlain: decryptSecret(me.smtpAppPassword),
+        sendAsAddress: me.sendAsAddress,
       };
     }
     const r = await sendEmail({ to, subject: finalSubject, body: finalBody, fromUser });
