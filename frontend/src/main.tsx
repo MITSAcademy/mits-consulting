@@ -10,7 +10,17 @@ initTheme();
 
 const qc = new QueryClient({
   defaultOptions: {
-    queries: { refetchOnWindowFocus: false, retry: 1, staleTime: 5_000 },
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+      // Longer default cache lifetime — most data on this app changes slowly
+      // (sourcing requests, client lifecycles, trainer pool). 60s staleTime
+      // means navigating between pages doesn't refetch the same data over
+      // and over. Components that need fresh data (e.g. lists with mutations)
+      // call qc.invalidateQueries themselves on success.
+      staleTime: 60_000,
+      gcTime: 5 * 60_000,
+    },
   },
 });
 

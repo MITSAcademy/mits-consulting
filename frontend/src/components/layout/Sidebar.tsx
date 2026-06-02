@@ -116,7 +116,10 @@ export function Sidebar() {
         holdDue,
       };
     },
-    refetchInterval: 30000,
+    // 3 min — badges are advisory, no need to hammer the server every 30s.
+    // Counts also refresh via React Query's invalidateQueries on relevant mutations.
+    refetchInterval: 180_000,
+    staleTime: 60_000,
     enabled: !!user,
   });
 
