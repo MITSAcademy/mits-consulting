@@ -53,7 +53,7 @@ function canEditClient(role: string, cat: 'identity' | 'contact' | 'engagement' 
 type ModalKind =
   | null | 'editContact' | 'editEngagement' | 'assignOwner'
   | 'sendIntake' | 'recordIntake' | 'internalSearch'
-  | 'scheduleDemo' | 'demoDone' | 'freshPayment' | 'leverage' | 'hold' | 'renewal' | 'welcomeEmail' | 'postDemoFeedback' | 'sendSkillMatrix' | 'skipMatrix' | 'preDemoReminder'
+  | 'scheduleDemo' | 'demoDone' | 'noShow' | 'freshPayment' | 'leverage' | 'hold' | 'renewal' | 'welcomeEmail' | 'postDemoFeedback' | 'sendSkillMatrix' | 'skipMatrix' | 'preDemoReminder'
   | 'engagementLetter' | 'handoverWelcome'
   | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume';
 
@@ -226,6 +226,11 @@ export function ClientDetailPage() {
       </Button>
     );
     actions.push(<Button key="done" variant="success" onClick={() => setModal('demoDone')}><Check size={14}/> Demo done</Button>);
+    actions.push(
+      <Button key="noshow" size="sm" variant="amber" onClick={() => setModal('noShow')} title="Client / trainer didn't show up — push the demo by a week or mark dormant.">
+        <Clock size={12}/> No-show
+      </Button>
+    );
   }
   // Samita's post-demo feedback step — auto-routes to Roshni (positive), Anjali (negative), or Hold (need time)
   if (canPostDemoFeedback(user.role) && (client.lifecycle === 'FeedbackPending' || client.lifecycle === 'DemoDone')) {
@@ -661,6 +666,7 @@ export function ClientDetailPage() {
         {modal === 'postDemoFeedback' && <PostDemoFeedbackModal client={client} onClose={() => setModal(null)} />}
         {modal === 'sendSkillMatrix' && <SendSkillMatrixModal client={client} onClose={() => setModal(null)} />}
         {modal === 'skipMatrix' && <SkipMatrixModal client={client} onClose={() => setModal(null)} onProceed={() => { setModal('scheduleDemo'); }} />}
+        {modal === 'noShow' && <NoShowModal client={client} onClose={() => setModal(null)} />}
         {modal === 'preDemoReminder' && <PreDemoReminderModal client={client} onClose={() => setModal(null)} />}
         {modal === 'engagementLetter' && <EngagementLetterModal client={client} onClose={() => setModal(null)} />}
         {modal === 'handoverWelcome' && <HandoverWelcomeModal client={client} onClose={() => setModal(null)} />}
@@ -2208,6 +2214,104 @@ function SkipMatrixModal({ client, onClose, onProceed }: { client: any; onClose:
           <Button variant="amber" disabled={m.isPending} onClick={() => m.mutate()}>
             {m.isPending ? 'Unlocking…' : 'Skip & schedule demo'}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** No-show modal — client / trainer didn't show up. Three exits:
+ *  1) Push by 1 week (auto-set demoDate + reschedule)
+ *  2) Custom reschedule date
+ *  3) Mark dormant (push to Dormant lifecycle with a stamped reason). */
+function NoShowModal({ client, onClose }: any) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [reason, setReason] = useState('');
+  const [customDate, setCustomDate] = useState('');
+
+  function plusDays(d: string | null | undefined, n: number): string {
+    const base = d ? new Date(d + 'T12:00:00') : new Date();
+    base.setDate(base.getDate() + n);
+    return base.toISOString().slice(0, 10);
+  }
+  const pushByWeek = plusDays(client.demoDate, 7);
+
+  const pushDemo = useMutation({
+    mutationFn: async (newDate: string) => {
+      const note = reason ? `No-show · pushed to ${newDate}. ${reason}` : `No-show · pushed to ${newDate}.`;
+      // Cancel the open demo row + record the no-show outcome on it
+      await api.patch(`/clients/${client.id}`, {
+        demoDate: newDate,
+        demoNextSteps: note,
+      });
+      // Mark the active scheduled demo as Cancelled with "No-show" note, then trigger a fresh schedule
+      // by leaving the lifecycle in DemoScheduled (the PATCH already updated the headline date).
+      await api.post(`/clients/${client.id}/demo-invite`).catch(() => {});
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      qc.invalidateQueries({ queryKey: ['my-calendar'] });
+      showToast('Demo pushed · invite re-sent');
+      onClose();
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const dormant = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/stage`, {
+      lifecycle: 'Dormant',
+      dormantReason: reason || 'No-show — client did not attend the demo.',
+      dormantCheckBackOn: plusDays(null, 14),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      qc.invalidateQueries({ queryKey: ['clients'] });
+      showToast('Client moved to Dormant');
+      onClose();
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const anyPending = pushDemo.isPending || dormant.isPending;
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        title={`No-show · ${client.name}`}
+        description="Client or trainer didn't show up. Pick the next step."
+      >
+        <div className="form-row">
+          <Label>Reason / note (optional)</Label>
+          <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. client called sick, trainer's mic broke" />
+        </div>
+        <div className="space-y-2">
+          <div className="bg-bg-input rounded p-2.5">
+            <div className="text-sm font-medium mb-1.5">Push the demo by 1 week</div>
+            <div className="text-xs muted mb-2">New date: <strong>{pushByWeek}</strong> · same trainer + time · invite re-sent.</div>
+            <Button size="sm" variant="primary" disabled={anyPending} onClick={() => pushDemo.mutate(pushByWeek)}>
+              {pushDemo.isPending ? 'Pushing…' : 'Push +1 week'}
+            </Button>
+          </div>
+          <div className="bg-bg-input rounded p-2.5">
+            <div className="text-sm font-medium mb-1.5">Custom reschedule date</div>
+            <div className="flex gap-2 items-end">
+              <Input type="date" value={customDate} onChange={(e) => setCustomDate(e.target.value)} className="flex-1" />
+              <Button size="sm" variant="primary" disabled={!customDate || anyPending} onClick={() => pushDemo.mutate(customDate)}>
+                Push to selected date
+              </Button>
+            </div>
+          </div>
+          <div className="bg-bg-input rounded p-2.5 border border-brand-amber/40">
+            <div className="text-sm font-medium mb-1.5">Mark dormant</div>
+            <div className="text-xs muted mb-2">Client paused — auto-set 14-day check-back. Reason is saved on the dormant entry.</div>
+            <Button size="sm" variant="amber" disabled={anyPending} onClick={() => dormant.mutate()}>
+              {dormant.isPending ? 'Moving…' : 'Mark dormant (+14d check-back)'}
+            </Button>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
