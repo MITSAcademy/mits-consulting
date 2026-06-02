@@ -722,6 +722,49 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   res.json(updated);
 });
 
+// Generate a personalised "couldn't reach you" WhatsApp message for Roshni to
+// send when client doesn't pick up. Used by the SubStatusModal when she marks
+// CP / NoPickup — gives her a ready-to-paste message including the next-call date.
+clientsRouter.get('/:id/no-pickup-template', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'sales_closer'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    include: { primaryTrainer: { select: { name: true } } },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const nextCallOn = (req.query.nextCallOn as string) || client.roshniNextCallOn || '';
+  const trainerName = client.primaryTrainer?.name || '';
+  const me = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { name: true, phone: true },
+  });
+  const senderName = me?.name?.split(' ')[0] || 'Roshni';
+  const senderPhone = me?.phone || '+91 62835 05780';
+
+  const lines: string[] = [];
+  lines.push(`Hi ${client.name || 'Sir/Mam'},`);
+  lines.push('');
+  lines.push(`This is ${senderName} from MITS Solution. I tried reaching you today regarding the next steps on your demo${trainerName ? ` with ${trainerName}` : ''}.`);
+  lines.push('');
+  lines.push(`Could you please confirm a convenient time so we can finalize the schedule and payment details?`);
+  if (nextCallOn) {
+    lines.push('');
+    lines.push(`I'll try reaching you again on ${nextCallOn}.`);
+  }
+  lines.push('');
+  lines.push(`Best regards,`);
+  lines.push(senderName);
+  lines.push(senderPhone);
+
+  const text = lines.join('\n');
+  const digits = `${client.phoneCode || ''}${client.phoneDigits || ''}`.replace(/[^0-9]/g, '');
+  const url = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(text)}` : null;
+  res.json({ text, url });
+});
+
 // ─── Payment confirmation (Roshni's post-payment step) ────────────────────
 // Logs the client's payment screenshot + builds the coordination message
 // for the internal payment-confirmation WhatsApp group.

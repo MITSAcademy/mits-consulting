@@ -2459,6 +2459,8 @@ function SubStatusModal({ client, onClose }: any) {
           <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. left voicemail, client said next week, etc." />
         </div>
 
+        {sub === 'CP' && <NoPickupTemplate clientId={client.id} nextCallOn={nextCallOn} />}
+
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={m.isPending} onClick={() => m.mutate()}>
@@ -2467,6 +2469,41 @@ function SubStatusModal({ client, onClose }: any) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Renders the auto-generated "couldn't reach you" WhatsApp message for CP clients.
+ *  Shows the suggested text + a "Send via WhatsApp" deep link Roshni can click. */
+function NoPickupTemplate({ clientId, nextCallOn }: { clientId: string; nextCallOn: string }) {
+  const { data } = useQuery<{ text: string; url: string | null }>({
+    queryKey: ['no-pickup-template', clientId, nextCallOn],
+    queryFn: () => api.get(`/clients/${clientId}/no-pickup-template`, {
+      params: { nextCallOn: nextCallOn || undefined },
+    }).then((r) => r.data),
+  });
+  if (!data) return <div className="mt-3 muted text-xs">Loading no-pickup message…</div>;
+  return (
+    <div className="mt-3 p-2.5 bg-bg-input rounded border border-brand-border">
+      <div className="text-xs font-medium mb-1.5 flex items-center justify-between">
+        <span>Suggested WhatsApp message</span>
+        <Button
+          size="sm"
+          onClick={() => { navigator.clipboard?.writeText(data.text); }}
+          title="Copy to clipboard"
+        >
+          Copy
+        </Button>
+      </div>
+      <Textarea rows={6} value={data.text} readOnly className="text-xs" />
+      {data.url && (
+        <a href={data.url} target="_blank" rel="noreferrer">
+          <Button size="sm" variant="default" className="mt-2"
+            style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}>
+            <MessageCircle size={11}/> Send via WhatsApp
+          </Button>
+        </a>
+      )}
+    </div>
   );
 }
 
