@@ -1756,32 +1756,53 @@ function MoveBackwardsModal({ client, onClose }: any) {
 
   const m = useMutation({
     mutationFn: async () => {
-      // 1. Save per-trainer feedback to each Pass'd proposal
+      // 1. Save per-trainer feedback to each Pass'd proposal — non-fatal: if a PATCH
+      //    fails we keep going so the stage transition still runs. The user can re-open
+      //    Move-back to retry the failed feedback rows.
+      const feedbackErrors: string[] = [];
       for (const p of passedProposals) {
         const fb = feedbacks[p.id];
         if (!fb) continue;
         const hasChange = fb.note !== (p.postDemoNote || '')
           || fb.url !== (p.postDemoEvidenceUrl || '')
           || fb.kind !== (p.postDemoEvidenceKind || '');
-        if (hasChange) {
+        if (!hasChange) continue;
+        try {
           await api.patch(`/sourcing/proposal/${p.id}`, {
             postDemoNote: fb.note || null,
             postDemoEvidenceUrl: fb.url || null,
             postDemoEvidenceKind: fb.kind || null,
           });
+        } catch (e: any) {
+          const tName = p.trainer?.name || p.trainerName || p.id;
+          const msg = e?.response?.data?.error || e?.message || 'unknown';
+          console.error(`[move-back] feedback PATCH failed for ${tName}:`, msg, e);
+          feedbackErrors.push(`${tName}: ${msg}`);
         }
       }
-      // 2. Transition the stage
+      // 2. Transition the stage — this is the part the user actually cares about.
       await api.post(`/clients/${client.id}/stage`, { lifecycle: target, reason });
+      return { feedbackErrors };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['clients'] });
       qc.invalidateQueries({ queryKey: ['nav-badges'] });
-      showToast(`Moved back to ${stageLabel(target)}${passedProposals.length ? ' · feedback saved' : ''}`);
+      if (result?.feedbackErrors?.length) {
+        showToast(
+          `Moved to ${stageLabel(target)} · ${result.feedbackErrors.length} feedback row(s) failed (see console)`,
+          'error',
+        );
+      } else {
+        showToast(`Moved back to ${stageLabel(target)}${passedProposals.length ? ' · feedback saved' : ''}`);
+      }
       onClose();
     },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+    onError: (e: any) => {
+      const detail = e?.response?.data?.error || e?.message || 'Failed';
+      console.error('[move-back] stage transition failed:', detail, e?.response?.data, e);
+      showToast(`Move back failed: ${detail}`, 'error');
+    },
   });
 
   return (
