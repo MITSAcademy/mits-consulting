@@ -1,14 +1,20 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Pill } from '@/components/ui/pill';
-import { Clock, Phone } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Clock, Phone, MessageCircle, Check } from 'lucide-react';
+import { useUI } from '@/store/ui';
 
 interface FollowUpItem {
   id: string;
   name: string;
   lifecycle: string;
+  phoneCode: string | null;
+  phoneDigits: string | null;
+  email: string | null;
+  whatsappGroupLink: string | null;
   saleClosingSubStatus: 'RP' | 'CP' | 'C' | null;
   roshniNextCallOn: string | null;
   roshniLastContactAt: string | null;
@@ -45,6 +51,7 @@ export function RoshniFollowUpsPage() {
         <div className="callout mb-3">
           <Clock size={14} className="inline mr-1"/>
           RP = ready for payment · CP = closure pending (no pickup) · clients marked C (not starting) are hidden — they're closed.
+          Click the phone or WhatsApp icon to dial / message; "Mark contacted" bumps next-call by 1 day automatically.
         </div>
 
         {overdue.length > 0 && (
@@ -93,10 +100,26 @@ function Section({ title, tone, children }: { title: string; tone: 'red' | 'ambe
 }
 
 function Row({ c }: { c: FollowUpItem }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
   const subColor = c.saleClosingSubStatus === 'RP' ? 'blue' : c.saleClosingSubStatus === 'CP' ? 'amber' : 'grey';
+  const phoneE164 = c.phoneCode && c.phoneDigits ? `${c.phoneCode}${c.phoneDigits}`.replace(/[^+0-9]/g, '') : '';
+  const waPhone = phoneE164.replace(/[^0-9]/g, '');
+  const waUrl = c.whatsappGroupLink || (waPhone ? `https://wa.me/${waPhone}` : '');
+
+  const markContacted = useMutation({
+    mutationFn: (outcome: string) => api.post(`/clients/${c.id}/mark-contacted`, { outcome, bumpDays: 1 }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['roshni-follow-ups'] });
+      qc.invalidateQueries({ queryKey: ['client', c.id] });
+      showToast('Marked contacted · next call +1 day');
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
   return (
-    <div className="bg-bg-input rounded p-3 flex justify-between items-start gap-3">
-      <div className="flex-1 min-w-0">
+    <div className="bg-bg-input rounded p-3 flex justify-between items-start gap-3 flex-wrap">
+      <div className="flex-1 min-w-[260px]">
         <div className="flex items-center gap-2 flex-wrap">
           <Link to={`/clients/${c.id}`} className="font-medium text-sm hover:underline">{c.name}</Link>
           <Pill color={subColor}>{c.saleClosingSubStatus || '—'}</Pill>
@@ -114,6 +137,30 @@ function Row({ c }: { c: FollowUpItem }) {
             <> · <strong>Last:</strong> {c.roshniLastContactOutcome}{c.roshniLastContactAt ? ` on ${c.roshniLastContactAt}` : ''}</>
           )}
         </div>
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {phoneE164 && (
+          <a href={`tel:${phoneE164}`} title={`Call ${phoneE164}`}>
+            <Button size="sm" variant="default" className="!px-2"><Phone size={12}/></Button>
+          </a>
+        )}
+        {waUrl && (
+          <a href={waUrl} target="_blank" rel="noreferrer" title="WhatsApp">
+            <Button size="sm" variant="default" className="!px-2"
+              style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}>
+              <MessageCircle size={12}/>
+            </Button>
+          </a>
+        )}
+        <Button
+          size="sm"
+          variant="success"
+          disabled={markContacted.isPending}
+          onClick={() => markContacted.mutate('Discussed')}
+          title="Mark you contacted the client today · bumps next-call by 1 day"
+        >
+          <Check size={12}/> Mark contacted
+        </Button>
       </div>
     </div>
   );

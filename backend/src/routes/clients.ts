@@ -83,6 +83,9 @@ clientsRouter.get('/roshni/follow-ups', async (req: AuthedRequest, res) => {
     },
     select: {
       id: true, name: true, lifecycle: true,
+      phoneCode: true, phoneDigits: true,
+      email: true,
+      whatsappGroupLink: true,
       saleClosingSubStatus: true,
       roshniNextCallOn: true,
       roshniLastContactAt: true,
@@ -789,6 +792,50 @@ clientsRouter.patch('/:id/payment-checklist', async (req: AuthedRequest, res) =>
   await audit(
     req.user!.id, req.user!.name, 'PAYMENT_CHECKLIST_UPDATE',
     `${req.params.id} · ${stamped.filter((it) => it.checked).length}/${stamped.length} checked`,
+  );
+  res.json(updated);
+});
+
+// One-click "mark contacted" — Roshni bumps the last-contact timestamp without
+// opening the SubStatusModal. Optionally bumps next-call-on by N days so the
+// follow-up queue rolls forward.
+clientsRouter.post('/:id/mark-contacted', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'sales_closer'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  const { outcome, bumpDays, nextCallOn } = req.body as {
+    outcome?: string;     // 'NoPickup' | 'Discussed' | 'PaymentPromised' | 'PaidScreenshotPending' | string
+    bumpDays?: number;    // shift roshniNextCallOn forward by N days (default 1)
+    nextCallOn?: string;  // explicit next-call date — overrides bumpDays
+  };
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, name: true, roshniNextCallOn: true, lifecycle: true },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const today = new Date().toISOString().slice(0, 10);
+  let newNextCall: string | undefined = nextCallOn;
+  if (!newNextCall && typeof bumpDays === 'number' && bumpDays > 0) {
+    const base = client.roshniNextCallOn && client.roshniNextCallOn >= today
+      ? client.roshniNextCallOn
+      : today;
+    const d = new Date(base + 'T00:00:00');
+    d.setDate(d.getDate() + bumpDays);
+    newNextCall = d.toISOString().slice(0, 10);
+  }
+  const updated = await prisma.client.update({
+    where: { id: client.id },
+    data: {
+      roshniLastContactAt: today,
+      ...(outcome ? { roshniLastContactOutcome: outcome } : {}),
+      ...(newNextCall ? { roshniNextCallOn: newNextCall } : {}),
+    },
+    select: { id: true, roshniLastContactAt: true, roshniLastContactOutcome: true, roshniNextCallOn: true },
+  });
+  await audit(
+    req.user!.id, req.user!.name, 'ROSHNI_MARK_CONTACTED',
+    `${client.name}${outcome ? ' · ' + outcome : ''}${newNextCall ? ' · next call ' + newNextCall : ''}`,
   );
   res.json(updated);
 });
