@@ -141,6 +141,10 @@ clientsRouter.get('/roshni/follow-ups', async (req: AuthedRequest, res) => {
     where: {
       ...ownerFilter,
       lifecycle: { in: ['SaleClosing', 'SaleWon'] },
+      // Only show clients still in Roshni's hands:
+      // - null sub-status (triage — fresh handoff)
+      // - RP / CP (active close-out work)
+      // C / JBT / Training are terminal — they've left her queue.
       OR: [
         { saleClosingSubStatus: { in: ['RP', 'CP'] } },
         { saleClosingSubStatus: null },
@@ -771,19 +775,31 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   if (!allowed.includes(req.user!.role)) {
     return res.status(403).json({ error: `Your role (${req.user!.role}) cannot set Roshni sub-status.` });
   }
-  const { subStatus, nextCallOn, lastContactOutcome, reason } = req.body as {
-    subStatus: 'RP' | 'CP' | 'C' | null;
+  // Extended state machine — 5 statuses Roshni walks clients through:
+  //   RP       — entry (auto-set on positive demo handoff)
+  //   CP       — silent client, still chasing
+  //   C        — client confirmed not starting (terminal lost)
+  //   JBT      — employer-paid path, client starts now (deferred payment) — terminal won
+  //   Training — client paid, starts now — terminal won
+  const { subStatus, nextCallOn, lastContactOutcome, reason, employerName, employerCommitDate } = req.body as {
+    subStatus: 'RP' | 'CP' | 'C' | 'JBT' | 'Training' | null;
     nextCallOn?: string;
     lastContactOutcome?: string;
     reason?: string;
+    employerName?: string;
+    employerCommitDate?: string;
   };
-  const allowedSubStatuses = [null, 'RP', 'CP', 'C'];
+  const allowedSubStatuses = [null, 'RP', 'CP', 'C', 'JBT', 'Training'];
   if (!allowedSubStatuses.includes(subStatus)) {
-    return res.status(400).json({ error: `Invalid sub-status: ${subStatus}. Must be RP, CP, C, or null.` });
+    return res.status(400).json({ error: `Invalid sub-status: ${subStatus}. Must be RP, CP, C, JBT, Training, or null.` });
   }
   const client = await prisma.client.findUnique({
     where: { id: req.params.id },
-    select: { id: true, name: true, lifecycle: true },
+    select: {
+      id: true, name: true, lifecycle: true,
+      freshPaymentReceived: true, freshPaymentAmount: true,
+      saleClosingSubStatus: true,
+    },
   });
   if (!client) return res.status(404).json({ error: 'Client not found' });
   if (!['SaleClosing', 'SaleWon'].includes(client.lifecycle)) {
@@ -791,12 +807,47 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
       error: `Sub-status only applies to SaleClosing / SaleWon clients (current: ${client.lifecycle}).`,
     });
   }
+
+  // ── Per-transition validation gates ────────────────────────────────────
+  // These ensure Roshni can't accidentally close a client without the
+  // required work being done. Each gate returns 409 with a clear "what's
+  // missing" message so the UI can render the checklist.
+  if (subStatus === 'Training') {
+    // Training = payment received. Must have a Fresh Payment recorded.
+    if (!client.freshPaymentReceived && (client.freshPaymentAmount || 0) <= 0) {
+      const existing = await prisma.payment.count({ where: { clientId: client.id, kind: 'Fresh' } });
+      if (existing === 0) {
+        return res.status(409).json({
+          error: 'Cannot move to Training without a recorded Fresh Payment. Click "Record payment" on the client first.',
+          code: 'TRAINING_REQUIRES_PAYMENT',
+        });
+      }
+    }
+  }
+  if (subStatus === 'JBT') {
+    // JBT = employer-paid path. Need to capture employer name + commitment date.
+    if (!employerName?.trim() || !employerCommitDate) {
+      return res.status(409).json({
+        error: 'JBT requires the employer name AND the commitment date for payment. Fill both before moving.',
+        code: 'JBT_REQUIRES_EMPLOYER_COMMITMENT',
+      });
+    }
+  }
+  if (subStatus === 'C') {
+    // C = terminal lost. Require a reason so it's auditable.
+    if (!reason?.trim()) {
+      return res.status(409).json({
+        error: 'Mark as C (not starting) requires a reason — why isn\'t the client proceeding?',
+        code: 'C_REQUIRES_REASON',
+      });
+    }
+  }
+
   const today = new Date().toISOString().slice(0, 10);
-  // When the user picks "Clear sub-status" (subStatus === null) or terminal C,
-  // also wipe roshniNextCallOn so the follow-ups queue (which filters on
-  // sub-status IN ('RP','CP')) doesn't leave a dangling next-call date that
-  // makes the client invisible despite the saved reminder.
-  const wipingFollowUp = subStatus === null || subStatus === 'C';
+  // When the user picks "Clear sub-status" (subStatus === null) or any terminal
+  // status (C / JBT / Training), wipe roshniNextCallOn so the follow-ups queue
+  // doesn't leave a dangling next-call date on a client Roshni is done with.
+  const wipingFollowUp = subStatus === null || subStatus === 'C' || subStatus === 'JBT' || subStatus === 'Training';
   const updated = await prisma.client.update({
     where: { id: client.id },
     data: {

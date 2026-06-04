@@ -165,8 +165,7 @@ export function RoshniFollowUpsPage() {
 }
 
 function RenewalRow({ r }: { r: RenewalItem }) {
-  const phoneE164 = r.phoneCode && r.phoneDigits ? `${r.phoneCode}${r.phoneDigits}`.replace(/[^+0-9]/g, '') : '';
-  const waPhone = phoneE164.replace(/[^0-9]/g, '');
+  const waPhone = r.phoneCode && r.phoneDigits ? `${r.phoneCode}${r.phoneDigits}`.replace(/[^0-9]/g, '') : '';
   const waUrl = r.whatsappGroupLink || (waPhone ? `https://wa.me/${waPhone}` : '');
   const riskColor = r.churnRisk === 'Red' ? 'red' : r.churnRisk === 'Amber' ? 'amber' : 'green';
 
@@ -190,19 +189,17 @@ function RenewalRow({ r }: { r: RenewalItem }) {
         </div>
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
-        {phoneE164 && (
-          <a href={`tel:${phoneE164}`} title={`Call ${phoneE164}`}>
-            <Button size="sm" variant="default" className="!px-2"><Phone size={12}/></Button>
-          </a>
-        )}
         {waUrl && (
-          <a href={waUrl} target="_blank" rel="noreferrer" title="WhatsApp">
-            <Button size="sm" variant="default" className="!px-2"
+          <a href={waUrl} target="_blank" rel="noreferrer" title="Open WhatsApp">
+            <Button size="sm" className="!px-3"
               style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}>
-              <MessageCircle size={12}/>
+              <MessageCircle size={12}/> WhatsApp
             </Button>
           </a>
         )}
+        <Link to={`/clients/${r.id}`}>
+          <Button size="sm" variant="primary">Open client</Button>
+        </Link>
       </div>
     </div>
   );
@@ -221,30 +218,24 @@ function Section({ title, tone, children }: { title: string; tone: 'red' | 'ambe
 }
 
 function Row({ c }: { c: FollowUpItem }) {
-  const qc = useQueryClient();
-  const showToast = useUI((s) => s.showToast);
-  const subColor = c.saleClosingSubStatus === 'RP' ? 'blue' : c.saleClosingSubStatus === 'CP' ? 'amber' : 'grey';
-  const phoneE164 = c.phoneCode && c.phoneDigits ? `${c.phoneCode}${c.phoneDigits}`.replace(/[^+0-9]/g, '') : '';
-  const waPhone = phoneE164.replace(/[^0-9]/g, '');
+  const subColor = c.saleClosingSubStatus === 'RP' ? 'blue'
+    : c.saleClosingSubStatus === 'CP' ? 'amber'
+    : c.saleClosingSubStatus === null ? 'amber'
+    : 'grey';
+  const subLabel = c.saleClosingSubStatus || 'TRIAGE';
+  // WhatsApp is the only contact channel — no tel: link (MITS comms are all WA).
+  // Prefer the client's WA group; fall back to wa.me with the personal number.
+  const waPhone = c.phoneCode && c.phoneDigits ? `${c.phoneCode}${c.phoneDigits}`.replace(/[^0-9]/g, '') : '';
   const waUrl = c.whatsappGroupLink || (waPhone ? `https://wa.me/${waPhone}` : '');
-
-  const markContacted = useMutation({
-    mutationFn: (outcome: string) => api.post(`/clients/${c.id}/mark-contacted`, { outcome, bumpDays: 1 }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['roshni-follow-ups'] });
-      qc.invalidateQueries({ queryKey: ['client', c.id] });
-      showToast('Marked contacted · next call +1 day');
-    },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
-  });
 
   return (
     <div className="bg-bg-input rounded p-3 flex justify-between items-start gap-3 flex-wrap">
       <div className="flex-1 min-w-[260px]">
         <div className="flex items-center gap-2 flex-wrap">
           <Link to={`/clients/${c.id}`} className="font-medium text-sm hover:underline">{c.name}</Link>
-          <Pill color={subColor}>{c.saleClosingSubStatus || '—'}</Pill>
+          <Pill color={subColor}>{subLabel}</Pill>
           <span className="text-[11px] muted">· {c.lifecycle}</span>
+          {c.cycleAmount ? <span className="text-[11px] muted">· {c.currency || 'USD'} {c.cycleAmount}</span> : null}
           {c.salesOwner && <span className="text-[11px] muted">· {c.salesOwner.name}</span>}
         </div>
         <div className="text-xs muted mt-1">
@@ -257,31 +248,25 @@ function Row({ c }: { c: FollowUpItem }) {
           {c.roshniLastContactOutcome && (
             <> · <strong>Last:</strong> {c.roshniLastContactOutcome}{c.roshniLastContactAt ? ` on ${c.roshniLastContactAt}` : ''}</>
           )}
+          {!c.saleClosingSubStatus && (
+            <span className="text-brand-amber">
+              <strong>New arrival</strong> — open the client and set status (RP / CP / C / JBT / Training).
+            </span>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
-        {phoneE164 && (
-          <a href={`tel:${phoneE164}`} title={`Call ${phoneE164}`}>
-            <Button size="sm" variant="default" className="!px-2"><Phone size={12}/></Button>
-          </a>
-        )}
         {waUrl && (
-          <a href={waUrl} target="_blank" rel="noreferrer" title="WhatsApp">
-            <Button size="sm" variant="default" className="!px-2"
+          <a href={waUrl} target="_blank" rel="noreferrer" title="Open WhatsApp">
+            <Button size="sm" className="!px-3"
               style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}>
-              <MessageCircle size={12}/>
+              <MessageCircle size={12}/> WhatsApp
             </Button>
           </a>
         )}
-        <Button
-          size="sm"
-          variant="success"
-          disabled={markContacted.isPending}
-          onClick={() => markContacted.mutate('Discussed')}
-          title="Mark you contacted the client today · bumps next-call by 1 day"
-        >
-          <Check size={12}/> Mark contacted
-        </Button>
+        <Link to={`/clients/${c.id}`}>
+          <Button size="sm" variant="primary"><Check size={12}/> Open client</Button>
+        </Link>
       </div>
     </div>
   );

@@ -247,20 +247,27 @@ export function ClientDetailPage() {
   if (canClose(user.role) && client.lifecycle === 'SaleClosing' && canRecordPayment(user.role)) {
     actions.push(<Button key="pay" variant="success" onClick={() => setModal('freshPayment')}><Wallet size={14}/> Fresh payment</Button>);
   }
-  // Roshni sub-status (RP / CP / C) — overlay tracker on SaleClosing/SaleWon
+  // Roshni state machine — RP (entry) / CP (silent) / C (lost) / JBT (employer-paid) / Training (paid)
   if (canClose(user.role) && (client.lifecycle === 'SaleClosing' || client.lifecycle === 'SaleWon')) {
     const ss = client.saleClosingSubStatus;
     const label = ss === 'RP' ? 'RP · ready for payment'
       : ss === 'CP' ? 'CP · closure pending'
       : ss === 'C' ? 'C · not starting'
-      : 'Set sub-status';
+      : ss === 'JBT' ? 'JBT · employer pays later'
+      : ss === 'Training' ? 'Training · paid'
+      : 'Set status (triage)';
+    const variant = ss === 'CP' ? 'amber' as const
+      : ss === 'C' ? 'danger' as const
+      : ss === 'RP' ? 'primary' as const
+      : ss === 'JBT' || ss === 'Training' ? 'success' as const
+      : 'amber' as const; // null = needs triage, amber call-to-action
     actions.push(
       <Button
         key="substatus"
         size="sm"
-        variant={ss === 'CP' ? 'amber' : ss === 'C' ? 'danger' : ss === 'RP' ? 'primary' : 'default'}
+        variant={variant}
         onClick={() => setModal('subStatus')}
-        title="Track Roshni's close progress: RP (ready for payment) → CP (no pickup) → C (client confirmed not starting)"
+        title="Roshni's state machine: RP → CP / C / JBT / Training. Each move has its own validation."
       >
         {label}
       </Button>
@@ -2430,68 +2437,144 @@ function NoShowModal({ client, onClose }: any) {
   );
 }
 
-/** Roshni sub-status modal — set RP / CP / C overlay on SaleClosing/SaleWon clients.
- *  RP = ready-for-payment (after the close call). CP = closure-pending (no pickup
- *  after 3 working days / 6 attempts). C = client confirmed not starting. */
+/** Roshni state-machine picker. Each client lands at RP (Ready for Payment); Roshni
+ *  walks them to one of CP (silent), C (lost), JBT (employer-paid), or Training (paid).
+ *  Each target has its own validation gate enforced by the backend. */
 function SubStatusModal({ client, onClose }: any) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  type Sub = 'RP' | 'CP' | 'C' | null;
-  const [sub, setSub] = useState<Sub>(client.saleClosingSubStatus || null);
+  type Sub = 'RP' | 'CP' | 'C' | 'JBT' | 'Training' | null;
+  const current: Sub = client.saleClosingSubStatus || null;
+  const [sub, setSub] = useState<Sub>(current);
   const [nextCallOn, setNextCallOn] = useState<string>(client.roshniNextCallOn || '');
   const [reason, setReason] = useState('');
+  const [employerName, setEmployerName] = useState('');
+  const [employerCommitDate, setEmployerCommitDate] = useState('');
 
   const m = useMutation({
     mutationFn: () => api.post(`/clients/${client.id}/sub-status`, {
       subStatus: sub,
       nextCallOn: nextCallOn || null,
       reason,
+      employerName: employerName || undefined,
+      employerCommitDate: employerCommitDate || undefined,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['clients'] });
-      showToast(sub ? `Sub-status set: ${sub}` : 'Sub-status cleared');
+      qc.invalidateQueries({ queryKey: ['roshni-follow-ups'] });
+      qc.invalidateQueries({ queryKey: ['roshni-renewals-approaching'] });
+      showToast(sub ? `Status set: ${sub}` : 'Status cleared');
       onClose();
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
-  const opts: { key: Sub; label: string; desc: string; tone: 'amber' | 'danger' | 'primary' | 'success' }[] = [
-    { key: 'RP', label: 'RP · Ready for payment', desc: 'Roshni had the close call; client said yes, payment expected soon.', tone: 'primary' },
-    { key: 'CP', label: 'CP · Closure pending', desc: 'Client took demo + was happy but isn\'t discussing payment. Default after 3 working days / 6 missed attempts.', tone: 'amber' },
-    { key: 'C',  label: 'C · Not starting',     desc: 'Client confirmed they\'re not proceeding. Terminal no-sale state.', tone: 'danger' },
+  // Payment recorded? Used to gate the Training transition with a clear hint.
+  const paymentDone = !!client.freshPaymentReceived || (client.freshPaymentAmount || 0) > 0;
+  const checklistDone = !!client.paymentChecklistCompletedAt;
+
+  const opts: {
+    key: Exclude<Sub, null>;
+    label: string;
+    desc: string;
+    tone: 'primary' | 'amber' | 'danger' | 'success' | 'default';
+    requires?: string[];
+    blockedReason?: string | null;
+  }[] = [
+    {
+      key: 'RP',
+      label: 'RP · Ready for Payment',
+      desc: 'Active close-out. Client engaged, you\'re running the checklist + chasing payment.',
+      tone: 'primary',
+    },
+    {
+      key: 'CP',
+      label: 'CP · Closure Pending — client silent',
+      desc: 'Client took demo, was happy, but isn\'t engaging on payment. Keep trying. Default after 3 working days / 6 missed attempts.',
+      tone: 'amber',
+    },
+    {
+      key: 'JBT',
+      label: 'JBT · Employer will pay (deferred)',
+      desc: 'Employer-paid path. Client starts training now; payment + invoice handled together later when employer pays.',
+      tone: 'success',
+      requires: ['Employer name', 'Employer commitment date'],
+      blockedReason: (!employerName?.trim() || !employerCommitDate)
+        ? 'Fill the employer name + commitment date below'
+        : null,
+    },
+    {
+      key: 'Training',
+      label: 'Training · Client paid, starts now',
+      desc: 'Payment recorded. Client is ready to begin training. After this you rename the WA group + intro Mitali.',
+      tone: 'success',
+      requires: ['Fresh payment recorded'],
+      blockedReason: !paymentDone
+        ? 'Record the Fresh payment on this client first ("Record payment" button)'
+        : null,
+    },
+    {
+      key: 'C',
+      label: 'C · Not starting (terminal lost)',
+      desc: 'Client explicitly confirmed they\'re NOT proceeding. Captures the reason for the audit log.',
+      tone: 'danger',
+      requires: ['Reason'],
+      blockedReason: !reason?.trim()
+        ? 'Fill the Reason field below — why isn\'t the client proceeding?'
+        : null,
+    },
   ];
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent
-        title={`Sub-status · ${client.name}`}
-        description="Overlay tracker on top of SaleClosing/SaleWon. Doesn't change the lifecycle."
+        title={`Move status · ${client.name}`}
+        description={current
+          ? `Current: ${current}. Pick the next status — each has its own validation before you can save.`
+          : 'Pick the right status for this client. RP is the default entry state for new SaleClosing arrivals.'}
+        className="max-w-2xl"
       >
         <div className="space-y-2">
-          {opts.map((o) => (
-            <label
-              key={o.key}
-              className={`flex items-start gap-2.5 p-2.5 rounded border cursor-pointer transition-colors ${
-                sub === o.key ? 'border-brand-amber bg-bg-input' : 'border-brand-border hover:bg-bg-input'
-              }`}
-            >
-              <input
-                type="radio"
-                name="sub-status"
-                checked={sub === o.key}
-                onChange={() => setSub(o.key)}
-                className="mt-0.5"
-              />
-              <div className="flex-1">
-                <div className="text-sm font-medium">{o.label}</div>
-                <div className="text-xs muted mt-0.5">{o.desc}</div>
-              </div>
-            </label>
-          ))}
+          {opts.map((o) => {
+            const isCurrent = current === o.key;
+            const isSelected = sub === o.key;
+            const blocked = !!o.blockedReason;
+            return (
+              <label
+                key={o.key}
+                className={`flex items-start gap-2.5 p-3 rounded border cursor-pointer transition-colors ${
+                  isSelected ? 'border-brand-amber bg-bg-input' : 'border-brand-border hover:bg-bg-input'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="sub-status"
+                  checked={isSelected}
+                  onChange={() => setSub(o.key)}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
+                    {o.label}
+                    {isCurrent && <span className="text-[10px] bg-brand-amber text-[#1A1B1E] px-1.5 py-0.5 rounded">current</span>}
+                  </div>
+                  <div className="text-xs muted mt-0.5">{o.desc}</div>
+                  {o.requires && (
+                    <div className="text-[11px] mt-1.5">
+                      <span className="muted">Required: </span>
+                      <span className={blocked ? 'text-brand-red' : 'text-brand-green'}>
+                        {blocked ? `✗ ${o.blockedReason}` : `✓ ${o.requires.join(' · ')}`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </label>
+            );
+          })}
           <label className="flex items-center gap-2 p-2 rounded border border-brand-border text-xs muted cursor-pointer">
             <input type="radio" name="sub-status" checked={sub === null} onChange={() => setSub(null)} />
-            Clear sub-status (back to plain SaleClosing/SaleWon)
+            Clear status (back to unclassified · triage)
           </label>
         </div>
 
@@ -2499,21 +2582,57 @@ function SubStatusModal({ client, onClose }: any) {
           <div className="form-row mt-3">
             <Label>Next call on (optional)</Label>
             <Input type="date" value={nextCallOn} onChange={(e) => setNextCallOn(e.target.value)} />
-            <div className="text-[10px] muted mt-1">Used by Roshni's follow-ups view to surface overdue calls.</div>
+            <div className="text-[10px] muted mt-1">Used by My follow-ups to surface overdue calls.</div>
+          </div>
+        )}
+
+        {sub === 'JBT' && (
+          <>
+            <div className="form-row mt-3">
+              <Label>Employer name *</Label>
+              <Input value={employerName} onChange={(e) => setEmployerName(e.target.value)} placeholder="e.g. Acme Corp · contact: HR head Priya" />
+            </div>
+            <div className="form-row mt-2">
+              <Label>Payment commitment date *</Label>
+              <Input type="date" value={employerCommitDate} onChange={(e) => setEmployerCommitDate(e.target.value)} />
+              <div className="text-[10px] muted mt-1">When will the employer settle the invoice? Accounts will follow up.</div>
+            </div>
+          </>
+        )}
+
+        {sub === 'Training' && (
+          <div className="callout mt-3 text-xs">
+            <strong>Next steps after Training:</strong> the regular handover flow takes over — rename the WhatsApp group to "Training {client.name} {client.primaryTrainer?.name || ''} Z", intro Mitali in the group, and you're done.
+            {!checklistDone && <div className="text-brand-amber mt-1">⚠ Heads-up: your 10-point payment checklist isn\'t marked complete yet. Open it to finish the audit trail.</div>}
           </div>
         )}
 
         <div className="form-row mt-2">
-          <Label>Reason / note (optional)</Label>
-          <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. left voicemail, client said next week, etc." />
+          <Label>Reason / note {sub === 'C' && <span className="text-brand-red">*</span>}</Label>
+          <Textarea
+            rows={2}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={sub === 'C' ? 'Why isn\'t the client proceeding?' : 'Optional note — e.g. left voicemail, client said next week.'}
+          />
         </div>
 
         {sub === 'CP' && <NoPickupTemplate clientId={client.id} nextCallOn={nextCallOn} />}
 
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={m.isPending} onClick={() => m.mutate()}>
-            {m.isPending ? 'Saving…' : 'Save sub-status'}
+          <Button
+            variant="primary"
+            disabled={m.isPending}
+            disabledReason={
+              sub === 'Training' && !paymentDone ? 'Record the Fresh payment first.'
+              : sub === 'JBT' && (!employerName?.trim() || !employerCommitDate) ? 'Fill employer name + commitment date.'
+              : sub === 'C' && !reason?.trim() ? 'A reason is required for C.'
+              : null
+            }
+            onClick={() => m.mutate()}
+          >
+            {m.isPending ? 'Saving…' : sub ? `Move to ${sub}` : 'Clear status'}
           </Button>
         </DialogFooter>
       </DialogContent>
