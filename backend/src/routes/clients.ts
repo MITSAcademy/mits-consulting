@@ -442,6 +442,25 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
     data.dormantResumeFromStage = null;
   }
 
+  // ─── Hold tracking bookkeeping ───────────────────────────────────────────
+  // Must run BEFORE the prisma.client.update below — earlier versions had this
+  // block AFTER the update which made every Hold transition lose holdSince /
+  // holdCheckBackOn / holdResumeFromStage silently (HoldClientsPage couldn't
+  // bucket overdue/today and Resume defaulted to the stage we left).
+  if (lifecycle === 'Hold') {
+    data.holdSince = new Date().toISOString().slice(0, 10);
+    if (reason !== undefined) data.holdReason = reason;
+    // Default 3-day check-back for Roshni follow-up
+    const cb = new Date(); cb.setDate(cb.getDate() + 3);
+    data.holdCheckBackOn = cb.toISOString().slice(0, 10);
+    data.holdResumeFromStage = current.lifecycle;
+  } else if (current.lifecycle === 'Hold') {
+    data.holdSince = null;
+    data.holdReason = null;
+    data.holdCheckBackOn = null;
+    data.holdResumeFromStage = null;
+  }
+
   const client = await prisma.client.update({ where: { id: req.params.id }, data, include });
 
   // ─── Sourcing side-effects ────────────────────────────────────────────────
@@ -533,20 +552,7 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
   }
 
   // ─── Demo history side-effects ───────────────────────────────────────────
-  // ─── Hold tracking bookkeeping ───────────────────────────────────────────
-  if (lifecycle === 'Hold') {
-    data.holdSince = new Date().toISOString().slice(0, 10);
-    if (reason !== undefined) data.holdReason = reason;
-    // Default 3-day check-back for Roshni follow-up
-    const cb = new Date(); cb.setDate(cb.getDate() + 3);
-    data.holdCheckBackOn = cb.toISOString().slice(0, 10);
-    data.holdResumeFromStage = current.lifecycle;
-  } else if (current.lifecycle === 'Hold') {
-    data.holdSince = null;
-    data.holdReason = null;
-    data.holdCheckBackOn = null;
-    data.holdResumeFromStage = null;
-  }
+  // Hold bookkeeping moved above the prisma.client.update — see comment there.
 
   // Entering DemoScheduled: create a new Demo row (so we have history per attempt)
   // Entering DemoDone: update the most-recent Scheduled demo with actuals + outcome
@@ -1919,6 +1925,21 @@ clientsRouter.post('/:id/schedule-multi-demo', async (req: AuthedRequest, res) =
     include: { primaryTrainer: true },
   });
   if (!client) return res.status(404).json({ error: 'Client not found' });
+
+  // Mirror /stage endpoint's two safety gates so multi-schedule can't be used to
+  // bypass them. These were missing originally, letting a client at SaleClosing
+  // (or similar downstream stage) be force-rewound to DemoScheduled with no audit.
+  // 1) Direction validator — refuses jumps that aren't in the lifecycle matrix.
+  // 2) Skill-matrix sent gate (founder/manager bypass for escape hatch).
+  if (client.lifecycle !== 'DemoScheduled') {
+    const valid = isValidTransition(client.lifecycle, 'DemoScheduled');
+    if (!valid.ok) return res.status(409).json({ error: valid.reason });
+  }
+  if (!['founder', 'manager'].includes(req.user!.role) && !client.skillMatrixSentAt) {
+    return res.status(409).json({
+      error: 'Skill matrix not sent to client yet. Open the client → "Send skill matrix to client" before scheduling the demo.',
+    });
+  }
 
   // Sort by date+time → earliest is the headline
   const sorted = [...slots].sort((a, b) => `${a.date} ${a.timeIst}`.localeCompare(`${b.date} ${b.timeIst}`));

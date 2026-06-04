@@ -1079,7 +1079,7 @@ function SmartMatchForRecruiterModal({ clientId, clientName, onPick, onClose }: 
                     <td className="text-right mono">₹{t.defaultRateInr}</td>
                     <td className="text-right mono">{t.experienceYears}y</td>
                     <td className="text-right">
-                      <Pill color={r.score >= 75 ? 'green' : r.score >= 50 ? 'amber' : 'grey'}>{Math.round(r.score)}</Pill>
+                      <Pill color={r.total >= 75 ? 'green' : r.total >= 50 ? 'amber' : 'grey'}>{Math.round(r.total ?? 0)}</Pill>
                     </td>
                     <td>
                       <Button size="sm" variant="primary" onClick={() => onPick(t)}>

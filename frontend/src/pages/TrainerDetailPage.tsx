@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
@@ -11,10 +11,11 @@ import { useState } from 'react';
 import { useUI } from '@/store/ui';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
-import { Mail, MessageCircle } from 'lucide-react';
+import { Mail, MessageCircle, ArrowLeft } from 'lucide-react';
 
 export function TrainerDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const { data: t } = useQuery({
@@ -51,6 +52,18 @@ export function TrainerDetailPage() {
             </>
           ) : (
             <>
+              <Button
+                size="sm"
+                onClick={() => {
+                  // Prefer history-back when there's a previous SPA entry (Trainer Match
+                  // → Pick → Detail flow), fall back to the trainer-pool list.
+                  if (window.history.length > 1) navigate(-1);
+                  else navigate('/trainers');
+                }}
+                title="Return to the previous screen"
+              >
+                <ArrowLeft size={14}/> Back
+              </Button>
               <Button size="sm" onClick={() => setSendOpen('Email')} disabled={!t.email}><Mail size={14}/> Email</Button>
               <Button size="sm" onClick={() => setSendOpen('WhatsApp')} disabled={!t.phoneDigits}
                 style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}>
