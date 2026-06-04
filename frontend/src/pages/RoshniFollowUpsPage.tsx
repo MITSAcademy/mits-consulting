@@ -84,17 +84,16 @@ export function RoshniFollowUpsPage() {
     <>
       <Topbar
         title="My follow-ups"
-        subtitle={`${items.length} client${items.length === 1 ? '' : 's'} · ${triage.length} need triage · ${overdue.length} overdue · ${today.length} due today`}
+        subtitle={`${items.length} client${items.length === 1 ? '' : 's'} · ${overdue.length} overdue · ${today.length} due today`}
       />
       <Page>
         <div className="callout mb-3">
           <Clock size={14} className="inline mr-1"/>
-          Triage = new SaleClosing arrivals to classify · RP = ready for payment · CP = closure pending · marked C are hidden.
-          Click the phone or WhatsApp icon to dial / message; "Mark contacted" bumps next-call by 1 day automatically.
+          New clients land at <strong>RP</strong> (Ready for Payment). Your job: call them and move to <strong>CP</strong> (silent), <strong>C</strong> (lost), <strong>JBT</strong> (employer pays later), or <strong>Training</strong> (paid). C / JBT / Training drop out of this queue.
         </div>
 
         {triage.length > 0 && (
-          <Section title={`Needs triage · ${triage.length} new arrivals`} tone="amber">
+          <Section title={`Needs status — unclassified · ${triage.length}`} tone="amber">
             {triage.map((c) => <Row key={c.id} c={c}/>)}
           </Section>
         )}
@@ -222,7 +221,7 @@ function Row({ c }: { c: FollowUpItem }) {
     : c.saleClosingSubStatus === 'CP' ? 'amber'
     : c.saleClosingSubStatus === null ? 'amber'
     : 'grey';
-  const subLabel = c.saleClosingSubStatus || 'TRIAGE';
+  const subLabel = c.saleClosingSubStatus || 'NO STATUS';
   // WhatsApp is the only contact channel — no tel: link (MITS comms are all WA).
   // Prefer the client's WA group; fall back to wa.me with the personal number.
   const waPhone = c.phoneCode && c.phoneDigits ? `${c.phoneCode}${c.phoneDigits}`.replace(/[^0-9]/g, '') : '';
@@ -250,7 +249,7 @@ function Row({ c }: { c: FollowUpItem }) {
           )}
           {!c.saleClosingSubStatus && (
             <span className="text-brand-amber">
-              <strong>New arrival</strong> — open the client and set status (RP / CP / C / JBT / Training).
+              <strong>No status set</strong> — open the client and default it to RP, or move directly to CP / C / JBT / Training.
             </span>
           )}
         </div>

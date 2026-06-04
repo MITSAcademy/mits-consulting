@@ -64,6 +64,9 @@ export function ClientDetailPage() {
   const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user)!;
   const [modal, setModal] = useState<ModalKind>(null);
+  // Sub-status modal target preset — set by the Close-out journey card so the
+  // modal opens already pointed at the destination Roshni clicked.
+  const [subStatusTarget, setSubStatusTarget] = useState<'CP' | 'C' | 'JBT' | 'Training' | undefined>(undefined);
 
   const { data: client, isLoading } = useQuery({
     queryKey: ['client', id],
@@ -248,26 +251,28 @@ export function ClientDetailPage() {
     actions.push(<Button key="pay" variant="success" onClick={() => setModal('freshPayment')}><Wallet size={14}/> Fresh payment</Button>);
   }
   // Roshni state machine — RP (entry) / CP (silent) / C (lost) / JBT (employer-paid) / Training (paid)
+  // RP is the implicit entry (auto-set on positive-demo handoff). Her job is
+  // to MOVE the client from RP to one of the 4 next states.
   if (canClose(user.role) && (client.lifecycle === 'SaleClosing' || client.lifecycle === 'SaleWon')) {
     const ss = client.saleClosingSubStatus;
-    const label = ss === 'RP' ? 'RP · ready for payment'
+    const label = ss === 'RP' ? 'Move from RP → next status'
       : ss === 'CP' ? 'CP · closure pending'
       : ss === 'C' ? 'C · not starting'
       : ss === 'JBT' ? 'JBT · employer pays later'
       : ss === 'Training' ? 'Training · paid'
-      : 'Set status (triage)';
+      : 'Set status (default RP)';
     const variant = ss === 'CP' ? 'amber' as const
       : ss === 'C' ? 'danger' as const
       : ss === 'RP' ? 'primary' as const
       : ss === 'JBT' || ss === 'Training' ? 'success' as const
-      : 'amber' as const; // null = needs triage, amber call-to-action
+      : 'amber' as const;
     actions.push(
       <Button
         key="substatus"
         size="sm"
         variant={variant}
         onClick={() => setModal('subStatus')}
-        title="Roshni's state machine: RP → CP / C / JBT / Training. Each move has its own validation."
+        title="RP → CP / C / JBT / Training. Each move has its own validation."
       >
         {label}
       </Button>
@@ -385,6 +390,16 @@ export function ClientDetailPage() {
         }
       />
       <Page>
+        {/* Roshni's close-out journey card — sits at the top whenever a sales-closer
+            role user opens a client in SaleClosing/SaleWon. Shows current status
+            and the 4 destinations as click-to-move cards with their validation. */}
+        {canClose(user.role) && (client.lifecycle === 'SaleClosing' || client.lifecycle === 'SaleWon') && (
+          <RoshniJourneyCard
+            client={client}
+            onMove={(target) => { setSubStatusTarget(target); setModal('subStatus'); }}
+          />
+        )}
+
         {/* State-specific callouts */}
         {client.lifecycle === 'WithRecruiters' && (
           <div className="callout purple">
@@ -721,7 +736,7 @@ export function ClientDetailPage() {
         {modal === 'sendSkillMatrix' && <SendSkillMatrixModal client={client} onClose={() => setModal(null)} />}
         {modal === 'skipMatrix' && <SkipMatrixModal client={client} onClose={() => setModal(null)} onProceed={() => { setModal('scheduleDemo'); }} />}
         {modal === 'noShow' && <NoShowModal client={client} onClose={() => setModal(null)} />}
-        {modal === 'subStatus' && <SubStatusModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'subStatus' && <SubStatusModal client={client} initialTarget={subStatusTarget} onClose={() => { setModal(null); setSubStatusTarget(undefined); }} />}
         {modal === 'paymentChecklist' && <PaymentChecklistModal client={client} onClose={() => setModal(null)} />}
         {modal === 'paymentConfirmation' && <PaymentConfirmationModal client={client} onClose={() => setModal(null)} />}
         {modal === 'groupRename' && <GroupRenameModal client={client} onClose={() => setModal(null)} />}
@@ -2437,15 +2452,157 @@ function NoShowModal({ client, onClose }: any) {
   );
 }
 
-/** Roshni state-machine picker. Each client lands at RP (Ready for Payment); Roshni
- *  walks them to one of CP (silent), C (lost), JBT (employer-paid), or Training (paid).
- *  Each target has its own validation gate enforced by the backend. */
-function SubStatusModal({ client, onClose }: any) {
+/** Roshni's close-out journey — the always-visible "what do I do with this client"
+ *  card on a SaleClosing/SaleWon client page. Shows current status (RP by default)
+ *  + the 4 destinations as cards with their required validation. Click any
+ *  destination card to open the move-status modal pre-pointed at that target. */
+function RoshniJourneyCard({ client, onMove }: { client: any; onMove: (t: 'CP' | 'C' | 'JBT' | 'Training') => void }) {
+  const ss: string = client.saleClosingSubStatus || 'RP';
+  const paymentDone = !!client.freshPaymentReceived || (client.freshPaymentAmount || 0) > 0;
+  const checklistDone = !!client.paymentChecklistCompletedAt;
+  const since = client.saleClosingSubStatusAt ? new Date(client.saleClosingSubStatusAt) : null;
+  const daysSince = since ? Math.floor((Date.now() - since.getTime()) / 86_400_000) : null;
+
+  // Status header
+  const statusColor =
+    ss === 'RP' ? 'border-brand-blue text-brand-blue' :
+    ss === 'CP' ? 'border-brand-amber text-brand-amber' :
+    ss === 'JBT' ? 'border-brand-green text-brand-green' :
+    ss === 'Training' ? 'border-brand-green text-brand-green' :
+    ss === 'C' ? 'border-brand-red text-brand-red' :
+    'border-brand-border text-brand-textMuted';
+
+  // Each destination card definition
+  type Dest = {
+    key: 'CP' | 'C' | 'JBT' | 'Training';
+    title: string;
+    when: string;
+    requires: string;
+    blocked: string | null;
+    tone: 'amber' | 'danger' | 'success';
+  };
+  const dests: Dest[] = [
+    {
+      key: 'CP',
+      title: 'CP · Closure Pending',
+      when: 'Client not engaging on payment. Keep chasing (3 working days / 6 missed attempts is the SOP).',
+      requires: 'No required input — mark CP any time.',
+      blocked: null,
+      tone: 'amber',
+    },
+    {
+      key: 'Training',
+      title: 'Training · Paid',
+      when: 'Client has made the payment. Falls out of your queue; you then rename WA group + intro Mitali.',
+      requires: 'A Fresh Payment must be recorded.',
+      blocked: !paymentDone ? 'Record Fresh payment first' : null,
+      tone: 'success',
+    },
+    {
+      key: 'JBT',
+      title: 'JBT · Employer pays later',
+      when: 'Employer-paid path. Client starts now; payment + invoice handled together later.',
+      requires: 'Employer name + commitment date.',
+      blocked: null, // filled in the modal
+      tone: 'success',
+    },
+    {
+      key: 'C',
+      title: 'C · Not starting',
+      when: 'Client explicitly confirmed they\'re NOT proceeding. Terminal lost — captured for audit.',
+      requires: 'A reason note.',
+      blocked: null,
+      tone: 'danger',
+    },
+  ];
+
+  // If client is already at a terminal status (C/JBT/Training), show a "done" banner
+  // instead of the journey cards.
+  if (ss === 'C' || ss === 'JBT' || ss === 'Training') {
+    return (
+      <div className="card mb-4" style={{ borderColor: ss === 'C' ? '#EF4444' : '#0F8A5F' }}>
+        <div className="card-h" style={{ color: ss === 'C' ? '#EF4444' : '#0F8A5F' }}>
+          <span>Close-out done · {ss === 'C' ? 'Not starting (lost)' : ss === 'JBT' ? 'Employer-paid path' : 'Paid & starting'}</span>
+        </div>
+        <div className="muted text-sm">
+          {daysSince !== null && `Set ${daysSince}d ago. `}
+          {ss === 'Training' && 'Next: rename the WhatsApp group → "Training {client} {trainer} Z" and intro Mitali.'}
+          {ss === 'JBT' && 'Next: rename the WhatsApp group → "JBT {client} {trainer} Z" and intro Mitali. Accounts will follow up on the employer invoice.'}
+          {ss === 'C' && 'This client is closed (no sale). Re-open by clearing the status from the action bar.'}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card mb-4">
+      <div className="card-h">
+        <span>Close-out journey</span>
+        <span className={`px-2 py-0.5 rounded border text-xs ${statusColor}`}>
+          {ss === 'RP' ? 'RP · Ready for Payment' : ss === 'CP' ? 'CP · Closure Pending' : ss}
+        </span>
+        <span className="muted text-xs">
+          {daysSince !== null
+            ? ` · ${ss} for ${daysSince}d`
+            : ''}
+          {ss === 'RP' && !checklistDone && <span className="text-brand-amber"> · 10-point checklist not yet done</span>}
+          {ss === 'RP' && checklistDone && <span className="text-brand-green"> · checklist ✓</span>}
+        </span>
+      </div>
+      <div className="muted text-xs mb-3">
+        {ss === 'RP'
+          ? 'Active close-out. Pick the destination this client is moving to:'
+          : 'Client is currently silent. Once they re-engage, move to Training (paid) / JBT (employer) / C (lost):'}
+      </div>
+      <div className="grid md:grid-cols-2 gap-2.5">
+        {dests.map((d) => {
+          const isBlocked = !!d.blocked;
+          const borderTone =
+            d.tone === 'danger' ? '#EF4444' :
+            d.tone === 'success' ? '#0F8A5F' :
+            '#F59E0B';
+          return (
+            <button
+              key={d.key}
+              type="button"
+              onClick={() => onMove(d.key)}
+              className="text-left rounded p-3 border transition-colors hover:bg-bg-input"
+              style={{ borderColor: isBlocked ? '#33363D' : borderTone, opacity: isBlocked ? 0.7 : 1 }}
+            >
+              <div className="text-sm font-semibold mb-1" style={{ color: isBlocked ? undefined : borderTone }}>
+                {d.title}
+              </div>
+              <div className="text-xs muted mb-2">{d.when}</div>
+              <div className="text-[11px]">
+                <span className="muted">Required: </span>
+                <span className={isBlocked ? 'text-brand-red' : 'text-brand-green'}>
+                  {isBlocked ? `✗ ${d.blocked}` : `✓ ${d.requires}`}
+                </span>
+              </div>
+              <div className="mt-2 text-[11px] text-brand-amber">
+                {isBlocked ? '→ Click to see what\'s needed' : '→ Click to move'}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Roshni's state machine.
+ *  RP is the implicit entry state (set automatically when Samita marks a positive
+ *  demo). From RP she moves the client to ONE of CP / C / JBT / Training. Each
+ *  target has its own validation gate enforced by the backend. */
+function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClose: () => void; initialTarget?: 'CP' | 'C' | 'JBT' | 'Training' }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   type Sub = 'RP' | 'CP' | 'C' | 'JBT' | 'Training' | null;
   const current: Sub = client.saleClosingSubStatus || null;
-  const [sub, setSub] = useState<Sub>(current);
+  // The 4 destinations she can move to. RP is excluded — it's the entry state,
+  // not a destination she picks. (Backend still accepts RP for admin edge cases.)
+  type Target = 'CP' | 'C' | 'JBT' | 'Training';
+  const [target, setTarget] = useState<Target | null>(initialTarget || null);
   const [nextCallOn, setNextCallOn] = useState<string>(client.roshniNextCallOn || '');
   const [reason, setReason] = useState('');
   const [employerName, setEmployerName] = useState('');
@@ -2453,7 +2610,7 @@ function SubStatusModal({ client, onClose }: any) {
 
   const m = useMutation({
     mutationFn: () => api.post(`/clients/${client.id}/sub-status`, {
-      subStatus: sub,
+      subStatus: target,
       nextCallOn: nextCallOn || null,
       reason,
       employerName: employerName || undefined,
@@ -2464,175 +2621,158 @@ function SubStatusModal({ client, onClose }: any) {
       qc.invalidateQueries({ queryKey: ['clients'] });
       qc.invalidateQueries({ queryKey: ['roshni-follow-ups'] });
       qc.invalidateQueries({ queryKey: ['roshni-renewals-approaching'] });
-      showToast(sub ? `Status set: ${sub}` : 'Status cleared');
+      showToast(target ? `Moved to ${target}` : 'Status cleared');
       onClose();
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
-  // Payment recorded? Used to gate the Training transition with a clear hint.
   const paymentDone = !!client.freshPaymentReceived || (client.freshPaymentAmount || 0) > 0;
   const checklistDone = !!client.paymentChecklistCompletedAt;
 
-  const opts: {
-    key: Exclude<Sub, null>;
-    label: string;
-    desc: string;
-    tone: 'primary' | 'amber' | 'danger' | 'success' | 'default';
-    requires?: string[];
-    blockedReason?: string | null;
+  const destinations: {
+    key: Target;
+    title: string;
+    when: string;
+    requires: string;
+    blockedReason: string | null;
+    tone: 'amber' | 'danger' | 'success';
   }[] = [
     {
-      key: 'RP',
-      label: 'RP · Ready for Payment',
-      desc: 'Active close-out. Client engaged, you\'re running the checklist + chasing payment.',
-      tone: 'primary',
-    },
-    {
       key: 'CP',
-      label: 'CP · Closure Pending — client silent',
-      desc: 'Client took demo, was happy, but isn\'t engaging on payment. Keep trying. Default after 3 working days / 6 missed attempts.',
+      title: 'Move to CP · Closure Pending',
+      when: 'Client took demo + was happy but isn\'t engaging on payment. Keep trying after 3 working days / 6 missed attempts.',
+      requires: 'No validation — you can mark CP any time.',
+      blockedReason: null,
       tone: 'amber',
     },
     {
-      key: 'JBT',
-      label: 'JBT · Employer will pay (deferred)',
-      desc: 'Employer-paid path. Client starts training now; payment + invoice handled together later when employer pays.',
+      key: 'Training',
+      title: 'Move to Training · Client paid',
+      when: 'Client has made the payment. After this you rename the WA group + intro Mitali. Client drops out of your queue.',
+      requires: 'A Fresh Payment must be recorded for this client.',
+      blockedReason: !paymentDone ? 'Record the Fresh payment first (use "Fresh payment" button on the action bar).' : null,
       tone: 'success',
-      requires: ['Employer name', 'Employer commitment date'],
-      blockedReason: (!employerName?.trim() || !employerCommitDate)
-        ? 'Fill the employer name + commitment date below'
-        : null,
     },
     {
-      key: 'Training',
-      label: 'Training · Client paid, starts now',
-      desc: 'Payment recorded. Client is ready to begin training. After this you rename the WA group + intro Mitali.',
-      tone: 'success',
-      requires: ['Fresh payment recorded'],
-      blockedReason: !paymentDone
-        ? 'Record the Fresh payment on this client first ("Record payment" button)'
+      key: 'JBT',
+      title: 'Move to JBT · Employer will pay later',
+      when: 'Employer-paid path. Client can start training now; payment + invoice handled together later.',
+      requires: 'Employer name + payment commitment date.',
+      blockedReason: (!employerName?.trim() || !employerCommitDate)
+        ? 'Fill employer name + commitment date below.'
         : null,
+      tone: 'success',
     },
     {
       key: 'C',
-      label: 'C · Not starting (terminal lost)',
-      desc: 'Client explicitly confirmed they\'re NOT proceeding. Captures the reason for the audit log.',
+      title: 'Move to C · Not starting',
+      when: 'Client explicitly confirmed they\'re NOT proceeding. Terminal lost.',
+      requires: 'A reason — why isn\'t the client going ahead?',
+      blockedReason: !reason?.trim() ? 'Fill the reason field below.' : null,
       tone: 'danger',
-      requires: ['Reason'],
-      blockedReason: !reason?.trim()
-        ? 'Fill the Reason field below — why isn\'t the client proceeding?'
-        : null,
     },
   ];
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent
-        title={`Move status · ${client.name}`}
-        description={current
-          ? `Current: ${current}. Pick the next status — each has its own validation before you can save.`
-          : 'Pick the right status for this client. RP is the default entry state for new SaleClosing arrivals.'}
+        title={`Move ${client.name} from RP →`}
+        description={`Current state: ${current || 'unclassified'} ${current === 'RP' ? '(default entry state)' : ''}. Pick where this client goes next. Each destination has its own validation.`}
         className="max-w-2xl"
       >
-        <div className="space-y-2">
-          {opts.map((o) => {
-            const isCurrent = current === o.key;
-            const isSelected = sub === o.key;
-            const blocked = !!o.blockedReason;
-            return (
-              <label
-                key={o.key}
-                className={`flex items-start gap-2.5 p-3 rounded border cursor-pointer transition-colors ${
-                  isSelected ? 'border-brand-amber bg-bg-input' : 'border-brand-border hover:bg-bg-input'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="sub-status"
-                  checked={isSelected}
-                  onChange={() => setSub(o.key)}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
-                    {o.label}
-                    {isCurrent && <span className="text-[10px] bg-brand-amber text-[#1A1B1E] px-1.5 py-0.5 rounded">current</span>}
-                  </div>
-                  <div className="text-xs muted mt-0.5">{o.desc}</div>
-                  {o.requires && (
-                    <div className="text-[11px] mt-1.5">
-                      <span className="muted">Required: </span>
-                      <span className={blocked ? 'text-brand-red' : 'text-brand-green'}>
-                        {blocked ? `✗ ${o.blockedReason}` : `✓ ${o.requires.join(' · ')}`}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </label>
-            );
-          })}
-          <label className="flex items-center gap-2 p-2 rounded border border-brand-border text-xs muted cursor-pointer">
-            <input type="radio" name="sub-status" checked={sub === null} onChange={() => setSub(null)} />
-            Clear status (back to unclassified · triage)
-          </label>
-        </div>
-
-        {(sub === 'RP' || sub === 'CP') && (
-          <div className="form-row mt-3">
-            <Label>Next call on (optional)</Label>
-            <Input type="date" value={nextCallOn} onChange={(e) => setNextCallOn(e.target.value)} />
-            <div className="text-[10px] muted mt-1">Used by My follow-ups to surface overdue calls.</div>
+        {!current && (
+          <div className="callout amber mb-3 text-xs">
+            ⚠ This client has no status yet. New SaleClosing arrivals should auto-default to RP. If you see this, ping Vaibhav — the auto-set didn't run.
           </div>
         )}
 
-        {sub === 'JBT' && (
+        <div className="space-y-2">
+          {destinations.map((d) => {
+            const selected = target === d.key;
+            const blocked = !!d.blockedReason;
+            const borderColor = d.tone === 'danger' ? 'border-brand-red'
+              : d.tone === 'amber' ? 'border-brand-amber'
+              : 'border-brand-green';
+            return (
+              <button
+                key={d.key}
+                type="button"
+                onClick={() => setTarget(d.key)}
+                className={`w-full text-left flex items-start gap-2.5 p-3 rounded border transition-colors ${
+                  selected ? `${borderColor} bg-bg-input` : 'border-brand-border hover:bg-bg-input'
+                }`}
+              >
+                <div className={`mt-1 w-3 h-3 rounded-full border-2 ${selected ? `${borderColor.replace('border', 'bg').replace('border-', 'bg-')}` : 'border-brand-border'}`} />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{d.title}</div>
+                  <div className="text-xs muted mt-0.5">{d.when}</div>
+                  <div className="text-[11px] mt-1.5">
+                    <span className="muted">Required: </span>
+                    <span className={blocked ? 'text-brand-red' : 'text-brand-green'}>
+                      {blocked ? `✗ ${d.blockedReason}` : `✓ ${d.requires}`}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {target === 'CP' && (
+          <>
+            <div className="form-row mt-3">
+              <Label>Next call on (optional)</Label>
+              <Input type="date" value={nextCallOn} onChange={(e) => setNextCallOn(e.target.value)} />
+              <div className="text-[10px] muted mt-1">Used by My follow-ups to surface overdue calls.</div>
+            </div>
+            <NoPickupTemplate clientId={client.id} nextCallOn={nextCallOn} />
+          </>
+        )}
+
+        {target === 'JBT' && (
           <>
             <div className="form-row mt-3">
               <Label>Employer name *</Label>
-              <Input value={employerName} onChange={(e) => setEmployerName(e.target.value)} placeholder="e.g. Acme Corp · contact: HR head Priya" />
+              <Input value={employerName} onChange={(e) => setEmployerName(e.target.value)} placeholder="e.g. Acme Corp · HR contact: Priya" />
             </div>
             <div className="form-row mt-2">
               <Label>Payment commitment date *</Label>
               <Input type="date" value={employerCommitDate} onChange={(e) => setEmployerCommitDate(e.target.value)} />
-              <div className="text-[10px] muted mt-1">When will the employer settle the invoice? Accounts will follow up.</div>
+              <div className="text-[10px] muted mt-1">When will the employer settle the invoice? Accounts uses this to follow up.</div>
             </div>
           </>
         )}
 
-        {sub === 'Training' && (
+        {target === 'Training' && (
           <div className="callout mt-3 text-xs">
-            <strong>Next steps after Training:</strong> the regular handover flow takes over — rename the WhatsApp group to "Training {client.name} {client.primaryTrainer?.name || ''} Z", intro Mitali in the group, and you're done.
-            {!checklistDone && <div className="text-brand-amber mt-1">⚠ Heads-up: your 10-point payment checklist isn\'t marked complete yet. Open it to finish the audit trail.</div>}
+            <strong>Next steps after this move:</strong> rename the WhatsApp group to "Training {client.name} {client.primaryTrainer?.name || ''} Z", intro Mitali in the group, send the post-payment confirmation message. The client drops out of your follow-ups queue.
+            {!checklistDone && <div className="text-brand-amber mt-1">⚠ Heads-up: your 10-point payment checklist isn't marked complete yet. Open it to finish the audit trail.</div>}
           </div>
         )}
 
-        <div className="form-row mt-2">
-          <Label>Reason / note {sub === 'C' && <span className="text-brand-red">*</span>}</Label>
-          <Textarea
-            rows={2}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder={sub === 'C' ? 'Why isn\'t the client proceeding?' : 'Optional note — e.g. left voicemail, client said next week.'}
-          />
-        </div>
-
-        {sub === 'CP' && <NoPickupTemplate clientId={client.id} nextCallOn={nextCallOn} />}
+        {target === 'C' && (
+          <div className="form-row mt-3">
+            <Label>Reason *</Label>
+            <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why isn't the client proceeding? e.g. budget pushed to next quarter, found another vendor." />
+          </div>
+        )}
 
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
           <Button
-            variant="primary"
-            disabled={m.isPending}
+            variant={target === 'C' ? 'danger' : target === 'CP' ? 'amber' : 'primary'}
+            disabled={!target || m.isPending}
             disabledReason={
-              sub === 'Training' && !paymentDone ? 'Record the Fresh payment first.'
-              : sub === 'JBT' && (!employerName?.trim() || !employerCommitDate) ? 'Fill employer name + commitment date.'
-              : sub === 'C' && !reason?.trim() ? 'A reason is required for C.'
+              !target ? 'Pick a destination above first.'
+              : target === 'Training' && !paymentDone ? 'Record the Fresh payment first.'
+              : target === 'JBT' && (!employerName?.trim() || !employerCommitDate) ? 'Fill employer name + commitment date.'
+              : target === 'C' && !reason?.trim() ? 'A reason is required for C.'
               : null
             }
             onClick={() => m.mutate()}
           >
-            {m.isPending ? 'Saving…' : sub ? `Move to ${sub}` : 'Clear status'}
+            {m.isPending ? 'Saving…' : target ? `Move to ${target}` : 'Pick destination'}
           </Button>
         </DialogFooter>
       </DialogContent>

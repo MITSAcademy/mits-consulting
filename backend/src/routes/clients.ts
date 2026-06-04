@@ -481,14 +481,21 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
     data.dormantResumeFromStage = null;
   }
 
-  // Auto-assign salesOwnerId to Roshni when a client lands in SaleClosing for
-  // the first time. Without this, clients pushed via "Start closing" (the
-  // canClose fallback used by Roshni / founder / manager) keep salesOwnerId=null
-  // and never appear in Roshni's owner-filtered follow-ups queue. The
-  // post-demo-feedback path already does this; this catches the other paths.
+  // Auto-assign salesOwnerId to Roshni AND default sub-status to 'RP' when a
+  // client lands in SaleClosing for the first time. Without this, clients
+  // pushed via "Start closing" (the canClose fallback) keep salesOwnerId=null
+  // and stay at unclassified, so Roshni had to manually set both. The
+  // post-demo-feedback path already does both; this catches the other entries.
   if (lifecycle === 'SaleClosing' && current.lifecycle !== 'SaleClosing') {
-    const c = await prisma.client.findUnique({ where: { id: req.params.id }, select: { salesOwnerId: true } });
+    const c = await prisma.client.findUnique({
+      where: { id: req.params.id },
+      select: { salesOwnerId: true, saleClosingSubStatus: true },
+    });
     if (!c?.salesOwnerId) data.salesOwnerId = 'u-roshni';
+    if (!c?.saleClosingSubStatus) {
+      data.saleClosingSubStatus = 'RP';
+      data.saleClosingSubStatusAt = new Date();
+    }
   }
 
   // ─── Hold tracking bookkeeping ───────────────────────────────────────────
@@ -1950,9 +1957,14 @@ clientsRouter.post('/:id/post-demo-feedback', async (req: AuthedRequest, res) =>
   };
 
   if (outcome === 'Positive') {
-    // Route to Roshni for payment closing
+    // Route to Roshni for payment closing. RP (Ready for Payment) is the
+    // implicit entry state for her workflow — the system sets it so she
+    // doesn't have to. From RP her job is to move to one of CP / C / JBT /
+    // Training.
     baseUpdate.lifecycle = 'SaleClosing';
     baseUpdate.salesOwnerId = existing.salesOwnerId || 'u-roshni';
+    baseUpdate.saleClosingSubStatus = 'RP';
+    baseUpdate.saleClosingSubStatusAt = new Date();
   } else if (outcome === 'Negative') {
     // Re-loop: send back to recruiters via Anjali's intake
     baseUpdate.lifecycle = 'WithRecruiters';
