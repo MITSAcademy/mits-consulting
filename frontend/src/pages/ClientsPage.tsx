@@ -12,8 +12,11 @@ import { stageColor, stageLabel } from '@/lib/utils';
 import { useAuth } from '@/store/auth';
 import { useUI } from '@/store/ui';
 
+// Mirror ClientDetailPage's tighter allowlist. Was previously broader here
+// (included manager/accounts/payment_processor), causing the Clients list to
+// show USD/INR amounts to roles that ClientDetailPage then redacted — confusing.
 const canSeeFinancial = (role: string) =>
-  ['founder', 'demo_lead', 'manager', 'sales_closer', 'accounts', 'payment_processor'].includes(role);
+  ['founder', 'demo_lead', 'sales_closer'].includes(role);
 
 // Roles that don't have a personal-ownership stake → "Mine only" doesn't make sense
 const SHOW_MINE_FILTER_ROLES = ['demo_intake', 'demo_lead', 'recruiter', 'sales_closer', 'lead', 'staff'];

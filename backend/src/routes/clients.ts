@@ -756,13 +756,20 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
     });
   }
   const today = new Date().toISOString().slice(0, 10);
+  // When the user picks "Clear sub-status" (subStatus === null) or terminal C,
+  // also wipe roshniNextCallOn so the follow-ups queue (which filters on
+  // sub-status IN ('RP','CP')) doesn't leave a dangling next-call date that
+  // makes the client invisible despite the saved reminder.
+  const wipingFollowUp = subStatus === null || subStatus === 'C';
   const updated = await prisma.client.update({
     where: { id: client.id },
     data: {
       saleClosingSubStatus: subStatus,
       saleClosingSubStatusAt: new Date(),
       saleClosingSubStatusById: req.user!.id,
-      ...(nextCallOn !== undefined ? { roshniNextCallOn: nextCallOn || null } : {}),
+      ...(wipingFollowUp
+        ? { roshniNextCallOn: null }
+        : nextCallOn !== undefined ? { roshniNextCallOn: nextCallOn || null } : {}),
       ...(lastContactOutcome !== undefined ? {
         roshniLastContactOutcome: lastContactOutcome || null,
         roshniLastContactAt: today,

@@ -48,6 +48,18 @@ export const useAuth = create<AuthState>()(
         set({ user: null });
       },
     }),
-    { name: 'mits-auth', partialize: (s) => ({ user: s.user }) },
+    {
+      name: 'mits-auth',
+      partialize: (s) => ({ user: s.user }),
+      // When persist rehydrates from localStorage, flip `loading` to false if
+      // we already have a user. Without this every page reload shows the
+      // "Loading…" splash for the duration of /auth/me, even though we already
+      // know who the user is from last time. /auth/me still runs in the
+      // background to refresh the user object — but we render the app
+      // optimistically in the meantime.
+      onRehydrateStorage: () => (state) => {
+        if (state && state.user) state.loading = false;
+      },
+    },
   ),
 );

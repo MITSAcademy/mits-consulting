@@ -175,7 +175,24 @@ oauthRouter.get('/google/callback', async (req, res) => {
 
     const token = signToken({ id: user.id });
     await audit(user.id, user.name, refreshToken ? 'LOGIN_GOOGLE_CAL' : 'LOGIN_GOOGLE_SSO', email);
-    const entry: CodeCacheEntry = { token, redirectTo: `${origin}/my-calendar`, ts: Date.now() };
+    // Role-aware landing page (mirrors the frontend homePathFor helper).
+    // Was previously hard-coded to /my-calendar which made no sense for
+    // recruiter / sales_closer / accounts users.
+    const ROLE_HOME: Record<string, string> = {
+      founder:           '/',
+      manager:           '/',
+      demo_lead:         '/demo-intake',
+      demo_intake:       '/demo-intake',
+      recruiter:         '/sourcing',
+      sales_closer:      '/sales-closing',
+      accounts:          '/accounts-queue',
+      payment_processor: '/trainer-pay',
+      account_manager:   '/tasks',
+      lead:              '/calendar',
+      staff:             '/tasks',
+    };
+    const home = ROLE_HOME[user.role] || '/my-calendar';
+    const entry: CodeCacheEntry = { token, redirectTo: `${origin}${home}`, ts: Date.now() };
     codeCache.set(code, entry);
     return entry;
   })();
