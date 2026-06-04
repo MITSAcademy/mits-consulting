@@ -82,37 +82,46 @@ clientsRouter.get('/roshni/renewals-approaching', async (req: AuthedRequest, res
   const horizonISO = horizon.toISOString().slice(0, 10);
   // Roshni sees clients she owns; founder/manager see all
   const ownerFilter = req.user!.role === 'sales_closer' ? { salesOwnerId: req.user!.id } : {};
+  // Include clients with NO nextRenewalDue at all (a real gap — Mitali's team
+  // sometimes forgets to set the date when activating). They get a separate
+  // "unscheduled" bucket so Roshni can chase down the missing date.
   const clients = await prisma.client.findMany({
     where: {
       ...ownerFilter,
       lifecycle: { in: ['Active', 'LeverageGranted'] },
-      nextRenewalDue: { not: null, lte: horizonISO },
+      OR: [
+        { nextRenewalDue: { lte: horizonISO } },
+        { nextRenewalDue: null },
+      ],
     },
     select: {
       id: true, name: true, lifecycle: true,
       phoneCode: true, phoneDigits: true, email: true,
       whatsappGroupLink: true,
       nextRenewalDue: true,
+      cycleStart: true, cycleEnd: true,
       cycleAmount: true, currency: true,
       sessionsUsed: true, sessionsPerCycle: true,
       churnRisk: true,
       primaryTrainer: { select: { id: true, name: true } },
       salesOwner: { select: { id: true, name: true } },
     },
-    orderBy: { nextRenewalDue: 'asc' },
+    orderBy: [{ nextRenewalDue: { sort: 'asc', nulls: 'last' } }],
   });
   const items = clients.map((c) => {
     const due = c.nextRenewalDue || '';
+    const unscheduled = !due;
     const overdue = !!due && due < today;
     const daysUntil = due ? Math.floor((Date.parse(due) - Date.parse(today)) / 86_400_000) : 0;
-    return { ...c, overdue, daysUntil };
+    return { ...c, overdue, unscheduled, daysUntil };
   });
   res.json({
     items,
     counts: {
       overdue: items.filter((i) => i.overdue).length,
-      thisWeek: items.filter((i) => !i.overdue && i.daysUntil <= 7).length,
-      next7to14: items.filter((i) => !i.overdue && i.daysUntil > 7 && i.daysUntil <= 14).length,
+      thisWeek: items.filter((i) => !i.overdue && !i.unscheduled && i.daysUntil <= 7).length,
+      next7to14: items.filter((i) => !i.overdue && !i.unscheduled && i.daysUntil > 7 && i.daysUntil <= 14).length,
+      unscheduled: items.filter((i) => i.unscheduled).length,
     },
   });
 });
@@ -2049,13 +2058,28 @@ clientsRouter.post('/:id/schedule-multi-demo', async (req: AuthedRequest, res) =
     results.push({ trainerId: slot.trainerId, trainerName: trainer.name, demoId: demo.id, date: slot.date, timeIst: slot.timeIst });
   }
 
+  // If every slot was skipped (all trainerIds invalid) the request was effectively
+  // a no-op. Refuse with 400 instead of silently flipping lifecycle to
+  // DemoScheduled with bogus headline date/time taken from a skipped slot.
+  if (results.length === 0) {
+    return res.status(400).json({
+      error: 'None of the supplied slots resolved to a valid trainer — nothing was scheduled.',
+      skippedCount: slots.length,
+    });
+  }
+
+  // Earliest of the SUCCESSFUL slots is the public-facing date/time. Was
+  // previously taken from `earliest` (computed before the skip loop), which
+  // could be a skipped trainer's date.
+  const earliestApplied = results[0];
+
   // Update headline fields on client (earliest demo = the public-facing date/time)
   await prisma.client.update({
     where: { id: client.id },
     data: {
-      demoDate: earliest.date,
-      demoTimeIst: earliest.timeIst,
-      ...(client.primaryTrainerId ? {} : { primaryTrainerId: earliest.trainerId }),
+      demoDate: earliestApplied.date,
+      demoTimeIst: earliestApplied.timeIst,
+      ...(client.primaryTrainerId ? {} : { primaryTrainerId: earliestApplied.trainerId }),
     },
   });
 

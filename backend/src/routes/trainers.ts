@@ -56,15 +56,23 @@ function skillScore(required: string[], have: string[]) {
   return Math.round((hits / required.length) * 100);
 }
 
-function costScore(trainerRate: number, clientBudget: number) {
-  if (!trainerRate) return 50;
+// Rough FX → INR. Mirrored from /metrics/home so the scoring uses the same
+// rates as MoneyFlow reporting. Tune in one place if accountancy wants real spot.
+const FX_TO_INR: Record<string, number> = { USD: 83, CAD: 60, INR: 1, EUR: 90, GBP: 105, AUD: 55, AED: 23 };
+
+function costScore(trainerRateInr: number, clientBudget: number, clientCurrency: string) {
+  if (!trainerRateInr) return 50;
   if (!clientBudget) return 70;     // no budget set → neutral preference
-  // Convert client budget (USD) into INR-ish baseline. Assume USD → ₹83.
-  const inrBudget = clientBudget * 83;
-  if (trainerRate <= inrBudget * 0.5) return 100;
-  if (trainerRate <= inrBudget * 0.8) return 90;
-  if (trainerRate <= inrBudget) return 75;
-  if (trainerRate <= inrBudget * 1.2) return 40;
+  // Convert client cycleAmount (in its native currency) to INR using the FX
+  // table. Was previously hard-coded as USD→₹83 for every client — which
+  // 83×-inflated the INR budget for INR-currency clients and made every
+  // trainer score 100/100 on cost regardless of actual rate.
+  const fx = FX_TO_INR[clientCurrency] ?? 1;
+  const inrBudget = clientBudget * fx;
+  if (trainerRateInr <= inrBudget * 0.5) return 100;
+  if (trainerRateInr <= inrBudget * 0.8) return 90;
+  if (trainerRateInr <= inrBudget) return 75;
+  if (trainerRateInr <= inrBudget * 1.2) return 40;
   return 10;
 }
 
@@ -137,7 +145,7 @@ trainersRouter.get('/match', async (req, res) => {
   const scored = trainers.map((t) => {
     const have = skillTokens(t.skills);
     const sk = skillScore(required, have);
-    const cs = costScore(t.defaultRateInr || 0, clientBudget);
+    const cs = costScore(t.defaultRateInr || 0, clientBudget, client.currency || 'USD');
     const totalSessions = sessionsByTrainer.get(t.id) || 0;
     const sc = Math.min(100, Math.round((totalSessions / 100) * 100));
     const team5 = team5SessionsByTrainer.get(t.id) || 0;

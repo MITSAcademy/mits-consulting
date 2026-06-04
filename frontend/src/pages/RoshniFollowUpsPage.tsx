@@ -24,12 +24,13 @@ interface RenewalItem {
   primaryTrainer?: { id: string; name: string } | null;
   salesOwner?: { id: string; name: string } | null;
   overdue: boolean;
+  unscheduled: boolean;
   daysUntil: number;
 }
 
 interface RenewalsResponse {
   items: RenewalItem[];
-  counts: { overdue: number; thisWeek: number; next7to14: number };
+  counts: { overdue: number; thisWeek: number; next7to14: number; unscheduled: number };
 }
 
 interface FollowUpItem {
@@ -70,9 +71,10 @@ export function RoshniFollowUpsPage() {
   const upcoming = items.filter((i) => i.bucket === 'upcoming');
   const unscheduled = items.filter((i) => i.bucket === 'unscheduled');
   const renewalItems = renewals?.items || [];
-  const renewalOverdue = renewalItems.filter((r) => r.overdue);
-  const renewalThisWeek = renewalItems.filter((r) => !r.overdue && r.daysUntil <= 7);
-  const renewalNext7to14 = renewalItems.filter((r) => !r.overdue && r.daysUntil > 7 && r.daysUntil <= 14);
+  const renewalOverdue = renewalItems.filter((r) => r.overdue && !r.unscheduled);
+  const renewalThisWeek = renewalItems.filter((r) => !r.overdue && !r.unscheduled && r.daysUntil <= 7);
+  const renewalNext7to14 = renewalItems.filter((r) => !r.overdue && !r.unscheduled && r.daysUntil > 7 && r.daysUntil <= 14);
+  const renewalUnscheduled = renewalItems.filter((r) => r.unscheduled);
 
   return (
     <>
@@ -127,6 +129,11 @@ export function RoshniFollowUpsPage() {
             {renewalNext7to14.length > 0 && (
               <Section title={`Due in 7-14 days · ${renewalNext7to14.length}`} tone="grey">
                 {renewalNext7to14.map((r) => <RenewalRow key={r.id} r={r}/>)}
+              </Section>
+            )}
+            {renewalUnscheduled.length > 0 && (
+              <Section title={`Active clients without renewal date · ${renewalUnscheduled.length}`} tone="amber">
+                {renewalUnscheduled.map((r) => <RenewalRow key={r.id} r={r}/>)}
               </Section>
             )}
           </div>

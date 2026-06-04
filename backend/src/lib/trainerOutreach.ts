@@ -43,7 +43,9 @@ function rupees(amount: number): string {
 
 /** Plain-text version (WhatsApp / SMS / fallback text body). */
 export function buildTrainerOutreachText(v: TrainerOutreachVars): string {
-  const rate = v.rateInr ?? DEFAULTS.rateInr;
+  // Treat 0 (or any falsy rateInr) as "no rate set" — was previously letting
+  // ₹0 through and sending "₹0 for 120 minutes of work" to the trainer.
+  const rate = v.rateInr && v.rateInr > 0 ? v.rateInr : DEFAULTS.rateInr;
   const hours = v.hoursPerSession ?? DEFAULTS.hoursPerSession;
   const minsPerSession = hours * 60;
   const maxMins = v.maxMinutesPerDay ?? DEFAULTS.maxMinutesPerDay;
@@ -100,7 +102,7 @@ export function buildTrainerOutreachText(v: TrainerOutreachVars): string {
 
 /** HTML version for email — clean tables, IMPORTANT NOTE callout box, branded. */
 export function buildTrainerOutreachHtml(v: TrainerOutreachVars): string {
-  const rate = v.rateInr ?? DEFAULTS.rateInr;
+  const rate = v.rateInr && v.rateInr > 0 ? v.rateInr : DEFAULTS.rateInr;
   const hours = v.hoursPerSession ?? DEFAULTS.hoursPerSession;
   const minsPerSession = hours * 60;
   const maxMins = v.maxMinutesPerDay ?? DEFAULTS.maxMinutesPerDay;

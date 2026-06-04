@@ -129,9 +129,14 @@ export async function buildEngagementLetterPdf(v: EngagementLetterVars): Promise
     doc.moveDown(0.4);
     doc.font('Helvetica-Oblique').fontSize(10).fillColor(BRAND_GREY).text('(Additional comments)');
     doc.moveDown(0.2);
-    bullet(doc, `${v.engagementType || 'Monthly'} based model`);
+    // Render real values when known; show "TBD" instead of fabricated defaults
+    // ("Support · Monday-Friday · 2 hours") when the field is unset — clients
+    // would otherwise read defaults as confirmed terms.
+    bullet(doc, v.engagementType ? `${v.engagementType} based model` : 'Engagement type: TBD');
     bullet(doc, 'Monday to Friday');
-    bullet(doc, `${v.sessionsPerCycle ? v.sessionsPerCycle + ' hours' : '2 hours'} in stretch.`);
+    bullet(doc, v.sessionsPerCycle && v.sessionsPerCycle > 0
+      ? `${v.sessionsPerCycle} hours in stretch.`
+      : 'Session duration: TBD');
     bullet(doc, 'No extra charges for skill change.');
 
     sectionTitle(doc, '3. Replacement of Trainer');
