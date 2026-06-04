@@ -261,26 +261,38 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
       // up in the pool and can be reused without re-typing in the next request.
       let trainerId: string | null = p.trainerId || null;
       if (!trainerId && (p.trainerName || p.trainerPhone)) {
+        // Normalize phone: digits only, last 10. Normalize name: collapse whitespace,
+        // strip punctuation, lowercase — so "Ravi  Kumar", "Ravi.Kumar", "ravi kumar"
+        // all match the same trainer instead of creating duplicates.
         const phoneDigits = (p.trainerPhone || '').replace(/[^0-9]/g, '').slice(-10);
-        // De-dupe: look for an existing trainer with the same phone digits (last 10).
-        // Falls back to exact name match if no phone provided.
+        const normName = (p.trainerName || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        // Country-code heuristic: 10-digit US-looking phone or explicit +1 prefix → +1
+        const trainerPhoneRaw = (p.trainerPhone || '').trim();
+        const phoneCode = trainerPhoneRaw.startsWith('+1') || (phoneDigits.length === 10 && /^[2-9]/.test(phoneDigits) && trainerPhoneRaw.startsWith('+1')) ? '+1' : '+91';
+        // De-dupe pass 1 — exact phone digits match.
         let existingTrainer = null;
         if (phoneDigits) {
           existingTrainer = await tx.trainer.findFirst({ where: { phoneDigits } });
         }
-        if (!existingTrainer && p.trainerName) {
-          existingTrainer = await tx.trainer.findFirst({
-            where: { name: { equals: p.trainerName.trim(), mode: 'insensitive' } },
+        // De-dupe pass 2 — normalized-name match. Compares lowercase + punctuation-stripped
+        // form against every active trainer so small typing variations dedupe.
+        if (!existingTrainer && normName) {
+          const candidates = await tx.trainer.findMany({
+            where: { active: true },
+            select: { id: true, name: true },
           });
+          existingTrainer = candidates.find((t) =>
+            (t.name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() === normName,
+          ) || null;
         }
         if (existingTrainer) {
           trainerId = existingTrainer.id;
         } else {
           const newTrainer = await tx.trainer.create({
             data: {
-              name: (p.trainerName || 'Unnamed').trim(),
+              name: (p.trainerName || 'Unnamed').replace(/\s+/g, ' ').trim(),
               email: p.trainerEmail || null,
-              phoneCode: phoneDigits && (p.trainerPhone || '').startsWith('+1') ? '+1' : '+91',
+              phoneCode,
               phoneDigits: phoneDigits || null,
               skills: p.trainerSkills || null,
               defaultRateInr: p.rateInr || 0,

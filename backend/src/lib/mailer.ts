@@ -79,6 +79,56 @@ export function decryptSecret(encoded: string): string {
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 }
 
+/**
+ * Build the `fromUser` arg from a user row, safely. Returns undefined when:
+ *  - The user has no Gmail or app-password configured (mailer will throw
+ *    MISSING_APP_PASSWORD, which triggers the setup modal).
+ *  - decryptSecret throws (e.g. SMTP_USER_ENCRYPTION_KEY rotated and the
+ *    stored ciphertext can no longer be opened). Without this guard the
+ *    crypto error bubbled all the way up as a generic 500 with raw GCM
+ *    auth-tag stack trace.
+ */
+export function safeBuildFromUser(me: {
+  id: string; name: string;
+  gmailAddress?: string | null;
+  smtpAppPassword?: string | null;
+  sendAsAddress?: string | null;
+}): SendEmailArgs['fromUser'] | undefined {
+  if (!me?.gmailAddress || !me?.smtpAppPassword) return undefined;
+  try {
+    return {
+      id: me.id,
+      name: me.name,
+      gmailAddress: me.gmailAddress,
+      appPasswordPlain: decryptSecret(me.smtpAppPassword),
+      sendAsAddress: me.sendAsAddress,
+    };
+  } catch (e) {
+    console.warn(`[mailer] decryptSecret failed for user ${me.id} — App Password likely encrypted with a rotated key. User will be prompted to re-save.`, (e as any)?.message);
+    return undefined;
+  }
+}
+
+/**
+ * Build a safe public error message + a code for the 502 response when a send fails.
+ * Hides raw SMTP errors ("535-5.7.8 Username and Password not accepted…") from end-users
+ * while keeping the friendly MISSING_APP_PASSWORD path readable. Server-side log
+ * still captures the full error for debugging.
+ */
+export function formatSendError(label: string, err: unknown): { error: string; code?: string } {
+  const code = (err as any)?.code;
+  const message = (err as any)?.message || String(err);
+  // eslint-disable-next-line no-console
+  console.error(`[${label}] send failed:`, message, err);
+  if (code === 'MISSING_APP_PASSWORD') {
+    return { error: message, code };
+  }
+  return {
+    error: `${label} send failed. Open Settings → My email to re-save your App Password, or contact admin if it persists.`,
+    code,
+  };
+}
+
 // ─── Send email ───────────────────────────────────────────────────────────────
 
 export interface SendEmailArgs {

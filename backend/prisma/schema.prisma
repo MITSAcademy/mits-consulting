@@ -261,6 +261,10 @@ model Trainer {
   tasks          Task[]
   outboundMessages OutboundMessage[]
   demos            Demo[]
+
+  @@index([phoneDigits])  // auto-add dedup lookup
+  @@index([name])         // search + dedup fallback
+  @@index([active])       // pool list filter
 }
 
 // -------- TRAINER LEADS (recruiter pipeline) --------
@@ -390,6 +394,12 @@ model Client {
   feedback         Feedback[]
   outboundMessages OutboundMessage[]
   demos            Demo[]
+
+  @@index([lifecycle])                                    // every kanban/queue filters by stage
+  @@index([nextRenewalDue])                               // RenewalsPage + Roshni queue
+  @@index([saleClosingSubStatus, roshniNextCallOn])       // Roshni follow-ups bucketing
+  @@index([salesOwnerId])                                 // owner-scoped queries
+  @@index([intakeOwnerId])
 }
 
 // -------- SOURCING REQUESTS --------
@@ -405,6 +415,9 @@ model SourcingRequest {
   sentAt    String?
   proposals Proposal[]
   createdAt DateTime        @default(now())
+
+  @@index([sentToId, status])    // recruiter queue
+  @@index([clientId, status])    // matrix + auto-close queries
 }
 
 enum ConfirmationKind {
@@ -454,6 +467,9 @@ model Proposal {
   // Stamped automatically by the trainer-outreach email or WhatsApp endpoint.
   trainerNotifiedAt   String?   // ISO date when Aman/Kanchan notified the trainer
   trainerNotifiedById String?   // user id who triggered the notification
+
+  @@index([requestId, verification]) // pass/fail filter per request
+  @@index([trainerId])               // sourcing.ts pass auto-create lookup
 }
 
 // -------- PAYMENTS --------
@@ -473,6 +489,10 @@ model Payment {
   createdAt       DateTime    @default(now())
 
   accountsQueue   AccountsQueueItem[]
+
+  @@index([clientId, paymentDate])  // per-client payment history
+  @@index([paymentDate])            // MoneyFlow / metrics aggregation
+  @@index([kind])                   // Fresh vs Renewal filters
 }
 
 // -------- TASKS --------
@@ -495,6 +515,10 @@ model Task {
   createdAt       DateTime    @default(now())
 
   sessionLogs     SessionLog[]
+
+  @@index([ownerId, status])    // TasksPage per-owner filter
+  @@index([ownerId, dueDate])   // overdue badge query
+  @@index([clientId])
 }
 
 // -------- SESSION LOGS --------
@@ -579,6 +603,11 @@ model Demo {
   conductedBy      User?      @relation(fields: [conductedById], references: [id], onDelete: SetNull)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
+
+  @@index([clientId, status])    // per-client demo history
+  @@index([trainerId])           // trainer demo history
+  @@index([scheduledDate])       // calendar + my-calendar queries
+  @@index([conductedById])       // conducted-by queries
 }
 
 // -------- PAYOUT BATCHES --------
@@ -602,6 +631,10 @@ model AuditLog {
   action    String
   details   String?
   createdAt DateTime @default(now())
+
+  @@index([createdAt])         // AuditPage default sort
+  @@index([byId, createdAt])   // per-user audit drill-in
+  @@index([action])            // filter by action type
 }
 
 // -------- DAILY REPORTS --------

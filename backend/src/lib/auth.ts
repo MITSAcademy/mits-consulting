@@ -3,7 +3,16 @@ import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from './prisma';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+// Hard refuse to boot in production with the dev fallback — accidentally
+// running without JWT_SECRET in prod would issue tokens any GitHub stalker
+// could forge. In dev the fallback stays so `npm run dev` works out of the box.
+const JWT_SECRET = (() => {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET environment variable is required in production. Set it in Render env vars (or use `generateValue: true` in render.yaml).');
+  }
+  return 'dev-secret-change-me';
+})();
 const COOKIE_NAME = 'mits_token';
 
 export interface AuthedRequest extends Request {
