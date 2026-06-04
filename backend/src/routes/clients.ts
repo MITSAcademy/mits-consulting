@@ -1429,22 +1429,39 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
       softSkills: DEFAULT_SOFT_SKILLS,
     }];
   } else {
-    // Require at least one mustHaveSkills entry per candidate before sending (compulsory criteria)
-    const missing = baseList.filter((p: any) => !Array.isArray(p.mustHaveSkills) || p.mustHaveSkills.length === 0);
-    if (missing.length > 0) {
+    // Build candidates with a smart fallback: if structured mustHaveSkills is missing
+    // on a proposal, derive it from the linked trainer's freeform "skills" string
+    // (same approach as the primaryTrainer fallback above). Only error out if a
+    // trainer truly has no skill data anywhere — that's the real blocker, not the
+    // recruiter having skipped the structured matrix.
+    const parseSkillsString = (raw: string | null | undefined) =>
+      (raw || '').split(/[,;\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 12)
+        .map((skill) => ({ skill, proficiency: 4 }));
+    const built = baseList.map((p: any) => {
+      const proposalSkills = Array.isArray(p.mustHaveSkills) ? p.mustHaveSkills : [];
+      const fallbackSkills = proposalSkills.length === 0
+        ? parseSkillsString(p.trainerSkills || p.trainer?.skills)
+        : proposalSkills;
+      return {
+        name: p.trainer?.name || p.trainerName || '—',
+        totalExperience: p.experienceYears ? `${p.experienceYears} Years` : '—',
+        demoDate: demoDateOverride,
+        demoTimeIst: demoTimeOverride ? `${demoTimeOverride} IST` : '',
+        zoneTimes: istToUsZones(demoTimeOverride, demoDateOverride),
+        mustHaveSkills: fallbackSkills,
+        softSkills: Array.isArray(p.softSkills) && p.softSkills.length > 0 ? p.softSkills : DEFAULT_SOFT_SKILLS,
+      };
+    });
+    const trulyEmpty = built.filter((c) => c.mustHaveSkills.length === 0);
+    if (trulyEmpty.length > 0) {
       return res.status(400).json({
-        error: `Skill matrix incomplete — ${missing.length} proposed trainer(s) have no "Must Have Skills" filled in. Ask Aman/Kanchan to fill them.`,
+        error: `Skill matrix incomplete — ${trulyEmpty.length} trainer(s) have no skill data anywhere (proposal mustHaveSkills + trainer pool skills both empty): ${trulyEmpty.map((c) => c.name).join(', ')}. Ask Aman/Kanchan to fill skills on the trainer's pool profile.`,
       });
     }
-    candidates = baseList.map((p: any) => ({
-      name: p.trainer?.name || p.trainerName || '—',
-      totalExperience: p.experienceYears ? `${p.experienceYears} Years` : '—',
-      demoDate: demoDateOverride,
-      demoTimeIst: demoTimeOverride ? `${demoTimeOverride} IST` : '',
-      zoneTimes: istToUsZones(demoTimeOverride, demoDateOverride),
-      mustHaveSkills: p.mustHaveSkills,
-      softSkills: Array.isArray(p.softSkills) && p.softSkills.length > 0 ? p.softSkills : DEFAULT_SOFT_SKILLS,
-    }));
+    candidates = built;
   }
   const subject = `MITS · Proposed trainer profiles for ${client.name}`;
   const html = buildSkillMatrixHtml({ clientName: client.name, candidates, introNote: req.body?.introNote });
@@ -1567,11 +1584,26 @@ clientsRouter.post('/:id/send-skill-matrix-whatsapp', async (req: AuthedRequest,
       .map((skill) => ({ skill, proficiency: 4 }));
     waItems = [{ name: t.name || '—', experienceYears: t.experienceYears, mustHaveSkills: skillList }];
   } else {
-    waItems = baseList.map((p: any) => ({
-      name: p.trainer?.name || p.trainerName || '—',
-      experienceYears: p.experienceYears ?? p.trainer?.experienceYears ?? null,
-      mustHaveSkills: Array.isArray(p.mustHaveSkills) ? p.mustHaveSkills : [],
-    }));
+    // Same fallback as send-skill-matrix (email): derive from trainer.skills string
+    // when proposal-level mustHaveSkills is empty so the WA send doesn't silently
+    // render skills as "—" for trainers Aman/Kanchan didn't fill manually.
+    const parseSkillsWa = (raw: string | null | undefined) =>
+      (raw || '').split(/[,;\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 12)
+        .map((skill) => ({ skill, proficiency: 4 }));
+    waItems = baseList.map((p: any) => {
+      const proposalSkills = Array.isArray(p.mustHaveSkills) ? p.mustHaveSkills : [];
+      const fallbackSkills = proposalSkills.length === 0
+        ? parseSkillsWa(p.trainerSkills || p.trainer?.skills)
+        : proposalSkills;
+      return {
+        name: p.trainer?.name || p.trainerName || '—',
+        experienceYears: p.experienceYears ?? p.trainer?.experienceYears ?? null,
+        mustHaveSkills: fallbackSkills,
+      };
+    });
   }
 
   // Compact text summary (WhatsApp message body)

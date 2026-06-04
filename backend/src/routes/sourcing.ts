@@ -860,15 +860,33 @@ sourcingRouter.get('/clients/:clientId/skill-matrix', async (req: AuthedRequest,
   // Prefer Passed proposals; fall back to all if none passed yet.
   const allProposals = reqs.flatMap((r) => r.proposals);
   const passed = allProposals.filter((p: any) => p.verification === 'Pass');
-  let candidates = (passed.length > 0 ? passed : allProposals).map((p: any) => ({
-    name: p.trainer?.name || p.trainerName || '—',
-    totalExperience: p.experienceYears ? `${p.experienceYears} Years` : (p.trainer?.experienceYears ? `${p.trainer.experienceYears} Years` : '—'),
-    demoDate: demoDateUse,
-    demoTimeIst: demoTimeUse ? `${demoTimeUse} IST` : '',
-    zoneTimes: istToUsZones(demoTimeUse, demoDateUse),
-    mustHaveSkills: Array.isArray(p.mustHaveSkills) ? p.mustHaveSkills : [],
-    softSkills: Array.isArray(p.softSkills) && p.softSkills.length > 0 ? p.softSkills : DEFAULT_SOFT_SKILLS,
-  }));
+  // Helper: parse a comma/semicolon/newline-separated "skills" string into the
+  // {skill, proficiency} shape that the matrix renderer expects.
+  const parseSkillsString = (raw: string | null | undefined) =>
+    (raw || '').split(/[,;\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 12)
+      .map((skill) => ({ skill, proficiency: 4 }));
+  let candidates = (passed.length > 0 ? passed : allProposals).map((p: any) => {
+    const proposalSkills = Array.isArray(p.mustHaveSkills) ? p.mustHaveSkills : [];
+    // Taran's case: the proposal was filed without the structured mustHaveSkills
+    // matrix (Aman/Kanchan typed only the freeform "skills" string). Derive a
+    // sensible default from the linked trainer's skills field so the matrix
+    // doesn't render an empty table.
+    const fallbackSkills = proposalSkills.length === 0
+      ? parseSkillsString(p.trainerSkills || p.trainer?.skills)
+      : proposalSkills;
+    return {
+      name: p.trainer?.name || p.trainerName || '—',
+      totalExperience: p.experienceYears ? `${p.experienceYears} Years` : (p.trainer?.experienceYears ? `${p.trainer.experienceYears} Years` : '—'),
+      demoDate: demoDateUse,
+      demoTimeIst: demoTimeUse ? `${demoTimeUse} IST` : '',
+      zoneTimes: istToUsZones(demoTimeUse, demoDateUse),
+      mustHaveSkills: fallbackSkills,
+      softSkills: Array.isArray(p.softSkills) && p.softSkills.length > 0 ? p.softSkills : DEFAULT_SOFT_SKILLS,
+    };
+  });
   // Internal Search fallback: when Anjali picks a trainer directly from the pool we
   // never create a Proposal — so the matrix would render empty and the Send buttons
   // would stay disabled. Synthesize a single candidate from the client's primary trainer.
