@@ -22,39 +22,92 @@ export function BulkUploadPage() {
     },
   });
 
+  // Quote-aware CSV row splitter — handles cells containing commas (e.g.
+  // a client name like "Smith, Jr."), escaped quotes (""), and trims the cell
+  // whitespace. Pure JS, no papaparse dep needed for this scale.
+  function splitCsvRow(line: string): string[] {
+    const out: string[] = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (line[i + 1] === '"') { cur += '"'; i++; } // escaped ""
+          else inQuotes = false;
+        } else {
+          cur += ch;
+        }
+      } else {
+        if (ch === ',') { out.push(cur.trim()); cur = ''; }
+        else if (ch === '"' && cur.length === 0) { inQuotes = true; }
+        else { cur += ch; }
+      }
+    }
+    out.push(cur.trim());
+    return out;
+  }
+
   const importCsv = useMutation({
     mutationFn: async () => {
-      const lines = csv.trim().split('\n');
-      const headers = lines[0].split(',').map((h) => h.trim());
+      // Split on both \r\n and \n so Excel-exported CSVs work the same as raw paste.
+      const lines = csv.trim().split(/\r?\n/);
+      const headers = splitCsvRow(lines[0]);
+      const required = ['name'];
+      const missing = required.filter((r) => !headers.includes(r));
+      if (missing.length > 0) {
+        throw new Error(`Missing required header(s): ${missing.join(', ')}. First row must list column names.`);
+      }
       const rows = lines.slice(1).map((l) => {
-        const cells = l.split(',');
+        const cells = splitCsvRow(l);
         const o: any = {};
-        headers.forEach((h, i) => (o[h] = (cells[i] || '').trim()));
+        headers.forEach((h, i) => (o[h] = cells[i] || ''));
         return o;
       });
       const created: any[] = [];
-      for (const r of rows) {
+      const failed: { row: number; name: string; error: string }[] = [];
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
         if (!r.name) continue;
-        const res = await api.post('/clients', {
-          name: r.name,
-          phoneCode: r.phoneCode || '+1',
-          phoneDigits: (r.phoneDigits || '').replace(/\D/g, ''),
-          email: r.email || '',
-          engagementType: r.engagementType || 'Support',
-          currency: r.currency || 'USD',
-          source: r.source || '',
-          intakeSkillHint: r.skill || '',
-          lifecycle: 'Lead',
-        });
-        created.push(res.data);
+        try {
+          const res = await api.post('/clients', {
+            name: r.name,
+            phoneCode: r.phoneCode || '+1',
+            phoneDigits: (r.phoneDigits || '').replace(/\D/g, ''),
+            email: r.email || '',
+            engagementType: r.engagementType || 'Support',
+            currency: r.currency || 'USD',
+            source: r.source || '',
+            intakeSkillHint: r.skill || '',
+            lifecycle: 'Lead',
+          });
+          created.push(res.data);
+        } catch (e: any) {
+          failed.push({
+            row: i + 2, // +2 = 1 (headers) + 1-based
+            name: r.name,
+            error: e?.response?.data?.error || e?.message || 'unknown',
+          });
+        }
       }
-      return created;
+      return { created, failed };
     },
-    onSuccess: (created) => {
+    onSuccess: ({ created, failed }) => {
       qc.invalidateQueries({ queryKey: ['clients'] });
-      showToast(`Imported ${created.length} clients`);
+      if (failed.length > 0) {
+        const sample = failed.slice(0, 3).map((f) => `row ${f.row} (${f.name}): ${f.error}`).join(' · ');
+        showToast(
+          `Imported ${created.length} · ${failed.length} failed — ${sample}${failed.length > 3 ? ` · +${failed.length - 3} more (see console)` : ''}`,
+          'error',
+        );
+        // eslint-disable-next-line no-console
+        console.warn('[bulk-upload] failed rows:', failed);
+      } else {
+        showToast(`Imported ${created.length} clients`);
+      }
       setCsv('');
     },
+    onError: (e: any) => showToast(e?.message || 'CSV parse failed', 'error'),
   });
 
   return (

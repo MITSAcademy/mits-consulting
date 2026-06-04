@@ -29,27 +29,59 @@ paymentsRouter.post('/', async (req: AuthedRequest, res) => {
   if (!clientId || !amount || !currency || !paymentDate) {
     return res.status(400).json({ error: 'clientId, amount, currency, paymentDate required' });
   }
+  const kindToUse = kind || 'Fresh';
+  const amountToUse = Number(amount);
+
+  // For Fresh payments — when one already exists we accept the new row as a
+  // top-up (biweekly cycles often record half-payment first, then the second
+  // half later). Sum into client.freshPaymentAmount so MoneyFlow + cycle math
+  // reflect the actual total received, and only flip freshPaymentReceived once
+  // the accumulated total covers cycleAmount.
+  let priorFreshTotal = 0;
+  let clientCycleAmount: number | null = null;
+  if (kindToUse === 'Fresh') {
+    const existingFresh = await prisma.payment.findMany({
+      where: { clientId, kind: 'Fresh' },
+      select: { amount: true },
+    });
+    priorFreshTotal = existingFresh.reduce((s, p) => s + (p.amount || 0), 0);
+    const cli = await prisma.client.findUnique({
+      where: { id: clientId },
+      select: { cycleAmount: true },
+    });
+    clientCycleAmount = cli?.cycleAmount || null;
+  }
+
   const p = await prisma.payment.create({
     data: {
-      clientId, kind: kind || 'Fresh', amount: Number(amount), currency,
+      clientId, kind: kindToUse, amount: amountToUse, currency,
       paymentDate, bankAccountId: bankAccountId || null,
       paymentMode: paymentMode || 'Bank',
       receivedById: req.user!.id,
     },
     include,
   });
-  if (kind === 'Fresh') {
+
+  if (kindToUse === 'Fresh') {
+    const newTotal = priorFreshTotal + amountToUse;
+    // Mark received only when accumulated Fresh payments fully cover the cycle.
+    // If cycleAmount isn't on file (rare) fall back to "any Fresh payment counts".
+    const fullyReceived = clientCycleAmount ? newTotal >= clientCycleAmount : true;
     await prisma.client.update({
       where: { id: clientId },
       data: {
-        freshPaymentReceived: true,
+        freshPaymentReceived: fullyReceived,
         freshPaymentDate: paymentDate,
-        freshPaymentAmount: Number(amount),
-        lifecycle: 'SaleWon',
+        freshPaymentAmount: newTotal,
+        // Only flip to SaleWon when the engagement is actually paid in full.
+        ...(fullyReceived ? { lifecycle: 'SaleWon' as const } : {}),
       },
     });
   }
-  await audit(req.user!.id, req.user!.name, 'PAYMENT_RECORD', `${p.client.name} · ${currency} ${amount}`);
+  await audit(
+    req.user!.id, req.user!.name, 'PAYMENT_RECORD',
+    `${p.client.name} · ${currency} ${amountToUse}${kindToUse === 'Fresh' && priorFreshTotal > 0 ? ` · top-up (prior ${currency} ${priorFreshTotal})` : ''}`,
+  );
   res.status(201).json(p);
 });
 

@@ -20,8 +20,21 @@ metricsRouter.get('/home', async (_req, res) => {
     prisma.leverageRequest.findMany({ where: { status: 'PendingVaibhav' } }),
   ]);
 
-  const usdIn = payments.filter((p) => p.currency === 'USD').reduce((s, p) => s + p.amount, 0);
-  const cadIn = payments.filter((p) => p.currency === 'CAD').reduce((s, p) => s + p.amount, 0);
+  // Sum payments per currency — was previously USD + CAD only, which silently
+  // dropped INR / EUR / GBP / AUD / AED into a black hole on MoneyFlow.
+  const byCurrency: Record<string, number> = {};
+  for (const p of payments) byCurrency[p.currency] = (byCurrency[p.currency] || 0) + p.amount;
+  const usdIn = byCurrency.USD || 0;
+  const cadIn = byCurrency.CAD || 0;
+  const inrIn = byCurrency.INR || 0;
+  const eurIn = byCurrency.EUR || 0;
+  const gbpIn = byCurrency.GBP || 0;
+  const audIn = byCurrency.AUD || 0;
+  const aedIn = byCurrency.AED || 0;
+  // Rough FX → INR for the consolidated "total inflow" view. Tune these in
+  // one place if accountancy wants real spot rates.
+  const FX_INR: Record<string, number> = { USD: 83, CAD: 60, INR: 1, EUR: 90, GBP: 105, AUD: 55, AED: 23 };
+  const totalInINR = Object.entries(byCurrency).reduce((s, [c, a]) => s + a * (FX_INR[c] || 0), 0);
   const trainerOut = sessions.reduce((s, l) => s + l.amountInr, 0);
   const trainerPending = sessions
     .filter((l) => ['Logged', 'ReadyForFinal', 'PaymentApproved'].includes(l.status))
@@ -41,12 +54,13 @@ metricsRouter.get('/home', async (_req, res) => {
 
   res.json({
     money: {
-      usdIn, cadIn,
-      usdInINR: usdIn * 83,
-      cadInINR: cadIn * 60,
-      totalInINR: usdIn * 83 + cadIn * 60,
+      usdIn, cadIn, inrIn, eurIn, gbpIn, audIn, aedIn,
+      byCurrency,
+      usdInINR: usdIn * FX_INR.USD,
+      cadInINR: cadIn * FX_INR.CAD,
+      totalInINR,
       trainerOut, trainerPending,
-      net: usdIn * 83 + cadIn * 60 - trainerOut,
+      net: totalInINR - trainerOut,
     },
     ops: {
       activeClients: active.length,
@@ -86,9 +100,17 @@ metricsRouter.get('/money-flow', async (_req, res) => {
   const payments = await prisma.payment.findMany({ where: { paymentDate: { gte: monthStart } } });
   const byBank = banks.map((b) => {
     const ps = payments.filter((p) => p.bankAccountId === b.id);
-    const usd = ps.filter((p) => p.currency === 'USD').reduce((s, p) => s + p.amount, 0);
-    const cad = ps.filter((p) => p.currency === 'CAD').reduce((s, p) => s + p.amount, 0);
-    return { bank: b, count: ps.length, usd, cad };
+    // Sum per currency so a bank that receives INR / EUR / GBP / AUD / AED
+    // doesn't appear empty just because the old code only summed USD + CAD.
+    const byCurrency: Record<string, number> = {};
+    for (const p of ps) byCurrency[p.currency] = (byCurrency[p.currency] || 0) + p.amount;
+    return {
+      bank: b,
+      count: ps.length,
+      usd: byCurrency.USD || 0,
+      cad: byCurrency.CAD || 0,
+      byCurrency,
+    };
   });
   res.json({ byBank: byBank.filter((b) => b.count > 0) });
 });
