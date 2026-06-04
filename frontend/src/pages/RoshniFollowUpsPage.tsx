@@ -46,13 +46,16 @@ interface FollowUpItem {
   roshniLastContactAt: string | null;
   roshniLastContactOutcome: string | null;
   salesOwner?: { id: string; name: string } | null;
-  bucket: 'overdue' | 'today' | 'upcoming' | 'unscheduled';
+  bucket: 'triage' | 'overdue' | 'today' | 'upcoming' | 'unscheduled';
   daysOverdue: number;
+  cycleAmount?: number | null;
+  currency?: string | null;
+  saleClosingSubStatusAt?: string | null;
 }
 
 interface FollowUpsResponse {
   items: FollowUpItem[];
-  counts: { overdue: number; today: number; upcoming: number; unscheduled: number };
+  counts: { triage: number; overdue: number; today: number; upcoming: number; unscheduled: number };
 }
 
 export function RoshniFollowUpsPage() {
@@ -66,6 +69,7 @@ export function RoshniFollowUpsPage() {
   });
 
   const items = data?.items || [];
+  const triage = items.filter((i) => i.bucket === 'triage');
   const overdue = items.filter((i) => i.bucket === 'overdue');
   const today = items.filter((i) => i.bucket === 'today');
   const upcoming = items.filter((i) => i.bucket === 'upcoming');
@@ -80,14 +84,20 @@ export function RoshniFollowUpsPage() {
     <>
       <Topbar
         title="My follow-ups"
-        subtitle={`${items.length} client${items.length === 1 ? '' : 's'} · ${overdue.length} overdue · ${today.length} due today`}
+        subtitle={`${items.length} client${items.length === 1 ? '' : 's'} · ${triage.length} need triage · ${overdue.length} overdue · ${today.length} due today`}
       />
       <Page>
         <div className="callout mb-3">
           <Clock size={14} className="inline mr-1"/>
-          RP = ready for payment · CP = closure pending (no pickup) · clients marked C (not starting) are hidden — they're closed.
+          Triage = new SaleClosing arrivals to classify · RP = ready for payment · CP = closure pending · marked C are hidden.
           Click the phone or WhatsApp icon to dial / message; "Mark contacted" bumps next-call by 1 day automatically.
         </div>
+
+        {triage.length > 0 && (
+          <Section title={`Needs triage · ${triage.length} new arrivals`} tone="amber">
+            {triage.map((c) => <Row key={c.id} c={c}/>)}
+          </Section>
+        )}
 
         {overdue.length > 0 && (
           <Section title={`Overdue · ${overdue.length}`} tone="red">
@@ -142,8 +152,11 @@ export function RoshniFollowUpsPage() {
         {items.length === 0 && renewalItems.length === 0 && (
           <div className="text-center py-12 muted">
             <Phone size={28} className="inline-block mb-2 opacity-50"/>
-            <div>No follow-ups in the queue.</div>
-            <div className="text-xs mt-1">Set sub-status (RP/CP) + next-call-on date on a SaleClosing/SaleWon client to add it here.</div>
+            <div>Nothing on your plate right now.</div>
+            <div className="text-xs mt-1">
+              New SaleClosing clients land here automatically as "Needs triage" so you can classify them as RP / CP / C.
+              If you don't see one you expect, check the Sales close list to verify the client is assigned to you.
+            </div>
           </div>
         )}
       </Page>

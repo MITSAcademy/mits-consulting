@@ -133,11 +133,18 @@ clientsRouter.get('/roshni/follow-ups', async (req: AuthedRequest, res) => {
   }
   const today = new Date().toISOString().slice(0, 10);
   const ownerFilter = req.user!.role === 'sales_closer' ? { salesOwnerId: req.user!.id } : {};
+  // Include null sub-status clients — these are fresh SaleClosing/SaleWon arrivals
+  // (just handed off by Anjali/Samita on positive demo) that need triage. Without
+  // this, new clients are invisible to Roshni until she remembers to manually set
+  // a sub-status — which she has no way to know is needed.
   const clients = await prisma.client.findMany({
     where: {
       ...ownerFilter,
       lifecycle: { in: ['SaleClosing', 'SaleWon'] },
-      saleClosingSubStatus: { in: ['RP', 'CP'] },
+      OR: [
+        { saleClosingSubStatus: { in: ['RP', 'CP'] } },
+        { saleClosingSubStatus: null },
+      ],
     },
     select: {
       id: true, name: true, lifecycle: true,
@@ -145,25 +152,35 @@ clientsRouter.get('/roshni/follow-ups', async (req: AuthedRequest, res) => {
       email: true,
       whatsappGroupLink: true,
       saleClosingSubStatus: true,
+      saleClosingSubStatusAt: true,
       roshniNextCallOn: true,
       roshniLastContactAt: true,
       roshniLastContactOutcome: true,
+      cycleAmount: true,
+      currency: true,
       salesOwner: { select: { id: true, name: true } },
     },
     orderBy: { roshniNextCallOn: 'asc' },
   });
   const items = clients.map((c) => {
     const due = c.roshniNextCallOn || '';
-    const bucket = !due ? 'unscheduled' : due < today ? 'overdue' : due === today ? 'today' : 'upcoming';
+    // 5 buckets now: triage (no sub-status) takes precedence, then by due date.
+    const bucket = !c.saleClosingSubStatus
+      ? 'triage'
+      : !due ? 'unscheduled'
+      : due < today ? 'overdue'
+      : due === today ? 'today'
+      : 'upcoming';
     const daysOverdue = due && due < today ? Math.floor((Date.parse(today) - Date.parse(due)) / 86_400_000) : 0;
     return { ...c, bucket, daysOverdue };
   });
   res.json({
     items,
     counts: {
-      overdue:    items.filter((i) => i.bucket === 'overdue').length,
-      today:      items.filter((i) => i.bucket === 'today').length,
-      upcoming:   items.filter((i) => i.bucket === 'upcoming').length,
+      triage:      items.filter((i) => i.bucket === 'triage').length,
+      overdue:     items.filter((i) => i.bucket === 'overdue').length,
+      today:       items.filter((i) => i.bucket === 'today').length,
+      upcoming:    items.filter((i) => i.bucket === 'upcoming').length,
       unscheduled: items.filter((i) => i.bucket === 'unscheduled').length,
     },
   });
@@ -458,6 +475,16 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
     data.dormantReason = null;
     data.dormantCheckBackOn = null;
     data.dormantResumeFromStage = null;
+  }
+
+  // Auto-assign salesOwnerId to Roshni when a client lands in SaleClosing for
+  // the first time. Without this, clients pushed via "Start closing" (the
+  // canClose fallback used by Roshni / founder / manager) keep salesOwnerId=null
+  // and never appear in Roshni's owner-filtered follow-ups queue. The
+  // post-demo-feedback path already does this; this catches the other paths.
+  if (lifecycle === 'SaleClosing' && current.lifecycle !== 'SaleClosing') {
+    const c = await prisma.client.findUnique({ where: { id: req.params.id }, select: { salesOwnerId: true } });
+    if (!c?.salesOwnerId) data.salesOwnerId = 'u-roshni';
   }
 
   // ─── Hold tracking bookkeeping ───────────────────────────────────────────
