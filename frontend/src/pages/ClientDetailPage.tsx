@@ -1946,15 +1946,18 @@ function MoveBackwardsModal({ client, onClose }: any) {
             // already wrote feedback per trainer below.
             const hasPerTrainerFeedback = Object.values(feedbacks).some((fb) => fb.note.trim().length > 0);
             const reasonOk = reason.trim().length > 0 || hasPerTrainerFeedback;
-            const disabled = !target || !reasonOk || m.isPending || !!uploadingFor;
-            const hint = !target ? '· pick a target stage'
-              : !reasonOk ? '· add a Reason or any per-trainer feedback'
-              : uploadingFor ? '· wait for upload'
-              : '';
+            const blockReason = !target
+              ? 'Pick a stage to move back to.'
+              : !reasonOk
+                ? 'Add a Reason at the top OR write feedback for at least one trainer below.'
+                : uploadingFor
+                  ? 'Waiting for the file upload to finish.'
+                  : null;
             return (
               <Button
                 variant="amber"
-                disabled={disabled}
+                disabled={m.isPending}
+                disabledReason={blockReason}
                 onClick={() => {
                   // Auto-build a reason string from per-trainer notes when the top field is blank.
                   if (!reason.trim() && hasPerTrainerFeedback) {
@@ -1970,10 +1973,8 @@ function MoveBackwardsModal({ client, onClose }: any) {
                   }
                   m.mutate();
                 }}
-                title={hint || undefined}
               >
                 <Undo2 size={14}/> {m.isPending ? 'Saving…' : `Move back to ${target ? stageLabel(target) : '—'}`}
-                {hint && <span className="text-[10px] ml-2 opacity-75">{hint}</span>}
               </Button>
             );
           })()}
