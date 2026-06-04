@@ -7,6 +7,7 @@ import { sendEmail, decryptSecret } from '../lib/mailer';
 import { buildIcsInvite } from '../lib/ical';
 import { buildWelcomeEmailHtml, WELCOME_EMAIL_SUBJECT } from '../lib/welcomeEmail';
 import { buildSkillMatrixHtml, buildSkillMatrixText, istToUsZones, DEFAULT_SOFT_SKILLS } from '../lib/skillMatrix';
+import { buildSkillMatrixPdf } from '../lib/skillMatrixPdf';
 import { buildPreDemoReminderHtml, buildPreDemoReminderText, PRE_DEMO_REMINDER_SUBJECT } from '../lib/preDemoTrainerReminder';
 import { buildEngagementLetterHtml, buildEngagementLetterText, ENGAGEMENT_LETTER_SUBJECT } from '../lib/engagementLetter';
 import { buildEngagementLetterPdf } from '../lib/engagementLetterPdf';
@@ -1500,6 +1501,25 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
     },
   });
   try {
+    // Generate the matrix PDF attachment — Anjali's ask: clients should get the
+    // matrix both inline AND as a portable file they can forward/save.
+    // Best-effort: if PDF build throws we still send the email with HTML body.
+    let pdfAttachment: { filename: string; content: Buffer; contentType: string } | undefined;
+    try {
+      const pdfBuf = await buildSkillMatrixPdf({
+        clientName: client.name,
+        candidates,
+        introNote: req.body?.introNote,
+      });
+      const safeName = (client.name || 'client').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40);
+      pdfAttachment = {
+        filename: `MITS_Skillset_Matrix_${safeName}.pdf`,
+        content: pdfBuf,
+        contentType: 'application/pdf',
+      };
+    } catch (pdfErr) {
+      console.warn('[skill-matrix] PDF build failed, sending without attachment:', (pdfErr as any)?.message);
+    }
     const r = await sendEmail({
       to: toEmail,
       cc: req.body?.cc || undefined,
@@ -1507,6 +1527,7 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
       body: text,
       htmlBody: html,
       fromUser,
+      ...(pdfAttachment ? { attachments: [pdfAttachment] } : {}),
     });
     await prisma.outboundMessage.update({
       where: { id: msg.id },
@@ -1519,9 +1540,9 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
     });
     await audit(
       req.user!.id, req.user!.name, 'SKILL_MATRIX_SENT',
-      `${client.name} · ${candidates.length} candidate(s) · ${toEmail}`,
+      `${client.name} · ${candidates.length} candidate(s) · ${toEmail}${pdfAttachment ? ' · pdf attached' : ''}`,
     );
-    res.status(201).json({ ok: true, messageId: msg.id, candidates: candidates.length });
+    res.status(201).json({ ok: true, messageId: msg.id, candidates: candidates.length, pdfAttached: !!pdfAttachment });
   } catch (e: any) {
     await prisma.outboundMessage.update({
       where: { id: msg.id },

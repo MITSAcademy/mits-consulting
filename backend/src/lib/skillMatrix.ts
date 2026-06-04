@@ -163,8 +163,35 @@ export function buildSkillMatrixHtml(opts: BuildSkillMatrixOpts): string {
     </table>
   `;
 
-  return wrapEmail(opts, `<tr><td style="padding:14px 0;">${matrix}</td></tr>`);
+  // Readable trainer-profile summary cards — rendered ABOVE the comparison table.
+  // Per Anjali's request: clients should see the profiles in the body, not have to
+  // wait for an attachment to download. The cards stack nicely on mobile too.
+  const profileCards = cands.map((c, i) => {
+    const top3 = (c.mustHaveSkills || []).slice(0, 6)
+      .map((s) => `<span style="display:inline-block;background:${labelBg};padding:2px 8px;margin:2px 4px 2px 0;border-radius:10px;font-size:12px;">${esc(s.skill)} <b style="color:${ACCENT_FOR_PROFILE};">${s.proficiency.toFixed(1)}/5</b></span>`)
+      .join(' ');
+    return `<div style="border:1px solid ${cellBorderColor};border-radius:6px;padding:12px 14px;margin:0 0 10px;background:#ffffff;">
+      <div style="font-weight:700;font-size:14px;margin:0 0 4px;">${esc(c.name)} <span style="font-weight:400;color:#6B6F78;font-size:12px;">· Candidate ${i + 1}</span></div>
+      <div style="font-size:12px;color:#6B6F78;margin:0 0 8px;">
+        <b>Experience:</b> ${esc(c.totalExperience || '—')}
+        ${c.demoDate ? ` · <b>Demo:</b> ${esc(c.demoDate)}` : ''}
+        ${c.demoTimeIst ? ` ${esc(c.demoTimeIst)}` : ''}
+        ${c.zoneTimes ? ` <span style="color:#9aa0a6;">(${esc(c.zoneTimes)})</span>` : ''}
+      </div>
+      <div>${top3 || '<span style="font-size:12px;color:#9aa0a6;">No skill breakdown captured yet.</span>'}</div>
+    </div>`;
+  }).join('');
+  const profilesBlock = `
+    <tr><td style="padding:14px 0 6px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#1A1B1E;">Proposed trainer profiles</td></tr>
+    <tr><td style="padding:6px 0 18px;">${profileCards}</td></tr>
+    <tr><td style="padding:6px 0 4px;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#1A1B1E;">Full skillset comparison</td></tr>
+  `;
+
+  return wrapEmail(opts, `${profilesBlock}<tr><td style="padding:6px 0 14px;">${matrix}</td></tr>`);
 }
+
+const ACCENT_FOR_PROFILE = '#1A6CDF';
+const cellBorderColor = '#e4e4e7';
 
 function wrapEmail(opts: BuildSkillMatrixOpts, bodyRows: string): string {
   return `<!DOCTYPE html>
