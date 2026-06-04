@@ -1,5 +1,11 @@
--- Roshni Phase 1a: account_manager role + sub-status + follow-up + send-as columns.
+-- Roshni Phase 1a — schema-only changes.
 -- All additive, all nullable. Existing rows remain valid.
+--
+-- IMPORTANT: this migration is intentionally schema-only. Postgres refuses to
+-- USE a newly-added enum value inside the same transaction that added it
+-- ("unsafe use of new value"). The role assignments + email/phone UPDATEs that
+-- need the new enum value live in a separate follow-up migration so they
+-- commit in their own transaction. Original P3009 fix.
 
 -- 1. Role enum gains account_manager (Muskan, Kashish, etc.)
 ALTER TYPE "Role" ADD VALUE IF NOT EXISTS 'account_manager';
@@ -26,31 +32,3 @@ ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "paymentConfirmationPostedAt" TEXT
 ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "whatsappGroupRenamedAt" TEXT;
 ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "whatsappGroupRenamedBy" TEXT;
 ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "assignedAmId" TEXT;
-
--- 7. Update existing user records to real Workspace identities
--- Roshni — sales_closer
-UPDATE "User"
-SET "email" = 'roshni.seth@mitssolution.com',
-    "name"  = 'Roshni Seth',
-    "phone" = '+91 62835 05780'
-WHERE "id" = 'u-roshni';
-
--- Mitali — manager
-UPDATE "User"
-SET "email" = 'mitagg@mitssolution.com',
-    "name"  = 'Mitali MITS',
-    "phone" = '+91 97795 30773'
-WHERE "id" = 'u-mitali';
-
--- Bhavneet — lead, reports to Mitali
-UPDATE "User"
-SET "email" = 'bhavneet.kaur@mitssolution.com',
-    "name"  = 'Bhavneet MITS',
-    "phone" = '+91 62833 24835'
-WHERE "id" = 'u-bhavneet';
-
--- Promote Muskan + Kashish to account_manager
-UPDATE "User" SET "role" = 'account_manager' WHERE "id" IN ('u-muskan', 'u-kashish');
-
--- Set Roshni's send-as alias (mc.sales@ Google Group)
-UPDATE "User" SET "sendAsAddress" = 'mc.sales@mitssolution.com' WHERE "id" = 'u-roshni';
