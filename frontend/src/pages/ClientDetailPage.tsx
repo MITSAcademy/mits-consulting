@@ -1879,7 +1879,7 @@ function MoveBackwardsModal({ client, onClose }: any) {
               </Select>
             </div>
             <div className="form-row">
-              <Label>Reason (logged in audit trail) *</Label>
+              <Label>Reason (logged in audit trail) <span className="muted normal-case">— optional if per-trainer feedback is filled below</span></Label>
               <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)}
                 placeholder="e.g. Client rejected after demo, wants someone with banking-domain experience" />
             </div>
@@ -1940,9 +1940,43 @@ function MoveBackwardsModal({ client, onClose }: any) {
         )}
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="amber" disabled={!target || !reason.trim() || m.isPending || !!uploadingFor} onClick={() => m.mutate()}>
-            <Undo2 size={14}/> {m.isPending ? 'Saving…' : `Move back to ${target ? stageLabel(target) : '—'}`}
-          </Button>
+          {(() => {
+            // Reason can be the top-level Reason field OR any non-blank per-trainer note —
+            // both end up in the audit trail. Don't block on the top field if Samita
+            // already wrote feedback per trainer below.
+            const hasPerTrainerFeedback = Object.values(feedbacks).some((fb) => fb.note.trim().length > 0);
+            const reasonOk = reason.trim().length > 0 || hasPerTrainerFeedback;
+            const disabled = !target || !reasonOk || m.isPending || !!uploadingFor;
+            const hint = !target ? '· pick a target stage'
+              : !reasonOk ? '· add a Reason or any per-trainer feedback'
+              : uploadingFor ? '· wait for upload'
+              : '';
+            return (
+              <Button
+                variant="amber"
+                disabled={disabled}
+                onClick={() => {
+                  // Auto-build a reason string from per-trainer notes when the top field is blank.
+                  if (!reason.trim() && hasPerTrainerFeedback) {
+                    const built = passedProposals
+                      .map((p: any) => {
+                        const note = (feedbacks[p.id]?.note || '').trim();
+                        const tName = p.trainer?.name || p.trainerName || 'Trainer';
+                        return note ? `${tName}: ${note}` : '';
+                      })
+                      .filter(Boolean)
+                      .join(' · ');
+                    setReason(`Per-trainer feedback — ${built}`);
+                  }
+                  m.mutate();
+                }}
+                title={hint || undefined}
+              >
+                <Undo2 size={14}/> {m.isPending ? 'Saving…' : `Move back to ${target ? stageLabel(target) : '—'}`}
+                {hint && <span className="text-[10px] ml-2 opacity-75">{hint}</span>}
+              </Button>
+            );
+          })()}
         </DialogFooter>
       </DialogContent>
     </Dialog>
