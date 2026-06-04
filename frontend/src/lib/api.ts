@@ -13,6 +13,12 @@ api.interceptors.response.use(
     if (err?.response?.status === 401 && !window.location.pathname.startsWith('/login')) {
       // Don't auto-redirect on login page; let the page handle it
     }
+    // When the backend refuses to send because the caller hasn't configured
+    // their Gmail App Password (we no longer fall back to Vaibhav's system
+    // SMTP), pop the setup modal so they can fix it in place.
+    if (err?.response?.data?.code === 'MISSING_APP_PASSWORD') {
+      try { window.dispatchEvent(new CustomEvent('mits:missing-app-password')); } catch {}
+    }
     return Promise.reject(err);
   },
 );

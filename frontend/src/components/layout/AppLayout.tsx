@@ -3,6 +3,7 @@ import { Sidebar } from './Sidebar';
 import { Toaster } from '@/components/ui/toast';
 import { NotificationBell } from '@/components/NotificationBell';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { SetupAppPasswordModal } from '@/components/SetupAppPasswordModal';
 
 export function AppLayout() {
   return (
@@ -12,6 +13,7 @@ export function AppLayout() {
         <Outlet />
       </main>
       <Toaster />
+      <SetupAppPasswordModal />
     </div>
   );
 }

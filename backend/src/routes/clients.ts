@@ -1171,7 +1171,7 @@ clientsRouter.post('/:id/engagement-letter', async (req: AuthedRequest, res) => 
     res.status(201).json({ ok: true, messageId: msg.id, pdfAttached: !!pdfAttachment });
   } catch (e: any) {
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Failed', errorText: e.message || String(e) } });
-    res.status(502).json({ error: 'Engagement letter send failed: ' + (e.message || String(e)), messageId: msg.id });
+    res.status(502).json({ error: 'Engagement letter send failed: ' + (e.message || String(e)), code: (e as any)?.code, messageId: msg.id });
   }
 });
 
@@ -1261,7 +1261,7 @@ clientsRouter.post('/:id/handover-welcome', async (req: AuthedRequest, res) => {
     res.status(201).json({ ok: true, messageId: msg.id });
   } catch (e: any) {
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Failed', errorText: e.message || String(e) } });
-    res.status(502).json({ error: 'Handover welcome send failed: ' + (e.message || String(e)), messageId: msg.id });
+    res.status(502).json({ error: 'Handover welcome send failed: ' + (e.message || String(e)), code: (e as any)?.code, messageId: msg.id });
   }
 });
 
@@ -1353,7 +1353,7 @@ clientsRouter.post('/:id/pre-demo-reminder', async (req: AuthedRequest, res) => 
     res.status(201).json({ ok: true, messageId: msg.id });
   } catch (e: any) {
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Failed', errorText: e.message || String(e) } });
-    res.status(502).json({ error: 'Reminder send failed: ' + (e.message || String(e)), messageId: msg.id });
+    res.status(502).json({ error: 'Reminder send failed: ' + (e.message || String(e)), code: (e as any)?.code, messageId: msg.id });
   }
 });
 
@@ -1521,7 +1521,7 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
       where: { id: msg.id },
       data: { status: 'Failed', errorText: e.message || String(e) },
     });
-    res.status(502).json({ error: 'Skill matrix send failed: ' + (e.message || String(e)), messageId: msg.id });
+    res.status(502).json({ error: 'Skill matrix send failed: ' + (e.message || String(e)), code: (e as any)?.code, messageId: msg.id });
   }
 });
 
@@ -1783,7 +1783,7 @@ clientsRouter.post('/:id/welcome-email', async (req: AuthedRequest, res) => {
       where: { id: msg.id },
       data: { status: 'Failed', errorText: e.message || String(e) },
     });
-    res.status(502).json({ error: 'Welcome email send failed: ' + (e.message || String(e)), messageId: msg.id });
+    res.status(502).json({ error: 'Welcome email send failed: ' + (e.message || String(e)), code: (e as any)?.code, messageId: msg.id });
   }
 });
 

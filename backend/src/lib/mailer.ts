@@ -118,9 +118,15 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     from = `"${args.fromUser.name}" <${fromAddr}>`;
     provider = 'smtp-user';
   } else {
-    tx = getSystemTransporter();
-    from = process.env.SMTP_FROM || process.env.SMTP_USER!;
-    provider = 'smtp-system';
+    // Per founder request: do NOT fall back to the system SMTP (Vaibhav's gmail).
+    // Throw a tagged error the frontend can detect to pop up the App-Password
+    // setup modal instead of silently using someone else's account.
+    const who = args.fromUser?.name || 'this user';
+    const err: any = new Error(
+      `${who} hasn't configured their Gmail App Password yet. Set it up in Settings → My email to send.`,
+    );
+    err.code = 'MISSING_APP_PASSWORD';
+    throw err;
   }
 
   const html = args.htmlBody

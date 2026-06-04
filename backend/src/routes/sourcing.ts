@@ -748,7 +748,7 @@ sourcingRouter.post('/proposals/:id/outreach/email', async (req: AuthedRequest, 
       where: { id: msg.id },
       data: { status: 'Failed', errorText: e.message || String(e) },
     });
-    res.status(502).json({ error: 'Trainer email send failed: ' + (e.message || String(e)), messageId: msg.id });
+    res.status(502).json({ error: 'Trainer email send failed: ' + (e.message || String(e)), code: (e as any)?.code, messageId: msg.id });
   }
 });
 

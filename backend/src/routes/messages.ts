@@ -146,7 +146,7 @@ messagesRouter.post('/email', async (req: AuthedRequest, res) => {
       data: { status: 'Failed', errorText: e.message || String(e) },
     });
     await audit(req.user!.id, req.user!.name, 'EMAIL_FAILED', `${to} · ${e.message}`);
-    res.status(502).json({ error: 'Email send failed: ' + (e.message || String(e)), messageId: msg.id });
+    res.status(502).json({ error: 'Email send failed: ' + (e.message || String(e)), code: (e as any)?.code, messageId: msg.id });
   }
 });
 
