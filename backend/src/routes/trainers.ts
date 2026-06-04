@@ -217,6 +217,12 @@ const fields = [
 ];
 
 trainersRouter.post('/', async (req: AuthedRequest, res) => {
+  // Trainer pool ops are owned by recruiters + leadership; demo_lead too
+  // because Samita / Anjali quick-add trainers from Internal Search.
+  const ALLOWED = ['founder', 'manager', 'recruiter', 'demo_lead', 'demo_intake'];
+  if (!ALLOWED.includes(req.user!.role)) {
+    return res.status(403).json({ error: `Your role (${req.user!.role}) cannot add trainers.` });
+  }
   const data: any = {};
   for (const f of fields) if (f in req.body) data[f] = req.body[f];
   if (!data.name) return res.status(400).json({ error: 'Name required' });
@@ -227,6 +233,19 @@ trainersRouter.post('/', async (req: AuthedRequest, res) => {
 });
 
 trainersRouter.patch('/:id', async (req: AuthedRequest, res) => {
+  // Same gate as POST. Without this any role could PATCH bank/UPI/rate which
+  // is a finance-sensitive surface.
+  const ALLOWED = ['founder', 'manager', 'recruiter', 'demo_lead', 'demo_intake'];
+  if (!ALLOWED.includes(req.user!.role)) {
+    return res.status(403).json({ error: `Your role (${req.user!.role}) cannot edit trainers.` });
+  }
+  // Bank / UPI / payment fields are leadership-only — recruiters can edit
+  // contact info + skills + rate.
+  const FINANCE_FIELDS = ['bankAccount', 'paymentMethod', 'upiId'];
+  const touchingFinance = FINANCE_FIELDS.some((f) => f in req.body);
+  if (touchingFinance && !['founder', 'manager'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only founder / manager can change trainer bank / UPI / payment fields.' });
+  }
   const data: any = {};
   for (const f of fields) if (f in req.body) data[f] = req.body[f];
   const t = await prisma.trainer.update({ where: { id: req.params.id }, data, include });

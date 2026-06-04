@@ -191,8 +191,17 @@ messagesRouter.post('/whatsapp', async (req: AuthedRequest, res) => {
 
 // ---------- List messages for a client / trainer ----------
 
-messagesRouter.get('/', async (req, res) => {
+messagesRouter.get('/', async (req: AuthedRequest, res) => {
+  // Privacy: without filters this used to dump every email/WhatsApp message
+  // sent by anyone in the org (subject + body inclusive) to any logged-in
+  // user. Require a client/trainer filter OR be founder/manager.
   const { clientId, trainerId, kind, limit } = req.query as any;
+  const isLeadership = ['founder', 'manager'].includes(req.user!.role);
+  if (!clientId && !trainerId && !isLeadership) {
+    return res.status(400).json({
+      error: 'clientId or trainerId query param required (founder/manager can omit).',
+    });
+  }
   const where: any = {};
   if (clientId) where.clientId = clientId;
   if (trainerId) where.trainerId = trainerId;

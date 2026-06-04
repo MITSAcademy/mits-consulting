@@ -257,6 +257,14 @@ function canEditFields(role: string, fields: string[]): { ok: boolean; blocked?:
 }
 
 clientsRouter.post('/', async (req: AuthedRequest, res) => {
+  // Role gate: PermissionsPage publicly advertises that recruiter / accounts /
+  // payment_processor have no client-edit rights, but POST was unguarded — a
+  // recruiter could hit /bulk-upload (or curl) and create clients. Limit to
+  // roles that already own the lead-creation flow.
+  const allowed = ['founder', 'manager', 'demo_lead', 'demo_intake'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: `Your role (${req.user!.role}) cannot create clients.` });
+  }
   const data: any = {};
   for (const f of allowedFields) if (f in req.body) data[f] = req.body[f];
   if (!data.name) return res.status(400).json({ error: 'Name required' });

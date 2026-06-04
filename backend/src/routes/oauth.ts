@@ -149,6 +149,17 @@ oauthRouter.get('/google/callback', async (req, res) => {
       );
       return { token: '', redirectTo, ts: Date.now() };
     }
+    // Block deactivated users at the OAuth callback instead of letting them get
+    // a signed JWT that every API call then rejects with a useless "User
+    // inactive" toast. Audit log lands so admins see attempts to use a disabled
+    // account.
+    if (user.active === false) {
+      await audit(user.id, user.name, 'LOGIN_DENIED_INACTIVE', email);
+      const redirectTo = `${origin}/login?error=` + encodeURIComponent(
+        `This account has been deactivated. Contact Vaibhav if you need access restored.`,
+      );
+      return { token: '', redirectTo, ts: Date.now() };
+    }
 
     const updates: any = {};
     if (!user.googleId) updates.googleId = googleId;

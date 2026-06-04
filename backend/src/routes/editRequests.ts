@@ -34,13 +34,67 @@ editRequestsRouter.post('/', async (req: AuthedRequest, res) => {
   res.status(201).json(r);
 });
 
+// Approver can only write fields in these whitelists. Without this, the
+// requester could craft an EditRequest for ANY field (passwordHash, lifecycle,
+// freshPaymentReceived, googleRefreshToken, …) and a clicker would approve it
+// without realizing what they were authorizing.
+const CLIENT_EDITABLE = new Set<string>([
+  'name', 'email', 'phoneCode', 'phoneDigits', 'whatsappGroupName', 'whatsappGroupLink',
+  'country', 'engagementType', 'paymentModel', 'currency', 'cycleAmount',
+  'feedbackDay', 'preferredTimeIst', 'sessionsPerCycle',
+  'intakeSkillHint', 'notes',
+]);
+const TRAINER_EDITABLE = new Set<string>([
+  'name', 'email', 'phoneCode', 'phoneDigits', 'whatsappGroupLink', 'whatsappGroupName',
+  'skills', 'experienceYears', 'defaultRateInr', 'rateModel',
+  'paymentMethod', 'bankAccount', 'upiId',
+  'notes', 'active',
+]);
+
+// Coerce string newValue (EditRequest stores everything as text) to a typed
+// value Prisma will accept. Returns the input unchanged for string fields.
+function coerceValue(entity: string, field: string, raw: string | null): any {
+  if (raw === null || raw === undefined) return null;
+  // Booleans
+  if (['active'].includes(field)) {
+    if (raw === 'true' || raw === '1') return true;
+    if (raw === 'false' || raw === '0') return false;
+  }
+  // Ints
+  if (['cycleAmount', 'experienceYears', 'defaultRateInr', 'sessionsPerCycle', 'feedbackDay'].includes(field)) {
+    const n = Number(raw);
+    if (Number.isFinite(n)) return Math.trunc(n);
+    throw new Error(`Cannot coerce "${raw}" to a number for ${field}.`);
+  }
+  return raw;
+}
+
 editRequestsRouter.post('/:id/approve', requireRole('founder', 'demo_lead', 'manager'), async (req: AuthedRequest, res) => {
   const r = await prisma.editRequest.findUnique({ where: { id: req.params.id } });
   if (!r) return res.status(404).json({ error: 'Not found' });
   if (r.status !== 'Pending') return res.status(409).json({ error: 'Already reviewed' });
 
-  // Apply the change
-  const data: any = { [r.field]: r.newValue };
+  // Validate field against the per-entity whitelist before applying.
+  const whitelist = r.entity === 'client' ? CLIENT_EDITABLE
+                  : r.entity === 'trainer' ? TRAINER_EDITABLE
+                  : null;
+  if (!whitelist) {
+    return res.status(400).json({ error: `Unknown entity "${r.entity}". Approve only supports client / trainer.` });
+  }
+  if (!whitelist.has(r.field)) {
+    return res.status(403).json({
+      error: `Field "${r.field}" is not approvable on ${r.entity}. Allowed: ${[...whitelist].join(', ')}.`,
+    });
+  }
+
+  let typedValue: any;
+  try {
+    typedValue = coerceValue(r.entity, r.field, r.newValue);
+  } catch (e: any) {
+    return res.status(400).json({ error: e.message });
+  }
+
+  const data: any = { [r.field]: typedValue };
   try {
     if (r.entity === 'client') await prisma.client.update({ where: { id: r.entityId }, data });
     if (r.entity === 'trainer') await prisma.trainer.update({ where: { id: r.entityId }, data });

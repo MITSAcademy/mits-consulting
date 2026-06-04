@@ -175,9 +175,24 @@ sourcingRouter.post('/', async (req: AuthedRequest, res) => {
 });
 
 sourcingRouter.patch('/:id', async (req: AuthedRequest, res) => {
+  // Role gate: routing (sentToId) is a Team-2 / leadership decision. Recruiters
+  // can only patch requests assigned to them (status only — to mark Closed).
+  const ALLOWED = ['founder', 'manager', 'demo_lead', 'demo_intake', 'recruiter'];
+  if (!ALLOWED.includes(req.user!.role)) {
+    return res.status(403).json({ error: `Your role (${req.user!.role}) cannot edit sourcing requests.` });
+  }
   const data: any = {};
   for (const f of ['status', 'sentToId', 'sentAt']) if (f in req.body) data[f] = req.body[f];
   const prior = await prisma.sourcingRequest.findUnique({ where: { id: req.params.id }, select: { sentToId: true, client: { select: { name: true } } } });
+  if (!prior) return res.status(404).json({ error: 'Sourcing request not found' });
+  if (req.user!.role === 'recruiter') {
+    if (prior.sentToId !== req.user!.id) {
+      return res.status(403).json({ error: 'Not assigned to you.' });
+    }
+    if ('sentToId' in data && data.sentToId !== req.user!.id) {
+      return res.status(403).json({ error: 'Recruiters cannot reassign requests to another user.' });
+    }
+  }
   const r = await prisma.sourcingRequest.update({ where: { id: req.params.id }, data, include });
   // If routing changed, notify the new recruiter.
   if (data.sentToId && data.sentToId !== prior?.sentToId) {
@@ -339,15 +354,49 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
 });
 
 sourcingRouter.patch('/proposal/:proposalId', async (req: AuthedRequest, res) => {
-  const data: any = {};
+  // Role gate. Different fields have different owners:
+  //   verification* — only Team-2 (Anjali/Taran/Samita) + leadership; recruiters
+  //     would otherwise be able to PATCH their own proposal to Pass and bypass
+  //     the dedicated /pass endpoint that enforces the notify-trainer gate.
+  //   notes/rateInr/availabilitySlots — recruiter who owns the proposal can
+  //     keep editing as they iterate.
+  //   postDemoNote/postDemoEvidence* — Team-2 records per-trainer feedback on
+  //     Move-back, never touched by recruiters.
+  const ROLE = req.user!.role;
+  const TEAM_2 = ['founder', 'manager', 'demo_lead', 'demo_intake'];
+  const RECRUITER_OK = ['founder', 'manager', 'recruiter'];
+  const incoming: Record<string, any> = {};
   for (const f of [
     'verification', 'verificationNotes', 'notes', 'rateInr',
     'availabilitySlots',
     'postDemoNote', 'postDemoEvidenceUrl', 'postDemoEvidenceKind',
   ]) {
-    if (f in req.body) data[f] = req.body[f];
+    if (f in req.body) incoming[f] = req.body[f];
   }
-  const p = await prisma.proposal.update({ where: { id: req.params.proposalId }, data });
+  const wantsVerificationEdit = 'verification' in incoming || 'verificationNotes' in incoming;
+  const wantsPostDemoEdit = 'postDemoNote' in incoming || 'postDemoEvidenceUrl' in incoming || 'postDemoEvidenceKind' in incoming;
+  const wantsRecruiterEdit = 'notes' in incoming || 'rateInr' in incoming || 'availabilitySlots' in incoming;
+  if (wantsVerificationEdit && !TEAM_2.includes(ROLE)) {
+    return res.status(403).json({ error: `Your role (${ROLE}) cannot change a proposal's verification status. Use the /pass endpoint or ask Anjali/Taran.` });
+  }
+  if (wantsPostDemoEdit && !TEAM_2.includes(ROLE)) {
+    return res.status(403).json({ error: `Your role (${ROLE}) cannot record post-demo feedback on a proposal.` });
+  }
+  if (wantsRecruiterEdit && !RECRUITER_OK.includes(ROLE) && !TEAM_2.includes(ROLE)) {
+    return res.status(403).json({ error: `Your role (${ROLE}) cannot edit proposal details.` });
+  }
+  // Ownership check for recruiter — they can only touch their own proposals.
+  if (ROLE === 'recruiter') {
+    const ownership = await prisma.proposal.findUnique({
+      where: { id: req.params.proposalId },
+      select: { proposedById: true, request: { select: { sentToId: true } } },
+    });
+    if (!ownership) return res.status(404).json({ error: 'Proposal not found' });
+    if (ownership.proposedById !== req.user!.id && ownership.request.sentToId !== req.user!.id) {
+      return res.status(403).json({ error: 'Not your proposal.' });
+    }
+  }
+  const p = await prisma.proposal.update({ where: { id: req.params.proposalId }, data: incoming });
   await audit(req.user!.id, req.user!.name, 'PROPOSAL_UPDATE', `${p.id} → ${p.verification}`);
   res.json(p);
 });
@@ -561,7 +610,12 @@ sourcingRouter.post('/proposal/:proposalId/notify-and-pass', async (req: AuthedR
 });
 
 sourcingRouter.delete('/:id', async (req: AuthedRequest, res) => {
+  // Limit to leadership — recruiters could otherwise nuke each other's requests.
+  if (!['founder', 'manager'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only founder / manager can delete sourcing requests.' });
+  }
   await prisma.sourcingRequest.delete({ where: { id: req.params.id } });
+  await audit(req.user!.id, req.user!.name, 'SOURCING_DELETE', req.params.id);
   res.json({ ok: true });
 });
 
