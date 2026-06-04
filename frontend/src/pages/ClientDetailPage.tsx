@@ -9,9 +9,9 @@ import { Input, Textarea, Label, Select } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { formatPhone, waLink, todayISO, stageLabel, backStagesFor, addDays } from '@/lib/utils';
 import { useUI } from '@/store/ui';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/store/auth';
-import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play, X } from 'lucide-react';
+import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play, X, Download, Users } from 'lucide-react';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 
@@ -2843,6 +2843,10 @@ function SendSkillMatrixModal({ client, onClose }: any) {
   const qc = useQueryClient();
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
   const hasPhone = !!client.phoneDigits;
+  const groupLink: string | null = client.whatsappGroupLink || null;
+  const groupName: string = client.whatsappGroupName || 'WhatsApp group';
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const [downloadingImg, setDownloadingImg] = useState(false);
   const [introNote, setIntroNote] = useState(
     `Dear ${client.name || 'Client'}, please find below the proposed trainer profiles for your review.`,
   );
@@ -2938,10 +2942,13 @@ function SendSkillMatrixModal({ client, onClose }: any) {
           <div className="bg-white rounded p-2 max-h-96 overflow-auto border border-brand-border">
             {isLoading && <div className="muted text-sm p-3">Loading preview…</div>}
             {preview?.html && (
-              <iframe
-                srcDoc={preview.html}
-                title="Skill matrix preview"
-                style={{ width: '100%', minHeight: 400, border: 0, background: 'white' }}
+              // Rendered as a div (not iframe) so html2canvas can capture it for the
+              // "Download as image" button. preview.html is server-built from
+              // trusted inputs (DEFAULT_SOFT_SKILLS + escaped trainer fields).
+              <div
+                ref={previewRef}
+                style={{ background: 'white', color: '#1A1B1E' }}
+                dangerouslySetInnerHTML={{ __html: preview.html }}
               />
             )}
             {preview && preview.candidates?.length === 0 && (
@@ -2951,6 +2958,56 @@ function SendSkillMatrixModal({ client, onClose }: any) {
               </div>
             )}
           </div>
+          {/* WhatsApp send paths — Anjali's ask: matrix as image, sent to group */}
+          {(preview?.candidates?.length || 0) > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              <Button
+                size="sm"
+                disabled={downloadingImg}
+                onClick={async () => {
+                  if (!previewRef.current) { showToast('Preview not ready', 'error'); return; }
+                  setDownloadingImg(true);
+                  try {
+                    const html2canvas = (await import('html2canvas')).default;
+                    const canvas = await html2canvas(previewRef.current, {
+                      backgroundColor: '#ffffff',
+                      scale: 2, // 2x for retina-quality WhatsApp share
+                      logging: false,
+                    });
+                    const dataUrl = canvas.toDataURL('image/png');
+                    const a = document.createElement('a');
+                    const safe = (client.name || 'client').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40);
+                    a.download = `MITS_Skill_Matrix_${safe}.png`;
+                    a.href = dataUrl;
+                    a.click();
+                    showToast('Image downloaded — attach it in WhatsApp');
+                  } catch (e: any) {
+                    showToast(e?.message || 'Image build failed', 'error');
+                  } finally {
+                    setDownloadingImg(false);
+                  }
+                }}
+                title="Render the matrix preview as a PNG and download — then attach it manually in WhatsApp"
+              >
+                <Download size={12}/> {downloadingImg ? 'Building image…' : 'Download as image'}
+              </Button>
+              {groupLink && (
+                <a href={groupLink} target="_blank" rel="noreferrer">
+                  <Button
+                    size="sm"
+                    style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}
+                    title={`Open ${groupName} in WhatsApp — paste the matrix image you just downloaded`}
+                  >
+                    <Users size={12}/> Open group ({groupName})
+                  </Button>
+                </a>
+              )}
+              <div className="text-[10px] muted self-center">
+                Workflow: <strong>Download image</strong> → <strong>Open group</strong> → attach in WhatsApp → send.
+                {!groupLink && ' Add a WhatsApp group link on this client (Edit contact) to enable group send.'}
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -2967,16 +3024,16 @@ function SendSkillMatrixModal({ client, onClose }: any) {
             style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}
             disabled={!hasPhone || anyPending || !preview?.candidates?.length}
             onClick={() => sendWAOnly.mutate()}
-            title={hasPhone ? 'Open WhatsApp with the candidate summary (also marks as sent)' : 'No phone on file'}
+            title={hasPhone ? 'Open WhatsApp text-only summary on personal number (use Download image + Open group above for image to group)' : 'No phone on file'}
           >
             <MessageCircle size={12}/>{' '}
-            {sendWAOnly.isPending ? 'Opening…' : 'Send WhatsApp'}
+            {sendWAOnly.isPending ? 'Opening…' : 'Send WhatsApp (text)'}
           </Button>
           <Button
             variant="primary"
             disabled={!toEmail || anyPending || !preview?.candidates?.length}
             onClick={() => sendEmailOnly.mutate()}
-            title={toEmail ? 'Send the matrix as a branded email' : 'No email on file'}
+            title={toEmail ? 'Send the matrix as a branded email + PDF attachment' : 'No email on file'}
           >
             <Mail size={12}/>{' '}
             {sendEmailOnly.isPending ? 'Sending…' : 'Send Email'}
