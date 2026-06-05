@@ -93,6 +93,7 @@ export function Sidebar() {
     queryKey: ['nav-badges'],
     queryFn: async () => {
       const today = new Date().toISOString().slice(0, 10);
+      const weekOut = (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().slice(0, 10); })();
       const [home, sourcing, leverage, editReqs, clients] = await Promise.all([
         api.get('/metrics/home').then((r) => r.data),
         api.get('/sourcing').then((r) => r.data),
@@ -100,11 +101,31 @@ export function Sidebar() {
         api.get('/edit-requests').then((r) => r.data),
         api.get('/clients').then((r) => r.data),
       ]);
-      const dormantOverdue = (clients || []).filter(
-        (c: any) => c.lifecycle === 'Dormant' && c.dormantCheckBackOn && c.dormantCheckBackOn <= today,
+      const cl = (clients || []) as any[];
+      const dormantOverdue = cl.filter((c) => c.lifecycle === 'Dormant' && c.dormantCheckBackOn && c.dormantCheckBackOn <= today).length;
+      const holdDue       = cl.filter((c) => c.lifecycle === 'Hold' && c.holdCheckBackOn && c.holdCheckBackOn <= today).length;
+      // Demo Intake: clients still in Anjali/Taran's hands BEFORE recruiters take over.
+      const demoIntakePending = cl.filter((c) => ['Lead', 'IntakeSent'].includes(c.lifecycle)).length;
+      // Demo schedule: upcoming or today's scheduled demos.
+      const demosToday = cl.filter((c) => c.lifecycle === 'DemoScheduled' && c.demoDate && c.demoDate <= weekOut).length;
+      // Feedback queue (Samita): demos done, awaiting feedback / disposition.
+      const feedbackPending = cl.filter((c) => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle)).length;
+      // Sales closing (Roshni's primary list): SaleClosing/SaleWon still in her hands
+      // (RP / CP / no-status). Terminal outcomes drop out automatically.
+      const salesClosingActive = cl.filter((c) =>
+        ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
+        && (c.saleClosingSubStatus === null || c.saleClosingSubStatus === 'RP' || c.saleClosingSubStatus === 'CP'),
       ).length;
-      const holdDue = (clients || []).filter(
-        (c: any) => c.lifecycle === 'Hold' && c.holdCheckBackOn && c.holdCheckBackOn <= today,
+      // My follow-ups (Roshni): overdue or due today calls.
+      const followUpsDue = cl.filter((c) =>
+        ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
+        && (c.saleClosingSubStatus === 'RP' || c.saleClosingSubStatus === 'CP')
+        && c.roshniNextCallOn && c.roshniNextCallOn <= today,
+      ).length;
+      // Renewals approaching — active clients whose renewal date is within 7 days or already past.
+      const renewalsDue = cl.filter((c) =>
+        ['Active', 'LeverageGranted'].includes(c.lifecycle)
+        && c.nextRenewalDue && c.nextRenewalDue <= weekOut,
       ).length;
       return {
         pendingVaibhav: home.ops.pendingVaibhav,
@@ -114,6 +135,12 @@ export function Sidebar() {
         editReqPending: editReqs.filter((r: any) => r.status === 'Pending').length,
         dormantOverdue,
         holdDue,
+        demoIntakePending,
+        demosToday,
+        feedbackPending,
+        salesClosingActive,
+        followUpsDue,
+        renewalsDue,
       };
     },
     // 3 min — badges are advisory, no need to hammer the server every 30s.
@@ -133,6 +160,7 @@ export function Sidebar() {
 
   const badge = (page: string) => {
     if (!metrics) return 0;
+    // Existing badges
     if (page === '/leverage') return metrics.pendingLeverage;
     if (page === '/vaibhav-queue') return metrics.pendingVaibhav;
     if (page === '/sourcing') return metrics.sourcingOpen;
@@ -140,6 +168,14 @@ export function Sidebar() {
     if (page === '/edit-requests') return metrics.editReqPending;
     if (page === '/dormant') return metrics.dormantOverdue;
     if (page === '/hold') return metrics.holdDue;
+    // Newly added — pending counts across the rest of the nav so every user
+    // can see "what's on my plate" at a glance.
+    if (page === '/demo-intake') return metrics.demoIntakePending;
+    if (page === '/demo-schedule') return metrics.demosToday;
+    if (page === '/feedback-queue') return metrics.feedbackPending;
+    if (page === '/sales-closing') return metrics.salesClosingActive;
+    if (page === '/roshni/follow-ups') return metrics.followUpsDue;
+    if (page === '/renewals') return metrics.renewalsDue;
     return 0;
   };
 
