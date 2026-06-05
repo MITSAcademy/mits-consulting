@@ -64,9 +64,9 @@ export function ClientDetailPage() {
   const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user)!;
   const [modal, setModal] = useState<ModalKind>(null);
-  // Sub-status modal target preset — set by the Close-out journey card so the
+  // Sub-status modal target preset — set by the Close-out wizard so the
   // modal opens already pointed at the destination Roshni clicked.
-  const [subStatusTarget, setSubStatusTarget] = useState<'CP' | 'C' | 'JBT' | 'Training' | undefined>(undefined);
+  const [subStatusTarget, setSubStatusTarget] = useState<'CP' | 'C' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater' | undefined>(undefined);
 
   const { data: client, isLoading } = useQuery({
     queryKey: ['client', id],
@@ -250,21 +250,22 @@ export function ClientDetailPage() {
   if (canClose(user.role) && client.lifecycle === 'SaleClosing' && canRecordPayment(user.role)) {
     actions.push(<Button key="pay" variant="success" onClick={() => setModal('freshPayment')}><Wallet size={14}/> Fresh payment</Button>);
   }
-  // Roshni state machine — RP (entry) / CP (silent) / C (lost) / JBT (employer-paid) / Training (paid)
-  // RP is the implicit entry (auto-set on positive-demo handoff). Her job is
-  // to MOVE the client from RP to one of the 4 next states.
+  // Roshni state machine — RP is auto-set entry; outcomes are CP / C +
+  // 4 win states (Training/JBT × Paid/EmployerLater). The Close-out wizard
+  // card above the action bar drives 90% of her work; this button is a
+  // quick shortcut to re-open the outcome picker.
   if (canClose(user.role) && (client.lifecycle === 'SaleClosing' || client.lifecycle === 'SaleWon')) {
     const ss = client.saleClosingSubStatus;
-    const label = ss === 'RP' ? 'Move from RP → next status'
+    const isWin = ss === 'Training-Paid' || ss === 'JBT-Paid' || ss === 'Training-EmployerLater' || ss === 'JBT-EmployerLater';
+    const label = ss === 'RP' ? 'Move from RP → outcome'
       : ss === 'CP' ? 'CP · closure pending'
       : ss === 'C' ? 'C · not starting'
-      : ss === 'JBT' ? 'JBT · employer pays later'
-      : ss === 'Training' ? 'Training · paid'
+      : isWin ? ss
       : 'Set status (default RP)';
     const variant = ss === 'CP' ? 'amber' as const
       : ss === 'C' ? 'danger' as const
       : ss === 'RP' ? 'primary' as const
-      : ss === 'JBT' || ss === 'Training' ? 'success' as const
+      : isWin ? 'success' as const
       : 'amber' as const;
     actions.push(
       <Button
@@ -272,7 +273,7 @@ export function ClientDetailPage() {
         size="sm"
         variant={variant}
         onClick={() => setModal('subStatus')}
-        title="RP → CP / C / JBT / Training. Each move has its own validation."
+        title="RP → CP / C / Training-Paid / JBT-Paid / Training-EmployerLater / JBT-EmployerLater."
       >
         {label}
       </Button>
@@ -397,6 +398,14 @@ export function ClientDetailPage() {
           <RoshniJourneyCard
             client={client}
             onMove={(target) => { setSubStatusTarget(target); setModal('subStatus'); }}
+            onAction={(kind) => {
+              if (kind === 'checklist') setModal('paymentChecklist');
+              else if (kind === 'engagement') setModal('engagementLetter');
+              else if (kind === 'recordPayment') setModal('freshPayment');
+              else if (kind === 'postConfirmation') setModal('paymentConfirmation');
+              else if (kind === 'groupRename') setModal('groupRename');
+              else if (kind === 'mitaliIntro') setModal('handoverWelcome');
+            }}
           />
         )}
 
@@ -2456,79 +2465,133 @@ function NoShowModal({ client, onClose }: any) {
  *  card on a SaleClosing/SaleWon client page. Shows current status (RP by default)
  *  + the 4 destinations as cards with their required validation. Click any
  *  destination card to open the move-status modal pre-pointed at that target. */
-function RoshniJourneyCard({ client, onMove }: { client: any; onMove: (t: 'CP' | 'C' | 'JBT' | 'Training') => void }) {
+/** Roshni close-out wizard — 7 sequential steps. Each step is locked until
+ *  the previous is done. Founder/manager get a small "skip" override.
+ *  When all 7 are done, the outcome picker appears (4 win-state buttons + C). */
+function RoshniJourneyCard({ client, onMove, onAction }: {
+  client: any;
+  onMove: (t: 'CP' | 'C' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater') => void;
+  onAction: (kind: 'checklist' | 'engagement' | 'paymentWa' | 'recordPayment' | 'postConfirmation' | 'groupRename' | 'mitaliIntro') => void;
+}) {
   const ss: string = client.saleClosingSubStatus || 'RP';
-  const paymentDone = !!client.freshPaymentReceived || (client.freshPaymentAmount || 0) > 0;
-  const checklistDone = !!client.paymentChecklistCompletedAt;
+  const user = useAuth((s) => s.user)!;
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
+  const canOverride = user.role === 'founder' || user.role === 'manager';
   const since = client.saleClosingSubStatusAt ? new Date(client.saleClosingSubStatusAt) : null;
   const daysSince = since ? Math.floor((Date.now() - since.getTime()) / 86_400_000) : null;
 
-  // Status header
-  const statusColor =
-    ss === 'RP' ? 'border-brand-blue text-brand-blue' :
-    ss === 'CP' ? 'border-brand-amber text-brand-amber' :
-    ss === 'JBT' ? 'border-brand-green text-brand-green' :
-    ss === 'Training' ? 'border-brand-green text-brand-green' :
-    ss === 'C' ? 'border-brand-red text-brand-red' :
-    'border-brand-border text-brand-textMuted';
+  // Step completion derived from existing fields. New fields are stamped by
+  // the backend on the corresponding action (engagement letter send /
+  // payment-confirmation post / etc.).
+  const checklistDone = !!client.paymentChecklistCompletedAt;
+  const engagementSent = !!client.engagementLetterSentAt;
+  const paymentWaSent = !!client.paymentWaSentAt;
+  const paymentRecorded = !!client.freshPaymentReceived || (client.freshPaymentAmount || 0) > 0;
+  const isEmployerLater = ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater';
+  const paymentResolved = paymentRecorded || isEmployerLater;
+  const confirmationPosted = !!client.paymentConfirmationPostedAt;
+  const groupRenamed = !!client.whatsappGroupRenamedAt;
+  const mitaliIntroDone = !!client.mitaliIntroSentAt;
 
-  // Each destination card definition
-  type Dest = {
-    key: 'CP' | 'C' | 'JBT' | 'Training';
+  const markPaymentWa = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/mark-payment-wa-sent`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      showToast('Payment WhatsApp marked sent · step unlocked');
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  type Step = {
+    n: number;
     title: string;
-    when: string;
-    requires: string;
-    blocked: string | null;
-    tone: 'amber' | 'danger' | 'success';
+    desc: string;
+    done: boolean;
+    doneAt?: string | null;
+    button: { label: string; onClick: () => void } | null;
   };
-  const dests: Dest[] = [
+
+  const steps: Step[] = [
     {
-      key: 'CP',
-      title: 'CP · Closure Pending',
-      when: 'Client not engaging on payment. Keep chasing (3 working days / 6 missed attempts is the SOP).',
-      requires: 'No required input — mark CP any time.',
-      blocked: null,
-      tone: 'amber',
+      n: 1,
+      title: 'Walk the 10-point payment checklist on the call',
+      desc: 'Open the checklist while on the call with the client; tick each item as you discuss it.',
+      done: checklistDone,
+      doneAt: client.paymentChecklistCompletedAt,
+      button: { label: checklistDone ? 'Re-open checklist' : 'Open checklist', onClick: () => onAction('checklist') },
     },
     {
-      key: 'Training',
-      title: 'Training · Paid',
-      when: 'Client has made the payment. Falls out of your queue; you then rename WA group + intro Mitali.',
-      requires: 'A Fresh Payment must be recorded.',
-      blocked: !paymentDone ? 'Record Fresh payment first' : null,
-      tone: 'success',
+      n: 2,
+      title: 'Send the engagement letter (email + PDF)',
+      desc: 'Branded email with terms + PDF attachment. CCs Mitali automatically.',
+      done: engagementSent,
+      doneAt: client.engagementLetterSentAt,
+      button: { label: engagementSent ? 'Re-send engagement letter' : 'Send engagement letter', onClick: () => onAction('engagement') },
     },
     {
-      key: 'JBT',
-      title: 'JBT · Employer pays later',
-      when: 'Employer-paid path. Client starts now; payment + invoice handled together later.',
-      requires: 'Employer name + commitment date.',
-      blocked: null, // filled in the modal
-      tone: 'success',
+      n: 3,
+      title: 'Send the payment WhatsApp with bank details',
+      desc: 'Paste the payment-WA template into the client\'s WhatsApp chat (bank account, GPay, etc.), then mark sent here.',
+      done: paymentWaSent,
+      doneAt: client.paymentWaSentAt,
+      button: { label: paymentWaSent ? 'Re-mark sent' : 'Mark payment WA sent', onClick: () => markPaymentWa.mutate() },
     },
     {
-      key: 'C',
-      title: 'C · Not starting',
-      when: 'Client explicitly confirmed they\'re NOT proceeding. Terminal lost — captured for audit.',
-      requires: 'A reason note.',
-      blocked: null,
-      tone: 'danger',
+      n: 4,
+      title: 'Record payment OR mark Employer-later',
+      desc: 'Either record the Fresh payment (direct-client paths) or, if the employer commits, capture employer details below at outcome step.',
+      done: paymentResolved,
+      doneAt: paymentRecorded ? client.freshPaymentDate : null,
+      button: paymentRecorded
+        ? null
+        : { label: 'Record payment', onClick: () => onAction('recordPayment') },
+    },
+    {
+      n: 5,
+      title: 'Post confirmation in MITS payment-confirmation group',
+      desc: 'Auto-generates the "X closed at Y USD" message + screenshot post for the internal coordination group.',
+      done: confirmationPosted,
+      doneAt: client.paymentConfirmationPostedAt,
+      button: { label: confirmationPosted ? 'Re-post confirmation' : 'Open confirmation', onClick: () => onAction('postConfirmation') },
+    },
+    {
+      n: 6,
+      title: 'Rename client WhatsApp group → Training / JBT',
+      desc: 'Auto-suggests "Training {client} {trainer} Z" or "JBT {client} {trainer} Z" based on engagement type.',
+      done: groupRenamed,
+      doneAt: client.whatsappGroupRenamedAt,
+      button: { label: groupRenamed ? 'Re-rename group' : 'Rename group', onClick: () => onAction('groupRename') },
+    },
+    {
+      n: 7,
+      title: 'Intro Mitali in the renamed group',
+      desc: 'Triggers the Mitali-handover task + paste the intro message in the group.',
+      done: mitaliIntroDone,
+      doneAt: client.mitaliIntroSentAt,
+      button: { label: mitaliIntroDone ? 'Re-send Mitali intro' : 'Hand over to Mitali', onClick: () => onAction('mitaliIntro') },
     },
   ];
 
-  // If client is already at a terminal status (C/JBT/Training), show a "done" banner
-  // instead of the journey cards.
-  if (ss === 'C' || ss === 'JBT' || ss === 'Training') {
+  const doneCount = steps.filter((s) => s.done).length;
+  const allDone = doneCount === steps.length;
+  const firstUndoneIdx = steps.findIndex((s) => !s.done);
+
+  // Already at a terminal state (or moved past) — show a result banner.
+  if (ss === 'C' || ss === 'JBT-Paid' || ss === 'Training-Paid' || ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater') {
+    const isWin = ss !== 'C';
     return (
-      <div className="card mb-4" style={{ borderColor: ss === 'C' ? '#EF4444' : '#0F8A5F' }}>
-        <div className="card-h" style={{ color: ss === 'C' ? '#EF4444' : '#0F8A5F' }}>
-          <span>Close-out done · {ss === 'C' ? 'Not starting (lost)' : ss === 'JBT' ? 'Employer-paid path' : 'Paid & starting'}</span>
+      <div className="card mb-4" style={{ borderColor: isWin ? '#0F8A5F' : '#EF4444' }}>
+        <div className="card-h" style={{ color: isWin ? '#0F8A5F' : '#EF4444' }}>
+          <span>Close-out complete · {ss}</span>
         </div>
         <div className="muted text-sm">
-          {daysSince !== null && `Set ${daysSince}d ago. `}
-          {ss === 'Training' && 'Next: rename the WhatsApp group → "Training {client} {trainer} Z" and intro Mitali.'}
-          {ss === 'JBT' && 'Next: rename the WhatsApp group → "JBT {client} {trainer} Z" and intro Mitali. Accounts will follow up on the employer invoice.'}
-          {ss === 'C' && 'This client is closed (no sale). Re-open by clearing the status from the action bar.'}
+          {daysSince !== null && `Marked ${daysSince}d ago. `}
+          {ss === 'Training-Paid' && 'Direct client paid; Training engagement started.'}
+          {ss === 'JBT-Paid' && 'Direct client paid; JBT engagement started.'}
+          {ss === 'Training-EmployerLater' && `Employer "${client.employerName || '—'}" committed for ${client.employerCommitDate || 'TBD'}; Training engagement started.`}
+          {ss === 'JBT-EmployerLater' && `Employer "${client.employerName || '—'}" committed for ${client.employerCommitDate || 'TBD'}; JBT engagement started.`}
+          {ss === 'C' && 'Closed (no sale). Re-open by clearing the status from the action bar.'}
         </div>
       </div>
     );
@@ -2537,54 +2600,114 @@ function RoshniJourneyCard({ client, onMove }: { client: any; onMove: (t: 'CP' |
   return (
     <div className="card mb-4">
       <div className="card-h">
-        <span>Close-out journey</span>
-        <span className={`px-2 py-0.5 rounded border text-xs ${statusColor}`}>
-          {ss === 'RP' ? 'RP · Ready for Payment' : ss === 'CP' ? 'CP · Closure Pending' : ss}
+        <span>Close-out wizard</span>
+        <span className="px-2 py-0.5 rounded border text-xs border-brand-blue text-brand-blue">
+          {ss === 'CP' ? 'CP · Closure Pending' : 'RP · Ready for Payment'}
         </span>
         <span className="muted text-xs">
-          {daysSince !== null
-            ? ` · ${ss} for ${daysSince}d`
-            : ''}
-          {ss === 'RP' && !checklistDone && <span className="text-brand-amber"> · 10-point checklist not yet done</span>}
-          {ss === 'RP' && checklistDone && <span className="text-brand-green"> · checklist ✓</span>}
+          · {doneCount} of {steps.length} steps done
+          {daysSince !== null ? ` · ${ss} for ${daysSince}d` : ''}
         </span>
       </div>
-      <div className="muted text-xs mb-3">
-        {ss === 'RP'
-          ? 'Active close-out. Pick the destination this client is moving to:'
-          : 'Client is currently silent. Once they re-engage, move to Training (paid) / JBT (employer) / C (lost):'}
+      {/* Progress dots */}
+      <div className="flex gap-1.5 mb-3">
+        {steps.map((s, i) => (
+          <div
+            key={s.n}
+            className="flex-1 h-1.5 rounded"
+            style={{
+              background: s.done ? '#0F8A5F' : i === firstUndoneIdx ? '#F59E0B' : '#33363D',
+            }}
+            title={`Step ${s.n}: ${s.title}${s.done ? ' ✓' : ''}`}
+          />
+        ))}
       </div>
-      <div className="grid md:grid-cols-2 gap-2.5">
-        {dests.map((d) => {
-          const isBlocked = !!d.blocked;
-          const borderTone =
-            d.tone === 'danger' ? '#EF4444' :
-            d.tone === 'success' ? '#0F8A5F' :
-            '#F59E0B';
+
+      <div className="space-y-1.5">
+        {steps.map((s, i) => {
+          const isCurrent = i === firstUndoneIdx;
+          const isLocked = !s.done && i > firstUndoneIdx && !canOverride;
+          const borderColor = s.done ? '#0F8A5F' : isCurrent ? '#F59E0B' : '#33363D';
+          const opacity = isLocked ? 0.45 : 1;
           return (
-            <button
-              key={d.key}
-              type="button"
-              onClick={() => onMove(d.key)}
-              className="text-left rounded p-3 border transition-colors hover:bg-bg-input"
-              style={{ borderColor: isBlocked ? '#33363D' : borderTone, opacity: isBlocked ? 0.7 : 1 }}
+            <div
+              key={s.n}
+              className="rounded border p-2.5 flex items-start gap-3"
+              style={{ borderColor, opacity }}
             >
-              <div className="text-sm font-semibold mb-1" style={{ color: isBlocked ? undefined : borderTone }}>
-                {d.title}
+              <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                style={{
+                  background: s.done ? '#0F8A5F' : isCurrent ? '#F59E0B' : '#2A2D33',
+                  color: s.done || isCurrent ? 'white' : '#9aa0a6',
+                }}
+              >
+                {s.done ? '✓' : s.n}
               </div>
-              <div className="text-xs muted mb-2">{d.when}</div>
-              <div className="text-[11px]">
-                <span className="muted">Required: </span>
-                <span className={isBlocked ? 'text-brand-red' : 'text-brand-green'}>
-                  {isBlocked ? `✗ ${d.blocked}` : `✓ ${d.requires}`}
-                </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium">
+                  {s.title}
+                  {s.done && s.doneAt && <span className="muted text-xs ml-2">· {s.doneAt}</span>}
+                  {isCurrent && <span className="ml-2 text-[10px] text-brand-amber font-bold">NEXT</span>}
+                  {isLocked && <span className="ml-2 text-[10px] muted">🔒 locked</span>}
+                </div>
+                <div className="text-xs muted mt-0.5">{s.desc}</div>
               </div>
-              <div className="mt-2 text-[11px] text-brand-amber">
-                {isBlocked ? '→ Click to see what\'s needed' : '→ Click to move'}
-              </div>
-            </button>
+              {s.button && (
+                <Button
+                  size="sm"
+                  variant={isCurrent ? 'primary' : s.done ? 'default' : 'default'}
+                  disabled={isLocked && !canOverride}
+                  disabledReason={isLocked && !canOverride ? `Complete step ${firstUndoneIdx + 1} first.` : null}
+                  onClick={s.button.onClick}
+                >
+                  {s.button.label}
+                </Button>
+              )}
+            </div>
           );
         })}
+      </div>
+
+      {/* Outcome picker — only revealed once all 7 steps are done OR override is used. */}
+      <div className="mt-4 pt-3 border-t border-brand-border">
+        <div className="text-sm font-medium mb-1">
+          {allDone ? '✓ All steps done — pick the final outcome:' : 'Outcome (lock until all 7 steps done — or override)'}
+        </div>
+        <div className="text-xs muted mb-2">
+          Training = engagement type; Paid = direct client paid; Employer-later = employer pays later.
+        </div>
+        <div className="grid md:grid-cols-2 gap-2">
+          {([
+            { k: 'Training-Paid',          label: 'Training · Paid by client',       tone: '#0F8A5F' },
+            { k: 'JBT-Paid',               label: 'JBT · Paid by client',            tone: '#0F8A5F' },
+            { k: 'Training-EmployerLater', label: 'Training · Employer pays later',  tone: '#1A6CDF' },
+            { k: 'JBT-EmployerLater',      label: 'JBT · Employer pays later',       tone: '#1A6CDF' },
+          ] as const).map((o) => (
+            <Button
+              key={o.k}
+              size="sm"
+              disabled={!allDone && !canOverride}
+              disabledReason={(!allDone && !canOverride) ? `Complete all ${steps.length} steps first (or ask founder/manager to override).` : null}
+              onClick={() => onMove(o.k)}
+              style={{ borderColor: o.tone, color: allDone || canOverride ? o.tone : undefined }}
+            >
+              {o.label}
+            </Button>
+          ))}
+        </div>
+        <div className="flex gap-2 mt-2">
+          <Button size="sm" variant="amber" onClick={() => onMove('CP')}>
+            Move to CP · Closure pending
+          </Button>
+          <Button size="sm" variant="danger" onClick={() => onMove('C')}>
+            Move to C · Not starting (lost)
+          </Button>
+        </div>
+        {canOverride && !allDone && (
+          <div className="text-[10px] muted mt-2">
+            Founder/manager: lock-step override active. You can mark any outcome regardless of step completion.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2594,14 +2717,12 @@ function RoshniJourneyCard({ client, onMove }: { client: any; onMove: (t: 'CP' |
  *  RP is the implicit entry state (set automatically when Samita marks a positive
  *  demo). From RP she moves the client to ONE of CP / C / JBT / Training. Each
  *  target has its own validation gate enforced by the backend. */
-function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClose: () => void; initialTarget?: 'CP' | 'C' | 'JBT' | 'Training' }) {
+function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClose: () => void; initialTarget?: 'CP' | 'C' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater' }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  type Sub = 'RP' | 'CP' | 'C' | 'JBT' | 'Training' | null;
-  const current: Sub = client.saleClosingSubStatus || null;
-  // The 4 destinations she can move to. RP is excluded — it's the entry state,
-  // not a destination she picks. (Backend still accepts RP for admin edge cases.)
-  type Target = 'CP' | 'C' | 'JBT' | 'Training';
+  const current: string | null = client.saleClosingSubStatus || null;
+  // 6 destinations — 4 win-states (Paid × EmployerLater × Training × JBT) + CP + C.
+  type Target = 'CP' | 'C' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater';
   const [target, setTarget] = useState<Target | null>(initialTarget || null);
   const [nextCallOn, setNextCallOn] = useState<string>(client.roshniNextCallOn || '');
   const [reason, setReason] = useState('');
@@ -2630,6 +2751,9 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
   const paymentDone = !!client.freshPaymentReceived || (client.freshPaymentAmount || 0) > 0;
   const checklistDone = !!client.paymentChecklistCompletedAt;
 
+  const isEmployerLaterTarget = target === 'Training-EmployerLater' || target === 'JBT-EmployerLater';
+  const isPaidTarget = target === 'Training-Paid' || target === 'JBT-Paid';
+
   const destinations: {
     key: Target;
     title: string;
@@ -2639,34 +2763,48 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
     tone: 'amber' | 'danger' | 'success';
   }[] = [
     {
+      key: 'Training-Paid',
+      title: 'Training · Paid by client',
+      when: 'Direct-client payment received. Engagement type is Training. After this you rename the WA group + intro Mitali.',
+      requires: 'A Fresh Payment must be recorded.',
+      blockedReason: !paymentDone ? 'Record the Fresh payment first.' : null,
+      tone: 'success',
+    },
+    {
+      key: 'JBT-Paid',
+      title: 'JBT · Paid by client',
+      when: 'Direct-client payment received. Engagement type is JBT.',
+      requires: 'A Fresh Payment must be recorded.',
+      blockedReason: !paymentDone ? 'Record the Fresh payment first.' : null,
+      tone: 'success',
+    },
+    {
+      key: 'Training-EmployerLater',
+      title: 'Training · Employer pays later',
+      when: 'Employer committed to pay. Client starts Training now; payment + invoice handled together later.',
+      requires: 'Employer name + commitment date.',
+      blockedReason: (!employerName?.trim() || !employerCommitDate) ? 'Fill employer name + commitment date below.' : null,
+      tone: 'success',
+    },
+    {
+      key: 'JBT-EmployerLater',
+      title: 'JBT · Employer pays later',
+      when: 'Employer committed to pay. Client starts JBT now; payment + invoice handled together later.',
+      requires: 'Employer name + commitment date.',
+      blockedReason: (!employerName?.trim() || !employerCommitDate) ? 'Fill employer name + commitment date below.' : null,
+      tone: 'success',
+    },
+    {
       key: 'CP',
-      title: 'Move to CP · Closure Pending',
-      when: 'Client took demo + was happy but isn\'t engaging on payment. Keep trying after 3 working days / 6 missed attempts.',
-      requires: 'No validation — you can mark CP any time.',
+      title: 'CP · Closure Pending — client silent',
+      when: 'Client not engaging on payment. Keep chasing (3 working days / 6 missed attempts is the SOP).',
+      requires: 'No validation — mark any time.',
       blockedReason: null,
       tone: 'amber',
     },
     {
-      key: 'Training',
-      title: 'Move to Training · Client paid',
-      when: 'Client has made the payment. After this you rename the WA group + intro Mitali. Client drops out of your queue.',
-      requires: 'A Fresh Payment must be recorded for this client.',
-      blockedReason: !paymentDone ? 'Record the Fresh payment first (use "Fresh payment" button on the action bar).' : null,
-      tone: 'success',
-    },
-    {
-      key: 'JBT',
-      title: 'Move to JBT · Employer will pay later',
-      when: 'Employer-paid path. Client can start training now; payment + invoice handled together later.',
-      requires: 'Employer name + payment commitment date.',
-      blockedReason: (!employerName?.trim() || !employerCommitDate)
-        ? 'Fill employer name + commitment date below.'
-        : null,
-      tone: 'success',
-    },
-    {
       key: 'C',
-      title: 'Move to C · Not starting',
+      title: 'C · Not starting (lost)',
       when: 'Client explicitly confirmed they\'re NOT proceeding. Terminal lost.',
       requires: 'A reason — why isn\'t the client going ahead?',
       blockedReason: !reason?.trim() ? 'Fill the reason field below.' : null,
@@ -2730,7 +2868,7 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
           </>
         )}
 
-        {target === 'JBT' && (
+        {isEmployerLaterTarget && (
           <>
             <div className="form-row mt-3">
               <Label>Employer name *</Label>
@@ -2744,10 +2882,10 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
           </>
         )}
 
-        {target === 'Training' && (
+        {isPaidTarget && (
           <div className="callout mt-3 text-xs">
-            <strong>Next steps after this move:</strong> rename the WhatsApp group to "Training {client.name} {client.primaryTrainer?.name || ''} Z", intro Mitali in the group, send the post-payment confirmation message. The client drops out of your follow-ups queue.
-            {!checklistDone && <div className="text-brand-amber mt-1">⚠ Heads-up: your 10-point payment checklist isn't marked complete yet. Open it to finish the audit trail.</div>}
+            <strong>Next steps after this move:</strong> if you haven't already, rename the WhatsApp group + intro Mitali. Confirmation post in MITS group too.
+            {!checklistDone && <div className="text-brand-amber mt-1">⚠ Heads-up: your 10-point payment checklist isn't marked complete yet.</div>}
           </div>
         )}
 
@@ -2765,8 +2903,8 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
             disabled={!target || m.isPending}
             disabledReason={
               !target ? 'Pick a destination above first.'
-              : target === 'Training' && !paymentDone ? 'Record the Fresh payment first.'
-              : target === 'JBT' && (!employerName?.trim() || !employerCommitDate) ? 'Fill employer name + commitment date.'
+              : isPaidTarget && !paymentDone ? 'Record the Fresh payment first.'
+              : isEmployerLaterTarget && (!employerName?.trim() || !employerCommitDate) ? 'Fill employer name + commitment date.'
               : target === 'C' && !reason?.trim() ? 'A reason is required for C.'
               : null
             }

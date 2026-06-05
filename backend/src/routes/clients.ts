@@ -796,17 +796,25 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   //   JBT      — employer-paid path, client starts now (deferred payment) — terminal won
   //   Training — client paid, starts now — terminal won
   const { subStatus, nextCallOn, lastContactOutcome, reason, employerName, employerCommitDate } = req.body as {
-    subStatus: 'RP' | 'CP' | 'C' | 'JBT' | 'Training' | null;
+    subStatus: 'RP' | 'CP' | 'C' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater' | null;
     nextCallOn?: string;
     lastContactOutcome?: string;
     reason?: string;
     employerName?: string;
     employerCommitDate?: string;
   };
-  const allowedSubStatuses = [null, 'RP', 'CP', 'C', 'JBT', 'Training'];
+  // 4 terminal-win outcomes (engagementType × paymentMode matrix):
+  //   Training-Paid             — direct client paid; client is doing Training
+  //   JBT-Paid                  — direct client paid; client is doing JBT
+  //   Training-EmployerLater    — employer will pay later; client is doing Training
+  //   JBT-EmployerLater         — employer will pay later; client is doing JBT
+  const allowedSubStatuses = [null, 'RP', 'CP', 'C', 'Training-Paid', 'JBT-Paid', 'Training-EmployerLater', 'JBT-EmployerLater'];
   if (!allowedSubStatuses.includes(subStatus)) {
-    return res.status(400).json({ error: `Invalid sub-status: ${subStatus}. Must be RP, CP, C, JBT, Training, or null.` });
+    return res.status(400).json({ error: `Invalid sub-status: ${subStatus}.` });
   }
+  // Legacy aliases for back-compat with the previous 2-outcome model. The
+  // wizard always sends the new full names; nothing else does in practice.
+  const aliasMap: Record<string, string> = { JBT: 'JBT-EmployerLater', Training: 'Training-Paid' };
   const client = await prisma.client.findUnique({
     where: { id: req.params.id },
     select: {
@@ -823,27 +831,29 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   }
 
   // ── Per-transition validation gates ────────────────────────────────────
-  // These ensure Roshni can't accidentally close a client without the
-  // required work being done. Each gate returns 409 with a clear "what's
-  // missing" message so the UI can render the checklist.
-  if (subStatus === 'Training') {
-    // Training = payment received. Must have a Fresh Payment recorded.
+  // 4-state outcome model:
+  //   *-Paid             → require a recorded Fresh Payment (client paid directly)
+  //   *-EmployerLater    → require employer name + commitment date
+  //   C                  → require a reason
+  //   CP / RP / null     → no validation
+  const isPaidOutcome = subStatus === 'Training-Paid' || subStatus === 'JBT-Paid';
+  const isEmployerLater = subStatus === 'Training-EmployerLater' || subStatus === 'JBT-EmployerLater';
+  if (isPaidOutcome) {
     if (!client.freshPaymentReceived && (client.freshPaymentAmount || 0) <= 0) {
       const existing = await prisma.payment.count({ where: { clientId: client.id, kind: 'Fresh' } });
       if (existing === 0) {
         return res.status(409).json({
-          error: 'Cannot move to Training without a recorded Fresh Payment. Click "Record payment" on the client first.',
-          code: 'TRAINING_REQUIRES_PAYMENT',
+          error: `Cannot move to ${subStatus} without a recorded Fresh Payment. Click "Record payment" first.`,
+          code: 'OUTCOME_REQUIRES_PAYMENT',
         });
       }
     }
   }
-  if (subStatus === 'JBT') {
-    // JBT = employer-paid path. Need to capture employer name + commitment date.
+  if (isEmployerLater) {
     if (!employerName?.trim() || !employerCommitDate) {
       return res.status(409).json({
-        error: 'JBT requires the employer name AND the commitment date for payment. Fill both before moving.',
-        code: 'JBT_REQUIRES_EMPLOYER_COMMITMENT',
+        error: `${subStatus} requires the employer name AND the payment commitment date. Fill both before moving.`,
+        code: 'EMPLOYER_LATER_REQUIRES_COMMITMENT',
       });
     }
   }
@@ -859,21 +869,27 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
 
   const today = new Date().toISOString().slice(0, 10);
   // When the user picks "Clear sub-status" (subStatus === null) or any terminal
-  // status (C / JBT / Training), wipe roshniNextCallOn so the follow-ups queue
-  // doesn't leave a dangling next-call date on a client Roshni is done with.
-  const wipingFollowUp = subStatus === null || subStatus === 'C' || subStatus === 'JBT' || subStatus === 'Training';
+  // Status / wipe roshniNextCallOn for any terminal status (C + any win state)
+  // and persist employer fields for the *-EmployerLater outcomes.
+  const isTerminal = subStatus === null || subStatus === 'C' || isPaidOutcome || isEmployerLater;
+  // Map legacy aliases to current values for the persisted column.
+  const persistedSubStatus = subStatus && aliasMap[subStatus] ? aliasMap[subStatus] : subStatus;
   const updated = await prisma.client.update({
     where: { id: client.id },
     data: {
-      saleClosingSubStatus: subStatus,
+      saleClosingSubStatus: persistedSubStatus,
       saleClosingSubStatusAt: new Date(),
       saleClosingSubStatusById: req.user!.id,
-      ...(wipingFollowUp
+      ...(isTerminal
         ? { roshniNextCallOn: null }
         : nextCallOn !== undefined ? { roshniNextCallOn: nextCallOn || null } : {}),
       ...(lastContactOutcome !== undefined ? {
         roshniLastContactOutcome: lastContactOutcome || null,
         roshniLastContactAt: today,
+      } : {}),
+      ...(isEmployerLater ? {
+        employerName: employerName!.trim(),
+        employerCommitDate: employerCommitDate!,
       } : {}),
     },
     include,
@@ -1290,12 +1306,38 @@ clientsRouter.post('/:id/engagement-letter', async (req: AuthedRequest, res) => 
       ...(pdfAttachment ? { attachments: [pdfAttachment] } : {}),
     });
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Sent', providerMessageId: r.id, provider: r.provider } });
+    // Stamp wizard step 2 — engagement letter sent. Used by Roshni's close-out
+    // wizard to unlock the next step (Payment WA).
+    await prisma.client.update({
+      where: { id: client.id },
+      data: { engagementLetterSentAt: new Date().toISOString().slice(0, 10) },
+    }).catch(() => null);
     await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · ${toEmail}${cc ? ' · cc ' + cc : ''}${pdfAttachment ? ' · pdf attached' : ''}`);
     res.status(201).json({ ok: true, messageId: msg.id, pdfAttached: !!pdfAttachment });
   } catch (e: any) {
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Failed', errorText: e.message || String(e) } });
     res.status(502).json({ error: 'Engagement letter send failed: ' + (e.message || String(e)), code: (e as any)?.code, messageId: msg.id });
   }
+});
+
+// Mark payment WhatsApp as sent — wizard step 3. Roshni clicks this after she
+// pastes the payment-WA template into the client's WhatsApp chat (we can't
+// detect WA sends automatically). Stamps paymentWaSentAt so step 4 (record
+// payment / mark JBT) unlocks.
+clientsRouter.post('/:id/mark-payment-wa-sent', async (req: AuthedRequest, res) => {
+  if (!['founder', 'manager', 'sales_closer'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  const client = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const today = new Date().toISOString().slice(0, 10);
+  const updated = await prisma.client.update({
+    where: { id: client.id },
+    data: { paymentWaSentAt: today },
+    select: { id: true, paymentWaSentAt: true },
+  });
+  await audit(req.user!.id, req.user!.name, 'PAYMENT_WA_SENT', client.name);
+  res.json(updated);
 });
 
 // Handover-to-Mitali notification (creates a Task on Mitali's queue so the call gets scheduled).
@@ -1318,10 +1360,10 @@ clientsRouter.post('/:id/handover-to-mitali', async (req: AuthedRequest, res) =>
       dueDate,
     },
   });
-  // Also assign Mitali as the hostOwner if not already set
-  if (!client.hostOwnerId) {
-    await prisma.client.update({ where: { id: client.id }, data: { hostOwnerId: 'u-mitali' } }).catch(() => null);
-  }
+  // Stamp wizard step 7 — Mitali intro sent. Also assign Mitali as hostOwner.
+  const updates: any = { mitaliIntroSentAt: today };
+  if (!client.hostOwnerId) updates.hostOwnerId = 'u-mitali';
+  await prisma.client.update({ where: { id: client.id }, data: updates }).catch(() => null);
   await audit(req.user!.id, req.user!.name, 'HANDOVER_TO_MITALI', `${client.name} · task ${task.id} due ${dueDate}`);
   res.status(201).json({ ok: true, taskId: task.id });
 });

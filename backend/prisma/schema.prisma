@@ -382,6 +382,15 @@ model Client {
   // JSON array: [{ key, label, checked, note, checkedAt, checkedBy }]
   paymentChecklist           Json?
   paymentChecklistCompletedAt String?
+  // Wizard timestamps — each step in Roshni's close-out journey stamps one of
+  // these on completion. Used to lock the next step until the previous is done.
+  engagementLetterSentAt     String?   // ISO date — stamped by POST /engagement-letter
+  paymentWaSentAt            String?   // ISO date — manually marked by Roshni ("payment WA sent" button)
+  mitaliIntroSentAt          String?   // ISO date — stamped by POST /handover-to-mitali
+  // For JBT-Employer / Training-Employer paths — captured when sub-status moves
+  // to one of the *-EmployerLater outcomes so accounts can chase the invoice.
+  employerName               String?
+  employerCommitDate         String?
   notes                    String?
   createdAt                DateTime       @default(now())
 
