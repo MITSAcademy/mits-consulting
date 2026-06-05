@@ -16,6 +16,7 @@
  */
 
 export interface CandidateMatrix {
+  trainerId?: string | null;  // for per-trainer selection / slot routing
   name: string;
   totalExperience?: string;   // e.g. "9 Years"
   demoDate?: string;          // e.g. "19-5-2026"

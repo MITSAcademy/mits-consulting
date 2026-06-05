@@ -1510,6 +1510,18 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
     });
   }
 
+  // Anjali's two asks:
+  //  • selectedTrainerIds  → only include these trainers in the matrix (subset).
+  //  • slots               → per-trainer date/time overrides
+  //                          [{ trainerId, date, timeIst }]
+  const selectedTrainerIds: string[] | null = Array.isArray(req.body?.selectedTrainerIds)
+    ? req.body.selectedTrainerIds.filter((s: any) => typeof s === 'string')
+    : null;
+  const perTrainerSlots: { trainerId: string; date?: string; timeIst?: string }[] =
+    Array.isArray(req.body?.slots) ? req.body.slots : [];
+  const slotFor = (trainerId: string | null | undefined) =>
+    trainerId ? perTrainerSlots.find((s) => s.trainerId === trainerId) : undefined;
+
   // Pull all proposals for this client and assemble the matrix
   const reqs = await prisma.sourcingRequest.findMany({
     where: { clientId: client.id, status: { in: ['Open', 'Proposed', 'Closed'] } },
@@ -1518,7 +1530,11 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
   });
   const allProposals = reqs.flatMap((r) => r.proposals);
   const passed = allProposals.filter((p: any) => p.verification === 'Pass');
-  const baseList = passed.length > 0 ? passed : allProposals;
+  let baseList = passed.length > 0 ? passed : allProposals;
+  // Filter by Anjali's trainer selection BEFORE candidate build.
+  if (selectedTrainerIds && selectedTrainerIds.length > 0) {
+    baseList = baseList.filter((p: any) => p.trainer?.id && selectedTrainerIds.includes(p.trainer.id));
+  }
   let candidates: any[];
   if (baseList.length === 0) {
     // Internal Search fallback — Anjali picked from the pool, no Proposal exists.
@@ -1542,12 +1558,16 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
     if (skillList.length === 0) {
       return res.status(400).json({ error: 'No skills listed on this trainer — add skills to the trainer profile before sending.' });
     }
+    const slot = slotFor(client.primaryTrainerId);
+    const dateUse = slot?.date || demoDateOverride;
+    const timeUse = slot?.timeIst || demoTimeOverride;
     candidates = [{
+      trainerId: client.primaryTrainerId,
       name: t.name || '—',
       totalExperience: t.experienceYears ? `${t.experienceYears} Years` : '—',
-      demoDate: demoDateOverride,
-      demoTimeIst: demoTimeOverride ? `${demoTimeOverride} IST` : '',
-      zoneTimes: istToUsZones(demoTimeOverride, demoDateOverride),
+      demoDate: dateUse,
+      demoTimeIst: timeUse ? `${timeUse} IST` : '',
+      zoneTimes: istToUsZones(timeUse, dateUse),
       mustHaveSkills: skillList,
       softSkills: DEFAULT_SOFT_SKILLS,
     }];
@@ -1568,12 +1588,17 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
       const fallbackSkills = proposalSkills.length === 0
         ? parseSkillsString(p.trainerSkills || p.trainer?.skills)
         : proposalSkills;
+      // Per-trainer slot override (Anjali sets each trainer's own date+time)
+      const slot = slotFor(p.trainer?.id);
+      const dateUse = slot?.date || demoDateOverride;
+      const timeUse = slot?.timeIst || demoTimeOverride;
       return {
+        trainerId: p.trainer?.id || null,
         name: p.trainer?.name || p.trainerName || '—',
         totalExperience: p.experienceYears ? `${p.experienceYears} Years` : '—',
-        demoDate: demoDateOverride,
-        demoTimeIst: demoTimeOverride ? `${demoTimeOverride} IST` : '',
-        zoneTimes: istToUsZones(demoTimeOverride, demoDateOverride),
+        demoDate: dateUse,
+        demoTimeIst: timeUse ? `${timeUse} IST` : '',
+        zoneTimes: istToUsZones(timeUse, dateUse),
         mustHaveSkills: fallbackSkills,
         softSkills: Array.isArray(p.softSkills) && p.softSkills.length > 0 ? p.softSkills : DEFAULT_SOFT_SKILLS,
       };

@@ -917,6 +917,21 @@ sourcingRouter.get('/clients/:clientId/skill-matrix', async (req: AuthedRequest,
   // so the recruiter sees the matrix populated even before the demo is scheduled.
   const demoDateUse = (req.query.demoDate as string) || client.demoDate || '';
   const demoTimeUse = (req.query.demoTimeIst as string) || client.demoTimeIst || '';
+  // Anjali's two asks: (1) let her tick which trainers to include before sharing,
+  // (2) allow a per-trainer demo slot since trainers don't all have the same
+  // availability. Both are passed by the modal as query params:
+  //   selectedTrainerIds = comma-separated list of trainerIds to include
+  //   slots               = JSON string of [{ trainerId, date, timeIst }] for
+  //                         per-trainer overrides
+  const selectedTrainerIdsParam = (req.query.selectedTrainerIds as string) || '';
+  const selectedTrainerIds = selectedTrainerIdsParam ? selectedTrainerIdsParam.split(',').filter(Boolean) : null;
+  let perTrainerSlots: { trainerId: string; date?: string; timeIst?: string }[] = [];
+  if (typeof req.query.slots === 'string' && req.query.slots) {
+    try { perTrainerSlots = JSON.parse(req.query.slots) || []; } catch { perTrainerSlots = []; }
+  }
+  const slotFor = (trainerId: string | null | undefined) =>
+    trainerId ? perTrainerSlots.find((s) => s.trainerId === trainerId) : undefined;
+
   // Collect all proposals from this client's currently-open or proposed sourcing requests.
   const reqs = await prisma.sourcingRequest.findMany({
     where: { clientId: client.id, status: { in: ['Open', 'Proposed', 'Closed'] } },
@@ -934,29 +949,35 @@ sourcingRouter.get('/clients/:clientId/skill-matrix', async (req: AuthedRequest,
       .filter(Boolean)
       .slice(0, 12)
       .map((skill) => ({ skill, proficiency: 4 }));
-  let candidates = (passed.length > 0 ? passed : allProposals).map((p: any) => {
+  let basePool = (passed.length > 0 ? passed : allProposals);
+  // Apply Anjali's trainer-selection filter — when she ticks only 2 of 3, drop the rest.
+  if (selectedTrainerIds && selectedTrainerIds.length > 0) {
+    basePool = basePool.filter((p: any) => p.trainer?.id && selectedTrainerIds.includes(p.trainer.id));
+  }
+  let candidates = basePool.map((p: any) => {
     const proposalSkills = Array.isArray(p.mustHaveSkills) ? p.mustHaveSkills : [];
-    // Taran's case: the proposal was filed without the structured mustHaveSkills
-    // matrix (Aman/Kanchan typed only the freeform "skills" string). Derive a
-    // sensible default from the linked trainer's skills field so the matrix
-    // doesn't render an empty table.
     const fallbackSkills = proposalSkills.length === 0
       ? parseSkillsString(p.trainerSkills || p.trainer?.skills)
       : proposalSkills;
+    // Per-trainer slot override (Anjali sets each trainer's own date+time)
+    const slot = slotFor(p.trainer?.id);
+    const dateUse = slot?.date || demoDateUse;
+    const timeUse = slot?.timeIst || demoTimeUse;
     return {
+      trainerId: p.trainer?.id || null,
       name: p.trainer?.name || p.trainerName || '—',
       totalExperience: p.experienceYears ? `${p.experienceYears} Years` : (p.trainer?.experienceYears ? `${p.trainer.experienceYears} Years` : '—'),
-      demoDate: demoDateUse,
-      demoTimeIst: demoTimeUse ? `${demoTimeUse} IST` : '',
-      zoneTimes: istToUsZones(demoTimeUse, demoDateUse),
+      demoDate: dateUse,
+      demoTimeIst: timeUse ? `${timeUse} IST` : '',
+      zoneTimes: istToUsZones(timeUse, dateUse),
       mustHaveSkills: fallbackSkills,
       softSkills: Array.isArray(p.softSkills) && p.softSkills.length > 0 ? p.softSkills : DEFAULT_SOFT_SKILLS,
     };
   });
   // Internal Search fallback: when Anjali picks a trainer directly from the pool we
-  // never create a Proposal — so the matrix would render empty and the Send buttons
-  // would stay disabled. Synthesize a single candidate from the client's primary trainer.
-  if (candidates.length === 0 && client.primaryTrainerId) {
+  // never create a Proposal — synthesize a single candidate from the primary trainer.
+  if (candidates.length === 0 && client.primaryTrainerId
+      && (!selectedTrainerIds || selectedTrainerIds.includes(client.primaryTrainerId))) {
     const t = await prisma.trainer.findUnique({
       where: { id: client.primaryTrainerId },
       select: { name: true, experienceYears: true, skills: true },
@@ -968,12 +989,16 @@ sourcingRouter.get('/clients/:clientId/skill-matrix', async (req: AuthedRequest,
         .filter(Boolean)
         .slice(0, 12)
         .map((skill) => ({ skill, proficiency: 4 }));
+      const slot = slotFor(client.primaryTrainerId);
+      const dateUse = slot?.date || demoDateUse;
+      const timeUse = slot?.timeIst || demoTimeUse;
       candidates = [{
+        trainerId: client.primaryTrainerId,
         name: t.name || '—',
         totalExperience: t.experienceYears ? `${t.experienceYears} Years` : '—',
-        demoDate: demoDateUse,
-        demoTimeIst: demoTimeUse ? `${demoTimeUse} IST` : '',
-        zoneTimes: istToUsZones(demoTimeUse, demoDateUse),
+        demoDate: dateUse,
+        demoTimeIst: timeUse ? `${timeUse} IST` : '',
+        zoneTimes: istToUsZones(timeUse, dateUse),
         mustHaveSkills: skillList,
         softSkills: DEFAULT_SOFT_SKILLS,
       }];

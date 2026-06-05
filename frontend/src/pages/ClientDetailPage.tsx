@@ -3109,21 +3109,64 @@ function SendSkillMatrixModal({ client, onClose }: any) {
   const [introNote, setIntroNote] = useState(
     `Dear ${client.name || 'Client'}, please find below the proposed trainer profiles for your review.`,
   );
-  // Demo date / time fields — pre-fill from client if already scheduled, otherwise blank.
-  // These are also persisted to the client on send/mark so downstream steps see them.
+  // Shared default demo date / time — applied to any trainer who doesn't have a
+  // per-trainer slot override below. Persisted on the client on send/mark.
   const [demoDate, setDemoDate] = useState<string>(client.demoDate || '');
   const [demoTimeIst, setDemoTimeIst] = useState<string>(client.demoTimeIst || '');
 
+  // Anjali's two asks (P0 for her):
+  //  (1) Pick which trainers to include in the matrix before sending (checkbox per trainer)
+  //  (2) Per-trainer date + time slots so each trainer's actual availability shows in the matrix
+  // We initialize from the preview's first response, then let her edit.
+  type TrainerSlot = { trainerId: string; name: string; selected: boolean; date: string; timeIst: string };
+  const [trainerSlots, setTrainerSlots] = useState<TrainerSlot[]>([]);
+  const [slotsInitialized, setSlotsInitialized] = useState(false);
+
+  // Preview re-fetches whenever selection or per-trainer slots change so the
+  // iframe HTML stays in sync with what would actually go out.
+  const selectedIds = trainerSlots.filter((s) => s.selected && s.trainerId).map((s) => s.trainerId);
+  const slotsParam = trainerSlots
+    .filter((s) => s.selected && s.trainerId && (s.date || s.timeIst))
+    .map((s) => ({ trainerId: s.trainerId, date: s.date || undefined, timeIst: s.timeIst || undefined }));
+
   const { data: preview, isLoading } = useQuery({
-    queryKey: ['skill-matrix-preview', client.id, demoDate, demoTimeIst],
+    queryKey: ['skill-matrix-preview', client.id, demoDate, demoTimeIst, selectedIds.join(','), JSON.stringify(slotsParam)],
     queryFn: () => api.get(`/sourcing/clients/${client.id}/skill-matrix`, {
-      params: { demoDate: demoDate || undefined, demoTimeIst: demoTimeIst || undefined },
+      params: {
+        demoDate: demoDate || undefined,
+        demoTimeIst: demoTimeIst || undefined,
+        ...(selectedIds.length > 0 ? { selectedTrainerIds: selectedIds.join(',') } : {}),
+        ...(slotsParam.length > 0 ? { slots: JSON.stringify(slotsParam) } : {}),
+      },
     }).then((r) => r.data),
   });
 
-  // Email only — fails fast if no email on file.
+  // Seed trainerSlots from the FIRST preview response (which has all available
+  // trainers). Subsequent re-fetches return only the filtered subset so we
+  // can't re-seed from there — we'd lose the unticked trainers.
+  useEffect(() => {
+    if (!slotsInitialized && preview?.candidates?.length) {
+      setTrainerSlots(preview.candidates.map((c: any) => ({
+        trainerId: c.trainerId || '',
+        name: c.name,
+        selected: true,
+        date: demoDate,
+        timeIst: demoTimeIst,
+      })));
+      setSlotsInitialized(true);
+    }
+  }, [preview, slotsInitialized, demoDate, demoTimeIst]);
+
+  const sendPayload = {
+    introNote,
+    demoDate,
+    demoTimeIst,
+    selectedTrainerIds: selectedIds.length > 0 ? selectedIds : undefined,
+    slots: slotsParam.length > 0 ? slotsParam : undefined,
+  };
+
   const sendEmailOnly = useMutation({
-    mutationFn: () => api.post(`/clients/${client.id}/send-skill-matrix`, { introNote, demoDate, demoTimeIst }),
+    mutationFn: () => api.post(`/clients/${client.id}/send-skill-matrix`, sendPayload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['messages'] });
@@ -3133,9 +3176,8 @@ function SendSkillMatrixModal({ client, onClose }: any) {
     onError: (e: any) => showToast(e.response?.data?.error || 'Email send failed', 'error'),
   });
 
-  // WhatsApp only — opens wa.me tab; marks matrix as sent server-side so demo schedule unlocks.
   const sendWAOnly = useMutation({
-    mutationFn: () => api.post(`/clients/${client.id}/send-skill-matrix-whatsapp`, { demoDate, demoTimeIst }),
+    mutationFn: () => api.post(`/clients/${client.id}/send-skill-matrix-whatsapp`, sendPayload),
     onSuccess: (r: any) => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['messages'] });
@@ -3146,7 +3188,6 @@ function SendSkillMatrixModal({ client, onClose }: any) {
     onError: (e: any) => showToast(e.response?.data?.error || 'WhatsApp build failed', 'error'),
   });
 
-  // Sent it outside the portal already — just unlock the next step.
   const markSent = useMutation({
     mutationFn: () => api.post(`/clients/${client.id}/mark-skill-matrix-sent`, { demoDate, demoTimeIst }),
     onSuccess: () => {
@@ -3190,6 +3231,55 @@ function SendSkillMatrixModal({ client, onClose }: any) {
             <Input type="time" value={demoTimeIst} onChange={(e) => setDemoTimeIst(e.target.value)} />
           </div>
         </div>
+
+        {trainerSlots.length > 1 && (
+          <div className="form-row">
+            <Label>Trainers to include in the matrix</Label>
+            <div className="text-[10px] muted mb-1.5">
+              Tick the trainers to share with the client. Each can have its own demo date/time — leave blank to use the shared default above.
+            </div>
+            <div className="space-y-1.5">
+              {trainerSlots.map((s, i) => (
+                <div
+                  key={`${s.trainerId}-${i}`}
+                  className={`rounded border p-2 ${s.selected ? 'border-brand-blue bg-bg-input' : 'border-brand-border opacity-60'}`}
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-[150px]">
+                      <input
+                        type="checkbox"
+                        checked={s.selected}
+                        onChange={(e) => setTrainerSlots((prev) => prev.map((p, idx) => idx === i ? { ...p, selected: e.target.checked } : p))}
+                      />
+                      <span className="text-sm font-medium">{s.name}</span>
+                    </label>
+                    {s.selected && (
+                      <>
+                        <Input
+                          type="date"
+                          value={s.date}
+                          onChange={(e) => setTrainerSlots((prev) => prev.map((p, idx) => idx === i ? { ...p, date: e.target.value } : p))}
+                          className="!w-auto !text-xs"
+                          title={`Demo date for ${s.name}`}
+                        />
+                        <Input
+                          type="time"
+                          value={s.timeIst}
+                          onChange={(e) => setTrainerSlots((prev) => prev.map((p, idx) => idx === i ? { ...p, timeIst: e.target.value } : p))}
+                          className="!w-auto !text-xs"
+                          title={`Demo time IST for ${s.name}`}
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="text-[10px] muted mt-1">
+              {selectedIds.length} of {trainerSlots.length} ticked. Preview below shows only the ticked trainers.
+            </div>
+          </div>
+        )}
 
         <div className="form-row">
           <Label>Intro note (editable)</Label>
