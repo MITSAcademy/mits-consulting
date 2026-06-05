@@ -3452,14 +3452,42 @@ function SendSkillMatrixModal({ client, onClose }: any) {
                 size="sm"
                 disabled={downloadingImg}
                 onClick={async () => {
-                  if (!previewRef.current) { showToast('Preview not ready', 'error'); return; }
+                  if (!previewRef.current || !preview?.html) { showToast('Preview not ready', 'error'); return; }
                   setDownloadingImg(true);
+                  // Anjali's bug: download was clipping the matrix because the on-screen
+                  // preview lives inside a max-h-96 + overflow-auto + max-w-3xl modal,
+                  // and html2canvas captures whatever clip box the browser hands it.
+                  // Fix: clone the matrix HTML into an OFF-SCREEN, full-width, no-clip
+                  // container, snapshot THAT, then remove. This way the full table
+                  // (incl. horizontal scroll content) makes it into the PNG.
+                  const offscreen = document.createElement('div');
+                  offscreen.style.cssText = [
+                    'position:fixed',
+                    'left:-10000px',
+                    'top:0',
+                    'width:1200px',          // wide enough to fit the full matrix table
+                    'background:#ffffff',
+                    'color:#1A1B1E',
+                    'padding:0',
+                    'margin:0',
+                    'z-index:-1',
+                  ].join(';');
+                  offscreen.innerHTML = preview.html;
+                  document.body.appendChild(offscreen);
                   try {
+                    // Wait one frame so the browser lays out the cloned DOM.
+                    await new Promise((r) => requestAnimationFrame(() => r(null)));
                     const html2canvas = (await import('html2canvas')).default;
-                    const canvas = await html2canvas(previewRef.current, {
+                    const canvas = await html2canvas(offscreen, {
                       backgroundColor: '#ffffff',
-                      scale: 2, // 2x for retina-quality WhatsApp share
+                      scale: 2, // retina quality for WhatsApp share
                       logging: false,
+                      // Explicit dims = scrollWidth/Height of the cloned element so the
+                      // whole table is captured, not just the modal-clipped viewport.
+                      width: offscreen.scrollWidth,
+                      height: offscreen.scrollHeight,
+                      windowWidth: offscreen.scrollWidth,
+                      windowHeight: offscreen.scrollHeight,
                     });
                     const dataUrl = canvas.toDataURL('image/png');
                     const a = document.createElement('a');
@@ -3471,10 +3499,11 @@ function SendSkillMatrixModal({ client, onClose }: any) {
                   } catch (e: any) {
                     showToast(e?.message || 'Image build failed', 'error');
                   } finally {
+                    if (offscreen.parentNode) offscreen.parentNode.removeChild(offscreen);
                     setDownloadingImg(false);
                   }
                 }}
-                title="Render the matrix preview as a PNG and download — then attach it manually in WhatsApp"
+                title="Render the FULL matrix as a PNG (off-screen capture, no clipping). Download then attach in WhatsApp."
               >
                 <Download size={12}/> {downloadingImg ? 'Building image…' : 'Download as image'}
               </Button>
