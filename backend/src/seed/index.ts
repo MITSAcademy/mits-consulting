@@ -5,20 +5,20 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 const TEAM = [
-  { id: 'u-vaibhav',  name: 'Vaibhav Aggarwal',   email: 'vaibhav@mits.local',  role: 'founder' as Role,           reportsToId: null,        phone: '+91 99999 00001' },
-  { id: 'u-samita',   name: 'Samita Gupta',       email: 'samita@mits.local',   role: 'demo_lead' as Role,         reportsToId: 'u-vaibhav', phone: '+91 73476 13659' },
-  { id: 'u-anjali',   name: 'Anjali',             email: 'anjali@mits.local',   role: 'demo_intake' as Role,       reportsToId: 'u-samita',  phone: '+91 90566 77384' },
-  { id: 'u-taran',    name: 'Taranpreet Kaur',    email: 'taran@mits.local',    role: 'demo_intake' as Role,       reportsToId: 'u-samita',  phone: '+91 70879 83742' },
-  { id: 'u-aman',     name: 'Amandeep Kaur',      email: 'aman@mits.local',     role: 'recruiter' as Role,         reportsToId: 'u-vaibhav', phone: '+91 81460 16061' },
-  { id: 'u-kanchan',  name: 'Kanchan Sharma',     email: 'kanchan@mits.local',  role: 'recruiter' as Role,         reportsToId: 'u-vaibhav', phone: '+91 76580 33316' },
-  { id: 'u-roshni',   name: 'Roshni Seth',        email: 'roshni.seth@mitssolution.com',   role: 'sales_closer' as Role,      reportsToId: 'u-vaibhav', phone: '+91 62835 05780' },
-  { id: 'u-mitali',   name: 'Mitali MITS',        email: 'mitagg@mitssolution.com',         role: 'manager' as Role,           reportsToId: 'u-vaibhav', phone: '+91 97795 30773' },
-  { id: 'u-bhavneet', name: 'Bhavneet MITS',      email: 'bhavneet.kaur@mitssolution.com',  role: 'lead' as Role,              reportsToId: 'u-mitali',  phone: '+91 62833 24835' },
-  { id: 'u-kashish',  name: 'Kashish',            email: 'kashish@mitssolution.com',        role: 'account_manager' as Role,   reportsToId: 'u-bhavneet',phone: null },
-  { id: 'u-muskan',   name: 'Muskan',             email: 'muskan@mitssolution.com',         role: 'account_manager' as Role,   reportsToId: 'u-bhavneet',phone: null },
-  { id: 'u-areena',   name: 'Areena',             email: 'areena@mits.local',   role: 'accounts' as Role,          reportsToId: 'u-vaibhav', phone: null },
-  { id: 'u-ashok',    name: 'Ashok ji',           email: 'ashok@mits.local',    role: 'accounts' as Role,          reportsToId: 'u-vaibhav', phone: null },
-  { id: 'u-malika',   name: 'Malika',             email: 'malika@mits.local',   role: 'payment_processor' as Role, reportsToId: 'u-vaibhav', phone: null },
+  { id: 'u-vaibhav',  name: 'Vaibhav Aggarwal',   email: 'vaibhav.aggarwal@mitssolution.com', role: 'founder' as Role,           reportsToId: null,        phone: '+91 99999 00001' },
+  { id: 'u-samita',   name: 'Samita Gupta',       email: 'samita@mitssolution.com',           role: 'demo_lead' as Role,         reportsToId: 'u-vaibhav', phone: '+91 73476 13659' },
+  { id: 'u-anjali',   name: 'Anjali Maini',       email: 'anjali.maini@mitssolution.com',     role: 'demo_intake' as Role,       reportsToId: 'u-samita',  phone: '+91 90566 77384' },
+  { id: 'u-taran',    name: 'Taranpreet Kaur',    email: 'tarkau@mitssolution.com',           role: 'demo_intake' as Role,       reportsToId: 'u-samita',  phone: '+91 70879 83742' },
+  { id: 'u-aman',     name: 'Amandeep Kaur',      email: 'amandeep.kaur@mitssolution.com',    role: 'recruiter' as Role,         reportsToId: 'u-vaibhav', phone: '+91 81460 16061' },
+  { id: 'u-kanchan',  name: 'Kanchan Sharma',     email: 'kanchan.sharma@mitssolution.com',   role: 'recruiter' as Role,         reportsToId: 'u-vaibhav', phone: '+91 76580 33316' },
+  { id: 'u-roshni',   name: 'Roshni Seth',        email: 'roshni.seth@mitssolution.com',      role: 'sales_closer' as Role,      reportsToId: 'u-vaibhav', phone: '+91 62835 05780' },
+  { id: 'u-mitali',   name: 'Mitali MITS',        email: 'mitagg@mitssolution.com',           role: 'manager' as Role,           reportsToId: 'u-vaibhav', phone: '+91 97795 30773' },
+  { id: 'u-bhavneet', name: 'Bhavneet MITS',      email: 'bhavneet.kaur@mitssolution.com',    role: 'lead' as Role,              reportsToId: 'u-mitali',  phone: '+91 62833 24835' },
+  { id: 'u-kashish',  name: 'Kashish',            email: 'kashish@mitssolution.com',          role: 'account_manager' as Role,   reportsToId: 'u-bhavneet',phone: null },
+  { id: 'u-muskan',   name: 'Muskan',             email: 'muskan@mitssolution.com',           role: 'account_manager' as Role,   reportsToId: 'u-bhavneet',phone: null },
+  { id: 'u-areena',   name: 'Areena Beri',        email: 'areena.beri@mitssolution.com',      role: 'accounts' as Role,          reportsToId: 'u-vaibhav', phone: null },
+  { id: 'u-ashok',    name: 'Ashok ji',           email: 'ashokaggarwal504@gmail.com',        role: 'accounts' as Role,          reportsToId: 'u-vaibhav', phone: null },
+  { id: 'u-malika',   name: 'Malika Gupta',       email: 'malika.gupta@mitssolution.com',     role: 'payment_processor' as Role, reportsToId: 'u-vaibhav', phone: null },
 ];
 
 const BANK_ACCOUNTS = [
