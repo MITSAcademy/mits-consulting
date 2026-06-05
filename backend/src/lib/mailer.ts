@@ -161,22 +161,37 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   let provider: SendEmailResult['provider'];
 
   if (args.fromUser?.gmailAddress && args.fromUser?.appPasswordPlain) {
+    // Path 1 — user-initiated email (engagement letter, skill matrix, etc.).
+    // Auth + From: the user's own Gmail App Password.
     tx = getUserTransporter(args.fromUser.id, args.fromUser.gmailAddress, args.fromUser.appPasswordPlain);
-    // Send-as override: if user has sendAsAddress (e.g. Google Group), use it as From header.
-    // SMTP auth still happens with their personal gmailAddress + app password.
     const fromAddr = args.fromUser.sendAsAddress?.trim() || args.fromUser.gmailAddress;
     from = `"${args.fromUser.name}" <${fromAddr}>`;
     provider = 'smtp-user';
-  } else {
-    // Per founder request: do NOT fall back to the system SMTP (Vaibhav's gmail).
-    // Throw a tagged error the frontend can detect to pop up the App-Password
-    // setup modal instead of silently using someone else's account.
+  } else if (args.fromUser) {
+    // Path 2 — user-initiated but their App Password is missing or unreadable.
+    // Refuse so the frontend can pop the setup modal (per founder request:
+    // never silently use someone else's account for personal emails).
     const who = args.fromUser?.name || 'this user';
     const err: any = new Error(
       `${who} hasn't configured their Gmail App Password yet. Set it up in Settings → My email to send.`,
     );
     err.code = 'MISSING_APP_PASSWORD';
     throw err;
+  } else {
+    // Path 3 — SYSTEM-INITIATED notification (notify() / handover task email /
+    // sourcing-request assignment / etc.) — these aren't personal correspondence
+    // so they go from the shared MITS Hub system account. Without this path,
+    // sourcing-request notifications silently failed for any sender who hadn't
+    // configured their App Password yet — Kanchan reported missing emails for
+    // today's requests. Restoring the system SMTP fallback for this path only.
+    if (!smtpConfigured()) {
+      const err: any = new Error('System SMTP not configured (SMTP_HOST / SMTP_USER / SMTP_PASS env vars). System notifications cannot send.');
+      err.code = 'SYSTEM_SMTP_NOT_CONFIGURED';
+      throw err;
+    }
+    tx = getSystemTransporter();
+    from = process.env.SMTP_FROM || `"MITS Hub" <${process.env.SMTP_USER}>`;
+    provider = 'smtp-system';
   }
 
   const html = args.htmlBody

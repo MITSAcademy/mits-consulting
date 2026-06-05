@@ -525,9 +525,16 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
   // requests so they vanish from the recruiter's queue. Without this, requests
   // routed to Aman/Kanchan keep showing even after Samita marks the client dormant
   // or Anjali pulls them back to handle herself.
+  // Lifecycles where Kanchan/Aman should NOT see the client in their open queue.
+  // Extended to also cover ALL post-recruiter stages (TrainerMatched onwards) —
+  // Kanchan reported 12 stale open requests for clients that were already past
+  // the recruiter step. Previously this only fired on dormant/hold/back-stages.
   const removeFromRecruiterQueue = [
     'Dormant', 'Hold', 'InternalSearch', 'Churned',
     'Lead', 'IntakeSent', 'IntakeReceived',
+    'TrainerMatched', 'DemoScheduled', 'DemoDone',
+    'FeedbackPending', 'SaleClosing', 'SaleWon', 'Active',
+    'LeverageGranted', 'Completed',
   ];
   try {
     if (
