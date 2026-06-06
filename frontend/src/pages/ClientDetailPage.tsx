@@ -2,23 +2,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, fileUrl, uploadFile } from '@/lib/api';
 import { readAvailabilitySlots, formatAvailabilitySlots, to12h } from '@/lib/utils';
-
-/** Inline AM/PM clarifier next to a 24h <input type="time">.
- *  Aman entered 08:00 thinking 8 PM; Anjali received what looked like "morning".
- *  This surfaces the AM/PM the instant the field is touched. */
-function AmPmHint({ hhmm }: { hhmm?: string }) {
-  if (!hhmm) return null;
-  const pretty = to12h(hhmm);
-  const isAm = pretty.endsWith('AM');
-  return (
-    <span
-      className={`text-[10px] font-medium ml-1 ${isAm ? 'text-brand-amber' : 'text-brand-green'}`}
-      title={isAm ? 'AM = morning. For evening (e.g. 8 PM) enter 20:00.' : 'PM = evening.'}
-    >
-      = {pretty}
-    </span>
-  );
-}
+import { Time12h } from '@/components/Time12h';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
@@ -1532,11 +1516,12 @@ function ScheduleDemoModal({ client, onClose }: any) {
                       />
                     </div>
                     <div className="form-row">
-                      <Label>Time (IST) <AmPmHint hhmm={s.timeIst} /></Label>
-                      <Input
-                        type="time"
+                      <Label>Time (IST)</Label>
+                      <Time12h
                         value={s.timeIst}
-                        onChange={(e) => patchSlot(idx, { timeIst: e.target.value })}
+                        onChange={(v) => patchSlot(idx, { timeIst: v })}
+                        quickSet
+                        ariaLabel={`Demo time for ${s.trainerName}`}
                       />
                     </div>
                   </div>
@@ -1727,9 +1712,9 @@ function DemoDoneModal({ client, onClose }: any) {
             {client.demoDate && <div className="text-[10px] muted mt-0.5">Scheduled: {client.demoDate}</div>}
           </div>
           <div className="form-row">
-            <Label>Actual time (IST) <AmPmHint hhmm={f.demoActualTimeIst} /></Label>
-            <Input type="time" value={f.demoActualTimeIst} onChange={(e) => setF({ ...f, demoActualTimeIst: e.target.value })} />
-            {client.demoTimeIst && <div className="text-[10px] muted mt-0.5">Scheduled: {client.demoTimeIst} IST ({to12h(client.demoTimeIst)})</div>}
+            <Label>Actual time (IST)</Label>
+            <Time12h value={f.demoActualTimeIst} onChange={(v) => setF({ ...f, demoActualTimeIst: v })} ariaLabel="Demo actual time" />
+            {client.demoTimeIst && <div className="text-[10px] muted mt-0.5">Scheduled: {to12h(client.demoTimeIst)} IST</div>}
           </div>
         </div>
         {wasRescheduled && (
@@ -3382,8 +3367,8 @@ function SendSkillMatrixModal({ client, onClose }: any) {
             <Input type="date" value={demoDate} onChange={(e) => setDemoDate(e.target.value)} />
           </div>
           <div className="form-row">
-            <Label>Demo time (IST) <AmPmHint hhmm={demoTimeIst} /></Label>
-            <Input type="time" value={demoTimeIst} onChange={(e) => setDemoTimeIst(e.target.value)} />
+            <Label>Demo time (IST)</Label>
+            <Time12h value={demoTimeIst} onChange={setDemoTimeIst} quickSet ariaLabel="Shared demo time" />
           </div>
         </div>
 
@@ -3417,14 +3402,11 @@ function SendSkillMatrixModal({ client, onClose }: any) {
                           className="!w-auto !text-xs"
                           title={`Demo date for ${s.name}`}
                         />
-                        <Input
-                          type="time"
+                        <Time12h
                           value={s.timeIst}
-                          onChange={(e) => setTrainerSlots((prev) => prev.map((p, idx) => idx === i ? { ...p, timeIst: e.target.value } : p))}
-                          className="!w-auto !text-xs"
-                          title={`Demo time IST for ${s.name}`}
+                          onChange={(v) => setTrainerSlots((prev) => prev.map((p, idx) => idx === i ? { ...p, timeIst: v } : p))}
+                          ariaLabel={`Demo time IST for ${s.name}`}
                         />
-                        <AmPmHint hhmm={s.timeIst} />
                       </>
                     )}
                   </div>
