@@ -74,6 +74,37 @@ usersRouter.delete('/me/smtp', async (req: AuthedRequest, res) => {
   res.json({ ok: true });
 });
 
+// Diagnostic: fire a SYSTEM-path test email (the same path notify() uses for
+// sourcing-assigned / handover / etc. system notifications). When recruiters
+// (Aman, Kanchan) report "I'm not getting notification emails", they can
+// click this from Settings → My email and self-verify whether the system SMTP
+// is reaching their inbox. Sends to the user's own gmailAddress (or email
+// fallback) — no fromUser, so it goes via system SMTP.
+usersRouter.post('/me/smtp/test-system', async (req: AuthedRequest, res) => {
+  const u = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { id: true, name: true, gmailAddress: true, email: true },
+  });
+  if (!u) return res.status(404).json({ error: 'User not found' });
+  const to = u.gmailAddress || u.email;
+  if (!to) return res.status(400).json({ error: 'No email on file for your user — ask admin to update.' });
+  try {
+    const r = await sendEmail({
+      to,
+      subject: 'MITS Portal · system notification test',
+      body: `Hi ${u.name},\n\nThis is a SYSTEM notification test — it went through the same path that powers your sourcing-assigned / handover / payment-confirmation emails.\n\nIf you got this, the system notifications are working and your inbox is receiving them correctly. Recent missing emails are then likely either filtered into Spam/Promotions or no notification was triggered for that event.\n\nIf you DIDN'T receive this, ping Vaibhav — the SMTP server-side configuration needs to be checked.\n\nUser ID: ${u.id}\nTarget: ${to}\n\n— MITS Hub`,
+      // NO fromUser — forces the system SMTP path.
+    });
+    res.json({ ok: true, deliveredTo: to, providerMessageId: r.id, provider: r.provider });
+  } catch (e: any) {
+    res.status(502).json({
+      error: 'System SMTP send failed: ' + (e.message || String(e)),
+      code: e.code,
+      deliveredTo: to,
+    });
+  }
+});
+
 // Send a test email to the user's own configured Gmail to verify creds
 usersRouter.post('/me/smtp/test', async (req: AuthedRequest, res) => {
   const u = await prisma.user.findUnique({

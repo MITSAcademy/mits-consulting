@@ -164,8 +164,11 @@ export function RoshniFollowUpsPage() {
 }
 
 function RenewalRow({ r }: { r: RenewalItem }) {
+  // Roshni's ask: WhatsApp icon should open the client's PERSONAL chat,
+  // not the project/group chat. Group link is only used as a last-resort
+  // fallback when the client's personal number isn't on file.
   const waPhone = r.phoneCode && r.phoneDigits ? `${r.phoneCode}${r.phoneDigits}`.replace(/[^0-9]/g, '') : '';
-  const waUrl = r.whatsappGroupLink || (waPhone ? `https://wa.me/${waPhone}` : '');
+  const waUrl = waPhone ? `https://wa.me/${waPhone}` : (r.whatsappGroupLink || '');
   const riskColor = r.churnRisk === 'Red' ? 'red' : r.churnRisk === 'Amber' ? 'amber' : 'green';
 
   return (
@@ -223,9 +226,10 @@ function Row({ c }: { c: FollowUpItem }) {
     : 'grey';
   const subLabel = c.saleClosingSubStatus || 'NO STATUS';
   // WhatsApp is the only contact channel — no tel: link (MITS comms are all WA).
-  // Prefer the client's WA group; fall back to wa.me with the personal number.
+  // Roshni's ask: always open the client's PERSONAL chat. Group link is only
+  // used as a last-resort fallback when there's no personal number on file.
   const waPhone = c.phoneCode && c.phoneDigits ? `${c.phoneCode}${c.phoneDigits}`.replace(/[^0-9]/g, '') : '';
-  const waUrl = c.whatsappGroupLink || (waPhone ? `https://wa.me/${waPhone}` : '');
+  const waUrl = waPhone ? `https://wa.me/${waPhone}` : (c.whatsappGroupLink || '');
 
   return (
     <div className="bg-bg-input rounded p-3 flex justify-between items-start gap-3 flex-wrap">

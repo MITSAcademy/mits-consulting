@@ -1,7 +1,26 @@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
-import type { AvailabilitySlot } from '@/lib/utils';
+import { to12h, type AvailabilitySlot } from '@/lib/utils';
+
+/** Show "= 8:00 PM" next to a time input so the user instantly sees AM/PM.
+ *  Bugfix per Aman: she entered 08:00 thinking 8 PM, but no AM/PM was
+ *  visible so it stored as 8 AM and Anjali saw "morning". Now the preview
+ *  is color-coded — green when PM, amber when AM — to flag morning entries
+ *  on a slot that's probably meant to be evening. */
+function AmPmHint({ hhmm }: { hhmm?: string }) {
+  if (!hhmm) return null;
+  const pretty = to12h(hhmm);
+  const isAm = pretty.endsWith('AM');
+  return (
+    <span
+      className={`text-[10px] font-medium ${isAm ? 'text-brand-amber' : 'text-brand-green'}`}
+      title={isAm ? 'AM = morning. If you meant the evening, switch to PM (e.g. 20:00 = 8 PM).' : 'PM = evening.'}
+    >
+      = {pretty}
+    </span>
+  );
+}
 
 interface Props {
   slots: AvailabilitySlot[];
@@ -45,6 +64,7 @@ export function AvailabilitySlotsEditor({ slots, onChange }: Props) {
             value={s.fromIst || ''}
             onChange={(e) => update(i, { fromIst: e.target.value })}
           />
+          <AmPmHint hhmm={s.fromIst} />
           <span className="text-xs muted">to</span>
           <Input
             type="time"
@@ -52,6 +72,7 @@ export function AvailabilitySlotsEditor({ slots, onChange }: Props) {
             value={s.toIst || ''}
             onChange={(e) => update(i, { toIst: e.target.value })}
           />
+          <AmPmHint hhmm={s.toIst} />
           <span className="text-[11px] muted">IST</span>
           <button
             type="button"

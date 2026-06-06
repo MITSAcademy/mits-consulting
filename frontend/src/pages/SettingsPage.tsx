@@ -119,6 +119,16 @@ function MyEmailSection() {
     onError: (e: any) => showToast(e.response?.data?.error || 'Test failed', 'error'),
   });
 
+  // Diagnostic for "I'm not receiving system notifications" reports (Aman / Kanchan).
+  // Sends a SYSTEM-path test (no fromUser) to the user's own inbox so they can
+  // self-verify whether the system SMTP pipeline is delivering. Doesn't depend
+  // on having their own App Password configured.
+  const testSystem = useMutation({
+    mutationFn: () => api.post('/users/me/smtp/test-system'),
+    onSuccess: (r) => showToast(`System notification test sent to ${r.data?.deliveredTo}`, 'success'),
+    onError: (e: any) => showToast(e.response?.data?.error || 'System test failed', 'error'),
+  });
+
   return (
     <div className="card">
       <div className="card-h">
@@ -183,6 +193,14 @@ function MyEmailSection() {
         {smtp?.configuredAt && (
           <div className="text-[11px] muted">Last saved: {new Date(smtp.configuredAt).toLocaleString()}</div>
         )}
+        <div className="mt-3 pt-3 border-t border-brand-border">
+          <div className="text-xs muted mb-2">
+            <strong>Not receiving system notifications?</strong> (sourcing assigned, handover task, payment confirmation, etc.) — fire a test to your own inbox to check whether the system SMTP pipeline is reaching you. No App Password needed.
+          </div>
+          <Button size="sm" onClick={() => testSystem.mutate()} disabled={testSystem.isPending}>
+            <Send size={12}/> {testSystem.isPending ? 'Sending…' : 'Send me a system notification test'}
+          </Button>
+        </div>
       </div>
     </div>
   );
