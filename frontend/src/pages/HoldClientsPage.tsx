@@ -8,6 +8,7 @@ import { useUI } from '@/store/ui';
 import { todayISO, stageLabel, waLink } from '@/lib/utils';
 import { HandMetal, MessageCircle, Play, Wallet } from 'lucide-react';
 import { useAuth } from '@/store/auth';
+import { EmptyState } from '@/components/EmptyState';
 
 /**
  * Hold clients = post-demo, client said "need time to decide".
@@ -120,11 +121,12 @@ export function HoldClientsPage() {
         </div>
 
         {onHold.length === 0 && (
-          <div className="text-center py-12 muted">
-            <HandMetal size={32} className="inline-block mb-2 opacity-50"/>
-            <div className="text-base font-semibold text-brand-text mb-1">Nothing on hold ✓</div>
-            <div>All post-demo clients have a decision.</div>
-          </div>
+          <EmptyState
+            icon={HandMetal}
+            tone="green"
+            title="Nothing on hold"
+            description="All post-demo clients have a decision — either they're moving forward or marked Churned."
+          />
         )}
 
         {overdue.length > 0 && (

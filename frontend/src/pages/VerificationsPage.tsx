@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Label, Textarea } from '@/components/ui/input';
 import { useState } from 'react';
 import { useAuth } from '@/store/auth';
-import { Check, X } from 'lucide-react';
+import { Check, X, ShieldCheck } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
 
 const ORDER = { Pending: 0, Fail: 1, Pass: 2 } as const;
 
@@ -177,10 +178,12 @@ export function VerificationsPage() {
         )}
 
         {items.length === 0 && orphans.length === 0 ? (
-          <div className="text-center py-12 muted">
-            <div className="text-base font-semibold text-brand-text mb-1">All clear</div>
-            <div>No recruiter proposals awaiting verification.</div>
-          </div>
+          <EmptyState
+            icon={ShieldCheck}
+            tone="green"
+            title="All clear"
+            description="No recruiter proposals awaiting verification. As Aman/Kanchan push proposals, they'll appear here."
+          />
         ) : items.map((req: any) => {
           const intake = (req.client.intakeData as any) || {};
           const required = intake.detailed_skill_set || req.client.intakeSkillHint || '';

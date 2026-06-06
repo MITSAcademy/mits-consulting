@@ -84,7 +84,7 @@ const SECTIONS: Record<string, string> = {
   admin: 'Admin',
 };
 
-export function Sidebar() {
+export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: boolean; onMobileClose?: () => void } = {}) {
   const user = useAuth((s) => s.user);
   const logout = useAuth((s) => s.logout);
   const location = useLocation();
@@ -180,12 +180,30 @@ export function Sidebar() {
   };
 
   return (
+    <>
+      {/* Mobile backdrop — only renders when the off-canvas sidebar is open. */}
+      {mobileOpen && (
+        <div
+          onClick={onMobileClose}
+          className="md:hidden fixed inset-0 z-30"
+          style={{
+            background: 'rgba(10,12,18,0.55)',
+            backdropFilter: 'blur(4px)',
+            animation: 'fadeIn 200ms ease-out both',
+          }}
+        />
+      )}
     <aside
-      className="w-60 border-r py-4 flex flex-col sticky top-0 h-screen flex-shrink-0 overflow-y-auto"
+      className={`w-60 border-r py-4 flex flex-col h-screen flex-shrink-0 overflow-y-auto z-40 transition-transform md:transition-none
+        fixed md:sticky top-0 left-0
+        ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}
       style={{
         background: 'linear-gradient(180deg, var(--bg-sidebar) 0%, color-mix(in srgb, var(--bg-sidebar) 92%, #000) 100%)',
         borderColor: 'rgba(255,255,255,0.06)',
-        color: '#E8E2D3', // cream — sidebar is always dark, so always use cream text
+        color: '#E8E2D3',
+        transitionDuration: '280ms',
+        transitionTimingFunction: 'cubic-bezier(0.2, 0.9, 0.25, 1)',
       }}
     >
       {/* Brand header — clean MITS wordmark + thin gold rule underneath */}
@@ -239,6 +257,7 @@ export function Sidebar() {
                 <NavLink
                   key={n.page}
                   to={n.page}
+                  onClick={() => onMobileClose?.()}
                   className="flex items-center gap-2.5 px-4 py-2 text-[13px] cursor-pointer relative group"
                   style={{
                     color: isActive ? '#FAF5E7' : 'rgba(232,226,211,0.78)',
@@ -320,5 +339,6 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

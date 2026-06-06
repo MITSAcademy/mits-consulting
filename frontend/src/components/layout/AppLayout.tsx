@@ -1,4 +1,6 @@
 import { Outlet } from 'react-router-dom';
+import { useState, createContext, useContext } from 'react';
+import { Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Toaster } from '@/components/ui/toast';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -8,17 +10,24 @@ import { AskAIButton } from '@/components/AskAI';
 import { CelebrationLayer } from '@/components/CelebrationLayer';
 import { useAuth } from '@/store/auth';
 
+/** Context lets the Topbar open the off-canvas sidebar without lifting state
+ *  through every page. */
+const MobileNavCtx = createContext<{ open: () => void }>({ open: () => {} });
+
 export function AppLayout() {
+  const [mobileOpen, setMobileOpen] = useState(false);
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
-      <main className="flex-1 min-w-0">
-        <Outlet />
-      </main>
-      <Toaster />
-      <SetupAppPasswordModal />
-      <CelebrationLayer />
-    </div>
+    <MobileNavCtx.Provider value={{ open: () => setMobileOpen(true) }}>
+      <div className="flex min-h-screen">
+        <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
+        <main className="flex-1 min-w-0 w-full">
+          <Outlet />
+        </main>
+        <Toaster />
+        <SetupAppPasswordModal />
+        <CelebrationLayer />
+      </div>
+    </MobileNavCtx.Provider>
   );
 }
 
@@ -50,17 +59,26 @@ export function Topbar({
   subtitle?: string;
   actions?: React.ReactNode;
 }) {
+  const { open: openMobile } = useContext(MobileNavCtx);
   return (
     <div
-      className="flex justify-between items-center px-6 py-3.5 border-b sticky top-0 z-10 flex-wrap gap-2.5"
+      className="flex justify-between items-center px-4 md:px-6 py-3.5 border-b sticky top-0 z-10 flex-wrap gap-2.5"
       style={{
         borderColor: 'var(--brand-border)',
         background: 'color-mix(in srgb, var(--bg-page) 92%, transparent)',
         backdropFilter: 'saturate(140%) blur(6px)',
       }}
     >
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="text-[17px] font-semibold tracking-tight">
+      <div className="flex items-center gap-3 flex-wrap min-w-0">
+        {/* Hamburger — mobile-only, opens the off-canvas sidebar */}
+        <button
+          onClick={openMobile}
+          className="md:hidden p-1.5 -ml-1 rounded hover:bg-bg-cardHover"
+          aria-label="Open navigation"
+        >
+          <Menu size={18} />
+        </button>
+        <div className="text-[16px] md:text-[17px] font-semibold tracking-tight min-w-0 truncate">
           {title}
           {subtitle && (
             <span className="text-brand-textMuted font-normal text-[13px] ml-2">· {subtitle}</span>
