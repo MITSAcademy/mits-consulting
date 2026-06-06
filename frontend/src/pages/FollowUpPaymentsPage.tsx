@@ -21,7 +21,24 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
 import { EmptyState } from '@/components/EmptyState';
-import { Wallet, Search, MessageSquare, Gift, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { Wallet, MessageSquare, Gift, AlertTriangle, CheckCircle2, Clock, Calendar as CalendarIcon, Phone } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { Select, Textarea, Label } from '@/components/ui/input';
+
+/** Build a Google Calendar "create event" pre-fill URL that the user can
+ *  save into their OWN calendar — no server-side OAuth dance needed. */
+function gcalLink(opts: { title: string; details?: string; date?: string; timeIst?: string; durationMinutes?: number }) {
+  const params = new URLSearchParams({ action: 'TEMPLATE', text: opts.title });
+  if (opts.details) params.set('details', opts.details);
+  if (opts.date && opts.timeIst) {
+    const [hh, mm] = opts.timeIst.split(':').map(Number);
+    const start = new Date(`${opts.date}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+05:30`);
+    const end = new Date(start.getTime() + (opts.durationMinutes || 30) * 60_000);
+    const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    params.set('dates', `${fmt(start)}/${fmt(end)}`);
+  }
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
 
 interface Row {
   id: string; name: string;
@@ -300,12 +317,29 @@ function RowItem({
       </td>
       <td>
         <div className="flex flex-col gap-1">
-          <Button size="sm" onClick={() => onFeedback(r.id)} title="Mark feedback taken today">
-            <MessageSquare size={11}/> Feedback
-          </Button>
-          <Button size="sm" onClick={() => onLeverage(r.id)} title="Mark you asked for leverage / referral today">
-            <Gift size={11}/> Leverage
-          </Button>
+          <div className="flex gap-1">
+            <Button size="sm" onClick={() => onFeedback(r.id)} title="Mark feedback taken today">
+              <MessageSquare size={11}/> Feedback
+            </Button>
+            <Button size="sm" onClick={() => onLeverage(r.id)} title="Mark you asked for leverage / referral today">
+              <Gift size={11}/> Leverage
+            </Button>
+          </div>
+          <div className="flex gap-1">
+            <QuickLogCall clientId={r.id} clientName={r.name} />
+            <a
+              href={gcalLink({
+                title: `${r.name} · payment follow-up`,
+                details: `Cycle amount ${r.currency} ${r.cycleAmount}\nLast payment: ${r.lastPaymentDate || '—'}\nLast feedback: ${r.lastFeedbackTakenAt || '—'}\nLast leverage ask: ${r.lastLeverageAskedAt || '—'}\n${r.followupNote ? 'Note: ' + r.followupNote : ''}`,
+              })}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Button size="sm" title="Open Google Calendar pre-filled — saves to your own calendar">
+                <CalendarIcon size={11}/> Cal
+              </Button>
+            </a>
+          </div>
           <Button
             size="sm"
             variant={r.paymentPendingVaibhav ? 'amber' : 'default'}
@@ -317,5 +351,69 @@ function RowItem({
         </div>
       </td>
     </tr>
+  );
+}
+
+/** Inline "Log a call" — opens a small modal preset with this client. */
+function QuickLogCall({ clientId, clientName }: { clientId: string; clientName: string }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ kind: 'checkin', outcome: '', notes: '' });
+
+  const create = useMutation({
+    mutationFn: () => api.post('/call-logs', { clientId, ...form, outcome: form.outcome || null, notes: form.notes || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['call-logs'] });
+      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
+      showToast('Call logged');
+      setOpen(false);
+      setForm({ kind: 'checkin', outcome: '', notes: '' });
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" title={`Log a call to ${clientName}`}>
+          <Phone size={11}/> Call
+        </Button>
+      </DialogTrigger>
+      <DialogContent title={`Log call · ${clientName}`} description="Quick check-in log so the call shows up in the client's history.">
+        <div className="grid md:grid-cols-2 gap-2">
+          <div className="form-row">
+            <Label>Kind</Label>
+            <Select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+              <option value="checkin">Check-in</option>
+              <option value="feedback">Feedback</option>
+              <option value="leverage">Leverage / referral ask</option>
+              <option value="escalation">Escalation</option>
+            </Select>
+          </div>
+          <div className="form-row">
+            <Label>Outcome</Label>
+            <Select value={form.outcome} onChange={(e) => setForm({ ...form, outcome: e.target.value })}>
+              <option value="">—</option>
+              <option value="answered">Answered</option>
+              <option value="no_pickup">No pickup</option>
+              <option value="rescheduled">Rescheduled</option>
+              <option value="completed">Completed</option>
+              <option value="escalated">Escalated</option>
+            </Select>
+          </div>
+        </div>
+        <div className="form-row">
+          <Label>Notes</Label>
+          <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="What was discussed, any follow-up needed." />
+        </div>
+        <DialogFooter>
+          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="primary" disabled={create.isPending} onClick={() => create.mutate()}>
+            {create.isPending ? 'Saving…' : 'Log call'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
