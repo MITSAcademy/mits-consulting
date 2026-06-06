@@ -6,6 +6,7 @@ import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { Clock, Phone, MessageCircle, Check, RefreshCw } from 'lucide-react';
 import { useUI } from '@/store/ui';
+import { EmptyState } from '@/components/EmptyState';
 
 interface RenewalItem {
   id: string;
@@ -149,14 +150,12 @@ export function RoshniFollowUpsPage() {
         )}
 
         {items.length === 0 && renewalItems.length === 0 && (
-          <div className="text-center py-12 muted">
-            <Phone size={28} className="inline-block mb-2 opacity-50"/>
-            <div>Nothing on your plate right now.</div>
-            <div className="text-xs mt-1">
-              New SaleClosing clients land here automatically as "Needs triage" so you can classify them as RP / CP / C.
-              If you don't see one you expect, check the Sales close list to verify the client is assigned to you.
-            </div>
-          </div>
+          <EmptyState
+            icon={Phone}
+            tone="green"
+            title="You're all caught up"
+            description="No clients waiting for a follow-up call. New SaleClosing clients land here automatically as Needs-triage so you can classify them. If you expected someone, check Sales close to confirm they're assigned to you."
+          />
         )}
       </Page>
     </>

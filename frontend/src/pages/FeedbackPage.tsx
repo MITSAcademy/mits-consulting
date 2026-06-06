@@ -6,6 +6,8 @@ import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
+import { EmptyState } from '@/components/EmptyState';
+import { MessageSquare } from 'lucide-react';
 import { todayISO } from '@/lib/utils';
 
 export function FeedbackPage() {
@@ -41,7 +43,18 @@ export function FeedbackPage() {
           <table>
             <thead><tr><th>Week</th><th>Client</th><th>Rating</th><th>Notes</th></tr></thead>
             <tbody>
-              {(fb || []).length === 0 ? <tr><td colSpan={4} className="text-center py-8 muted">No feedback yet.</td></tr> :
+              {(fb || []).length === 0 ? (
+                <tr>
+                  <td colSpan={4}>
+                    <EmptyState
+                      icon={MessageSquare}
+                      tone="gold"
+                      title="No feedback yet"
+                      description="Weekly feedback will show up here as you record it. Use the form on the client page to add the first entry."
+                    />
+                  </td>
+                </tr>
+              ) :
               (fb || []).map((x: any) => (
                 <tr key={x.id}>
                   <td className="mono">{x.weekStart}</td>
