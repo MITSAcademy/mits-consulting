@@ -201,7 +201,7 @@ export function Sidebar() {
             <img src="/mits-logo.svg" alt="MITS" className="w-7 h-7" />
           </div>
           <div className="leading-tight">
-            <div className="text-[13px] font-bold tracking-tight" style={{ color: '#F5EFE0' }}>MITS Academy</div>
+            <div className="text-[15px] font-bold tracking-tight" style={{ color: '#F5EFE0' }}>MITS</div>
             <div className="text-[10px] uppercase tracking-[0.14em]" style={{ color: 'rgba(229,178,76,0.85)' }}>
               Consulting Hub
             </div>
