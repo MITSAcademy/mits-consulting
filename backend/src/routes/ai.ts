@@ -80,7 +80,7 @@ aiRouter.post('/ask', async (req: AuthedRequest, res) => {
     const baseSystem = buildSystemPrompt({ name: req.user!.name, role: req.user!.role });
     let context = '';
     try {
-      context = await buildMitsContext();
+      context = await buildMitsContext({ id: req.user!.id, role: req.user!.role, name: req.user!.name });
     } catch (e) {
       console.warn('[ai] context build failed (degrading to no-context):', (e as any)?.message);
     }

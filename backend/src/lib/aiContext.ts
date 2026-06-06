@@ -1,196 +1,321 @@
 /**
- * Build a compact, AI-friendly snapshot of the current state of MITS Hub
- * so the assistant can answer questions like "how many demos pending on
- * Anjali?" or "what did Roshni close today?" with real numbers instead
- * of "check the Demos page".
+ * Build an AI-friendly snapshot tailored to the requesting user's role.
  *
- * Keep this LEAN — every token added here is sent on EVERY question, so
- * inflating it linearly inflates cost and latency. Target: under ~2000
- * tokens of structured text.
+ * Permission model — same shape as the rest of the app:
+ *   founder / manager    → full org-wide view (everything)
+ *   demo_lead (Samita)   → demo intake queue + feedback queue + handoffs
+ *   demo_intake (Anjali, Taran) → their own intake/demo clients
+ *   recruiter (Aman, Kanchan)    → their sourcing requests + trainers
+ *   sales_closer (Roshni)        → her sales-close queue + renewals
+ *   account_manager (Muskan, Kashish) → their hosted clients
+ *   accounts (Areena, Ashok)     → payments-related view
+ *   payment_processor (Malika)    → payment-processing view
  *
- * Cached for 60 seconds per user so a burst of follow-ups doesn't hammer
- * the DB. The context is the same for every user (org-wide snapshot),
- * but we still key by something so a future per-user shaping is trivial.
+ * Everyone sees: org pipeline counts, their own activity today, the
+ * 7-step Roshni workflow vocabulary.
+ *
+ * PII stripped: phone numbers, raw emails, addresses — the AI doesn't need
+ * them to answer "how many", "who has", "tell me about <client>" questions.
+ *
+ * Cached for 60s PER USER (role+id combo) so a follow-up question doesn't
+ * re-query the DB but different users get different context.
  */
 import { prisma } from './prisma';
 
-interface CachedContext {
-  text: string;
-  builtAt: number;
-}
-
+interface CachedContext { text: string; builtAt: number; }
 const CACHE_TTL_MS = 60_000;
-let cached: CachedContext | null = null;
+const cacheByUser = new Map<string, CachedContext>();
 
-export async function buildMitsContext(): Promise<string> {
-  if (cached && Date.now() - cached.builtAt < CACHE_TTL_MS) {
-    return cached.text;
-  }
+type Role = string;
+const FULL_ACCESS: Role[] = ['founder', 'manager'];
+const isFull = (role: Role) => FULL_ACCESS.includes(role);
+
+export async function buildMitsContext(user: { id: string; role: Role; name: string }): Promise<string> {
+  const cacheKey = `${user.id}::${user.role}`;
+  const c = cacheByUser.get(cacheKey);
+  if (c && Date.now() - c.builtAt < CACHE_TTL_MS) return c.text;
 
   const today = new Date().toISOString().slice(0, 10);
   const todayStart = new Date(today + 'T00:00:00Z');
+  const inSevenDays = (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().slice(0, 10); })();
 
-  // ── Per-team-member pipeline counts ─────────────────────────────────────
-  // For each user we summarise: how many open clients sit at each lifecycle
-  // they're responsible for. Ownership is multi-field (intake/sales/host),
-  // so the question "Anjali's demos" can mean different things — we surface
-  // each angle and let the LLM disambiguate.
-  const users = await prisma.user.findMany({
-    select: { id: true, name: true, role: true },
-    where: { role: { not: 'staff' } },
-    orderBy: { name: 'asc' },
-  });
-
-  // Aggregate counts per (ownerId, ownerField, lifecycle) — three SQLs
-  // since Prisma's groupBy doesn't let us union them in one go.
-  const intakeCounts = await prisma.client.groupBy({
-    by: ['intakeOwnerId', 'lifecycle'],
-    _count: { _all: true },
-    where: { intakeOwnerId: { not: null } },
-  });
-  const salesCounts = await prisma.client.groupBy({
-    by: ['salesOwnerId', 'lifecycle'],
-    _count: { _all: true },
-    where: { salesOwnerId: { not: null } },
-  });
-  const hostCounts = await prisma.client.groupBy({
-    by: ['hostOwnerId', 'lifecycle'],
-    _count: { _all: true },
-    where: { hostOwnerId: { not: null } },
-  });
-
-  const byUser: Record<string, { intake: Record<string, number>; sales: Record<string, number>; host: Record<string, number> }> = {};
-  for (const u of users) byUser[u.id] = { intake: {}, sales: {}, host: {} };
-  for (const r of intakeCounts) if (r.intakeOwnerId && byUser[r.intakeOwnerId]) byUser[r.intakeOwnerId].intake[r.lifecycle] = r._count._all;
-  for (const r of salesCounts)  if (r.salesOwnerId  && byUser[r.salesOwnerId])  byUser[r.salesOwnerId].sales[r.lifecycle]   = r._count._all;
-  for (const r of hostCounts)   if (r.hostOwnerId   && byUser[r.hostOwnerId])   byUser[r.hostOwnerId].host[r.lifecycle]     = r._count._all;
-
-  // ── Today's audit log — what the team actually did today ────────────────
-  const todayAudits = await prisma.auditLog.findMany({
-    where: { createdAt: { gte: todayStart } },
-    select: { byName: true, action: true, details: true, createdAt: true },
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-  });
-  // Bucket by person → action counts + a sample of recent details
-  const todayByPerson: Record<string, { actions: Record<string, number>; samples: string[] }> = {};
-  for (const a of todayAudits) {
-    const k = a.byName || '—';
-    if (!todayByPerson[k]) todayByPerson[k] = { actions: {}, samples: [] };
-    todayByPerson[k].actions[a.action] = (todayByPerson[k].actions[a.action] || 0) + 1;
-    if (todayByPerson[k].samples.length < 3 && a.details) {
-      todayByPerson[k].samples.push(`${a.action}: ${a.details.slice(0, 90)}`);
-    }
-  }
-
-  // ── Org-wide pipeline + payments snapshot ───────────────────────────────
-  const [pipelineCounts, subStatusCounts, openSourcing, openVerifications, todayPayments, recentClients] = await Promise.all([
-    prisma.client.groupBy({ by: ['lifecycle'], _count: { _all: true } }),
-    prisma.client.groupBy({
-      by: ['saleClosingSubStatus'],
-      _count: { _all: true },
-      where: { lifecycle: { in: ['SaleClosing', 'SaleWon'] } },
-    }),
-    prisma.sourcingRequest.count({ where: { status: 'Open' } }),
-    prisma.sourcingRequest.count({ where: { status: 'Proposed' } }),
-    prisma.payment.findMany({
-      where: { paymentDate: { gte: today } },
-      select: { amount: true, currency: true, kind: true, client: { select: { name: true } } },
-      take: 20,
-    }),
-    // Recent / active clients — so the AI can answer "tell me about X" questions.
-    // We include 250 most-recently-updated active clients with their key fields.
-    // Excludes Churned + Completed to keep the index focused on what's live.
-    prisma.client.findMany({
-      where: { lifecycle: { notIn: ['Churned', 'Completed'] } },
-      select: {
-        name: true,
-        lifecycle: true,
-        engagementType: true,
-        currency: true,
-        cycleAmount: true,
-        saleClosingSubStatus: true,
-        source: true,
-        demoDate: true,
-        demoTimeIst: true,
-        intakeOwner:   { select: { name: true } },
-        salesOwner:    { select: { name: true } },
-        hostOwner:     { select: { name: true } },
-        primaryTrainer:{ select: { name: true } },
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 250,
-    }),
-  ]);
-
-  // ── Stitch into compact text ────────────────────────────────────────────
   const lines: string[] = [];
-  lines.push(`LIVE SNAPSHOT (cached up to 60s, asof ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC)`);
+  lines.push(`LIVE SNAPSHOT  (asof ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC,  for ${user.name} — role: ${user.role})`);
   lines.push('');
 
-  lines.push('## Org pipeline counts');
+  // ── 1. Org pipeline counts — everyone sees these ────────────────────────
+  const pipelineCounts = await prisma.client.groupBy({ by: ['lifecycle'], _count: { _all: true } });
+  lines.push('## Org pipeline (all clients)');
   for (const r of pipelineCounts) lines.push(`  ${r.lifecycle}: ${r._count._all}`);
   lines.push('');
 
-  lines.push('## Sales-close sub-status (Roshni\'s queue)');
-  for (const r of subStatusCounts) lines.push(`  ${r.saleClosingSubStatus || '(unset)'}: ${r._count._all}`);
-  lines.push('');
+  // ── 2. Per-user permissioned client index ───────────────────────────────
+  // Build the client-filter WHERE clause based on what this role legitimately
+  // needs. Full-access roles see everything; others see only their own.
+  const clientWhere = isFull(user.role)
+    ? { lifecycle: { notIn: ['Churned', 'Completed'] as any } }
+    : buildPermissionedClientWhere(user);
 
-  lines.push(`## Recruiter queue: ${openSourcing} sourcing requests Open, ${openVerifications} proposals awaiting verification`);
-  lines.push('');
+  const clientLimit = isFull(user.role) ? 300 : 200;
 
-  if (todayPayments.length > 0) {
-    lines.push(`## Payments recorded today (${todayPayments.length})`);
-    for (const p of todayPayments) lines.push(`  ${p.client.name}: ${p.currency} ${p.amount} (${p.kind})`);
+  const visibleClients = clientWhere
+    ? await prisma.client.findMany({
+        where: clientWhere,
+        select: {
+          name: true,
+          lifecycle: true,
+          engagementType: true,
+          currency: true,
+          cycleAmount: true,
+          saleClosingSubStatus: true,
+          source: true,
+          demoDate: true,
+          demoTimeIst: true,
+          intakeOwner:    { select: { name: true } },
+          salesOwner:     { select: { name: true } },
+          hostOwner:      { select: { name: true } },
+          primaryTrainer: { select: { name: true } },
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: clientLimit,
+      })
+    : [];
+
+  if (visibleClients.length > 0) {
+    lines.push(`## Clients you can see (${visibleClients.length}${isFull(user.role) ? ', most-recent first' : ', filtered by your role'})`);
+    lines.push('  Format: NAME | stage | engagement | amount | sub | source | trainer | intake/sales/host owner | demo | created');
+    for (const c of visibleClients) {
+      const owners = [
+        c.intakeOwner?.name ? `intake:${c.intakeOwner.name}` : null,
+        c.salesOwner?.name  ? `sales:${c.salesOwner.name}`   : null,
+        c.hostOwner?.name   ? `host:${c.hostOwner.name}`     : null,
+      ].filter(Boolean).join(', ');
+      const amount = c.cycleAmount ? `${c.currency} ${c.cycleAmount}` : '—';
+      const demo = c.demoDate ? `${c.demoDate}${c.demoTimeIst ? ' ' + c.demoTimeIst : ''}` : '—';
+      const sub = c.saleClosingSubStatus || '—';
+      const created = c.createdAt.toISOString().slice(0, 10);
+      lines.push(`  ${c.name} | ${c.lifecycle} | ${c.engagementType} | ${amount} | ${sub} | ${c.source || '—'} | ${c.primaryTrainer?.name || '—'} | ${owners || '—'} | demo:${demo} | ${created}`);
+    }
+    lines.push('');
+  } else if (clientWhere === null) {
+    lines.push("## Clients — your role doesn't own client records directly.");
+    lines.push('');
+  } else {
+    lines.push('## Clients you own — none right now.');
     lines.push('');
   }
 
-  lines.push('## Per-user open client counts (by ownership field)');
-  for (const u of users) {
-    const ub = byUser[u.id];
-    const intake = Object.entries(ub.intake).map(([k, v]) => `${k}:${v}`).join(', ');
-    const sales  = Object.entries(ub.sales).map(([k, v]) => `${k}:${v}`).join(', ');
-    const host   = Object.entries(ub.host).map(([k, v]) => `${k}:${v}`).join(', ');
-    const parts: string[] = [];
-    if (intake) parts.push(`intakeOwner→{${intake}}`);
-    if (sales)  parts.push(`salesOwner→{${sales}}`);
-    if (host)   parts.push(`hostOwner→{${host}}`);
-    if (parts.length === 0) continue;
-    lines.push(`  ${u.name} (${u.role}): ${parts.join(' · ')}`);
+  // ── 3. Sub-status breakdown — relevant for Roshni + leadership ──────────
+  if (isFull(user.role) || user.role === 'sales_closer') {
+    const subStatusCounts = await prisma.client.groupBy({
+      by: ['saleClosingSubStatus'],
+      _count: { _all: true },
+      where: {
+        lifecycle: { in: ['SaleClosing', 'SaleWon'] },
+        ...(isFull(user.role) ? {} : { salesOwnerId: user.id }),
+      },
+    });
+    if (subStatusCounts.length > 0) {
+      lines.push(`## Sales-close sub-status${isFull(user.role) ? '' : ' (yours)'}`);
+      for (const r of subStatusCounts) lines.push(`  ${r.saleClosingSubStatus || '(unset)'}: ${r._count._all}`);
+      lines.push('');
+    }
   }
-  lines.push('');
 
-  lines.push(`## Today's activity by person (${todayAudits.length} log entries)`);
-  for (const [name, b] of Object.entries(todayByPerson)) {
-    const actions = Object.entries(b.actions).map(([k, v]) => `${k}×${v}`).join(', ');
-    lines.push(`  ${name}: ${actions}`);
-    for (const s of b.samples) lines.push(`    - ${s}`);
+  // ── 4. Trainer pool — recruiters + leadership ───────────────────────────
+  if (isFull(user.role) || user.role === 'recruiter' || user.role === 'demo_intake' || user.role === 'demo_lead') {
+    const trainers = await prisma.trainer.findMany({
+      where: { active: true },
+      select: {
+        name: true,
+        skills: true,
+        experienceYears: true,
+        defaultRateInr: true,
+        rateModel: true,
+      },
+      orderBy: { name: 'asc' },
+      take: 80,
+    });
+    if (trainers.length > 0) {
+      lines.push(`## Trainer pool (${trainers.length} active)`);
+      for (const t of trainers) {
+        const skills = (t.skills || '').slice(0, 80);
+        lines.push(`  ${t.name} | ${t.experienceYears ?? '?'}y | ₹${t.defaultRateInr || '?'}/${t.rateModel} | ${skills}`);
+      }
+      lines.push('');
+    }
   }
-  if (Object.keys(todayByPerson).length === 0) lines.push('  (No team activity logged yet today)');
-  lines.push('');
 
-  // Per-client index — compact format so the AI can answer "tell me about X" /
-  // "what's happening with X" / "who owns X" / "when's X's demo" etc.
-  lines.push(`## Active clients index (${recentClients.length} most recently updated, excludes Churned/Completed)`);
-  lines.push('  Format: NAME | stage | engagement | amount | sub | source | trainer | intake/sales/host owner | demo | last update');
-  for (const c of recentClients) {
-    const owners = [
-      c.intakeOwner?.name ? `intake:${c.intakeOwner.name}`   : null,
-      c.salesOwner?.name  ? `sales:${c.salesOwner.name}`     : null,
-      c.hostOwner?.name   ? `host:${c.hostOwner.name}`       : null,
-    ].filter(Boolean).join(', ');
-    const amount = c.cycleAmount ? `${c.currency} ${c.cycleAmount}` : '—';
-    const demo = c.demoDate ? `${c.demoDate}${c.demoTimeIst ? ' ' + c.demoTimeIst : ''}` : '—';
-    const sub = c.saleClosingSubStatus || '—';
-    const updated = c.createdAt.toISOString().slice(0, 10);
-    lines.push(`  ${c.name} | ${c.lifecycle} | ${c.engagementType} | ${amount} | ${sub} | ${c.source || '—'} | ${c.primaryTrainer?.name || '—'} | ${owners || '—'} | demo:${demo} | upd:${updated}`);
+  // ── 5. Sourcing requests — recruiters + leadership ──────────────────────
+  if (isFull(user.role) || user.role === 'recruiter' || user.role === 'demo_intake' || user.role === 'demo_lead') {
+    const sourcingWhere = isFull(user.role)
+      ? { status: { in: ['Open', 'Proposed'] as any } }
+      : { status: { in: ['Open', 'Proposed'] as any }, sentToId: user.id };
+    const sourcingReqs = await prisma.sourcingRequest.findMany({
+      where: sourcingWhere,
+      select: {
+        status: true,
+        sentAt: true,
+        client:   { select: { name: true, lifecycle: true } },
+        sentTo:   { select: { name: true } },
+        proposals: { select: { trainer: { select: { name: true } }, verification: true } },
+      },
+      orderBy: { sentAt: 'desc' },
+      take: 50,
+    });
+    if (sourcingReqs.length > 0) {
+      lines.push(`## Open sourcing requests${isFull(user.role) ? '' : ' (assigned to you)'}`);
+      for (const r of sourcingReqs) {
+        const proposalSummary = r.proposals.length === 0
+          ? 'no proposals'
+          : r.proposals.map((p) => `${p.trainer?.name || '?'}:${p.verification}`).join(', ');
+        lines.push(`  ${r.client.name} (${r.client.lifecycle}) | ${r.status} | sent ${r.sentAt} → ${r.sentTo?.name || '?'} | ${proposalSummary}`);
+      }
+      lines.push('');
+    }
   }
-  lines.push('');
 
-  lines.push('Use the numbers + the client index when answering "how many", "who has", "tell me about <client>", "what did X do today", "when is <client>\'s demo", etc. — they\'re fresh. If a client name isn\'t in the index above, they may be Churned/Completed (excluded above) or genuinely don\'t exist; say so explicitly. Team names map: Anjali Maini, Taranpreet Kaur, Amandeep Kaur (Aman), Kanchan Sharma, Samita Gupta, Roshni Seth, Mitali, Bhavneet, Vaibhav.');
+  // ── 6. Demos scheduled in the next 7 days — demo_intake + leadership ────
+  if (isFull(user.role) || user.role === 'demo_intake' || user.role === 'demo_lead') {
+    const demos = await prisma.demo.findMany({
+      where: {
+        status: { in: ['Scheduled', 'Rescheduled'] },
+        scheduledDate: { gte: today, lte: inSevenDays },
+      },
+      select: {
+        scheduledDate: true,
+        scheduledTimeIst: true,
+        status: true,
+        client:  { select: { name: true } },
+        trainer: { select: { name: true } },
+      },
+      orderBy: [{ scheduledDate: 'asc' }, { scheduledTimeIst: 'asc' }],
+      take: 50,
+    });
+    if (demos.length > 0) {
+      lines.push(`## Demos in next 7 days (${demos.length})`);
+      for (const d of demos) {
+        lines.push(`  ${d.scheduledDate} ${d.scheduledTimeIst || ''} IST | ${d.client?.name || '?'} ↔ ${d.trainer?.name || '?'} | ${d.status}`);
+      }
+      lines.push('');
+    }
+  }
+
+  // ── 7. Payments today + recent — accounts + leadership + sales_closer ───
+  if (isFull(user.role) || user.role === 'accounts' || user.role === 'payment_processor' || user.role === 'sales_closer') {
+    const paymentWhere: any = {};
+    if (user.role === 'sales_closer') {
+      // Only payments for clients she owns
+      paymentWhere.client = { salesOwnerId: user.id };
+    }
+    const todayPayments = await prisma.payment.findMany({
+      where: { ...paymentWhere, paymentDate: today },
+      select: { amount: true, currency: true, kind: true, client: { select: { name: true } } },
+      take: 30,
+    });
+    if (todayPayments.length > 0) {
+      lines.push(`## Payments today (${todayPayments.length})`);
+      for (const p of todayPayments) lines.push(`  ${p.client.name}: ${p.currency} ${p.amount} (${p.kind})`);
+      lines.push('');
+    }
+  }
+
+  // ── 8. Your own activity today (always shown) ───────────────────────────
+  const myAudits = await prisma.auditLog.findMany({
+    where: { createdAt: { gte: todayStart }, byId: user.id },
+    select: { action: true, details: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
+  if (myAudits.length > 0) {
+    const actionCounts: Record<string, number> = {};
+    for (const a of myAudits) actionCounts[a.action] = (actionCounts[a.action] || 0) + 1;
+    lines.push(`## Your activity today (${myAudits.length} actions)`);
+    lines.push(`  ${Object.entries(actionCounts).map(([k, v]) => `${k}×${v}`).join(', ')}`);
+    for (const a of myAudits.slice(0, 6)) lines.push(`    - ${a.action}: ${(a.details || '').slice(0, 80)}`);
+    lines.push('');
+  }
+
+  // ── 9. Org-wide activity today — leadership only ────────────────────────
+  if (isFull(user.role)) {
+    const orgAudits = await prisma.auditLog.findMany({
+      where: { createdAt: { gte: todayStart } },
+      select: { byName: true, action: true, details: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    const byPerson: Record<string, Record<string, number>> = {};
+    for (const a of orgAudits) {
+      const k = a.byName || '—';
+      if (!byPerson[k]) byPerson[k] = {};
+      byPerson[k][a.action] = (byPerson[k][a.action] || 0) + 1;
+    }
+    if (Object.keys(byPerson).length > 0) {
+      lines.push(`## Today's team activity (${orgAudits.length} entries)`);
+      for (const [name, actions] of Object.entries(byPerson)) {
+        lines.push(`  ${name}: ${Object.entries(actions).map(([a, c]) => `${a}×${c}`).join(', ')}`);
+      }
+      lines.push('');
+    }
+  }
+
+  // ── Footer / instructions for the LLM ───────────────────────────────────
+  lines.push('When answering: quote the actual numbers / names from the data above. If the user asks about something not in their snapshot (e.g. a client they don\'t own and they\'re not founder/manager), say "you don\'t have access to that client" rather than making something up. Team first names: Vaibhav, Samita, Anjali, Taran (Taranpreet), Aman (Amandeep), Kanchan, Roshni, Mitali, Bhavneet, Muskan, Kashish, Areena, Ashok, Malika.');
 
   const text = lines.join('\n');
-  cached = { text, builtAt: Date.now() };
+  cacheByUser.set(cacheKey, { text, builtAt: Date.now() });
   return text;
+}
+
+/** Where-clause for clients a non-founder/manager user can see based on
+ *  ownership fields. Returns null if the role doesn't own clients (accounts
+ *  / payment_processor handle data they shouldn't index per-client anyway). */
+function buildPermissionedClientWhere(user: { id: string; role: Role }): any {
+  switch (user.role) {
+    case 'sales_closer':
+      return {
+        OR: [
+          { salesOwnerId: user.id },
+          { lifecycle: { in: ['SaleClosing', 'SaleWon', 'Active', 'LeverageGranted'] } },
+        ],
+        lifecycle: { notIn: ['Churned', 'Completed'] },
+      };
+    case 'demo_intake':
+      return {
+        OR: [
+          { intakeOwnerId: user.id },
+          { lifecycle: { in: ['Lead', 'IntakeSent', 'IntakeReceived', 'WithRecruiters', 'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone', 'FeedbackPending'] } },
+        ],
+        lifecycle: { notIn: ['Churned', 'Completed'] },
+      };
+    case 'demo_lead':
+      // Samita sees the full pre-sales pipeline
+      return { lifecycle: { in: ['Lead', 'IntakeSent', 'IntakeReceived', 'WithRecruiters', 'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone', 'FeedbackPending', 'SaleClosing'] } };
+    case 'recruiter':
+      // Aman/Kanchan don't own clients directly; they see clients tied to
+      // sourcing requests assigned to them. Surface those.
+      return {
+        sourcingRequests: { some: { sentToId: user.id } },
+        lifecycle: { notIn: ['Churned', 'Completed'] },
+      };
+    case 'account_manager':
+      // Muskan/Kashish see clients they host (post-handover service delivery)
+      return {
+        OR: [
+          { hostOwnerId: user.id },
+          { assignedAmId: user.id },
+        ],
+        lifecycle: { notIn: ['Churned', 'Completed'] },
+      };
+    case 'lead': // Bhavneet — backs up manager
+      return { lifecycle: { notIn: ['Churned', 'Completed'] } };
+    case 'accounts':
+    case 'payment_processor':
+      // These roles don't need a per-client index — they work off the
+      // payments view. Returning null skips the section entirely.
+      return null;
+    default:
+      return null;
+  }
 }
