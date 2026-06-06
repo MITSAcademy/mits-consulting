@@ -221,6 +221,48 @@ export async function buildMitsContext(user: { id: string; role: Role; name: str
     }
   }
 
+  // ── 7.5 Call logs — Mitali / Bhavneet / AMs ─────────────────────────────
+  if (isFull(user.role) || user.role === 'lead' || user.role === 'account_manager') {
+    const recentCalls = await prisma.callLog.findMany({
+      where: isFull(user.role) ? {} : { byId: user.id },
+      select: {
+        kind: true, outcome: true, calledAt: true,
+        client: { select: { name: true } },
+        by:     { select: { name: true } },
+      },
+      orderBy: { calledAt: 'desc' },
+      take: 30,
+    });
+    if (recentCalls.length > 0) {
+      lines.push(`## Recent calls${isFull(user.role) ? '' : ' (yours)'} (${recentCalls.length}, most recent 30)`);
+      for (const c of recentCalls) {
+        const d = c.calledAt.toISOString().slice(0, 10);
+        lines.push(`  ${d} | ${c.client.name} | ${c.kind}${c.outcome ? ' · ' + c.outcome : ''} | by ${c.by.name}`);
+      }
+      lines.push('');
+    }
+  }
+
+  // ── 7.6 Mitali / leadership: payment follow-up snapshot ─────────────────
+  if (isFull(user.role) || user.role === 'lead') {
+    const followUpClients = await prisma.client.findMany({
+      where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] } },
+      select: {
+        name: true,
+        followupNote: true,
+        lastFeedbackTakenAt: true,
+        lastLeverageAskedAt: true,
+        paymentPendingVaibhav: true,
+      },
+      take: 100,
+    });
+    const pendingV = followUpClients.filter((c) => c.paymentPendingVaibhav).length;
+    const feedbackStale = followUpClients.filter((c) => !c.lastFeedbackTakenAt).length;
+    const leverageStale = followUpClients.filter((c) => !c.lastLeverageAskedAt).length;
+    lines.push(`## Payment follow-up (Mitali's queue): ${followUpClients.length} active clients, ${pendingV} pending on Vaibhav, ${feedbackStale} have never had feedback taken, ${leverageStale} have never been asked for leverage.`);
+    lines.push('');
+  }
+
   // ── 8. Your own activity today (always shown) ───────────────────────────
   const myAudits = await prisma.auditLog.findMany({
     where: { createdAt: { gte: todayStart }, byId: user.id },
