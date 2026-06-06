@@ -84,7 +84,7 @@ export async function buildMitsContext(): Promise<string> {
   }
 
   // ── Org-wide pipeline + payments snapshot ───────────────────────────────
-  const [pipelineCounts, subStatusCounts, openSourcing, openVerifications, todayPayments] = await Promise.all([
+  const [pipelineCounts, subStatusCounts, openSourcing, openVerifications, todayPayments, recentClients] = await Promise.all([
     prisma.client.groupBy({ by: ['lifecycle'], _count: { _all: true } }),
     prisma.client.groupBy({
       by: ['saleClosingSubStatus'],
@@ -97,6 +97,30 @@ export async function buildMitsContext(): Promise<string> {
       where: { paymentDate: { gte: today } },
       select: { amount: true, currency: true, kind: true, client: { select: { name: true } } },
       take: 20,
+    }),
+    // Recent / active clients — so the AI can answer "tell me about X" questions.
+    // We include 250 most-recently-updated active clients with their key fields.
+    // Excludes Churned + Completed to keep the index focused on what's live.
+    prisma.client.findMany({
+      where: { lifecycle: { notIn: ['Churned', 'Completed'] } },
+      select: {
+        name: true,
+        lifecycle: true,
+        engagementType: true,
+        currency: true,
+        cycleAmount: true,
+        saleClosingSubStatus: true,
+        source: true,
+        demoDate: true,
+        demoTimeIst: true,
+        intakeOwner:   { select: { name: true } },
+        salesOwner:    { select: { name: true } },
+        hostOwner:     { select: { name: true } },
+        primaryTrainer:{ select: { name: true } },
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 250,
     }),
   ]);
 
@@ -146,7 +170,25 @@ export async function buildMitsContext(): Promise<string> {
   if (Object.keys(todayByPerson).length === 0) lines.push('  (No team activity logged yet today)');
   lines.push('');
 
-  lines.push('Use these numbers when answering "how many", "who has", "what did X do today" — they\'re fresh. Names map: u-anjali=Anjali Maini, u-taran=Taranpreet Kaur, u-aman=Amandeep Kaur, u-kanchan=Kanchan Sharma, u-samita=Samita Gupta, u-roshni=Roshni Seth, u-mitali=Mitali, u-bhavneet=Bhavneet, u-vaibhav=Vaibhav.');
+  // Per-client index — compact format so the AI can answer "tell me about X" /
+  // "what's happening with X" / "who owns X" / "when's X's demo" etc.
+  lines.push(`## Active clients index (${recentClients.length} most recently updated, excludes Churned/Completed)`);
+  lines.push('  Format: NAME | stage | engagement | amount | sub | source | trainer | intake/sales/host owner | demo | last update');
+  for (const c of recentClients) {
+    const owners = [
+      c.intakeOwner?.name ? `intake:${c.intakeOwner.name}`   : null,
+      c.salesOwner?.name  ? `sales:${c.salesOwner.name}`     : null,
+      c.hostOwner?.name   ? `host:${c.hostOwner.name}`       : null,
+    ].filter(Boolean).join(', ');
+    const amount = c.cycleAmount ? `${c.currency} ${c.cycleAmount}` : '—';
+    const demo = c.demoDate ? `${c.demoDate}${c.demoTimeIst ? ' ' + c.demoTimeIst : ''}` : '—';
+    const sub = c.saleClosingSubStatus || '—';
+    const updated = c.createdAt.toISOString().slice(0, 10);
+    lines.push(`  ${c.name} | ${c.lifecycle} | ${c.engagementType} | ${amount} | ${sub} | ${c.source || '—'} | ${c.primaryTrainer?.name || '—'} | ${owners || '—'} | demo:${demo} | upd:${updated}`);
+  }
+  lines.push('');
+
+  lines.push('Use the numbers + the client index when answering "how many", "who has", "tell me about <client>", "what did X do today", "when is <client>\'s demo", etc. — they\'re fresh. If a client name isn\'t in the index above, they may be Churned/Completed (excluded above) or genuinely don\'t exist; say so explicitly. Team names map: Anjali Maini, Taranpreet Kaur, Amandeep Kaur (Aman), Kanchan Sharma, Samita Gupta, Roshni Seth, Mitali, Bhavneet, Vaibhav.');
 
   const text = lines.join('\n');
   cached = { text, builtAt: Date.now() };
