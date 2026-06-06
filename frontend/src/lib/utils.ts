@@ -135,8 +135,9 @@ export function homePathFor(role?: string): string {
     case 'staff':             return '/tasks';
     case 'accounts':          return '/accounts-queue';
     case 'payment_processor': return '/trainer-pay';
-    case 'lead':              return '/calendar';
-    case 'manager':
+    case 'lead':              return '/my-sessions';
+    case 'account_manager':   return '/my-sessions';
+    case 'manager':           return '/follow-up-payments';
     case 'founder':           return '/';
     default:                  return '/tasks';
   }

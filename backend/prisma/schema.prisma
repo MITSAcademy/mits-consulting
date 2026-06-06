@@ -176,6 +176,7 @@ model User {
   outboundMessages   OutboundMessage[]
   demosConducted     Demo[]
   notifications      Notification[]
+  callLogs           CallLog[]
 }
 
 // -------- NOTIFICATIONS --------
@@ -411,6 +412,7 @@ model Client {
   feedback         Feedback[]
   outboundMessages OutboundMessage[]
   demos            Demo[]
+  callLogs         CallLog[]
 
   @@index([lifecycle])                                    // every kanban/queue filters by stage
   @@index([nextRenewalDue])                               // RenewalsPage + Roshni queue
@@ -579,6 +581,27 @@ model AccountsQueueItem {
   payment    Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
   status     AccountsStatus @default(Pending)
   createdAt  DateTime       @default(now())
+}
+
+// -------- CALL LOG --------
+// Lightweight call log for account managers (Muskan, Kashish) and Bhavneet.
+// They host sessions AND make check-in calls to clients. Each call is a row
+// here so we can show "last contact" + count of touchpoints per client.
+model CallLog {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  byId        String
+  by          User     @relation(fields: [byId], references: [id], onDelete: Cascade)
+  kind        String   @default("checkin")  // checkin | feedback | leverage | escalation
+  outcome     String?  // answered | no_pickup | rescheduled | completed | escalated
+  durationMinutes Int? // optional, if they remember
+  notes       String?
+  calledAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([clientId, calledAt])  // per-client call history (most recent first)
+  @@index([byId, calledAt])      // per-user call log feed
 }
 
 // -------- FEEDBACK --------

@@ -16,6 +16,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,7 @@ import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { todayISO } from '@/lib/utils';
 import { EmptyState } from '@/components/EmptyState';
-import { ClipboardList, Plus, Calendar as CalendarIcon, CheckCircle2 } from 'lucide-react';
+import { ClipboardList, Plus, Calendar as CalendarIcon, CheckCircle2, Phone } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 
 function googleCalendarLink(opts: { title: string; details?: string; date?: string; timeIst?: string; durationMinutes?: number }) {
@@ -65,6 +66,12 @@ export function MySessionsPage() {
     queryFn: () => api.get('/session-logs', { params: { dateFrom: sevenAgo } }).then((r) => r.data),
   });
 
+  // Recent calls by this user (last 7 days)
+  const { data: recentCalls } = useQuery({
+    queryKey: ['call-logs', { mine: true }],
+    queryFn: () => api.get('/call-logs', { params: { mine: true, limit: 50 } }).then((r) => r.data),
+  });
+
   const todayTasks = (tasks || []).filter((t: any) => t.dueDate === today && t.status !== 'Done');
   const upcoming   = (tasks || []).filter((t: any) => t.dueDate && t.dueDate > today && t.status !== 'Done');
   const overdue    = (tasks || []).filter((t: any) => t.dueDate && t.dueDate < today && t.status !== 'Done');
@@ -83,7 +90,12 @@ export function MySessionsPage() {
       <Topbar
         title="My sessions"
         subtitle={`${todayTasks.length} today · ${overdue.length} overdue`}
-        actions={<LogSessionButton onCreated={() => qc.invalidateQueries({ queryKey: ['session-logs'] })} />}
+        actions={
+          <>
+            <LogCallButton onCreated={() => qc.invalidateQueries({ queryKey: ['call-logs'] })} />
+            <LogSessionButton onCreated={() => qc.invalidateQueries({ queryKey: ['session-logs'] })} />
+          </>
+        }
       />
       <Page>
         {overdue.length > 0 && (
@@ -111,7 +123,30 @@ export function MySessionsPage() {
           </Section>
         )}
 
-        <Section title={`Recently logged (last 7d · ${(recentLogs || []).length})`} tone="grey">
+        <Section title={`My recent calls (${(recentCalls || []).length})`} tone="grey">
+          {(recentCalls || []).length === 0 ? (
+            <div className="muted text-[12px] py-2">No calls logged yet. Use the "Log call" button to add one after each touchpoint.</div>
+          ) : (
+            <div className="table-card">
+              <table>
+                <thead><tr><th>When</th><th>Client</th><th>Kind</th><th>Outcome</th><th>Notes</th></tr></thead>
+                <tbody>
+                  {(recentCalls || []).slice(0, 20).map((c: any) => (
+                    <tr key={c.id}>
+                      <td className="mono">{new Date(c.calledAt).toLocaleDateString()}</td>
+                      <td><Link to={`/clients/${c.client.id}`} className="font-medium hover:underline">{c.client.name}</Link></td>
+                      <td><Pill color={c.kind === 'feedback' ? 'blue' : c.kind === 'leverage' ? 'purple' : c.kind === 'escalation' ? 'red' : 'grey'}>{c.kind}</Pill></td>
+                      <td>{c.outcome || <span className="muted">—</span>}</td>
+                      <td className="text-[11px]">{(c.notes || '—').slice(0, 80)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Section>
+
+        <Section title={`Recently logged sessions (last 7d · ${(recentLogs || []).length})`} tone="grey">
           {(recentLogs || []).length === 0 ? (
             <div className="muted text-[12px] py-2">No sessions logged yet this week.</div>
           ) : (
@@ -184,6 +219,95 @@ function TaskRow({ t, onDone }: { t: any; onDone: () => void }) {
         </Button>
       </div>
     </div>
+  );
+}
+
+/** Lightweight "Log a call" modal — used by AMs + Bhavneet + Mitali after a
+ *  check-in / feedback / leverage call. Creates a CallLog row, audit log, done. */
+function LogCallButton({ onCreated }: { onCreated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const showToast = useUI((s) => s.showToast);
+  const [form, setForm] = useState({ clientId: '', kind: 'checkin', outcome: '', durationMinutes: '', notes: '' });
+
+  const { data: clients } = useQuery({
+    queryKey: ['clients'],
+    queryFn: () => api.get('/clients').then((r) => r.data),
+    enabled: open,
+  });
+
+  const create = useMutation({
+    mutationFn: () => api.post('/call-logs', {
+      clientId: form.clientId,
+      kind: form.kind,
+      outcome: form.outcome || null,
+      durationMinutes: form.durationMinutes ? Number(form.durationMinutes) : null,
+      notes: form.notes || null,
+    }),
+    onSuccess: () => {
+      setOpen(false);
+      onCreated();
+      showToast('Call logged');
+      setForm({ clientId: '', kind: 'checkin', outcome: '', durationMinutes: '', notes: '' });
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button><Phone size={12}/> Log call</Button>
+      </DialogTrigger>
+      <DialogContent title="Log a client call" description="Track check-ins, feedback calls, leverage asks, etc.">
+        <div className="grid md:grid-cols-2 gap-2">
+          <div className="form-row">
+            <Label>Client *</Label>
+            <Select value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}>
+              <option value="">— pick —</option>
+              {(clients || []).map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </div>
+          <div className="form-row">
+            <Label>Kind</Label>
+            <Select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+              <option value="checkin">Check-in</option>
+              <option value="feedback">Feedback</option>
+              <option value="leverage">Leverage / referral ask</option>
+              <option value="escalation">Escalation</option>
+            </Select>
+          </div>
+          <div className="form-row">
+            <Label>Outcome</Label>
+            <Select value={form.outcome} onChange={(e) => setForm({ ...form, outcome: e.target.value })}>
+              <option value="">—</option>
+              <option value="answered">Answered</option>
+              <option value="no_pickup">No pickup</option>
+              <option value="rescheduled">Rescheduled</option>
+              <option value="completed">Completed</option>
+              <option value="escalated">Escalated</option>
+            </Select>
+          </div>
+          <div className="form-row">
+            <Label>Duration (minutes)</Label>
+            <Input type="number" min="0" step="1" value={form.durationMinutes} onChange={(e) => setForm({ ...form, durationMinutes: e.target.value })} placeholder="optional" />
+          </div>
+        </div>
+        <div className="form-row">
+          <Label>Notes</Label>
+          <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="What was discussed, any follow-up needed, etc." />
+        </div>
+        <DialogFooter>
+          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button
+            variant="primary"
+            disabled={!form.clientId || create.isPending}
+            disabledReason={!form.clientId ? 'Pick a client first' : null}
+            onClick={() => create.mutate()}
+          >
+            {create.isPending ? 'Saving…' : 'Log call'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
