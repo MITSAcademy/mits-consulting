@@ -4,6 +4,7 @@ import { api, fileUrl, uploadFile } from '@/lib/api';
 import { readAvailabilitySlots, formatAvailabilitySlots, to12h } from '@/lib/utils';
 import { Time12h } from '@/components/Time12h';
 import { celebrate } from '@/components/CelebrationLayer';
+import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
@@ -108,7 +109,30 @@ export function ClientDetailPage() {
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
-  if (isLoading || !client) return <Page><div className="muted">Loading…</div></Page>;
+  if (isLoading || !client) return (
+    <Page>
+      <div className="space-y-3">
+        <div className="card">
+          <SkeletonBlock w={180} h={20} className="mb-2" />
+          <SkeletonBlock w={260} h={12} />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="kpi-card" style={{ minHeight: 70 }}>
+              <SkeletonBlock w={70} h={10} className="mb-2" />
+              <SkeletonBlock w={50} h={18} />
+            </div>
+          ))}
+        </div>
+        <div className="card">
+          <SkeletonBlock w={140} h={12} className="mb-3" />
+          <SkeletonBlock w="100%" h={12} className="mb-2" />
+          <SkeletonBlock w="92%" h={12} className="mb-2" />
+          <SkeletonBlock w="78%" h={12} />
+        </div>
+      </div>
+    </Page>
+  );
 
   const intake = (client.intakeData as any) || {};
   const hasIntake = Object.values(intake).some(Boolean);

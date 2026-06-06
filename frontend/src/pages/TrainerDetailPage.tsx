@@ -10,6 +10,7 @@ import { AvailabilitySlotsEditor } from '@/components/AvailabilitySlotsEditor';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
+import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 import { Mail, MessageCircle, ArrowLeft } from 'lucide-react';
 
@@ -37,7 +38,16 @@ export function TrainerDetailPage() {
     },
   });
 
-  if (!t) return <Page><div className="muted">Loading…</div></Page>;
+  if (!t) return (
+    <Page>
+      <div className="card">
+        <SkeletonBlock w={200} h={22} className="mb-3" />
+        <SkeletonBlock w="100%" h={12} className="mb-2" />
+        <SkeletonBlock w="80%" h={12} className="mb-2" />
+        <SkeletonBlock w="60%" h={12} />
+      </div>
+    </Page>
+  );
 
   return (
     <>

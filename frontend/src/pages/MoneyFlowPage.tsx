@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
+import { SkeletonKpis, SkeletonTable } from '@/components/ui/Skeleton';
 
 export function MoneyFlowPage() {
   const { data: home } = useQuery({
@@ -12,7 +13,16 @@ export function MoneyFlowPage() {
     queryFn: () => api.get('/metrics/money-flow').then((r) => r.data),
   });
 
-  if (!home) return <div className="p-10 muted">Loading…</div>;
+  if (!home) return (
+    <>
+      <Topbar title="Money flow" subtitle="MTD" />
+      <Page>
+        <SkeletonKpis count={4} />
+        <SkeletonKpis count={4} />
+        <SkeletonTable rows={6} cols={5} />
+      </Page>
+    </>
+  );
 
   const m = home.money;
   return (
