@@ -28,7 +28,10 @@ export interface AiAskResult {
 /** Pick the first configured provider. Returns null if none. */
 export function getConfiguredProvider(): { provider: AiProvider; model: string } | null {
   if (process.env.XAI_API_KEY) {
-    return { provider: 'xai', model: process.env.XAI_MODEL || 'grok-2-latest' };
+    // Default to grok-4-fast-non-reasoning — current production xAI model with
+    // good speed/cost balance. Override with XAI_MODEL env var if you want
+    // a different one (e.g. grok-4 for reasoning, grok-3-mini for cheapest).
+    return { provider: 'xai', model: process.env.XAI_MODEL || 'grok-4-fast-non-reasoning' };
   }
   if (process.env.ANTHROPIC_API_KEY) {
     return { provider: 'anthropic', model: process.env.ANTHROPIC_MODEL || 'claude-3-5-sonnet-latest' };
