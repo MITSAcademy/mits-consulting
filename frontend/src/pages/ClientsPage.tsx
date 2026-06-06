@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Link } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
 import { stageColor, stageLabel } from '@/lib/utils';
 import { useAuth } from '@/store/auth';
 import { useUI } from '@/store/ui';
@@ -223,6 +224,24 @@ export function ClientsPage() {
                   </td>
                 </tr>
               ))}
+              {list.length === 0 && (
+                <tr>
+                  <td colSpan={showAmt ? 7 : 6}>
+                    <EmptyState
+                      icon={Users}
+                      tone="gold"
+                      title={search ? `No clients match "${search}"` : (mineOnly ? "No clients assigned to you yet" : "No clients yet")}
+                      description={
+                        search
+                          ? 'Try a shorter search term or clear the filter.'
+                          : mineOnly
+                            ? "When clients come into your role's queue they'll show up here. Switch to All to see the full list."
+                            : 'Click "+ New lead" above to add the first one.'
+                      }
+                    />
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
