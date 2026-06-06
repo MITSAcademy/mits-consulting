@@ -14,6 +14,7 @@
 import { Router } from 'express';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { askAi, getConfiguredProvider } from '../lib/aiProvider';
+import { buildMitsContext } from '../lib/aiContext';
 
 export const aiRouter = Router();
 aiRouter.use(requireAuth);
@@ -52,7 +53,9 @@ The tool covers the full client lifecycle:
 
 Roshni's 4 win outcomes are: Training-Paid, JBT-Paid, Training-EmployerLater, JBT-EmployerLater. Plus CP (closure pending, silent client) and C (not starting, lost).
 
-Be brief and direct (2-4 sentences). Speak as a helpful colleague who knows the tool inside-out. Suggest specific pages or actions when relevant. If asked about real client data, say you don't have access to live records — suggest where to look in the tool.`;
+Be brief and direct (2-4 sentences). Speak as a helpful colleague who knows the tool inside-out. Suggest specific pages or actions when relevant.
+
+When the user asks "how many", "who has", "what did X do today", or similar count/activity questions, USE the LIVE SNAPSHOT data injected below — it's fresh (cached up to 60 seconds). Quote the actual number. Only say "I don't have access" if the question genuinely isn't covered by the snapshot.`;
 }
 
 aiRouter.post('/ask', async (req: AuthedRequest, res) => {
@@ -71,8 +74,19 @@ aiRouter.post('/ask', async (req: AuthedRequest, res) => {
     });
   }
   try {
+    // Fetch the live data snapshot in parallel with prompt building.
+    // Errors from the context build shouldn't block the AI — fall back to
+    // the static prompt if the DB is having a bad day.
+    const baseSystem = buildSystemPrompt({ name: req.user!.name, role: req.user!.role });
+    let context = '';
+    try {
+      context = await buildMitsContext();
+    } catch (e) {
+      console.warn('[ai] context build failed (degrading to no-context):', (e as any)?.message);
+    }
+    const systemPrompt = context ? `${baseSystem}\n\n--- LIVE SNAPSHOT ---\n${context}\n--- END SNAPSHOT ---` : baseSystem;
     const r = await askAi({
-      systemPrompt: buildSystemPrompt({ name: req.user!.name, role: req.user!.role }),
+      systemPrompt,
       question: message,
       history: Array.isArray(history) ? history.slice(-10) : undefined,
       maxTokens: 600,
