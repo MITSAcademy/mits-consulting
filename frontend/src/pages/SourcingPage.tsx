@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useState, useEffect } from 'react';
 import { useUI } from '@/store/ui';
+import { EmptyState } from '@/components/EmptyState';
+import { Briefcase } from 'lucide-react';
 import { Pill } from '@/components/ui/pill';
 import { Link } from 'react-router-dom';
 import { Plus, MessageCircle, FileAudio, Image, FileText, Upload, X, Mail, Send } from 'lucide-react';
@@ -117,7 +119,12 @@ export function SourcingPage() {
         </div>
 
         {open.length === 0 && proposed.length === 0 && (
-          <div className="muted text-center py-8">No sourcing requests.</div>
+          <EmptyState
+            icon={Briefcase}
+            tone="green"
+            title="All caught up"
+            description="No open sourcing requests right now. New ones land here as Anjali / Taran push clients to recruiters."
+          />
         )}
 
         {open.length > 0 && (

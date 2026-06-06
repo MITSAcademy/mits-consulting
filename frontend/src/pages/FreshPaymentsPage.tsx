@@ -8,6 +8,8 @@ import { useState, useMemo } from 'react';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { todayISO } from '@/lib/utils';
+import { EmptyState } from '@/components/EmptyState';
+import { Wallet } from 'lucide-react';
 
 export function FreshPaymentsPage() {
   const qc = useQueryClient();
@@ -111,11 +113,20 @@ export function FreshPaymentsPage() {
                 </tr>
               ))}
               {filteredPayments.length === 0 && (
-                <tr><td colSpan={6} className="muted text-center py-6">
-                  {mineOnly && user.role === 'sales_closer'
-                    ? 'No payments recorded for your clients yet. Record one via the + Record payment button.'
-                    : 'No payments recorded yet.'}
-                </td></tr>
+                <tr>
+                  <td colSpan={6}>
+                    <EmptyState
+                      icon={Wallet}
+                      tone="gold"
+                      title="No payments recorded yet"
+                      description={
+                        mineOnly && user.role === 'sales_closer'
+                          ? 'Nothing for your clients yet. Click "+ Record payment" above to log the first one.'
+                          : 'Once a client pays, log it here so accounts can reconcile and the client moves to Sale Won.'
+                      }
+                    />
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
