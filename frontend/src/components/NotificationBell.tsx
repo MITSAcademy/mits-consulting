@@ -89,28 +89,66 @@ export function NotificationBell() {
     <div ref={wrapRef} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen(!open)}
-        className="relative p-2 rounded hover:bg-bg-input"
+        className="relative p-2 rounded transition-colors hover:bg-bg-cardHover"
         title="Notifications"
         aria-label="Notifications"
       >
-        <Bell size={18} />
+        <Bell
+          size={18}
+          style={{
+            color: unread > 0 ? 'var(--accent-gold)' : undefined,
+            // Tiny "shake" when unread > 0 so it draws the eye on page load
+            animation: unread > 0 ? 'bellWiggle 4s ease-in-out infinite' : undefined,
+          }}
+        />
         {unread > 0 && (
           <span
-            className="absolute -top-0.5 -right-0.5 bg-brand-red text-white text-[10px] font-bold rounded-full px-1 min-w-[16px] h-[16px] flex items-center justify-center"
-            style={{ lineHeight: 1 }}
+            className="absolute -top-0.5 -right-0.5 text-[10px] font-bold rounded-full px-1 min-w-[17px] h-[17px] flex items-center justify-center"
+            style={{
+              background: 'var(--status-red)',
+              color: 'white',
+              lineHeight: 1,
+              boxShadow: '0 2px 6px rgba(239,68,68,0.45), 0 0 0 2px var(--bg-page)',
+              animation: 'unreadPop 360ms cubic-bezier(0.18, 0.89, 0.32, 1.28) both',
+            }}
           >
             {unread > 99 ? '99+' : unread}
           </span>
         )}
       </button>
       {open && (
-        <div className="absolute right-0 mt-1 w-[360px] max-h-[480px] overflow-y-auto rounded-md border border-brand-border bg-bg-card shadow-lg z-50">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-brand-border">
-            <span className="text-sm font-semibold">Notifications</span>
+        <div
+          className="absolute right-0 mt-2 w-[380px] max-h-[500px] overflow-y-auto rounded-2xl z-50"
+          style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--brand-border)',
+            boxShadow: '0 16px 50px rgba(0,0,0,0.35), 0 0 0 1px rgba(229,178,76,0.06)',
+            animation: 'notifDropIn 220ms cubic-bezier(0.2, 0.9, 0.25, 1) both',
+          }}
+        >
+          <div
+            className="flex items-center justify-between px-4 py-2.5 sticky top-0 z-10"
+            style={{
+              background: 'var(--bg-card)',
+              borderBottom: '1px solid var(--brand-border)',
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold tracking-tight">Notifications</span>
+              {unread > 0 && (
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                  style={{ background: 'var(--accent-goldSoft)', color: 'var(--accent-gold)' }}
+                >
+                  {unread} new
+                </span>
+              )}
+            </div>
             {unread > 0 && (
               <button
                 onClick={() => markAll.mutate()}
-                className="text-[11px] text-brand-blue hover:underline flex items-center gap-1"
+                className="text-[11px] font-medium flex items-center gap-1 transition-colors"
+                style={{ color: 'var(--accent-gold)' }}
                 title="Mark all as read"
               >
                 <Check size={11} /> Mark all read
@@ -118,22 +156,46 @@ export function NotificationBell() {
             )}
           </div>
           {!list || list.length === 0 ? (
-            <div className="muted text-sm py-6 text-center">No notifications yet.</div>
+            <div className="py-10 px-6 text-center">
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2"
+                style={{ background: 'var(--bg-cardHover)' }}
+              >
+                <Bell size={18} style={{ color: 'var(--brand-textMuted)' }} />
+              </div>
+              <div className="text-[13px] font-semibold mb-1">All caught up</div>
+              <div className="text-[11px] muted">You'll see new updates here as they arrive.</div>
+            </div>
           ) : (
             list.map((n) => (
               <button
                 key={n.id}
                 onClick={() => clickItem(n)}
-                className={`w-full text-left px-3 py-2 border-b border-brand-border hover:bg-bg-input ${n.readAt ? 'opacity-60' : 'bg-bg-input/30'}`}
+                className="w-full text-left px-4 py-2.5 transition-colors"
+                style={{
+                  borderBottom: '1px solid var(--brand-borderSoft)',
+                  background: n.readAt ? 'transparent' : 'var(--accent-goldSoft)',
+                  opacity: n.readAt ? 0.65 : 1,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-cardHover)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = n.readAt ? 'transparent' : 'var(--accent-goldSoft)'; }}
               >
-                <div className="flex items-start gap-2">
-                  {!n.readAt && (
-                    <span className="mt-1.5 w-2 h-2 rounded-full bg-brand-blue flex-shrink-0" />
-                  )}
+                <div className="flex items-start gap-2.5">
+                  <span
+                    className="mt-1.5 w-2 h-2 rounded-full flex-shrink-0"
+                    style={{
+                      background: n.readAt ? 'transparent' : 'var(--accent-gold)',
+                      boxShadow: n.readAt ? 'none' : '0 0 6px rgba(229,178,76,0.5)',
+                    }}
+                  />
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium leading-snug">{n.title}</div>
-                    {n.body && <div className="text-[11px] muted mt-0.5 leading-snug">{n.body}</div>}
-                    <div className="text-[10px] muted mt-1">{timeAgo(n.createdAt)}</div>
+                    <div className="text-[12.5px] font-semibold leading-snug" style={{ color: 'var(--brand-text)' }}>
+                      {n.title}
+                    </div>
+                    {n.body && (
+                      <div className="text-[11px] muted mt-0.5 leading-snug">{n.body}</div>
+                    )}
+                    <div className="text-[10px] muted mt-1.5">{timeAgo(n.createdAt)}</div>
                   </div>
                 </div>
               </button>
@@ -141,6 +203,22 @@ export function NotificationBell() {
           )}
         </div>
       )}
+      <style>{`
+        @keyframes bellWiggle {
+          0%, 92%, 100% { transform: rotate(0); }
+          94%           { transform: rotate(-9deg); }
+          96%           { transform: rotate(7deg); }
+          98%           { transform: rotate(-4deg); }
+        }
+        @keyframes unreadPop {
+          from { opacity: 0; transform: scale(0.4); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes notifDropIn {
+          from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+          to   { opacity: 1; transform: translateY(0)    scale(1); }
+        }
+      `}</style>
     </div>
   );
 }

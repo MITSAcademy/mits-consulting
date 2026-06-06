@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { EmptyState } from '@/components/EmptyState';
 import { useUI } from '@/store/ui';
 import { todayISO, stageLabel, formatPhone, waLink } from '@/lib/utils';
 import { Moon, MessageCircle, Play } from 'lucide-react';
@@ -139,17 +140,21 @@ export function DormantClientsPage() {
         </div>
 
         {dormant.length === 0 && allDormant.length === 0 && (
-          <div className="text-center py-12 muted">
-            <Moon size={32} className="inline-block mb-2 opacity-50"/>
-            <div className="text-base font-semibold text-brand-text mb-1">All clients are responding ✓</div>
-            <div>No-one's gone silent. Things are good.</div>
-          </div>
+          <EmptyState
+            icon={Moon}
+            tone="green"
+            title="All clients are responding"
+            description="No-one's gone silent. Things are good — keep an eye on the renewals queue for what's next."
+          />
         )}
 
         {dormant.length === 0 && allDormant.length > 0 && (
-          <div className="text-center py-12 muted">
-            No dormant clients match "<strong>{q}</strong>".
-          </div>
+          <EmptyState
+            icon={Moon}
+            tone="grey"
+            title={`No matches for "${q}"`}
+            description="Try a shorter search term, or clear the filter to see every dormant client."
+          />
         )}
 
         {overdue.length > 0 && (
