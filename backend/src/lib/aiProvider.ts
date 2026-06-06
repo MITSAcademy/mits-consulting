@@ -59,10 +59,10 @@ export async function askAi(opts: AiAskOpts): Promise<AiAskResult> {
   const maxTokens = opts.maxTokens || 800;
 
   if (cfg.provider === 'gemini') {
-    // Google Gemini — REST API, key in URL query param.
-    // Format: contents = list of { role: 'user'|'model', parts: [{text}] }
-    // System prompt goes into a top-level system_instruction field.
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    // Google Gemini — REST API. Key goes in the X-goog-api-key header
+    // (Google's current recommended approach; works with both legacy
+    // AIza… keys and the new AQ.… format).
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent`;
     const contents = [
       ...(opts.history || []).map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
@@ -72,7 +72,10 @@ export async function askAi(opts: AiAskOpts): Promise<AiAskResult> {
     ];
     const r = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-goog-api-key': process.env.GEMINI_API_KEY!,
+      },
       body: JSON.stringify({
         system_instruction: { parts: [{ text: opts.systemPrompt }] },
         contents,
