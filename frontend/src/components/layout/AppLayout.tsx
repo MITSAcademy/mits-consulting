@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/toast';
 import { NotificationBell } from '@/components/NotificationBell';
 import { ThemeToggle, timeGreeting } from '@/components/ThemeToggle';
 import { SetupAppPasswordModal } from '@/components/SetupAppPasswordModal';
+import { AskAIButton } from '@/components/AskAI';
 import { useAuth } from '@/store/auth';
 
 export function AppLayout() {
@@ -67,6 +68,7 @@ export function Topbar({
       </div>
       <div className="flex gap-1.5 items-center flex-wrap">
         {actions}
+        <AskAIButton />
         <ThemeToggle />
         <NotificationBell />
       </div>

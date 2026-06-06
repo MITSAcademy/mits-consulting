@@ -30,6 +30,7 @@ import { uploadsRouter, UPLOAD_DIR } from './routes/uploads';
 import { messagesRouter } from './routes/messages';
 import { calendarRouter } from './routes/calendar';
 import { oauthRouter } from './routes/oauth';
+import { aiRouter } from './routes/ai';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -78,6 +79,7 @@ app.use('/api/uploads', uploadsRouter);
 app.use('/api/messages', messagesRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/oauth', oauthRouter);
+app.use('/api/ai', aiRouter);
 
 // Global error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

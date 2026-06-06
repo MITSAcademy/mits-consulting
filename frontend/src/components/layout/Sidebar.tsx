@@ -188,22 +188,26 @@ export function Sidebar() {
         color: '#E8E2D3', // cream — sidebar is always dark, so always use cream text
       }}
     >
-      {/* Brand header — Academy mark + thin gold rule underneath */}
+      {/* Brand header — clean MITS wordmark + thin gold rule underneath */}
       <div className="px-4 pb-3">
         <div className="flex items-center gap-2.5">
           <div
-            className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+            className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
             style={{
-              background: 'linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-goldDeep) 100%)',
-              boxShadow: '0 2px 8px rgba(229,178,76,0.25)',
+              background: 'linear-gradient(135deg, #FAF5E7 0%, #E8DEC2 100%)',
+              boxShadow: '0 2px 10px rgba(229,178,76,0.20), inset 0 1px 0 rgba(255,255,255,0.40)',
+              color: '#0F1115',
             }}
           >
-            <img src="/mits-logo.svg" alt="MITS" className="w-7 h-7" />
+            {/* SVG uses currentColor → renders dark on the cream tile */}
+            <img src="/mits-logo.svg" alt="MITS" className="w-8 h-8" style={{ filter: 'none' }} />
           </div>
           <div className="leading-tight">
-            <div className="text-[15px] font-bold tracking-tight" style={{ color: '#F5EFE0' }}>MITS</div>
             <div className="text-[10px] uppercase tracking-[0.14em]" style={{ color: 'rgba(229,178,76,0.85)' }}>
               Consulting Hub
+            </div>
+            <div className="text-[12px] mt-0.5" style={{ color: 'rgba(232,226,211,0.62)' }}>
+              by MITS
             </div>
           </div>
         </div>
