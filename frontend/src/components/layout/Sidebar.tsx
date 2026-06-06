@@ -180,16 +180,50 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="w-60 bg-bg-sidebar border-r border-brand-border py-4 flex flex-col sticky top-0 h-screen flex-shrink-0 overflow-y-auto">
-      <div className="flex items-center gap-2.5 px-4 pb-4 text-[15px] font-medium">
-        <img src="/mits-logo.svg" alt="MITS" className="w-7 h-7 rounded-md flex-shrink-0" />
-        <span>MITS Consulting Hub</span>
+    <aside
+      className="w-60 border-r py-4 flex flex-col sticky top-0 h-screen flex-shrink-0 overflow-y-auto"
+      style={{
+        background: 'linear-gradient(180deg, var(--bg-sidebar) 0%, color-mix(in srgb, var(--bg-sidebar) 92%, #000) 100%)',
+        borderColor: 'rgba(255,255,255,0.06)',
+        color: '#E8E2D3', // cream — sidebar is always dark, so always use cream text
+      }}
+    >
+      {/* Brand header — Academy mark + thin gold rule underneath */}
+      <div className="px-4 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{
+              background: 'linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-goldDeep) 100%)',
+              boxShadow: '0 2px 8px rgba(229,178,76,0.25)',
+            }}
+          >
+            <img src="/mits-logo.svg" alt="MITS" className="w-7 h-7" />
+          </div>
+          <div className="leading-tight">
+            <div className="text-[13px] font-bold tracking-tight" style={{ color: '#F5EFE0' }}>MITS Academy</div>
+            <div className="text-[10px] uppercase tracking-[0.14em]" style={{ color: 'rgba(229,178,76,0.85)' }}>
+              Consulting Hub
+            </div>
+          </div>
+        </div>
+        <div
+          className="mt-3 h-px"
+          style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(229,178,76,0.40) 50%, transparent 100%)' }}
+        />
       </div>
 
       {Object.keys(SECTIONS).map((k) =>
         grouped[k] ? (
-          <div key={k}>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-brand-textMuted px-4 pt-3 pb-1">
+          <div key={k} className="mb-1">
+            <div
+              className="text-[10px] font-bold uppercase tracking-[0.14em] px-4 pt-3 pb-1.5 flex items-center gap-2"
+              style={{ color: 'rgba(245,239,224,0.45)' }}
+            >
+              <span
+                className="inline-block w-1 h-1 rounded-full"
+                style={{ background: 'var(--accent-gold)', opacity: 0.6 }}
+              />
               {SECTIONS[k]}
             </div>
             {grouped[k].map((n) => {
@@ -201,23 +235,50 @@ export function Sidebar() {
                 <NavLink
                   key={n.page}
                   to={n.page}
-                  className={() =>
-                    `flex items-center gap-2.5 px-4 py-1.5 text-[13px] cursor-pointer transition-all border-l-2 ${
-                      isActive
-                        ? 'bg-bg-card text-brand-text border-brand-amber'
-                        : 'text-brand-textSecondary border-transparent hover:bg-bg-card hover:text-brand-text'
-                    }`
-                  }
+                  className="flex items-center gap-2.5 px-4 py-2 text-[13px] cursor-pointer relative group"
+                  style={{
+                    color: isActive ? '#FAF5E7' : 'rgba(232,226,211,0.78)',
+                    background: isActive
+                      ? 'linear-gradient(90deg, rgba(229,178,76,0.18) 0%, rgba(229,178,76,0.04) 100%)'
+                      : 'transparent',
+                    transition: 'background-color 150ms ease, color 150ms ease, padding-left 150ms ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                      e.currentTarget.style.color = '#FAF5E7';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'rgba(232,226,211,0.78)';
+                    }
+                  }}
                 >
-                  <span className="w-[18px] text-center">
+                  {/* Gold left accent bar — only on active item */}
+                  {isActive && (
+                    <span
+                      aria-hidden
+                      className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full"
+                      style={{
+                        background: 'linear-gradient(180deg, var(--accent-gold) 0%, var(--accent-goldDeep) 100%)',
+                        boxShadow: '0 0 8px rgba(229,178,76,0.5)',
+                      }}
+                    />
+                  )}
+                  <span className="w-[18px] text-center flex-shrink-0">
                     <Icon size={14} />
                   </span>
-                  <span className="flex-1">{n.label}</span>
+                  <span className="flex-1 truncate">{n.label}</span>
                   {b > 0 && (
                     <span
-                      className={`ml-auto text-[10px] px-1.5 py-0 rounded-full font-semibold ${
-                        n.page === '/verifications' ? 'bg-brand-red text-white' : 'bg-brand-amber text-[#1A1B1E]'
-                      }`}
+                      className="ml-auto text-[10px] px-1.5 py-px rounded-full font-bold leading-none min-w-[18px] text-center"
+                      style={
+                        n.page === '/verifications'
+                          ? { background: 'var(--status-red)', color: 'white', boxShadow: '0 1px 3px rgba(239,68,68,0.35)' }
+                          : { background: 'var(--accent-gold)', color: '#0F1115', boxShadow: '0 1px 3px rgba(229,178,76,0.35)' }
+                      }
                     >
                       {b}
                     </span>
@@ -229,15 +290,28 @@ export function Sidebar() {
         ) : null,
       )}
 
-      <div className="mt-auto px-3 pt-3 border-t border-brand-border flex items-center gap-2.5">
+      <div
+        className="mt-auto mx-3 mt-3 px-2.5 py-2.5 rounded-lg flex items-center gap-2.5"
+        style={{
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.06)',
+        }}
+      >
         <Avatar name={user.name} />
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-[13px]">{user.name}</div>
-          <div className="text-[11px] text-brand-textMuted capitalize">
+          <div className="font-semibold text-[13px] truncate" style={{ color: '#F5EFE0' }}>{user.name}</div>
+          <div className="text-[10.5px] uppercase tracking-[0.10em]" style={{ color: 'rgba(229,178,76,0.75)' }}>
             {user.role.replace(/_/g, ' ')}
           </div>
         </div>
-        <button onClick={() => logout()} className="text-brand-textMuted hover:text-brand-text" title="Logout">
+        <button
+          onClick={() => logout()}
+          className="p-1.5 rounded transition-colors"
+          style={{ color: 'rgba(232,226,211,0.55)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--status-red)'; e.currentTarget.style.background = 'rgba(239,68,68,0.10)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(232,226,211,0.55)'; e.currentTarget.style.background = 'transparent'; }}
+          title="Logout"
+        >
           <LogOut size={14} />
         </button>
       </div>

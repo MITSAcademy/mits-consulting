@@ -126,17 +126,21 @@
   .muted { color: var(--brand-textMuted); }
 
   .pill {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full font-medium whitespace-nowrap;
+    @apply inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full font-semibold whitespace-nowrap;
+    border: 1px solid transparent;
+    letter-spacing: 0.01em;
   }
-  .pill-grey   { background: var(--pill-grey-bg); color: var(--brand-textSecondary); }
-  .pill-green  { background: rgba(74,222,128,0.14);  color: var(--status-green);  }
-  .pill-amber  { background: rgba(245,158,11,0.14);  color: var(--status-amber);  }
-  .pill-red    { background: rgba(239,68,68,0.14);   color: var(--status-red);    }
-  .pill-blue   { background: rgba(91,141,239,0.14);  color: var(--status-blue);   }
-  .pill-purple { background: rgba(167,139,250,0.14); color: var(--status-purple); }
-  .pill-pink   { background: rgba(236,72,153,0.14);  color: #EC4899; }
-  .pill-teal   { background: rgba(20,184,166,0.14);  color: var(--status-teal);   }
-  .pill-gold   { background: var(--accent-goldSoft); color: var(--accent-gold);   }
+  /* Stronger contrast (border + fill) so pills read on cream paper AND
+     deep charcoal without being washed out. */
+  .pill-grey   { background: var(--pill-grey-bg);             color: var(--brand-textSecondary); border-color: var(--brand-border); }
+  .pill-green  { background: rgba(74,222,128,0.18);   color: var(--status-green);  border-color: rgba(74,222,128,0.32); }
+  .pill-amber  { background: rgba(245,158,11,0.18);   color: var(--status-amber);  border-color: rgba(245,158,11,0.36); }
+  .pill-red    { background: rgba(239,68,68,0.18);    color: var(--status-red);    border-color: rgba(239,68,68,0.32); }
+  .pill-blue   { background: rgba(91,141,239,0.18);   color: var(--status-blue);   border-color: rgba(91,141,239,0.32); }
+  .pill-purple { background: rgba(167,139,250,0.18);  color: var(--status-purple); border-color: rgba(167,139,250,0.32); }
+  .pill-pink   { background: rgba(236,72,153,0.18);   color: #EC4899; border-color: rgba(236,72,153,0.32); }
+  .pill-teal   { background: rgba(20,184,166,0.18);   color: var(--status-teal);   border-color: rgba(20,184,166,0.32); }
+  .pill-gold   { background: var(--accent-goldSoft);  color: var(--accent-gold);   border-color: rgba(229,178,76,0.40); }
 
   .card {
     background: var(--bg-card);
@@ -182,9 +186,12 @@
     font-size: 13px;
   }
   .table-card tr.clickable { cursor: pointer; }
-  .table-card tr.clickable:hover td { background: var(--bg-cardHover); }
+  .table-card tbody tr { transition: background-color 120ms ease; }
+  .table-card tbody tr:hover td {
+    background: color-mix(in srgb, var(--accent-gold) 8%, var(--bg-card));
+  }
   .table-card tr:last-child td { border-bottom: none; }
-  .table-card td.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .table-card td.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--brand-textSecondary); }
 
   .callout {
     background: var(--bg-input);
@@ -243,12 +250,22 @@
   .btn:active:not(:disabled) { transform: translateY(1px); }
   .btn:focus-visible { outline: 2px solid var(--accent-gold); outline-offset: 2px; }
 
+  /* Primary CTA — refined academic blue with depth instead of flat saturation.
+     The gradient + soft shadow give the button a tactile, "press me" feel
+     without screaming. Hover lifts it 1px. */
   .btn-primary {
-    background: var(--status-blue);
+    background: linear-gradient(180deg, #6F9AF2 0%, var(--status-blue) 100%);
     color: white;
     border-color: var(--status-blue);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 1px 3px rgba(91,141,239,0.20);
   }
-  .btn-primary:hover:not(:disabled) { background: #4A7AE0; border-color: #4A7AE0; box-shadow: 0 2px 8px rgba(91,141,239,0.25); }
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(180deg, #7BA4F4 0%, #4A7AE0 100%);
+    border-color: #4A7AE0;
+    box-shadow: 0 2px 10px rgba(91,141,239,0.30);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active:not(:disabled) { transform: translateY(0); }
 
   .btn-success {
     background: var(--status-green);
