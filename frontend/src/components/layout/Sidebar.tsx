@@ -129,6 +129,12 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
         ['Active', 'LeverageGranted'].includes(c.lifecycle)
         && c.nextRenewalDue && c.nextRenewalDue <= weekOut,
       ).length;
+      // Payment follow-up (Mitali): Active/LeverageGranted/SaleWon clients
+      // flagged pending-Vaibhav OR active. Cheap proxy without round-tripping
+      // the follow-up endpoint — counts active clients overall.
+      const followUpActiveTotal = cl.filter((c) =>
+        ['Active', 'LeverageGranted', 'SaleWon'].includes(c.lifecycle),
+      ).length;
       return {
         pendingVaibhav: home.ops.pendingVaibhav,
         pendingLeverage: leverage.length,
@@ -143,6 +149,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
         salesClosingActive,
         followUpsDue,
         renewalsDue,
+        followUpActiveTotal,
       };
     },
     // 3 min — badges are advisory, no need to hammer the server every 30s.
@@ -178,6 +185,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
     if (page === '/sales-closing') return metrics.salesClosingActive;
     if (page === '/roshni/follow-ups') return metrics.followUpsDue;
     if (page === '/renewals') return metrics.renewalsDue;
+    if (page === '/follow-up-payments') return metrics.followUpActiveTotal;
     return 0;
   };
 

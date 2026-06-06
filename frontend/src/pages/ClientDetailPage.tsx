@@ -17,6 +17,7 @@ import { useAuth } from '@/store/auth';
 import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play, X, Download, Users } from 'lucide-react';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
+import { CallHistoryCard } from '@/components/CallHistoryCard';
 
 const INTAKE_FIELDS = [
   { key: 'detailed_skill_set', label: 'Detailed skill set', required: true },
@@ -720,6 +721,7 @@ export function ClientDetailPage() {
             </div>
 
             <DemoHistoryCard clientId={client.id} />
+            <CallHistoryCard clientId={client.id} />
             <MessagesHistoryCard clientId={client.id} />
           </div>
         </div>
