@@ -10,6 +10,7 @@ import { useAuth } from '@/store/auth';
 import { todayISO } from '@/lib/utils';
 import { EmptyState } from '@/components/EmptyState';
 import { Wallet } from 'lucide-react';
+import { celebrate } from '@/components/CelebrationLayer';
 
 export function FreshPaymentsPage() {
   const qc = useQueryClient();
@@ -48,7 +49,8 @@ export function FreshPaymentsPage() {
       qc.invalidateQueries({ queryKey: ['metrics/home'] });
       qc.invalidateQueries({ queryKey: ['clients'] });
       setOpen(false);
-      showToast('Payment recorded');
+      showToast('🎉 Payment recorded — great work!');
+      celebrate();
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });

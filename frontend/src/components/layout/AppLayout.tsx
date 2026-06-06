@@ -5,6 +5,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { ThemeToggle, timeGreeting } from '@/components/ThemeToggle';
 import { SetupAppPasswordModal } from '@/components/SetupAppPasswordModal';
 import { AskAIButton } from '@/components/AskAI';
+import { CelebrationLayer } from '@/components/CelebrationLayer';
 import { useAuth } from '@/store/auth';
 
 export function AppLayout() {
@@ -16,6 +17,7 @@ export function AppLayout() {
       </main>
       <Toaster />
       <SetupAppPasswordModal />
+      <CelebrationLayer />
     </div>
   );
 }

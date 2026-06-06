@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, fileUrl, uploadFile } from '@/lib/api';
 import { readAvailabilitySlots, formatAvailabilitySlots, to12h } from '@/lib/utils';
 import { Time12h } from '@/components/Time12h';
+import { celebrate } from '@/components/CelebrationLayer';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
@@ -2744,7 +2745,12 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
       qc.invalidateQueries({ queryKey: ['clients'] });
       qc.invalidateQueries({ queryKey: ['roshni-follow-ups'] });
       qc.invalidateQueries({ queryKey: ['roshni-renewals-approaching'] });
-      showToast(target ? `Moved to ${target}` : 'Status cleared');
+      // Win moves get a celebration — Training-Paid, JBT-Paid,
+      // Training-EmployerLater, JBT-EmployerLater are all "client is starting"
+      // outcomes worth a confetti moment. CP / C / cleared are quiet.
+      const isWin = !!target && target !== 'CP' && target !== 'C';
+      showToast(target ? (isWin ? `🎉 ${target} — closed!` : `Moved to ${target}`) : 'Status cleared');
+      if (isWin) celebrate();
       onClose();
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
