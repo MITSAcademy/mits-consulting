@@ -391,6 +391,14 @@ model Client {
   // to one of the *-EmployerLater outcomes so accounts can chase the invoice.
   employerName               String?
   employerCommitDate         String?
+  // Mitali's payment follow-up workspace ("MITS Accounts" sheet).
+  // - followupNote: free-form comment ("done", "cad", "1 hour daily", etc.)
+  // - paymentPendingMitali: marks a payment as awaiting Mitali's collection (separate from Vaibhav's queue)
+  // - lastFeedbackTakenAt / lastLeverageAskedAt: track the two recurring touchpoints she does each cycle
+  followupNote               String?
+  followupNoteAt             String?  // ISO date of last note update
+  lastFeedbackTakenAt        String?  // ISO date — Mitali bumps this when feedback is logged
+  lastLeverageAskedAt        String?  // ISO date — when she asked for testimonial/referral
   notes                    String?
   createdAt                DateTime       @default(now())
 

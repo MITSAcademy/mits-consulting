@@ -31,6 +31,7 @@ import { messagesRouter } from './routes/messages';
 import { calendarRouter } from './routes/calendar';
 import { oauthRouter } from './routes/oauth';
 import { aiRouter } from './routes/ai';
+import { followUpPaymentsRouter } from './routes/followUpPayments';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -80,6 +81,7 @@ app.use('/api/messages', messagesRouter);
 app.use('/api/calendar', calendarRouter);
 app.use('/api/oauth', oauthRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/follow-up-payments', followUpPaymentsRouter);
 
 // Global error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
