@@ -16,18 +16,22 @@ export default {
         },
         brand: {
           border:     'var(--brand-border)',
-          borderSoft: '#2A2D33',
+          borderSoft: 'var(--brand-borderSoft)',
           text:           'var(--brand-text)',
           textSecondary:  'var(--brand-textSecondary)',
           textMuted:      'var(--brand-textMuted)',
-          // Accent colours stay static — work on both themes.
-          green: '#4ADE80',
-          amber: '#F59E0B',
-          blue: '#3B82F6',
-          red: '#EF4444',
-          purple: '#A78BFA',
-          pink: '#EC4899',
-          teal: '#14B8A6',
+          // Status accents pull from CSS vars so light/dark mode can soften
+          // them for cream-paper contrast vs deep-charcoal contrast.
+          green:  'var(--status-green)',
+          amber:  'var(--status-amber)',
+          blue:   'var(--status-blue)',
+          red:    'var(--status-red)',
+          purple: 'var(--status-purple)',
+          teal:   'var(--status-teal)',
+          pink:   '#EC4899',
+          // Academy brand accent — saved for marquee CTAs / branded surfaces
+          gold:     'var(--accent-gold)',
+          goldDeep: 'var(--accent-goldDeep)',
         },
       },
       fontFamily: {
