@@ -8,7 +8,7 @@
  * a question and shows the reply.
  */
 
-export type AiProvider = 'xai' | 'anthropic' | 'openai';
+export type AiProvider = 'gemini' | 'xai' | 'anthropic' | 'openai';
 
 export interface AiAskOpts {
   systemPrompt: string;
@@ -25,12 +25,16 @@ export interface AiAskResult {
   model: string;
 }
 
-/** Pick the first configured provider. Returns null if none. */
+/** Pick the first configured provider. Returns null if none.
+ *  Order: Gemini (free tier) → xAI → Anthropic → OpenAI. If multiple keys
+ *  are set, free-tier provider wins so the team isn't surprised by a bill. */
 export function getConfiguredProvider(): { provider: AiProvider; model: string } | null {
+  if (process.env.GEMINI_API_KEY) {
+    // gemini-2.5-flash — fast + free tier covers 1500 req/day. Override
+    // with GEMINI_MODEL env var (e.g. gemini-2.5-pro for the smarter model).
+    return { provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash' };
+  }
   if (process.env.XAI_API_KEY) {
-    // Default to grok-4-fast-non-reasoning — current production xAI model with
-    // good speed/cost balance. Override with XAI_MODEL env var if you want
-    // a different one (e.g. grok-4 for reasoning, grok-3-mini for cheapest).
     return { provider: 'xai', model: process.env.XAI_MODEL || 'grok-4-fast-non-reasoning' };
   }
   if (process.env.ANTHROPIC_API_KEY) {
@@ -53,6 +57,36 @@ export async function askAi(opts: AiAskOpts): Promise<AiAskResult> {
     throw err;
   }
   const maxTokens = opts.maxTokens || 800;
+
+  if (cfg.provider === 'gemini') {
+    // Google Gemini — REST API, key in URL query param.
+    // Format: contents = list of { role: 'user'|'model', parts: [{text}] }
+    // System prompt goes into a top-level system_instruction field.
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    const contents = [
+      ...(opts.history || []).map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      })),
+      { role: 'user', parts: [{ text: opts.question }] },
+    ];
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: opts.systemPrompt }] },
+        contents,
+        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.5 },
+      }),
+    });
+    if (!r.ok) {
+      const text = await r.text().catch(() => '');
+      throw new Error(`gemini HTTP ${r.status}: ${text.slice(0, 400)}`);
+    }
+    const j: any = await r.json();
+    const answer = (j?.candidates?.[0]?.content?.parts || []).map((p: any) => p?.text || '').join('').trim() || '(empty response)';
+    return { answer, provider: 'gemini', model: cfg.model };
+  }
 
   if (cfg.provider === 'xai' || cfg.provider === 'openai') {
     // xAI is OpenAI-compatible — same payload shape, different base URL + key.
