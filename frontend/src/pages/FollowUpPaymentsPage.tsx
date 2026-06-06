@@ -57,6 +57,22 @@ interface Row {
   paymentCount: number;
 }
 
+function BriefStat({ label, value, tone }: { label: string; value: number; tone: 'red' | 'amber' | 'green' | 'grey' }) {
+  const color =
+    tone === 'red'   ? 'var(--status-red)'   :
+    tone === 'amber' ? 'var(--status-amber)' :
+    tone === 'green' ? 'var(--status-green)' :
+    'var(--brand-textMuted)';
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider muted">{label}</div>
+      <div className="text-[22px] font-bold leading-tight mt-0.5" style={{ color: value > 0 ? color : 'var(--brand-text)' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
 function statusPill(s: Row['status']): { tone: 'amber' | 'red' | 'green' | 'blue' | 'grey'; label: string; Icon: any } {
   switch (s) {
     case 'pending_vaibhav': return { tone: 'amber', label: 'Pending on Vaibhav', Icon: AlertTriangle };
@@ -109,6 +125,20 @@ export function FollowUpPaymentsPage() {
     return o;
   }, [data]);
 
+  // Daily brief — what's the most actionable summary at a glance?
+  const brief = useMemo(() => {
+    const xs = data || [];
+    const today = new Date().toISOString().slice(0, 10);
+    const thirtyAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); })();
+    return {
+      neverFeedback:  xs.filter((r) => !r.lastFeedbackTakenAt).length,
+      staleFeedback:  xs.filter((r) => r.lastFeedbackTakenAt && r.lastFeedbackTakenAt < thirtyAgo).length,
+      neverLeverage:  xs.filter((r) => !r.lastLeverageAskedAt).length,
+      todayFeedback:  xs.filter((r) => r.lastFeedbackTakenAt === today).length,
+      todayLeverage:  xs.filter((r) => r.lastLeverageAskedAt === today).length,
+    };
+  }, [data]);
+
   const feedbackTaken = useMutation({
     mutationFn: (id: string) => api.post(`/follow-up-payments/${id}/feedback-taken`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); showToast('Feedback marked taken'); },
@@ -143,6 +173,24 @@ export function FollowUpPaymentsPage() {
         }
       />
       <Page>
+        {/* Daily brief — actionable summary at the top */}
+        {(data || []).length > 0 && (
+          <div
+            className="rounded-2xl p-4 mb-4 grid grid-cols-2 md:grid-cols-5 gap-3"
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--brand-border)',
+              borderLeft: '3px solid var(--accent-gold)',
+            }}
+          >
+            <BriefStat label="Overdue" value={counts.overdue} tone="red" />
+            <BriefStat label="Pending Vaibhav" value={counts.pending_vaibhav} tone="amber" />
+            <BriefStat label="Never asked for feedback" value={brief.neverFeedback} tone="amber" />
+            <BriefStat label="Feedback >30d ago" value={brief.staleFeedback} tone="grey" />
+            <BriefStat label="Never asked for leverage" value={brief.neverLeverage} tone="amber" />
+          </div>
+        )}
+
         {/* Filter chips */}
         <div className="flex flex-wrap gap-2 mb-3">
           {([
