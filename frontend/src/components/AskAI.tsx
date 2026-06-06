@@ -22,6 +22,17 @@ import { useAuth } from '@/store/auth';
 
 interface ChatTurn { role: 'user' | 'assistant'; content: string; }
 
+/** True only when no input/textarea/contenteditable currently has focus.
+ *  Stops "/" or Cmd+K from opening AI while the user is typing in a form. */
+function noInputActive(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  if (!el) return true;
+  const tag = el.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return false;
+  if (el.isContentEditable) return false;
+  return true;
+}
+
 export function AskAIButton() {
   const [open, setOpen] = useState(false);
   const user = useAuth((s) => s.user);
@@ -34,6 +45,24 @@ export function AskAIButton() {
     enabled: !!user,
   });
 
+  // Global keyboard shortcuts — Cmd/Ctrl+K and "/" to open Ask AI.
+  // Standard command-palette muscle memory; respects when the user is
+  // already typing in a form so it doesn't hijack their input.
+  useEffect(() => {
+    if (!status?.enabled) return;
+    function onKey(e: KeyboardEvent) {
+      if (open) return;
+      const isCmdK = (e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K');
+      const isSlash = e.key === '/' && noInputActive();
+      if (isCmdK || isSlash) {
+        e.preventDefault();
+        setOpen(true);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, status?.enabled]);
+
   if (!user || !status?.enabled) return null;
 
   return (
@@ -41,7 +70,7 @@ export function AskAIButton() {
       <button
         onClick={() => setOpen(true)}
         className="p-2 rounded transition-all hover:bg-bg-cardHover relative group"
-        title="Ask MITS AI"
+        title="Ask MITS AI  ·  ⌘K or /"
         aria-label="Ask AI"
       >
         <Sparkles size={18} style={{ color: 'var(--accent-gold)' }} />
@@ -261,11 +290,31 @@ function AskAIPanel({ onClose }: { onClose: () => void }) {
               <Send size={14} />
             </button>
           </div>
-          <div className="text-[10px] muted mt-1.5 px-1">
-            Enter to send · Shift+Enter for new line · Esc to close
+          <div className="text-[10px] muted mt-1.5 px-1 flex items-center justify-between flex-wrap gap-1">
+            <span>Enter to send · Shift+Enter for new line · Esc to close</span>
+            <span className="flex items-center gap-1">
+              <Kbd>⌘K</Kbd> or <Kbd>/</Kbd> to open
+            </span>
           </div>
         </div>
       </aside>
     </>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd
+      className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-mono font-semibold"
+      style={{
+        background: 'var(--bg-input)',
+        border: '1px solid var(--brand-border)',
+        color: 'var(--brand-textSecondary)',
+        minWidth: 18,
+        justifyContent: 'center',
+      }}
+    >
+      {children}
+    </kbd>
   );
 }
