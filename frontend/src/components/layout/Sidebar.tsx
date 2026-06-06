@@ -320,7 +320,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
           border: '1px solid rgba(255,255,255,0.06)',
         }}
       >
-        <Avatar name={user.name} />
+        <Avatar name={user.name} ring />
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-[13px] truncate" style={{ color: '#F5EFE0' }}>{user.name}</div>
           <div className="text-[10.5px] uppercase tracking-[0.10em]" style={{ color: 'rgba(229,178,76,0.75)' }}>

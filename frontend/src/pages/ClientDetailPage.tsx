@@ -3689,7 +3689,8 @@ function EngagementLetterModal({ client, onClose }: any) {
       qc.invalidateQueries({ queryKey: ['messages'] });
       qc.invalidateQueries({ queryKey: ['tasks'] });
       if (r.wa?.url) window.open(r.wa.url, '_blank', 'noopener');
-      showToast('Engagement letter sent · handover task created for Mitali');
+      showToast('🎉 Engagement letter sent · Mitali takes it from here');
+      celebrate();
       onClose();
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),

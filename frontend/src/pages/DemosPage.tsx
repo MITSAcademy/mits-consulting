@@ -6,9 +6,10 @@ import { useUI } from '@/store/ui';
 import { Link } from 'react-router-dom';
 import { Pill } from '@/components/ui/pill';
 import { todayISO, addDays, formatPhone, waLink } from '@/lib/utils';
-import { Check, Calendar, MessageCircle } from 'lucide-react';
+import { Check, Calendar, MessageCircle, Video } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { useState } from 'react';
+import { EmptyState } from '@/components/EmptyState';
 
 function dateBucket(date: string | null, today: string) {
   if (!date) return 'unscheduled';
@@ -169,12 +170,12 @@ export function DemosPage() {
         })}
 
         {visible.length === 0 && (
-          <div className="text-center py-12 muted">
-            <div className="text-base font-semibold text-brand-text mb-1">
-              {mineOnly ? 'No demos assigned to you' : 'No demos scheduled'}
-            </div>
-            <div>Once Team 2 picks a trainer for a client, "Schedule demo" appears on the client page.</div>
-          </div>
+          <EmptyState
+            icon={Video}
+            tone="gold"
+            title={mineOnly ? 'No demos assigned to you yet' : 'No demos scheduled'}
+            description='Once Team 2 picks a trainer for a client, "Schedule demo" appears on the client page.'
+          />
         )}
 
         <div className="divider">Recently completed · last {recent.length}</div>
