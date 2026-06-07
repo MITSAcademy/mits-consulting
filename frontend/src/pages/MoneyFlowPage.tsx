@@ -29,31 +29,45 @@ export function MoneyFlowPage() {
     <>
       <Topbar title="Money flow" subtitle="MTD" />
       <Page>
-        <div className="callout">Indicative FX: USD = ₹83, CAD = ₹60.</div>
+        <div className="callout gold">Indicative FX: USD = ₹83, CAD = ₹60.</div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-4">
-          <div className="kpi-card">
+          <div className="kpi-card" style={{ borderTop: '2px solid var(--status-green)' }}>
             <div className="kpi-label">USD in</div>
-            <div className="kpi-value text-brand-green">${m.usdIn.toLocaleString()}</div>
+            <div className="kpi-value" style={{ color: 'var(--status-green)' }}>${m.usdIn.toLocaleString()}</div>
             <div className="kpi-sub">≈ ₹{m.usdInINR.toLocaleString()}</div>
           </div>
-          <div className="kpi-card">
+          <div className="kpi-card" style={{ borderTop: '2px solid var(--status-green)' }}>
             <div className="kpi-label">CAD in</div>
-            <div className="kpi-value text-brand-green">C${m.cadIn.toLocaleString()}</div>
+            <div className="kpi-value" style={{ color: 'var(--status-green)' }}>C${m.cadIn.toLocaleString()}</div>
             <div className="kpi-sub">≈ ₹{m.cadInINR.toLocaleString()}</div>
           </div>
-          <div className="kpi-card">
+          <div className="kpi-card" style={{ borderTop: '2px solid var(--accent-gold)' }}>
             <div className="kpi-label">Total in</div>
             <div className="kpi-value">₹{m.totalInINR.toLocaleString()}</div>
           </div>
-          <div className="kpi-card">
+          <div className="kpi-card" style={{ borderTop: '2px solid var(--status-red)' }}>
             <div className="kpi-label">Trainer out</div>
-            <div className="kpi-value text-brand-red">₹{m.trainerOut.toLocaleString()}</div>
+            <div className="kpi-value" style={{ color: 'var(--status-red)' }}>₹{m.trainerOut.toLocaleString()}</div>
             <div className="kpi-sub">₹{m.trainerPending.toLocaleString()} unpaid</div>
           </div>
         </div>
-        <div className="kpi-card text-center mb-4" style={{ padding: 22 }}>
-          <div className="kpi-label">Net this month</div>
-          <div className={`kpi-value ${m.net > 0 ? 'text-brand-green' : 'text-brand-red'}`} style={{ fontSize: 32 }}>
+        {/* Net this month — hero stat */}
+        <div
+          className="card-hero text-center mb-4"
+          style={{ padding: '28px 24px' }}
+        >
+          <div className="kpi-label mb-2">Net this month</div>
+          <div
+            className="kpi-value"
+            style={{
+              fontSize: 40,
+              color: m.net > 0 ? 'var(--status-green)' : 'var(--status-red)',
+              letterSpacing: '-0.025em',
+              textShadow: m.net > 0
+                ? '0 0 24px rgba(74,222,128,0.25)'
+                : '0 0 24px rgba(239,68,68,0.25)',
+            }}
+          >
             ₹{m.net.toLocaleString()}
           </div>
         </div>
