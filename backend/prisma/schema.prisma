@@ -332,6 +332,10 @@ model Client {
   intakeData               Json?
   intakeSkillHint          String?
   intakeReceivedAt         String?
+  // When this client entered their current lifecycle stage. Bumped on every
+  // /stage transition. Drives aging analysis in the demo-team report.
+  // For old rows that pre-date this column, fall back to createdAt.
+  stageEnteredAt           String?
   demoDate                 String?
   demoTimeIst              String?
   demoActualDate           String?

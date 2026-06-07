@@ -466,7 +466,13 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
   }
 
   // Build the update payload — Dormant-specific bookkeeping
+  // stageEnteredAt: bumped whenever the lifecycle actually changes so the
+  // demo-team reporting dashboard can compute days-in-stage accurately. No
+  // existing reader requires this column, so writing it is purely additive.
   const data: any = { lifecycle };
+  if (current.lifecycle !== lifecycle) {
+    data.stageEnteredAt = new Date().toISOString().slice(0, 10);
+  }
   if (lifecycle === 'Dormant') {
     data.dormantSince = dormantSince || new Date().toISOString().slice(0, 10);
     if (dormantReason !== undefined) data.dormantReason = dormantReason;
