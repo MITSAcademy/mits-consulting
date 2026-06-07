@@ -27,9 +27,10 @@ export function DialogContent({
       <DialogPrimitive.Overlay
         className="fixed inset-0 z-[100]"
         style={{
-          background: 'rgba(10, 12, 18, 0.55)',
-          backdropFilter: 'blur(4px) saturate(140%)',
-          animation: 'dialogFadeIn 200ms ease-out both',
+          background: 'rgba(10, 12, 18, 0.60)',
+          backdropFilter: 'blur(8px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(8px) saturate(160%)',
+          animation: 'dialogFadeIn 220ms ease-out both',
         }}
       />
       <DialogPrimitive.Content
@@ -38,14 +39,17 @@ export function DialogContent({
           className,
         )}
         style={{
-          background: 'var(--bg-card)',
+          background:
+            'radial-gradient(700px 200px at 100% 0%, rgba(229,178,76,0.04), transparent 60%), ' +
+            'var(--bg-card)',
           border: '1px solid var(--brand-border)',
-          // Slight gold accent in the shadow so it feels branded, not generic.
+          // Multi-layered shadow with a subtle gold halo so it feels branded.
           boxShadow:
-            '0 20px 60px rgba(0, 0, 0, 0.40), ' +
-            '0 0 0 1px rgba(229, 178, 76, 0.06), ' +
-            '0 0 80px rgba(229, 178, 76, 0.04)',
-          animation: 'dialogPopIn 260ms cubic-bezier(0.2, 0.9, 0.25, 1.0) both',
+            '0 24px 70px rgba(0, 0, 0, 0.45), ' +
+            '0 0 0 1px rgba(229, 178, 76, 0.08), ' +
+            '0 0 100px rgba(229, 178, 76, 0.06), ' +
+            'inset 0 1px 0 rgba(255, 255, 255, 0.02)',
+          animation: 'dialogPopIn 280ms cubic-bezier(0.2, 0.9, 0.25, 1.0) both',
           transform: 'translate(-50%, -50%)',
         }}
       >
