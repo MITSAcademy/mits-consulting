@@ -599,13 +599,26 @@ model CallLog {
   by          User     @relation(fields: [byId], references: [id], onDelete: Cascade)
   kind        String   @default("checkin")  // checkin | feedback | leverage | escalation
   outcome     String?  // answered | no_pickup | rescheduled | completed | escalated
-  durationMinutes Int? // optional, if they remember
+  durationMinutes Int? // computed from start/end if both set, or set manually
   notes       String?
-  calledAt    DateTime @default(now())
+
+  // ── Scheduled + punch-in workflow (Mitali/Bhavneet/AM) ───────────────────
+  // status   : scheduled (planned) → in_progress (start clicked) → completed (end clicked) → missed
+  // scheduledFor: when the call is/was planned for (date+time IST tz-naïve)
+  // actualStartAt / actualEndAt: stamped by punch-in/out buttons
+  // feedback: free-form notes the rep captures at end-of-call
+  status        String    @default("completed")  // scheduled | in_progress | completed | missed
+  scheduledFor  DateTime?
+  actualStartAt DateTime?
+  actualEndAt   DateTime?
+  feedback      String?
+
+  calledAt    DateTime @default(now())  // back-compat — also acts as fallback for "when"
   createdAt   DateTime @default(now())
 
   @@index([clientId, calledAt])  // per-client call history (most recent first)
   @@index([byId, calledAt])      // per-user call log feed
+  @@index([byId, status, scheduledFor])  // "my scheduled calls today" query
 }
 
 // -------- FEEDBACK --------

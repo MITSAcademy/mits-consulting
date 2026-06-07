@@ -227,19 +227,34 @@ export async function buildMitsContext(user: { id: string; role: Role; name: str
       where: isFull(user.role) ? {} : { byId: user.id },
       select: {
         kind: true, outcome: true, calledAt: true,
+        status: true, scheduledFor: true, durationMinutes: true, feedback: true,
         client: { select: { name: true } },
         by:     { select: { name: true } },
       },
       orderBy: { calledAt: 'desc' },
-      take: 30,
+      take: 40,
     });
     if (recentCalls.length > 0) {
-      lines.push(`## Recent calls${isFull(user.role) ? '' : ' (yours)'} (${recentCalls.length}, most recent 30)`);
-      for (const c of recentCalls) {
-        const d = c.calledAt.toISOString().slice(0, 10);
-        lines.push(`  ${d} | ${c.client.name} | ${c.kind}${c.outcome ? ' · ' + c.outcome : ''} | by ${c.by.name}`);
+      const scheduled = recentCalls.filter((c) => c.status === 'scheduled' || c.status === 'in_progress');
+      const completed = recentCalls.filter((c) => c.status === 'completed');
+      if (scheduled.length > 0) {
+        lines.push(`## Scheduled/live calls${isFull(user.role) ? '' : ' (yours)'} (${scheduled.length})`);
+        for (const c of scheduled) {
+          const when = c.scheduledFor?.toISOString().replace('T', ' ').slice(0, 16) || '—';
+          lines.push(`  [${c.status}] ${when} | ${c.client.name} | ${c.kind} | ${c.by.name}`);
+        }
+        lines.push('');
       }
-      lines.push('');
+      if (completed.length > 0) {
+        lines.push(`## Completed calls${isFull(user.role) ? '' : ' (yours)'} (${completed.length})`);
+        for (const c of completed) {
+          const d = c.calledAt.toISOString().slice(0, 10);
+          const dur = c.durationMinutes ? `${c.durationMinutes}m` : '—';
+          const fb = c.feedback ? ` | fb: "${c.feedback.slice(0, 50)}"` : '';
+          lines.push(`  ${d} | ${c.client.name} | ${c.kind}${c.outcome ? ' · ' + c.outcome : ''} | ${dur} | ${c.by.name}${fb}`);
+        }
+        lines.push('');
+      }
     }
   }
 

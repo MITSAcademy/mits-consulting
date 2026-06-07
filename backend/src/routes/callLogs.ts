@@ -20,21 +20,135 @@ callLogsRouter.get('/', async (req: AuthedRequest, res) => {
   if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const clientId = (req.query.clientId as string) || undefined;
   const mine = req.query.mine === 'true';
+  const status = req.query.status as string | undefined;        // scheduled | in_progress | completed | missed
+  const scheduledOnly = req.query.scheduledOnly === 'true';     // shorthand: only scheduled + in_progress
   const limit = Math.min(Number(req.query.limit) || 100, 500);
+
   const where: any = {};
   if (clientId) where.clientId = clientId;
   if (mine) where.byId = req.user!.id;
+  if (status) where.status = status;
+  if (scheduledOnly) where.status = { in: ['scheduled', 'in_progress'] };
+
+  const orderBy: any = scheduledOnly
+    ? [{ scheduledFor: 'asc' }, { calledAt: 'desc' }]
+    : { calledAt: 'desc' };
+
   const logs = await prisma.callLog.findMany({
     where,
     select: {
       id: true, kind: true, outcome: true, durationMinutes: true, notes: true, calledAt: true,
+      status: true, scheduledFor: true, actualStartAt: true, actualEndAt: true, feedback: true,
       client: { select: { id: true, name: true } },
       by:     { select: { id: true, name: true } },
     },
-    orderBy: { calledAt: 'desc' },
+    orderBy,
     take: limit,
   });
   res.json(logs);
+});
+
+// Schedule a future call (status='scheduled', scheduledFor set, no actuals yet).
+callLogsRouter.post('/schedule', async (req: AuthedRequest, res) => {
+  if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const { clientId, scheduledFor, kind, notes } = req.body || {};
+  if (!clientId || !scheduledFor) return res.status(400).json({ error: 'clientId and scheduledFor required' });
+  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const dt = new Date(scheduledFor);
+  if (isNaN(dt.getTime())) return res.status(400).json({ error: 'scheduledFor must be a valid date' });
+  const log = await prisma.callLog.create({
+    data: {
+      clientId,
+      byId: req.user!.id,
+      kind: typeof kind === 'string' ? kind : 'checkin',
+      status: 'scheduled',
+      scheduledFor: dt,
+      notes: typeof notes === 'string' ? notes.slice(0, 1000) : null,
+    },
+  });
+  await audit(req.user!.id, req.user!.name, 'CALL_SCHEDULED', `${client.name} · ${dt.toISOString().slice(0, 16)}`);
+  res.status(201).json(log);
+});
+
+// Punch in — start the call (status='in_progress', actualStartAt=now).
+callLogsRouter.post('/:id/start', async (req: AuthedRequest, res) => {
+  if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const existing = await prisma.callLog.findUnique({ where: { id: req.params.id }, select: { id: true, byId: true, clientId: true, status: true, client: { select: { name: true } } } });
+  if (!existing) return res.status(404).json({ error: 'Call not found' });
+  // Only the owner can punch in (or founder/manager override)
+  if (existing.byId !== req.user!.id && !['founder', 'manager'].includes(req.user!.role)) {
+    return res.status(403).json({ error: "This call belongs to someone else" });
+  }
+  const log = await prisma.callLog.update({
+    where: { id: existing.id },
+    data: { status: 'in_progress', actualStartAt: new Date() },
+  });
+  await audit(req.user!.id, req.user!.name, 'CALL_STARTED', existing.client.name);
+  res.json(log);
+});
+
+// Punch out — end the call (status='completed', actualEndAt=now, durationMinutes auto-computed).
+callLogsRouter.post('/:id/end', async (req: AuthedRequest, res) => {
+  if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const { outcome, feedback, notes } = req.body || {};
+  const existing = await prisma.callLog.findUnique({ where: { id: req.params.id }, select: { id: true, byId: true, actualStartAt: true, client: { select: { name: true } } } });
+  if (!existing) return res.status(404).json({ error: 'Call not found' });
+  if (existing.byId !== req.user!.id && !['founder', 'manager'].includes(req.user!.role)) {
+    return res.status(403).json({ error: "This call belongs to someone else" });
+  }
+  const endAt = new Date();
+  let duration: number | null = null;
+  if (existing.actualStartAt) {
+    duration = Math.max(1, Math.round((endAt.getTime() - existing.actualStartAt.getTime()) / 60_000));
+  }
+  const log = await prisma.callLog.update({
+    where: { id: existing.id },
+    data: {
+      status: 'completed',
+      actualEndAt: endAt,
+      durationMinutes: duration,
+      ...(typeof outcome === 'string' && outcome ? { outcome } : {}),
+      ...(typeof feedback === 'string' ? { feedback: feedback.slice(0, 2000) } : {}),
+      ...(typeof notes === 'string' && notes ? { notes: notes.slice(0, 1000) } : {}),
+    },
+  });
+  await audit(req.user!.id, req.user!.name, 'CALL_ENDED', `${existing.client.name} · ${duration ? duration + 'min' : 'no timer'}`);
+  res.json(log);
+});
+
+// Patch feedback / notes after-the-fact (no time changes).
+callLogsRouter.patch('/:id/feedback', async (req: AuthedRequest, res) => {
+  if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const { feedback, notes, outcome } = req.body || {};
+  const existing = await prisma.callLog.findUnique({ where: { id: req.params.id }, select: { id: true, byId: true, client: { select: { name: true } } } });
+  if (!existing) return res.status(404).json({ error: 'Call not found' });
+  if (existing.byId !== req.user!.id && !['founder', 'manager'].includes(req.user!.role)) {
+    return res.status(403).json({ error: "This call belongs to someone else" });
+  }
+  const log = await prisma.callLog.update({
+    where: { id: existing.id },
+    data: {
+      ...(typeof feedback === 'string' ? { feedback: feedback.slice(0, 2000) } : {}),
+      ...(typeof notes === 'string'    ? { notes: notes.slice(0, 1000) } : {}),
+      ...(typeof outcome === 'string' && outcome ? { outcome } : {}),
+    },
+  });
+  await audit(req.user!.id, req.user!.name, 'CALL_FEEDBACK_UPDATED', existing.client.name);
+  res.json(log);
+});
+
+// Mark as missed (status='missed') — used when a scheduled call's time passes without action.
+callLogsRouter.post('/:id/missed', async (req: AuthedRequest, res) => {
+  if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const existing = await prisma.callLog.findUnique({ where: { id: req.params.id }, select: { id: true, byId: true, client: { select: { name: true } } } });
+  if (!existing) return res.status(404).json({ error: 'Call not found' });
+  if (existing.byId !== req.user!.id && !['founder', 'manager'].includes(req.user!.role)) {
+    return res.status(403).json({ error: "This call belongs to someone else" });
+  }
+  await prisma.callLog.update({ where: { id: existing.id }, data: { status: 'missed' } });
+  await audit(req.user!.id, req.user!.name, 'CALL_MISSED', existing.client.name);
+  res.json({ ok: true });
 });
 
 callLogsRouter.post('/', async (req: AuthedRequest, res) => {

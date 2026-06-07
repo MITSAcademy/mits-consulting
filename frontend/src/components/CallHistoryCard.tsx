@@ -21,6 +21,11 @@ interface CallRow {
   outcome: string | null;
   durationMinutes: number | null;
   notes: string | null;
+  feedback: string | null;
+  status: 'scheduled' | 'in_progress' | 'completed' | 'missed' | string;
+  scheduledFor: string | null;
+  actualStartAt: string | null;
+  actualEndAt: string | null;
   calledAt: string;
   by: { id: string; name: string };
 }
@@ -53,23 +58,46 @@ export function CallHistoryCard({ clientId }: { clientId: string }) {
         <div className="muted text-sm">No calls logged for this client yet.</div>
       ) : (
         <div className="space-y-1.5">
-          {(data || []).map((c) => (
-            <div
-              key={c.id}
-              className="rounded p-2 text-[12px]"
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
-            >
-              <div className="flex items-center gap-2 flex-wrap">
-                <Pill color={c.kind === 'feedback' ? 'blue' : c.kind === 'leverage' ? 'purple' : c.kind === 'escalation' ? 'red' : 'grey'}>
-                  {c.kind}
-                </Pill>
-                {c.outcome && <span className="muted">· {c.outcome}</span>}
-                {c.durationMinutes != null && <span className="muted">· {c.durationMinutes}min</span>}
-                <span className="muted ml-auto">{c.by.name} · {timeAgo(c.calledAt)}</span>
+          {(data || []).map((c) => {
+            const statusTone =
+              c.status === 'scheduled' ? 'amber' :
+              c.status === 'in_progress' ? 'green' :
+              c.status === 'missed' ? 'red' : null;
+            return (
+              <div
+                key={c.id}
+                className="rounded p-2 text-[12px]"
+                style={{
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--brand-borderSoft)',
+                  ...(statusTone ? { borderLeft: `3px solid ${statusTone === 'amber' ? 'var(--status-amber)' : statusTone === 'green' ? 'var(--status-green)' : 'var(--status-red)'}` } : {}),
+                }}
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Pill color={c.kind === 'feedback' ? 'blue' : c.kind === 'leverage' ? 'purple' : c.kind === 'escalation' ? 'red' : 'grey'}>
+                    {c.kind}
+                  </Pill>
+                  {statusTone && <Pill color={statusTone as any}>{c.status}</Pill>}
+                  {c.outcome && <span className="muted">· {c.outcome}</span>}
+                  {c.durationMinutes != null && <span className="muted">· {c.durationMinutes}min</span>}
+                  <span className="muted ml-auto">{c.by.name} · {timeAgo(c.actualEndAt || c.actualStartAt || c.scheduledFor || c.calledAt)}</span>
+                </div>
+                {c.scheduledFor && c.status === 'scheduled' && (
+                  <div className="mt-1 text-[11px] muted">
+                    Scheduled for {new Date(c.scheduledFor).toLocaleString()}
+                  </div>
+                )}
+                {c.feedback && (
+                  <div className="mt-1 text-[11.5px] leading-snug" style={{ color: 'var(--brand-text)' }}>
+                    <span className="muted">Feedback:</span> {c.feedback}
+                  </div>
+                )}
+                {c.notes && c.notes !== c.feedback && (
+                  <div className="mt-1 text-[11.5px] muted leading-snug">{c.notes}</div>
+                )}
               </div>
-              {c.notes && <div className="mt-1 text-[11.5px] muted leading-snug">{c.notes}</div>}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
