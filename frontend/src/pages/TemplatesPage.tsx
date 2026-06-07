@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
+import { EmptyState } from '@/components/EmptyState';
+import { FileText } from 'lucide-react';
 
 export function TemplatesPage() {
   const qc = useQueryClient();
@@ -43,7 +45,14 @@ export function TemplatesPage() {
       } />
       <Page>
         <div className="space-y-3">
-          {(data || []).length === 0 && <div className="muted text-center py-8">No templates.</div>}
+          {(data || []).length === 0 && (
+            <EmptyState
+              icon={FileText}
+              tone="gold"
+              title="No templates yet"
+              description='Use "+ New template" above to add your first reusable message template.'
+            />
+          )}
           {(data || []).map((t: any) => (
             <div key={t.id} className="card">
               <div className="card-h">
