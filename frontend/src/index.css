@@ -148,6 +148,16 @@
   .mono { font-family: 'JetBrains Mono', monospace; }
   .muted { color: var(--brand-textMuted); }
 
+  /* Anchor styling — subtle by default, underline on hover. Override per
+     context with text-{color} utilities. */
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  a:not(.btn):not(.no-link-style):hover {
+    text-decoration: none;
+  }
+
   .pill {
     @apply inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full font-semibold whitespace-nowrap;
     border: 1px solid transparent;

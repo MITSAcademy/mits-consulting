@@ -193,9 +193,17 @@ function MyEmailSection() {
         {smtp?.configuredAt && (
           <div className="text-[11px] muted">Last saved: {new Date(smtp.configuredAt).toLocaleString()}</div>
         )}
-        <div className="mt-3 pt-3 border-t border-brand-border">
-          <div className="text-xs muted mb-2">
-            <strong>Not receiving system notifications?</strong> (sourcing assigned, handover task, payment confirmation, etc.) — fire a test to your own inbox to check whether the system SMTP pipeline is reaching you. No App Password needed.
+        <div
+          className="mt-4 rounded-lg p-3"
+          style={{
+            background: 'linear-gradient(90deg, color-mix(in srgb, var(--accent-gold) 6%, var(--bg-input)) 0%, var(--bg-input) 60%)',
+            border: '1px solid color-mix(in srgb, var(--accent-gold) 25%, var(--brand-borderSoft))',
+            borderLeft: '3px solid var(--accent-gold)',
+          }}
+        >
+          <div className="text-[12px] mb-2 leading-relaxed">
+            <strong style={{ color: 'var(--brand-text)' }}>Not receiving system notifications?</strong>
+            <span className="muted"> (sourcing assigned, handover task, payment confirmation, etc.) — fire a test to your own inbox to check whether the system SMTP pipeline is reaching you. No App Password needed.</span>
           </div>
           <Button size="sm" onClick={() => testSystem.mutate()} disabled={testSystem.isPending}>
             <Send size={12}/> {testSystem.isPending ? 'Sending…' : 'Send me a system notification test'}
@@ -245,10 +253,10 @@ export function SettingsPage() {
 
         <div className="card mb-4">
           <div className="card-h">Account</div>
-          <div className="text-sm">
-            <div><span className="muted">Name:</span> {user?.name}</div>
-            <div><span className="muted">Login email:</span> {user?.email}</div>
-            <div><span className="muted">Role:</span> <span className="capitalize">{user?.role.replace(/_/g, ' ')}</span></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <InfoCell label="Name" value={user?.name} />
+            <InfoCell label="Login email" value={user?.email} />
+            <InfoCell label="Role" value={<span className="capitalize">{user?.role.replace(/_/g, ' ')}</span>} />
           </div>
         </div>
 
@@ -314,5 +322,17 @@ export function SettingsPage() {
         )}
       </Page>
     </>
+  );
+}
+
+function InfoCell({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div
+      className="rounded-lg p-3"
+      style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+    >
+      <div className="text-[10px] uppercase tracking-[0.10em] font-bold muted mb-1">{label}</div>
+      <div className="text-[13px] font-medium" style={{ color: 'var(--brand-text)' }}>{value || '—'}</div>
+    </div>
   );
 }
