@@ -69,9 +69,10 @@ export function AskAIButton() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="p-2 rounded transition-all hover:bg-bg-cardHover relative group"
+        className="p-2 rounded-lg transition-all hover:bg-bg-cardHover relative group glow-pulse"
         title="Ask MITS AI  ·  ⌘K or /"
         aria-label="Ask AI"
+        style={{ border: '1px solid var(--brand-border)' }}
       >
         <Sparkles size={18} style={{ color: 'var(--accent-gold)' }} />
         {/* Subtle pulse on the icon — feels alive */}

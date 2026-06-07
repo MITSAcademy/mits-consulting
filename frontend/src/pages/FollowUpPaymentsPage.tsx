@@ -63,10 +63,18 @@ function BriefStat({ label, value, tone }: { label: string; value: number; tone:
     tone === 'amber' ? 'var(--status-amber)' :
     tone === 'green' ? 'var(--status-green)' :
     'var(--brand-textMuted)';
+  const isAlert = value > 0;
   return (
-    <div>
-      <div className="text-[10px] uppercase tracking-wider muted">{label}</div>
-      <div className="text-[22px] font-bold leading-tight mt-0.5" style={{ color: value > 0 ? color : 'var(--brand-text)' }}>
+    <div className="relative">
+      <div className="text-[10px] uppercase tracking-[0.12em] font-semibold muted mb-1">{label}</div>
+      <div
+        className="text-[26px] font-extrabold leading-none kpi-value"
+        style={{
+          color: isAlert ? color : 'var(--brand-text)',
+          letterSpacing: '-0.02em',
+          textShadow: isAlert ? `0 0 16px ${color === 'var(--status-red)' ? 'rgba(239,68,68,0.20)' : color === 'var(--status-amber)' ? 'rgba(245,158,11,0.20)' : 'none'}` : 'none',
+        }}
+      >
         {value}
       </div>
     </div>
@@ -175,14 +183,7 @@ export function FollowUpPaymentsPage() {
       <Page>
         {/* Daily brief — actionable summary at the top */}
         {(data || []).length > 0 && (
-          <div
-            className="rounded-2xl p-4 mb-4 grid grid-cols-2 md:grid-cols-5 gap-3"
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--brand-border)',
-              borderLeft: '3px solid var(--accent-gold)',
-            }}
-          >
+          <div className="card-hero mb-4 grid grid-cols-2 md:grid-cols-5 gap-4">
             <BriefStat label="Overdue" value={counts.overdue} tone="red" />
             <BriefStat label="Pending Vaibhav" value={counts.pending_vaibhav} tone="amber" />
             <BriefStat label="Never asked for feedback" value={brief.neverFeedback} tone="amber" />

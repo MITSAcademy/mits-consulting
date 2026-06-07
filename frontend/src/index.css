@@ -15,29 +15,30 @@
 
 :root {
   /* ── EVENING (dark) — default ───────────────────────────────────────── */
-  --bg-page:      #10131A;
-  --bg-sidebar:   #0A0C12;
+  --bg-page:      #0F121A;
+  --bg-sidebar:   #08090F;
   --bg-card:      #181C25;
   --bg-cardHover: #1F2330;
   --bg-input:     #141823;
   --brand-border: #2A2F3A;
   --brand-borderSoft: #20242E;
 
-  --brand-text:           #F0E8D6;          /* warm cream */
+  --brand-text:           #F2EAD8;          /* warm cream */
   --brand-textSecondary:  #B8B0A0;
   --brand-textMuted:      #7A7B85;
 
   --pill-grey-bg: #1E2230;
-  --scrollbar-track: #10131A;
+  --scrollbar-track: #0F121A;
   --scrollbar-thumb: #2A2F3A;
   --scrollbar-thumb-hover: #7A7B85;
 
-  /* Academy accents — same in both modes (warm, inviting) */
+  /* Academy accents — warm, inviting */
   --accent-gold:          #E5B24C;
   --accent-goldDeep:      #B8861B;
   --accent-goldSoft:      rgba(229,178,76,0.12);
+  --accent-goldGlow:      rgba(229,178,76,0.20);
 
-  /* Status palette — kept similar to before so callouts still read */
+  /* Status palette */
   --status-green:   #4ADE80;
   --status-amber:   #F59E0B;
   --status-red:     #EF4444;
@@ -45,17 +46,24 @@
   --status-purple:  #A78BFA;
   --status-teal:    #14B8A6;
 
-  /* Subtle ambient gradient that warms the page corners — only visible in dark */
+  /* Card shadow elevation — used at multiple depths */
+  --shadow-sm:  0 1px 2px rgba(0,0,0,0.15);
+  --shadow-md:  0 4px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-lg:  0 12px 32px rgba(0,0,0,0.30), 0 4px 10px rgba(0,0,0,0.18);
+  --shadow-gold: 0 8px 28px rgba(229,178,76,0.15), 0 2px 6px rgba(229,178,76,0.10);
+
+  /* Subtle ambient gradient that warms the page corners */
   --ambient-glow:
-    radial-gradient(1200px 600px at 100% 0%, rgba(229,178,76,0.05), transparent 60%),
-    radial-gradient(900px 500px at 0% 100%, rgba(91,141,239,0.04), transparent 60%);
+    radial-gradient(1200px 700px at 100% 0%, rgba(229,178,76,0.06), transparent 60%),
+    radial-gradient(900px 500px at 0% 100%, rgba(91,141,239,0.05), transparent 60%),
+    radial-gradient(700px 400px at 50% 50%, rgba(229,178,76,0.02), transparent 70%);
 }
 
 :root[data-theme="light"] {
   /* ── MORNING (light) — warm cream paper, dark sidebar still ─────────── */
   --bg-page:      #FBF8F1;                  /* warm cream */
   --bg-card:      #FFFFFF;
-  --bg-cardHover: #F5F1E5;
+  --bg-cardHover: #FAF6EB;
   --bg-input:     #FFFFFF;
   --brand-border: #E8E1CF;
   --brand-borderSoft: #F0E9D8;
@@ -64,14 +72,15 @@
   --brand-textSecondary:  #4D4E54;
   --brand-textMuted:      #8A8B92;
 
-  --pill-grey-bg: #F0E9D8;
+  --pill-grey-bg: #F2EBD8;
   --scrollbar-track: #F5F1E5;
   --scrollbar-thumb: #D4C9AE;
   --scrollbar-thumb-hover: #8A8B92;
 
   --accent-gold:          #B8861B;          /* deeper gold reads better on cream */
   --accent-goldDeep:      #8A6510;
-  --accent-goldSoft:      rgba(184,134,27,0.12);
+  --accent-goldSoft:      rgba(184,134,27,0.10);
+  --accent-goldGlow:      rgba(184,134,27,0.18);
 
   --status-green:   #16A34A;
   --status-amber:   #D97706;
@@ -80,12 +89,16 @@
   --status-purple:  #7C3AED;
   --status-teal:    #0D9488;
 
+  --shadow-sm:  0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:  0 4px 16px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-lg:  0 16px 40px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.06);
+  --shadow-gold: 0 8px 28px rgba(184,134,27,0.16), 0 2px 6px rgba(184,134,27,0.10);
+
   --ambient-glow:
-    radial-gradient(1100px 550px at 100% 0%, rgba(184,134,27,0.04), transparent 60%),
+    radial-gradient(1100px 600px at 100% 0%, rgba(184,134,27,0.05), transparent 60%),
     radial-gradient(800px 450px at 0% 100%, rgba(37,99,235,0.03), transparent 60%);
 
-  /* Sidebar stays dark in light mode too — see comment at top */
-  --bg-sidebar:   #0A0C12;
+  --bg-sidebar:   #08090F;
 }
 
 @layer base {
@@ -128,8 +141,10 @@
   .pill {
     @apply inline-flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full font-semibold whitespace-nowrap;
     border: 1px solid transparent;
-    letter-spacing: 0.01em;
+    letter-spacing: 0.02em;
+    transition: filter 150ms ease;
   }
+  .pill:hover { filter: brightness(1.08); }
   /* Stronger contrast (border + fill) so pills read on cream paper AND
      deep charcoal without being washed out. */
   .pill-grey   { background: var(--pill-grey-bg);             color: var(--brand-textSecondary); border-color: var(--brand-border); }
@@ -145,12 +160,26 @@
   .card {
     background: var(--bg-card);
     border: 1px solid var(--brand-border);
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    border-radius: 14px;
+    padding: 18px;
+    box-shadow: var(--shadow-sm);
     transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
   }
-  .card:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.08); }
+  .card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: color-mix(in srgb, var(--brand-border) 70%, var(--accent-gold) 12%);
+  }
+  /* Variant: hero card with a faint gold glow halo */
+  .card-hero {
+    background: var(--bg-card);
+    border: 1px solid var(--brand-border);
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.02);
+    background-image:
+      radial-gradient(600px 200px at 100% 0%, var(--accent-goldSoft), transparent 60%),
+      radial-gradient(500px 220px at 0% 100%, rgba(91,141,239,0.04), transparent 60%);
+  }
   .card-h {
     font-size: 11px;
     font-weight: 600;
@@ -165,47 +194,73 @@
   .table-card {
     background: var(--bg-card);
     border: 1px solid var(--brand-border);
-    border-radius: 12px;
+    border-radius: 14px;
     overflow: hidden;
     overflow-x: auto;
+    box-shadow: var(--shadow-sm);
   }
   .table-card table { width: 100%; border-collapse: collapse; }
+  .table-card thead {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg-card) 50%, var(--bg-input)) 0%, var(--bg-card) 100%);
+  }
   .table-card th {
-    font-size: 11px;
+    font-size: 10.5px;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.10em;
     color: var(--brand-textMuted);
-    padding: 10px 14px;
+    padding: 12px 16px;
     text-align: left;
-    font-weight: 600;
+    font-weight: 700;
     border-bottom: 1px solid var(--brand-border);
   }
   .table-card td {
-    padding: 11px 14px;
+    padding: 12px 16px;
     border-bottom: 1px solid var(--brand-borderSoft);
     font-size: 13px;
   }
   .table-card tr.clickable { cursor: pointer; }
-  .table-card tbody tr { transition: background-color 120ms ease; }
+  .table-card tbody tr { transition: background-color 140ms ease, transform 140ms ease; }
   .table-card tbody tr:hover td {
-    background: color-mix(in srgb, var(--accent-gold) 8%, var(--bg-card));
+    background: color-mix(in srgb, var(--accent-gold) 10%, var(--bg-card));
   }
   .table-card tr:last-child td { border-bottom: none; }
   .table-card td.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--brand-textSecondary); }
 
   .callout {
-    background: var(--bg-input);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--status-amber) 8%, var(--bg-input)) 0%, var(--bg-input) 60%);
+    border: 1px solid color-mix(in srgb, var(--status-amber) 25%, var(--brand-border));
     border-left: 3px solid var(--status-amber);
-    padding: 10px 14px;
+    padding: 11px 16px;
     font-size: 12.5px;
     margin-bottom: 14px;
-    border-radius: 6px;
+    border-radius: 10px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
   }
-  .callout.red    { border-left-color: var(--status-red); }
-  .callout.blue   { border-left-color: var(--status-blue); }
-  .callout.green  { border-left-color: var(--status-green); }
-  .callout.purple { border-left-color: var(--status-purple); }
-  .callout.gold   { border-left-color: var(--accent-gold); }
+  .callout.red    {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--status-red) 8%, var(--bg-input)) 0%, var(--bg-input) 60%);
+    border-color: color-mix(in srgb, var(--status-red) 25%, var(--brand-border));
+    border-left-color: var(--status-red);
+  }
+  .callout.blue   {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--status-blue) 8%, var(--bg-input)) 0%, var(--bg-input) 60%);
+    border-color: color-mix(in srgb, var(--status-blue) 25%, var(--brand-border));
+    border-left-color: var(--status-blue);
+  }
+  .callout.green  {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--status-green) 8%, var(--bg-input)) 0%, var(--bg-input) 60%);
+    border-color: color-mix(in srgb, var(--status-green) 25%, var(--brand-border));
+    border-left-color: var(--status-green);
+  }
+  .callout.purple {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--status-purple) 8%, var(--bg-input)) 0%, var(--bg-input) 60%);
+    border-color: color-mix(in srgb, var(--status-purple) 25%, var(--brand-border));
+    border-left-color: var(--status-purple);
+  }
+  .callout.gold   {
+    background: linear-gradient(90deg, var(--accent-goldSoft) 0%, var(--bg-input) 60%);
+    border-color: color-mix(in srgb, var(--accent-gold) 30%, var(--brand-border));
+    border-left-color: var(--accent-gold);
+  }
 
   .form-row { margin-bottom: 12px; }
   .form-row label {
@@ -225,116 +280,352 @@
     color: var(--brand-text);
     background: var(--bg-input);
     border: 1px solid var(--brand-border);
-    padding: 9px 12px;
-    border-radius: 8px;
+    padding: 10px 13px;
+    border-radius: 9px;
     width: 100%;
     outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    transition: border-color 180ms ease, box-shadow 220ms ease, background-color 180ms ease;
+  }
+  .input:hover:not(:focus), input:hover:not(:focus), select:hover:not(:focus), textarea:hover:not(:focus) {
+    border-color: color-mix(in srgb, var(--brand-border) 60%, var(--brand-textMuted));
   }
   .input:focus, input:focus, select:focus, textarea:focus {
     border-color: var(--accent-gold);
-    box-shadow: 0 0 0 3px var(--accent-goldSoft);
+    box-shadow: 0 0 0 4px var(--accent-goldSoft);
+    background: color-mix(in srgb, var(--bg-input) 95%, var(--accent-gold) 1%);
+  }
+  /* Placeholder styling */
+  input::placeholder, textarea::placeholder {
+    color: var(--brand-textMuted);
+    opacity: 0.7;
   }
 
   .btn {
-    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-3 py-1.5 text-[12.5px] font-medium;
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-3.5 py-1.5 text-[12.5px] font-medium;
     background: var(--bg-card);
     border-color: var(--brand-border);
     color: var(--brand-text);
-    transition: background-color 150ms ease, border-color 150ms ease, transform 80ms ease, box-shadow 150ms ease;
+    transition: background-color 180ms ease, border-color 180ms ease, transform 100ms ease, box-shadow 200ms ease, color 180ms ease;
+    box-shadow: var(--shadow-sm);
   }
   .btn:hover:not(:disabled) {
     background: var(--bg-cardHover);
-    border-color: var(--brand-textMuted);
+    border-color: color-mix(in srgb, var(--brand-border) 50%, var(--accent-gold) 20%);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
   }
   .btn:active:not(:disabled) { transform: translateY(1px); }
   .btn:focus-visible { outline: 2px solid var(--accent-gold); outline-offset: 2px; }
 
   /* Primary CTA — refined academic blue with depth instead of flat saturation.
      The gradient + soft shadow give the button a tactile, "press me" feel
-     without screaming. Hover lifts it 1px. */
+     without screaming. */
   .btn-primary {
-    background: linear-gradient(180deg, #6F9AF2 0%, var(--status-blue) 100%);
+    background: linear-gradient(180deg, #7AA3F4 0%, var(--status-blue) 100%);
     color: white;
-    border-color: var(--status-blue);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 1px 3px rgba(91,141,239,0.20);
+    border-color: color-mix(in srgb, var(--status-blue) 80%, #000);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.20) inset, 0 2px 6px rgba(91,141,239,0.25);
   }
   .btn-primary:hover:not(:disabled) {
-    background: linear-gradient(180deg, #7BA4F4 0%, #4A7AE0 100%);
+    background: linear-gradient(180deg, #8BB1F6 0%, #4A7AE0 100%);
     border-color: #4A7AE0;
-    box-shadow: 0 2px 10px rgba(91,141,239,0.30);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 4px 14px rgba(91,141,239,0.35);
     transform: translateY(-1px);
   }
-  .btn-primary:active:not(:disabled) { transform: translateY(0); }
+  .btn-primary:active:not(:disabled) { transform: translateY(0); box-shadow: 0 1px 0 rgba(255,255,255,0.20) inset, 0 1px 3px rgba(91,141,239,0.20); }
 
   .btn-success {
-    background: var(--status-green);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--status-green) 95%, white 10%) 0%, var(--status-green) 100%);
     color: #0F1115;
-    border-color: var(--status-green);
-    font-weight: 600;
+    border-color: color-mix(in srgb, var(--status-green) 80%, #000);
+    font-weight: 700;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 2px 6px rgba(74,222,128,0.20);
   }
-  .btn-success:hover:not(:disabled) { background: #22C55E; border-color: #22C55E; }
+  .btn-success:hover:not(:disabled) {
+    background: linear-gradient(180deg, var(--status-green) 0%, #22C55E 100%);
+    border-color: #22C55E;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 4px 14px rgba(74,222,128,0.30);
+    transform: translateY(-1px);
+  }
 
   .btn-amber {
-    background: var(--status-amber);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--status-amber) 95%, white 10%) 0%, var(--status-amber) 100%);
     color: #0F1115;
-    border-color: var(--status-amber);
+    border-color: color-mix(in srgb, var(--status-amber) 80%, #000);
+    font-weight: 700;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 2px 6px rgba(245,158,11,0.20);
   }
-  .btn-amber:hover:not(:disabled) { filter: brightness(1.05); }
+  .btn-amber:hover:not(:disabled) {
+    filter: brightness(1.05);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 4px 14px rgba(245,158,11,0.30);
+    transform: translateY(-1px);
+  }
 
   .btn-danger {
-    background: var(--status-red);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--status-red) 95%, white 10%) 0%, var(--status-red) 100%);
     color: white;
-    border-color: var(--status-red);
+    border-color: color-mix(in srgb, var(--status-red) 80%, #000);
+    font-weight: 700;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.20) inset, 0 2px 6px rgba(239,68,68,0.20);
   }
-  .btn-danger:hover:not(:disabled) { background: #DC2626; border-color: #DC2626; }
+  .btn-danger:hover:not(:disabled) {
+    background: linear-gradient(180deg, var(--status-red) 0%, #DC2626 100%);
+    border-color: #DC2626;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 4px 14px rgba(239,68,68,0.30);
+    transform: translateY(-1px);
+  }
 
-  /* New "gold" variant for academy-branded CTAs (saved for special moments) */
+  /* "Gold" variant for academy-branded CTAs (saved for special moments) */
   .btn-gold {
-    background: var(--accent-gold);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--accent-gold) 90%, white 10%) 0%, var(--accent-gold) 100%);
     color: #0F1115;
-    border-color: var(--accent-gold);
-    font-weight: 600;
+    border-color: var(--accent-goldDeep);
+    font-weight: 700;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.30) inset, 0 2px 6px var(--accent-goldGlow);
   }
-  .btn-gold:hover:not(:disabled) { background: var(--accent-goldDeep); border-color: var(--accent-goldDeep); color: white; box-shadow: 0 2px 10px var(--accent-goldSoft); }
+  .btn-gold:hover:not(:disabled) {
+    background: linear-gradient(180deg, var(--accent-gold) 0%, var(--accent-goldDeep) 100%);
+    border-color: var(--accent-goldDeep);
+    color: white;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 4px 16px var(--accent-goldGlow);
+    transform: translateY(-1px);
+  }
 
   .btn-sm { padding: 5px 9px; font-size: 11.5px; }
 
   .kpi-card {
     background: var(--bg-card);
     border: 1px solid var(--brand-border);
-    border-radius: 12px;
-    padding: 14px 16px;
-    transition: transform 200ms ease, box-shadow 200ms ease;
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-shadow: var(--shadow-sm);
+    transition: transform 220ms cubic-bezier(0.2,0.9,0.25,1), box-shadow 220ms ease, border-color 220ms ease;
   }
   .kpi-card:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: color-mix(in srgb, var(--brand-border) 70%, var(--accent-gold) 15%);
   }
   .kpi-label {
     font-size: 10px;
     color: var(--brand-textMuted);
     text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-weight: 600;
-    margin-bottom: 5px;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    margin-bottom: 6px;
   }
-  .kpi-value { font-size: 22px; font-weight: 700; line-height: 1.1; }
-  .kpi-sub { font-size: 11px; color: var(--brand-textMuted); margin-top: 3px; }
+  .kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+  }
+  .kpi-sub { font-size: 11px; color: var(--brand-textMuted); margin-top: 4px; }
 
   .divider {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin: 18px 0 10px;
+    margin: 22px 0 12px;
     font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.14em;
     color: var(--brand-textMuted);
-    font-weight: 600;
+    font-weight: 700;
   }
-  .divider::after { content: ''; flex: 1; height: 1px; background: var(--brand-border); }
+  .divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--brand-border) 50%, transparent 100%);
+  }
+  /* Section header — small uppercase label with optional gold accent dot */
+  .section-h {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--brand-textSecondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0 10px;
+  }
+  .section-h::before {
+    content: '';
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--accent-gold);
+    box-shadow: 0 0 8px var(--accent-goldGlow);
+  }
 }
 
 /* Page wrapper subtle entry animation */
-.page-enter { animation: fadeUp 280ms ease-out both; }
+.page-enter { animation: fadeUp 320ms cubic-bezier(0.2,0.9,0.25,1) both; }
+
+/* Subtle hover lift utility — for clickable cards */
+.hover-lift {
+  transition: transform 220ms cubic-bezier(0.2,0.9,0.25,1), box-shadow 220ms ease;
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Animated highlight bar that flows on hover — for nav items, links */
+.shimmer-on-hover {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-on-hover::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, var(--accent-goldGlow), transparent);
+  transition: left 600ms cubic-bezier(0.2,0.9,0.25,1);
+  pointer-events: none;
+}
+.shimmer-on-hover:hover::after {
+  left: 100%;
+}
+
+/* Subtle "breathing" pulse — for live status indicators */
+@keyframes mits-breathe {
+  0%, 100% { opacity: 1;    transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.93); }
+}
+.pulse-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--status-green);
+  box-shadow: 0 0 8px var(--status-green);
+  animation: mits-breathe 1.6s ease-in-out infinite;
+}
+
+/* Number ticker animation when KPIs first render */
+@keyframes mits-count-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.kpi-value { animation: mits-count-up 380ms cubic-bezier(0.2,0.9,0.25,1) both; }
+
+/* Refined heading typography scale */
+.h-display {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+@media (min-width: 768px) {
+  .h-display { font-size: 32px; }
+}
+.h-page {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.h-card {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+}
+
+/* Gold accent text — for the "gold-tinted first name" in headlines, etc. */
+.text-gold-grad {
+  background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-goldDeep) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Subtle gradient surface for the Page wrapper — adds depth without noise */
+.page-surface {
+  position: relative;
+}
+.page-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(800px 320px at 100% 0%, var(--accent-goldSoft), transparent 60%);
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Card with a colored top accent bar — used for KPIs / status cards */
+.card-accent {
+  background: var(--bg-card);
+  border: 1px solid var(--brand-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 220ms ease, transform 220ms cubic-bezier(0.2,0.9,0.25,1);
+}
+.card-accent::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent-gold) 50%, transparent 100%);
+  opacity: 0.6;
+}
+.card-accent:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Smooth route entry animation — wraps every page change */
+@keyframes mits-route-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.route-enter { animation: mits-route-enter 320ms cubic-bezier(0.2,0.9,0.25,1) both; }
+
+/* Subtle background noise — adds tactile paper-like texture */
+.paper-texture::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.02;
+  background-image:
+    radial-gradient(circle at 25% 25%, var(--brand-text) 1px, transparent 1px),
+    radial-gradient(circle at 75% 75%, var(--brand-text) 1px, transparent 1px);
+  background-size: 3px 3px;
+}
+
+/* Glow effect — for highlighted/active states (sparkle button etc) */
+@keyframes mits-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-goldGlow); }
+  50%      { box-shadow: 0 0 0 4px var(--accent-goldGlow); }
+}
+.glow-pulse {
+  animation: mits-glow 2.4s ease-in-out infinite;
+}
+
+/* Action button with subtle shimmer on hover */
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shimmer::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  transition: left 600ms cubic-bezier(0.2,0.9,0.25,1);
+  pointer-events: none;
+}
+.btn-shimmer:hover::before { left: 130%; }

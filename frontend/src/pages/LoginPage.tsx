@@ -104,10 +104,10 @@ export function LoginPage() {
             <span>{greeting} — welcome back.</span>
           </div>
           <h1
-            className="text-[42px] lg:text-[52px] font-bold tracking-tight leading-[1.05] mb-4"
-            style={{ color: '#FAF5E7' }}
+            className="text-[42px] lg:text-[54px] font-extrabold tracking-tight leading-[1.05] mb-4"
+            style={{ color: '#FAF5E7', letterSpacing: '-0.025em' }}
           >
-            Run the entire client lifecycle <span style={{ color: 'var(--accent-gold)' }}>in one place.</span>
+            Run the entire client lifecycle <span className="text-gold-grad">in one place.</span>
           </h1>
           <p className="text-[14px] max-w-[460px]" style={{ color: 'rgba(240,232,214,0.65)' }}>
             From the first lead, through demos, sourcing, sales close, and renewals —

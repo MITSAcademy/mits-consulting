@@ -64,9 +64,10 @@ export function Topbar({
     <div
       className="flex justify-between items-center px-4 md:px-6 py-3.5 border-b sticky top-0 z-10 flex-wrap gap-2.5"
       style={{
-        borderColor: 'var(--brand-border)',
-        background: 'color-mix(in srgb, var(--bg-page) 92%, transparent)',
-        backdropFilter: 'saturate(140%) blur(6px)',
+        borderColor: 'color-mix(in srgb, var(--brand-border) 70%, transparent)',
+        background: 'color-mix(in srgb, var(--bg-page) 80%, transparent)',
+        backdropFilter: 'saturate(160%) blur(12px)',
+        WebkitBackdropFilter: 'saturate(160%) blur(12px)',
       }}
     >
       <div className="flex items-center gap-3 flex-wrap min-w-0">
@@ -78,7 +79,7 @@ export function Topbar({
         >
           <Menu size={18} />
         </button>
-        <div className="text-[16px] md:text-[17px] font-semibold tracking-tight min-w-0 truncate">
+        <div className="h-page min-w-0 truncate">
           {title}
           {subtitle && (
             <span className="text-brand-textMuted font-normal text-[13px] ml-2">· {subtitle}</span>
@@ -97,5 +98,5 @@ export function Topbar({
 }
 
 export function Page({ children }: { children: React.ReactNode }) {
-  return <div className="px-6 py-5 page-enter">{children}</div>;
+  return <div className="px-4 md:px-6 py-5 route-enter relative" style={{ maxWidth: '1600px', margin: '0 auto' }}>{children}</div>;
 }

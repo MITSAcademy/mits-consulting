@@ -13,24 +13,15 @@ function HomeHero({ name }: { name: string }) {
   const firstName = (name || '').split(' ')[0];
   const dayDate = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   return (
-    <div
-      className="rounded-2xl p-6 md:p-7 mb-5 relative overflow-hidden"
-      style={{
-        background:
-          'radial-gradient(700px 300px at 100% 0%, rgba(229,178,76,0.10), transparent 60%), ' +
-          'radial-gradient(500px 300px at 0% 100%, rgba(91,141,239,0.06), transparent 60%), ' +
-          'var(--bg-card)',
-        border: '1px solid var(--brand-border)',
-      }}
-    >
+    <div className="card-hero mb-5 relative overflow-hidden">
       <div className="text-[12px] muted flex items-center gap-1.5 mb-1.5">
         <span aria-hidden>{emoji}</span>
         <span>{greeting}</span>
       </div>
-      <h1 className="text-[28px] md:text-[32px] font-bold tracking-tight leading-tight" style={{ color: 'var(--brand-text)' }}>
-        Welcome back, <span style={{ color: 'var(--accent-gold)' }}>{firstName}</span>
+      <h1 className="h-display">
+        Welcome back, <span className="text-gold-grad">{firstName}</span>
       </h1>
-      <div className="text-[13px] muted mt-1">{dayDate}</div>
+      <div className="text-[13px] muted mt-1.5">{dayDate}</div>
     </div>
   );
 }

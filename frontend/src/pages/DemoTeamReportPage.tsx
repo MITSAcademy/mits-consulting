@@ -125,10 +125,18 @@ function KpiTile({ icon: Icon, label, value, sub, accent }: { icon: any; label: 
     accent === 'blue'   ? 'var(--status-blue)'  :
     'var(--brand-textMuted)';
   return (
-    <div className="kpi-card" style={{ borderTop: `2px solid ${c}` }}>
+    <div className="kpi-card" style={{ borderTop: `2px solid ${c}`, position: 'relative' }}>
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <div className="kpi-label">{label}</div>
-        <Icon size={14} style={{ color: c, opacity: 0.85 }} />
+        <div
+          className="rounded-md p-1.5"
+          style={{
+            background: `color-mix(in srgb, ${c} 12%, transparent)`,
+            color: c,
+          }}
+        >
+          <Icon size={14} />
+        </div>
       </div>
       <div className="kpi-value" style={{ color: c }}>{value}</div>
       {sub && <div className="kpi-sub">{sub}</div>}
