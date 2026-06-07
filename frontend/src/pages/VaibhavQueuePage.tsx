@@ -5,6 +5,8 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
+import { EmptyState } from '@/components/EmptyState';
+import { CheckCircle2 } from 'lucide-react';
 
 export function VaibhavQueuePage() {
   const qc = useQueryClient();
@@ -30,13 +32,16 @@ export function VaibhavQueuePage() {
     <>
       <Topbar title="Pending on Vaibhav" subtitle={`${pending.length}`} />
       <Page>
-        <div className="callout">
+        <div className="callout gold">
           Clients flagged for Vaibhav to personally chase. Click a row to open, or unflag inline.
         </div>
         {pending.length === 0 ? (
-          <div className="text-center py-12 muted">
-            <div className="text-base font-semibold text-brand-text mb-1">Queue is clear.</div>
-          </div>
+          <EmptyState
+            icon={CheckCircle2}
+            tone="green"
+            title="Queue is clear"
+            description="Nothing waiting on you right now. Nice work."
+          />
         ) : (
           <div className="table-card">
             <table>
