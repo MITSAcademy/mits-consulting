@@ -103,7 +103,14 @@ export function DemosPage() {
                   const trainerPhoneUrl = trainer?.phoneDigits ? waLink(trainer.phoneCode, trainer.phoneDigits) : '';
                   const skill = (c.intakeData as any)?.detailed_skill_set || c.intakeSkillHint || '';
                   return (
-                    <div key={c.id} className="bg-bg-input rounded p-3">
+                    <div
+                      key={c.id}
+                      className="rounded-xl p-3 transition-all hover-lift"
+                      style={{
+                        background: 'var(--bg-input)',
+                        border: '1px solid var(--brand-borderSoft)',
+                      }}
+                    >
                       <div className="flex justify-between items-start gap-3 flex-wrap">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
