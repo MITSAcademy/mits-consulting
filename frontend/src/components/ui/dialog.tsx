@@ -53,17 +53,23 @@ export function DialogContent({
           transform: 'translate(-50%, -50%)',
         }}
       >
-        {title && <h3 className="text-[17px] font-bold tracking-tight mb-1 pr-8">{title}</h3>}
+        {title && (
+          <h3 className="text-[18px] font-bold mb-1.5 pr-8" style={{ letterSpacing: '-0.015em', color: 'var(--brand-text)' }}>
+            {title}
+          </h3>
+        )}
         {description && (
-          <p className="text-[13px] mb-4 leading-relaxed" style={{ color: 'var(--brand-textSecondary)' }}>
+          <p className="text-[13px] mb-5 leading-relaxed" style={{ color: 'var(--brand-textSecondary)' }}>
             {description}
           </p>
         )}
         {children}
         <DialogPrimitive.Close
-          className="absolute right-3 top-3 rounded-md p-1.5 transition-all"
-          style={{ color: 'var(--brand-textMuted)' }}
+          className="absolute right-3 top-3 rounded-lg p-1.5 transition-all hover:bg-bg-cardHover"
+          style={{ color: 'var(--brand-textMuted)', border: '1px solid transparent' }}
           aria-label="Close"
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--brand-borderSoft)'; e.currentTarget.style.color = 'var(--brand-text)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.color = 'var(--brand-textMuted)'; }}
         >
           <X size={16} />
         </DialogPrimitive.Close>
@@ -85,7 +91,7 @@ export function DialogContent({
 export function DialogFooter({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="flex justify-end gap-2 mt-4 pt-4 flex-wrap"
+      className="flex justify-end gap-2 mt-5 pt-4 flex-wrap"
       style={{ borderTop: '1px solid var(--brand-borderSoft)' }}
     >
       {children}
