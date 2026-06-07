@@ -11,7 +11,8 @@ import { Pill } from '@/components/ui/pill';
 import { formatPhone, waLink, readAvailabilitySlots, formatAvailabilitySlots } from '@/lib/utils';
 import type { AvailabilitySlot } from '@/lib/utils';
 import { AvailabilitySlotsEditor } from '@/components/AvailabilitySlotsEditor';
-import { MessageCircle, ArrowUp, ArrowDown, Filter, X } from 'lucide-react';
+import { MessageCircle, ArrowUp, ArrowDown, Filter, X, UserSearch } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
 
 type SortKey = 'name' | 'rate' | 'experience' | 'recent';
 
@@ -327,8 +328,16 @@ export function TrainersPage() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="muted text-center py-6">
-                  {q || activeFilterCount ? 'No trainers match your filters.' : 'No trainers in pool.'}
+                <tr><td colSpan={9}>
+                  <EmptyState
+                    icon={UserSearch}
+                    tone={q || activeFilterCount ? 'grey' : 'gold'}
+                    title={q || activeFilterCount ? 'No trainers match your filters' : 'No trainers in pool yet'}
+                    description={q || activeFilterCount
+                      ? 'Try clearing the search or filters above to see the full pool.'
+                      : 'Click + Add trainer above to add the first trainer.'
+                    }
+                  />
                 </td></tr>
               ) : filtered.map((t: any) => {
                 const phone = formatPhone(t.phoneCode, t.phoneDigits);
