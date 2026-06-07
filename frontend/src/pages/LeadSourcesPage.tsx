@@ -33,11 +33,18 @@ export function LeadSourcesPage() {
         <div className="card">
           <div className="grid md:grid-cols-3 gap-2">
             {(data || []).map((s: any) => (
-              <div key={s.id} className="bg-bg-input rounded p-2 flex justify-between items-center">
-                <span>{s.name}</span>
+              <div
+                key={s.id}
+                className="flex justify-between items-center rounded-xl px-3 py-2.5 hover-lift"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+              >
+                <span className="text-sm font-medium">{s.name}</span>
                 <Button size="sm" variant="danger" onClick={() => { if (confirm('Delete?')) del.mutate(s.id); }}>×</Button>
               </div>
             ))}
+            {(data || []).length === 0 && (
+              <div className="col-span-3 text-center py-8 muted text-sm">No sources yet. Add one above.</div>
+            )}
           </div>
         </div>
       </Page>

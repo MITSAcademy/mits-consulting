@@ -39,10 +39,10 @@ export function BanksPage() {
             <thead><tr><th>Label</th><th>Bank</th><th>Last 4</th><th>Status</th></tr></thead>
             <tbody>
               {(data || []).map((b: any) => (
-                <tr key={b.id}>
-                  <td className="font-medium">{b.label}</td>
+                <tr key={b.id} className="clickable">
+                  <td className="font-semibold">{b.label}</td>
                   <td>{b.bank}</td>
-                  <td className="mono">{b.last4}</td>
+                  <td className="mono text-[12px]">{b.last4}</td>
                   <td>{b.active ? <Pill color="green">Active</Pill> : <Pill color="red">Inactive</Pill>}</td>
                 </tr>
               ))}

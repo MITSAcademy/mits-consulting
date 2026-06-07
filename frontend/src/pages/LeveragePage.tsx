@@ -6,6 +6,8 @@ import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/store/auth';
+import { EmptyState } from '@/components/EmptyState';
+import { CheckCircle2 } from 'lucide-react';
 
 export function LeveragePage() {
   const qc = useQueryClient();
@@ -22,17 +24,24 @@ export function LeveragePage() {
       <Topbar title="Leverage requests" />
       <Page>
         <div className="callout">Auto-approved for ≤ 3 days. Anything longer needs Vaibhav.</div>
+        {(data || []).length === 0 ? (
+          <EmptyState
+            icon={CheckCircle2}
+            tone="green"
+            title="No leverage requests"
+            description="When a client asks for extra time beyond their committed date, the request appears here for approval."
+          />
+        ) : (
         <div className="table-card">
           <table>
             <thead><tr><th>Client</th><th>Days</th><th>Reason</th><th>New committed</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {(data || []).length === 0 ? <tr><td colSpan={6} className="text-center py-8 muted">No requests.</td></tr> :
-              (data || []).map((l: any) => (
-                <tr key={l.id}>
-                  <td><Link to={`/clients/${l.client.id}`}>{l.client.name}</Link></td>
-                  <td className="mono">{l.daysRequested}</td>
-                  <td className="text-xs">{l.reasonStated}</td>
-                  <td className="mono">{l.newCommittedDate || '—'}</td>
+              {(data || []).map((l: any) => (
+                <tr key={l.id} className="clickable">
+                  <td><Link to={`/clients/${l.client.id}`} className="font-medium hover:underline">{l.client.name}</Link></td>
+                  <td className="mono">{l.daysRequested}d</td>
+                  <td className="text-[12px] muted">{l.reasonStated}</td>
+                  <td className="mono text-[12px]">{l.newCommittedDate || '—'}</td>
                   <td><Pill color={l.status === 'Approved' || l.status === 'AutoApproved' ? 'green' : l.status === 'Rejected' ? 'red' : 'amber'}>{l.status}</Pill></td>
                   <td>
                     {l.status === 'PendingVaibhav' && user?.role === 'founder' && (
@@ -47,6 +56,7 @@ export function LeveragePage() {
             </tbody>
           </table>
         </div>
+        )}
       </Page>
     </>
   );

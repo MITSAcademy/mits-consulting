@@ -105,13 +105,13 @@ export function FreshPaymentsPage() {
             <thead><tr><th>Date</th><th>Client</th><th>Kind</th><th>Amount</th><th>Bank</th><th>Received by</th></tr></thead>
             <tbody>
               {filteredPayments.map((p: any) => (
-                <tr key={p.id}>
+                <tr key={p.id} className="clickable">
                   <td className="mono">{p.paymentDate}</td>
-                  <td>{p.client.name}</td>
-                  <td>{p.kind}</td>
-                  <td className="mono">{p.currency} {p.amount}</td>
-                  <td>{p.bankAccount?.label || '—'}</td>
-                  <td>{p.receivedBy?.name || '—'}</td>
+                  <td className="font-medium">{p.client.name}</td>
+                  <td><span className="text-[11px] muted">{p.kind}</span></td>
+                  <td className="mono font-semibold">{p.currency} {p.amount}</td>
+                  <td className="muted text-[12px]">{p.bankAccount?.label || '—'}</td>
+                  <td className="muted text-[12px]">{p.receivedBy?.name || '—'}</td>
                 </tr>
               ))}
               {filteredPayments.length === 0 && (

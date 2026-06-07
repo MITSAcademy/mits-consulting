@@ -14,11 +14,11 @@ export function AuditPage() {
             <thead><tr><th>When</th><th>Who</th><th>Action</th><th>Details</th></tr></thead>
             <tbody>
               {(data || []).map((l: any) => (
-                <tr key={l.id}>
-                  <td className="mono text-xs">{new Date(l.createdAt).toLocaleString()}</td>
-                  <td>{l.byName}</td>
-                  <td className="mono text-xs">{l.action}</td>
-                  <td className="text-xs">{l.details}</td>
+                <tr key={l.id} className="clickable">
+                  <td className="mono text-[11px] muted">{new Date(l.createdAt).toLocaleString()}</td>
+                  <td className="font-medium text-[12px]">{l.byName}</td>
+                  <td className="mono text-[11px]">{l.action}</td>
+                  <td className="text-[12px] muted">{l.details}</td>
                 </tr>
               ))}
             </tbody>

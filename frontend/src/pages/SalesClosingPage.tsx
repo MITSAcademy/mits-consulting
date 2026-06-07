@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { Inbox } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
 
 /** Map engagementType → a sensible pill color. Keeps the table scannable. */
 function engagementColor(t?: string): 'green' | 'blue' | 'purple' | 'grey' {
@@ -30,22 +31,19 @@ export function SalesClosingPage() {
     <>
       <Topbar title="Sales closing" subtitle={`${items.length} ready`} />
       <Page>
+        {items.length === 0 ? (
+          <EmptyState
+            icon={Inbox}
+            tone="gold"
+            title="All clear — no clients in closing"
+            description="New clients arrive here automatically after a positive demo feedback."
+          />
+        ) : (
         <div className="table-card">
           <table>
             <thead><tr><th>Client</th><th>Stage</th><th>Engagement</th><th>Amount</th><th>Trainer</th><th className="text-right">Actions</th></tr></thead>
             <tbody>
-              {items.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12">
-                    <div className="flex flex-col items-center justify-center gap-2 muted">
-                      <Inbox size={32} className="opacity-40" />
-                      <div className="text-sm">No clients in sales close.</div>
-                      <div className="text-[11px]">New clients arrive here automatically after a positive demo feedback.</div>
-                    </div>
-                  </td>
-                </tr>
-              ) :
-              items.map((c: any) => (
+              {items.map((c: any) => (
                 <tr key={c.id} className="clickable">
                   <td>
                     <Link to={`/clients/${c.id}`} className="font-semibold hover:underline" style={{ color: 'var(--brand-text)' }}>
@@ -69,6 +67,7 @@ export function SalesClosingPage() {
             </tbody>
           </table>
         </div>
+        )}
       </Page>
     </>
   );

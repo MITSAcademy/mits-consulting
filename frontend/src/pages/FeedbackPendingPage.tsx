@@ -4,6 +4,7 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Link } from 'react-router-dom';
 import { Pill } from '@/components/ui/pill';
 import { MessageCircle } from 'lucide-react';
+import { EmptyState } from '@/components/EmptyState';
 
 /**
  * Samita's queue — clients sitting in `FeedbackPending` after their demo finished.
@@ -21,12 +22,16 @@ export function FeedbackPendingPage() {
 
   function row(c: any) {
     return (
-      <div key={c.id} className="bg-bg-input rounded p-3">
+      <div
+        key={c.id}
+        className="rounded-xl p-3 transition-all hover-lift"
+        style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+      >
         <div className="flex justify-between items-start gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <Link to={`/clients/${c.id}`} className="font-semibold text-sm hover:underline">{c.name}</Link>
-              {c.primaryTrainer && <Pill>Trainer: {c.primaryTrainer.name}</Pill>}
+              {c.primaryTrainer && <Pill color="blue">Trainer: {c.primaryTrainer.name}</Pill>}
               {c.demoActualDate && <span className="text-xs muted">demo done {c.demoActualDate}</span>}
             </div>
             <div className="text-xs muted mt-0.5">
@@ -35,7 +40,7 @@ export function FeedbackPendingPage() {
               {c.demoFeedback && <>Notes: <em>{c.demoFeedback.slice(0, 80)}{c.demoFeedback.length > 80 ? '…' : ''}</em></>}
             </div>
           </div>
-          <Link to={`/clients/${c.id}`} className="btn btn-sm btn-primary">
+          <Link to={`/clients/${c.id}`} className="btn btn-sm btn-primary flex items-center gap-1">
             <MessageCircle size={12}/> Take feedback →
           </Link>
         </div>
@@ -56,11 +61,12 @@ export function FeedbackPendingPage() {
         </div>
 
         {pending.length === 0 && stuck.length === 0 && (
-          <div className="text-center py-12 muted">
-            <MessageCircle size={32} className="inline-block mb-2 opacity-50"/>
-            <div className="text-base font-semibold text-brand-text mb-1">No demos awaiting feedback ✓</div>
-            <div>Samita's queue is clear.</div>
-          </div>
+          <EmptyState
+            icon={MessageCircle}
+            tone="green"
+            title="Samita's queue is clear ✓"
+            description="No demos awaiting feedback. New clients will appear here after Anjali marks a demo as done."
+          />
         )}
 
         {pending.length > 0 && (

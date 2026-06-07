@@ -187,9 +187,13 @@ export function TasksPage() {
         </div>
 
         {workflow.length === 0 && sessionsPending.length === 0 && (
-          <div className="text-center py-12 muted">
-            <div className="text-base font-semibold text-brand-text mb-1">All clear ✓</div>
-            <div>Nothing pending on clients you own.</div>
+          <div
+            className="flex flex-col items-center justify-center py-14 rounded-2xl"
+            style={{ background: 'linear-gradient(135deg, var(--accent-goldSoft) 0%, transparent 100%)', border: '1px solid var(--brand-borderSoft)' }}
+          >
+            <div className="text-3xl mb-2">✓</div>
+            <div className="text-[15px] font-bold mb-1" style={{ color: 'var(--brand-text)' }}>All clear</div>
+            <div className="muted text-sm">Nothing pending on clients you own.</div>
           </div>
         )}
 
@@ -201,15 +205,18 @@ export function TasksPage() {
             </div>
             <div className="space-y-1.5">
               {items.map((row) => (
-                <Link key={row.key} to={row.href} className="block bg-bg-input rounded p-2.5 hover:bg-bg-cardHover transition-colors">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium">{row.title}</div>
-                      {row.subtitle && <div className="muted text-xs mt-0.5 truncate">{row.subtitle}</div>}
-                    </div>
-                    {row.priority === 'high' && <Pill color="red">priority</Pill>}
-                    <span className="text-brand-textMuted">→</span>
+                <Link
+                  key={row.key}
+                  to={row.href}
+                  className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 hover-lift"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium">{row.title}</div>
+                    {row.subtitle && <div className="muted text-xs mt-0.5 truncate">{row.subtitle}</div>}
                   </div>
+                  {row.priority === 'high' && <Pill color="red">priority</Pill>}
+                  <span className="muted text-xs">→</span>
                 </Link>
               ))}
             </div>

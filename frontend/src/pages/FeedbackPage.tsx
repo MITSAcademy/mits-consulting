@@ -56,11 +56,16 @@ export function FeedbackPage() {
                 </tr>
               ) :
               (fb || []).map((x: any) => (
-                <tr key={x.id}>
-                  <td className="mono">{x.weekStart}</td>
-                  <td>{x.client.name}</td>
-                  <td className="mono">{'★'.repeat(x.rating)}{'☆'.repeat(5 - x.rating)}</td>
-                  <td className="text-xs">{x.notes || '—'}</td>
+                <tr key={x.id} className="clickable">
+                  <td className="mono text-[12px]">{x.weekStart}</td>
+                  <td className="font-medium">{x.client.name}</td>
+                  <td>
+                    <span style={{ color: x.rating >= 4 ? 'var(--status-green)' : x.rating <= 2 ? 'var(--status-red)' : 'var(--status-amber)', letterSpacing: '2px' }}>
+                      {'★'.repeat(x.rating)}
+                    </span>
+                    <span className="muted" style={{ letterSpacing: '2px' }}>{'☆'.repeat(5 - x.rating)}</span>
+                  </td>
+                  <td className="text-[12px] muted">{x.notes || '—'}</td>
                 </tr>
               ))}
             </tbody>

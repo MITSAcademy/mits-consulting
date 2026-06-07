@@ -56,25 +56,43 @@ export function TrainerLeadsPage() {
         }
       />
       <Page>
-        <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
           {STAGES.map((s) => {
             const items = (data || []).filter((l: any) => l.stage === s);
+            const stageColor = s === 'Approved' ? 'var(--status-green)' : s === 'Rejected' ? 'var(--status-red)' : s === 'Vetting' ? 'var(--status-amber)' : 'var(--brand-textMuted)';
             return (
-              <div key={s} className="bg-bg-card border border-brand-border rounded-md p-2.5 min-h-[200px]">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-brand-textSecondary mb-2 flex justify-between">
-                  <span>{s}</span>
-                  <span className="bg-bg-input text-[10px] px-1.5 rounded-full">{items.length}</span>
+              <div key={s} className="card min-h-[200px]" style={{ borderTop: `2px solid ${stageColor}` }}>
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: stageColor }}>{s}</span>
+                  <span
+                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: 'var(--bg-input)', color: 'var(--brand-textMuted)' }}
+                  >
+                    {items.length}
+                  </span>
                 </div>
-                {items.map((l: any) => (
-                  <div key={l.id} className="bg-bg-input rounded p-2 mb-1.5 text-xs">
-                    <div className="font-medium">{l.name}</div>
-                    <div className="muted">{l.skills}</div>
-                    <div className="muted mono">₹{l.expectedRateInr} · {l.source}</div>
-                    <Select className="!text-[11px] !py-1 mt-1.5" value={l.stage} onChange={(e) => setStage.mutate({ id: l.id, stage: e.target.value })}>
-                      {STAGES.map((st) => <option key={st}>{st}</option>)}
-                    </Select>
-                  </div>
-                ))}
+                <div className="space-y-1.5">
+                  {items.map((l: any) => (
+                    <div
+                      key={l.id}
+                      className="rounded-xl p-2.5 text-xs hover-lift"
+                      style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+                    >
+                      <div className="font-semibold mb-0.5">{l.name}</div>
+                      {l.skills && <div className="muted truncate mb-0.5">{l.skills}</div>}
+                      <div className="muted mono text-[10.5px]">
+                        {l.expectedRateInr > 0 && <>₹{l.expectedRateInr.toLocaleString()}</>}
+                        {l.source && <> · {l.source}</>}
+                      </div>
+                      <Select className="!text-[11px] !py-0.5 mt-2" value={l.stage} onChange={(e) => setStage.mutate({ id: l.id, stage: e.target.value })}>
+                        {STAGES.map((st) => <option key={st}>{st}</option>)}
+                      </Select>
+                    </div>
+                  ))}
+                  {items.length === 0 && (
+                    <div className="text-center py-8 muted text-[11px]">None in {s.toLowerCase()}</div>
+                  )}
+                </div>
               </div>
             );
           })}

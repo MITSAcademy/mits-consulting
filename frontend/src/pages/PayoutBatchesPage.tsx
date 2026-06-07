@@ -4,6 +4,8 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
+import { EmptyState } from '@/components/EmptyState';
+import { Wallet } from 'lucide-react';
 
 export function PayoutBatchesPage() {
   const qc = useQueryClient();
@@ -16,16 +18,23 @@ export function PayoutBatchesPage() {
     <>
       <Topbar title="Payout batches" subtitle={`${data?.length || 0}`} />
       <Page>
+        {(data || []).length === 0 ? (
+          <EmptyState
+            icon={Wallet}
+            tone="grey"
+            title="No payout batches yet"
+            description='Create a batch from the Trainer Payouts page by selecting sessions and clicking "Create batch".'
+          />
+        ) : (
         <div className="table-card">
           <table>
             <thead><tr><th>Week</th><th>Sessions</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
-              {(data || []).length === 0 ? <tr><td colSpan={5} className="text-center py-8 muted">No batches.</td></tr> :
-              (data || []).map((b: any) => (
-                <tr key={b.id}>
+              {(data || []).map((b: any) => (
+                <tr key={b.id} className="clickable">
                   <td className="mono">{b.weekStart}</td>
                   <td className="mono">{b.sessionIds.length}</td>
-                  <td className="mono">₹{b.totalInr.toLocaleString()}</td>
+                  <td className="mono font-semibold">₹{b.totalInr.toLocaleString()}</td>
                   <td><Pill color={b.status === 'Paid' ? 'green' : b.status === 'Approved' ? 'blue' : 'amber'}>{b.status}</Pill></td>
                   <td className="space-x-1">
                     {b.status === 'Pending' && <Button size="sm" variant="success" onClick={() => approve.mutate(b.id)}>Approve</Button>}
@@ -36,6 +45,7 @@ export function PayoutBatchesPage() {
             </tbody>
           </table>
         </div>
+        )}
       </Page>
     </>
   );

@@ -4,6 +4,8 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
+import { EmptyState } from '@/components/EmptyState';
+import { ClipboardCheck } from 'lucide-react';
 
 export function EditRequestsPage() {
   const qc = useQueryClient();
@@ -24,18 +26,25 @@ export function EditRequestsPage() {
     <>
       <Topbar title="Edit requests" subtitle={`${data?.length || 0}`} />
       <Page>
+        {(data || []).length === 0 ? (
+          <EmptyState
+            icon={ClipboardCheck}
+            tone="green"
+            title="No edit requests pending"
+            description="When team members propose changes to client or trainer records, they appear here for approval."
+          />
+        ) : (
         <div className="table-card">
           <table>
             <thead><tr><th>Entity</th><th>Field</th><th>Old</th><th>New</th><th>By</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {(data || []).length === 0 ? <tr><td colSpan={7} className="text-center py-8 muted">No edit requests.</td></tr> :
-              (data || []).map((r: any) => (
-                <tr key={r.id}>
-                  <td>{r.entity} <span className="muted text-xs">{r.entityId.slice(0, 8)}</span></td>
-                  <td className="mono text-xs">{r.field}</td>
-                  <td className="text-xs muted">{r.oldValue || '—'}</td>
-                  <td className="text-xs">{r.newValue || '—'}</td>
-                  <td>{r.requestedBy?.name || '—'}</td>
+              {(data || []).map((r: any) => (
+                <tr key={r.id} className="clickable">
+                  <td className="font-medium">{r.entity} <span className="muted text-[11px]">{r.entityId.slice(0, 8)}</span></td>
+                  <td className="mono text-[11px]">{r.field}</td>
+                  <td className="text-[12px] muted">{r.oldValue || '—'}</td>
+                  <td className="text-[12px]">{r.newValue || '—'}</td>
+                  <td className="text-[12px]">{r.requestedBy?.name || '—'}</td>
                   <td><Pill color={r.status === 'Approved' ? 'green' : r.status === 'Rejected' ? 'red' : 'amber'}>{r.status}</Pill></td>
                   <td>
                     {r.status === 'Pending' && (
@@ -50,6 +59,7 @@ export function EditRequestsPage() {
             </tbody>
           </table>
         </div>
+        )}
       </Page>
     </>
   );

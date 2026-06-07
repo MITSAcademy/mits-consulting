@@ -1,3 +1,4 @@
+import React from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -144,20 +145,18 @@ export function TrainerDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="text-sm space-y-1">
-                <div><span className="muted">Email:</span> {t.email || '—'}</div>
-                <div><span className="muted">Phone:</span> <span className="mono">{formatPhone(t.phoneCode, t.phoneDigits) || '—'}</span></div>
-                <div><span className="muted">Rate:</span> <span className="mono">₹{t.defaultRateInr}</span> {t.rateModel}</div>
-                <div><span className="muted">Experience:</span> {t.experienceYears}y</div>
-                <div><span className="muted">Payment:</span> {t.paymentMethod} {t.upiId || t.bankAccount || ''}</div>
-                <div><span className="muted">Recruiter:</span> {t.recruitedBy?.name || '—'}</div>
-                <div>
-                  <span className="muted">Availability:</span>{' '}
-                  {(() => {
+              <div className="grid grid-cols-2 gap-2">
+                <InfoCell label="Email" value={t.email} />
+                <InfoCell label="Phone" value={<span className="mono">{formatPhone(t.phoneCode, t.phoneDigits) || '—'}</span>} />
+                <InfoCell label="Rate" value={<><span className="mono">₹{t.defaultRateInr}</span> <span className="muted text-[11px]">{t.rateModel}</span></>} />
+                <InfoCell label="Experience" value={t.experienceYears ? `${t.experienceYears}y` : undefined} />
+                <InfoCell label="Payment" value={[t.paymentMethod, t.upiId || t.bankAccount].filter(Boolean).join(' · ') || undefined} />
+                <InfoCell label="Recruiter" value={t.recruitedBy?.name} />
+                <div className="col-span-2">
+                  <InfoCell label="Availability (IST)" value={(() => {
                     const slots = readAvailabilitySlots(t);
-                    if (!slots.length) return <span className="muted">not set</span>;
-                    return <span>{formatAvailabilitySlots(slots)} IST</span>;
-                  })()}
+                    return slots.length ? formatAvailabilitySlots(slots) : undefined;
+                  })()} />
                 </div>
               </div>
             )}
@@ -165,33 +164,45 @@ export function TrainerDetailPage() {
           <div className="card">
             <div className="card-h">Active clients</div>
             {t.clients?.length ? (
-              <ul className="space-y-1 text-sm">
+              <div className="space-y-1">
                 {t.clients.map((c: any) => (
-                  <li key={c.id}><Link to={`/clients/${c.id}`} className="hover:underline">{c.name}</Link></li>
+                  <Link
+                    key={c.id}
+                    to={`/clients/${c.id}`}
+                    className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium hover-lift"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+                  >
+                    {c.name}
+                    <span className="muted text-xs">→</span>
+                  </Link>
                 ))}
-              </ul>
+              </div>
             ) : (
-              <div className="muted">No active engagements.</div>
+              <div className="muted text-sm py-2">No active engagements.</div>
             )}
           </div>
         </div>
 
         <div className="card mb-4">
           <div className="card-h">Recent session logs</div>
+          {(t.sessionLogs || []).length === 0 ? (
+            <div className="muted text-sm py-4 text-center">No sessions logged yet.</div>
+          ) : (
           <table className="w-full text-sm">
-            <thead><tr className="text-brand-textMuted"><th className="text-left py-1">Date</th><th className="text-left py-1">Client</th><th className="text-right py-1">Hours</th><th className="text-right py-1">Amount</th><th className="text-right py-1">Status</th></tr></thead>
+            <thead><tr className="text-brand-textMuted text-[11px] uppercase tracking-[0.08em]"><th className="text-left py-2 pb-1.5">Date</th><th className="text-left py-2 pb-1.5">Client</th><th className="text-right py-2 pb-1.5">Hours</th><th className="text-right py-2 pb-1.5">Amount</th><th className="text-right py-2 pb-1.5">Status</th></tr></thead>
             <tbody>
               {(t.sessionLogs || []).slice(0, 20).map((l: any) => (
-                <tr key={l.id}>
-                  <td className="mono py-1">{l.date}</td>
-                  <td>{l.client?.name || '—'}</td>
-                  <td className="mono text-right">{l.hours}</td>
-                  <td className="mono text-right">₹{l.amountInr}</td>
-                  <td className="text-right"><Pill color={l.status === 'Paid' ? 'green' : 'grey'}>{l.status}</Pill></td>
+                <tr key={l.id} style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
+                  <td className="mono py-2 text-xs">{l.date}</td>
+                  <td className="py-2">{l.client?.name || '—'}</td>
+                  <td className="mono text-right py-2">{l.hours}</td>
+                  <td className="mono text-right py-2">₹{l.amountInr}</td>
+                  <td className="text-right py-2"><Pill color={l.status === 'Paid' ? 'green' : 'grey'}>{l.status}</Pill></td>
                 </tr>
               ))}
             </tbody>
           </table>
+          )}
         </div>
 
         <div className="mt-3 space-y-3">
@@ -214,5 +225,14 @@ export function TrainerDetailPage() {
         )}
       </Page>
     </>
+  );
+}
+
+function InfoCell({ label, value }: { label: string; value?: React.ReactNode }) {
+  return (
+    <div className="rounded-lg p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+      <div className="text-[10px] uppercase tracking-[0.10em] font-bold muted mb-1">{label}</div>
+      <div className="text-[13px] font-medium" style={{ color: 'var(--brand-text)' }}>{value || <span className="muted">—</span>}</div>
+    </div>
   );
 }
