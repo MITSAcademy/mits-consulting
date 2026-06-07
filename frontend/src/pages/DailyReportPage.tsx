@@ -150,9 +150,13 @@ export function DailyReportPage() {
           ) : (
             <div className="space-y-1 max-h-[260px] overflow-y-auto">
               {(todayLogs || []).map((l: any) => (
-                <div key={l.id} className="bg-bg-input rounded p-2 text-xs">
+                <div
+                  key={l.id}
+                  className="rounded-lg p-2.5 text-xs"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+                >
                   <div className="flex justify-between">
-                    <span className="font-medium">{ACTION_LABEL[l.action] || l.action}</span>
+                    <span className="font-semibold">{ACTION_LABEL[l.action] || l.action}</span>
                     <span className="mono muted text-[11px]">{new Date(l.createdAt).toLocaleTimeString()}</span>
                   </div>
                   {l.details && <div className="muted mt-0.5">{l.details}</div>}
@@ -164,11 +168,15 @@ export function DailyReportPage() {
 
         <div className="card">
           <div className="card-h">My recent reports</div>
-          {(reports || []).length === 0 ? <div className="muted">No reports yet.</div> : (
+          {(reports || []).length === 0 ? <div className="muted text-sm py-2">No reports yet.</div> : (
             <div className="space-y-2">
               {(reports || []).map((r: any) => (
-                <div key={r.id} className="bg-bg-input p-3 rounded">
-                  <div className="text-xs muted mono mb-1">{r.date}</div>
+                <div
+                  key={r.id}
+                  className="p-3 rounded-xl"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+                >
+                  <div className="text-[11px] muted mono mb-1">{r.date}</div>
                   <div className="text-sm whitespace-pre-wrap">{r.content}</div>
                 </div>
               ))}

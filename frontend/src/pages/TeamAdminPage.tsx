@@ -49,15 +49,18 @@ export function TeamAdminPage() {
             <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Reports to</th><th>Active</th></tr></thead>
             <tbody>
               {(data || []).map((u: any) => (
-                <tr key={u.id}>
+                <tr key={u.id} className="clickable" style={u.active ? undefined : { opacity: 0.55 }}>
                   <td className="flex items-center gap-2 py-2"><Avatar name={u.name} size={24} /><span className="font-medium">{u.name}</span></td>
                   <td className="muted text-xs">{u.email}</td>
                   <td><Pill color="grey">{ROLE_LABELS[u.role] || u.role}</Pill></td>
                   <td className="muted">{(data || []).find((x: any) => x.id === u.reportsToId)?.name || '—'}</td>
                   <td>
-                    <Button size="sm" onClick={() => setActive.mutate({ id: u.id, active: !u.active })}>
-                      {u.active ? 'Deactivate' : 'Activate'}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Pill color={u.active ? 'green' : 'red'}>{u.active ? 'Active' : 'Inactive'}</Pill>
+                      <Button size="sm" variant={u.active ? 'default' : 'success'} onClick={() => setActive.mutate({ id: u.id, active: !u.active })}>
+                        {u.active ? 'Deactivate' : 'Activate'}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}

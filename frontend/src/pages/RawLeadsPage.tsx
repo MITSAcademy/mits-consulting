@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
+import { EmptyState } from '@/components/EmptyState';
+import { Inbox } from 'lucide-react';
 
 export function RawLeadsPage() {
   const qc = useQueryClient();
@@ -26,12 +28,19 @@ export function RawLeadsPage() {
       <Topbar title="Raw leads inbox" subtitle={`${data?.length || 0}`} />
       <Page>
         <div className="callout">Clean each row (name, phone, skill) then promote to a Client.</div>
+        {(data || []).length === 0 ? (
+          <EmptyState
+            icon={Inbox}
+            tone="green"
+            title="Inbox is empty"
+            description="Paste leads via Bulk Upload and they'll land here for cleanup before promotion."
+          />
+        ) : (
         <div className="table-card">
           <table>
             <thead><tr><th>Raw</th><th>Name</th><th>Phone</th><th>Skill</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {(data || []).length === 0 ? <tr><td colSpan={6} className="text-center py-8 muted">Inbox empty.</td></tr> :
-              (data || []).map((r: any) => (
+              {(data || []).map((r: any) => (
                 <tr key={r.id}>
                   <td className="text-xs muted max-w-[200px] truncate" title={r.raw}>{r.raw}</td>
                   <td><Input defaultValue={r.cleanedName || ''} onBlur={(e) => upd.mutate({ id: r.id, cleanedName: e.target.value })} /></td>
@@ -44,6 +53,7 @@ export function RawLeadsPage() {
             </tbody>
           </table>
         </div>
+        )}
       </Page>
     </>
   );

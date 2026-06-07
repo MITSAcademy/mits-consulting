@@ -25,13 +25,19 @@ export function ReportsDashboardPage() {
                   <div className="flex items-center gap-2"><Avatar name={u.name} size={24} /><span>{u.name}</span></div>
                   <span>{list.length}</span>
                 </div>
-                {list.length === 0 ? <div className="muted text-xs">No reports yet.</div> :
-                  list.slice(0, 5).map((r: any) => (
-                    <div key={r.id} className="bg-bg-input rounded p-2 mb-1.5">
-                      <div className="text-xs mono muted">{r.date}</div>
-                      <div className="text-xs mt-0.5 line-clamp-2">{r.content}</div>
-                    </div>
-                  ))
+                {list.length === 0 ? <div className="muted text-xs py-2">No reports yet.</div> :
+                  <div className="space-y-1.5">
+                    {list.slice(0, 5).map((r: any) => (
+                      <div
+                        key={r.id}
+                        className="rounded-lg p-2.5"
+                        style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+                      >
+                        <div className="text-[11px] mono muted mb-0.5">{r.date}</div>
+                        <div className="text-xs line-clamp-2">{r.content}</div>
+                      </div>
+                    ))}
+                  </div>
                 }
               </div>
             );
