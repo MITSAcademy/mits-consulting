@@ -78,11 +78,12 @@ export function ThemeToggle() {
   return (
     <button
       onClick={() => setChoice(next())}
-      className="p-2 rounded hover:bg-bg-cardHover transition-colors"
+      className="p-2 rounded-lg hover:bg-bg-cardHover transition-all"
       title={label}
       aria-label="Theme — Auto / Light / Dark"
+      style={{ border: '1px solid var(--brand-borderSoft)' }}
     >
-      <Icon size={18} />
+      <Icon size={18} style={{ color: 'var(--brand-textSecondary)' }} />
     </button>
   );
 }

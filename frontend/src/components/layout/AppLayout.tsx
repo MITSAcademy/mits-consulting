@@ -41,10 +41,17 @@ function GreetingChip() {
   const firstName = (user.name || '').split(' ')[0];
   const dayDate = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' });
   return (
-    <div className="hidden md:flex items-center gap-2 text-[12px] muted">
-      <span aria-hidden>{emoji}</span>
-      <span>{greeting}, <span className="font-medium" style={{ color: 'var(--brand-text)' }}>{firstName}</span></span>
-      <span>·</span>
+    <div
+      className="hidden md:flex items-center gap-2 text-[12px] px-3 py-1 rounded-full"
+      style={{
+        background: 'color-mix(in srgb, var(--bg-input) 80%, transparent)',
+        border: '1px solid var(--brand-borderSoft)',
+        color: 'var(--brand-textSecondary)',
+      }}
+    >
+      <span aria-hidden style={{ fontSize: '13px' }}>{emoji}</span>
+      <span>{greeting}, <span className="font-semibold" style={{ color: 'var(--brand-text)' }}>{firstName}</span></span>
+      <span style={{ color: 'var(--brand-textMuted)' }}>·</span>
       <span>{dayDate}</span>
     </div>
   );
@@ -74,7 +81,7 @@ export function Topbar({
         {/* Hamburger — mobile-only, opens the off-canvas sidebar */}
         <button
           onClick={openMobile}
-          className="md:hidden p-1.5 -ml-1 rounded hover:bg-bg-cardHover"
+          className="md:hidden p-2 -ml-1 rounded-lg hover:bg-bg-cardHover transition-colors"
           aria-label="Open navigation"
         >
           <Menu size={18} />

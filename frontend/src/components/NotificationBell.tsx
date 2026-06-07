@@ -89,9 +89,10 @@ export function NotificationBell() {
     <div ref={wrapRef} style={{ position: 'relative' }}>
       <button
         onClick={() => setOpen(!open)}
-        className="relative p-2 rounded transition-colors hover:bg-bg-cardHover"
+        className="relative p-2 rounded-lg transition-all hover:bg-bg-cardHover"
         title="Notifications"
         aria-label="Notifications"
+        style={{ border: '1px solid var(--brand-borderSoft)' }}
       >
         <Bell
           size={18}

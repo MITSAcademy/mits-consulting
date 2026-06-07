@@ -38,7 +38,7 @@ export function Avatar({
   const [c1, c2] = PALETTE[hashName(name || 'x') % PALETTE.length];
   return (
     <div
-      className="rounded-full flex items-center justify-center font-bold flex-shrink-0 select-none"
+      className="rounded-full flex items-center justify-center font-bold flex-shrink-0 select-none transition-transform hover:scale-105"
       style={{
         width: size,
         height: size,
@@ -46,9 +46,9 @@ export function Avatar({
         background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
         color: 'white',
         boxShadow: ring
-          ? `0 0 0 2px var(--bg-sidebar), 0 0 0 4px rgba(229,178,76,0.50), 0 2px 8px rgba(0,0,0,0.20)`
-          : `0 1px 3px rgba(0,0,0,0.15)`,
-        textShadow: '0 1px 1px rgba(0,0,0,0.15)',
+          ? `0 0 0 2px var(--bg-sidebar), 0 0 0 4px rgba(229,178,76,0.60), 0 4px 12px rgba(0,0,0,0.25)`
+          : `0 2px 6px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.15)`,
+        textShadow: '0 1px 2px rgba(0,0,0,0.20)',
         letterSpacing: '-0.02em',
       }}
       title={name}
