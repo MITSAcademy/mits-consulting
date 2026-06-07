@@ -63,30 +63,43 @@ export function DemoIntakePage() {
           Once demo is done, lead goes to Roshni for sale closing.
         </div>
 
-        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+        <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
           {STAGES.map((s) => {
             const items = grouped[s.key];
+            const isEmpty = items.length === 0;
             return (
-              <div key={s.key} className="bg-bg-card border border-brand-border rounded-md p-2.5 min-h-[240px]">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-brand-textSecondary">
+              <div
+                key={s.key}
+                className="rounded-xl p-3 min-h-[260px] transition-all"
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--brand-border)',
+                  boxShadow: 'var(--shadow-sm)',
+                }}
+              >
+                <div className="flex justify-between items-center mb-2.5 pb-2" style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--brand-textSecondary)' }}>
                     {s.label}
                   </span>
                   <Pill color={stageColor(s.key) as any}>{items.length}</Pill>
                 </div>
-                {items.length === 0 && <div className="text-[11px] muted text-center py-3">Empty</div>}
+                {isEmpty && <div className="text-[10.5px] muted text-center py-4 italic">Empty</div>}
                 {items.map((c: any) => {
                   const skill = (c.intakeData as any)?.detailed_skill_set || c.intakeSkillHint || c.engagementType;
                   return (
                     <Link
                       key={c.id}
                       to={`/clients/${c.id}`}
-                      className="block bg-bg-input border border-brand-borderSoft rounded p-2 mb-1.5 hover:bg-bg-cardHover transition-colors"
+                      className="block rounded-lg p-2 mb-1.5 transition-all hover-lift"
+                      style={{
+                        background: 'var(--bg-input)',
+                        border: '1px solid var(--brand-borderSoft)',
+                      }}
                     >
-                      <div className="font-medium text-xs mb-0.5">{c.name}</div>
+                      <div className="font-semibold text-xs mb-0.5" style={{ color: 'var(--brand-text)' }}>{c.name}</div>
                       <div className="text-[10px] muted mono truncate" title={skill}>{skill}</div>
                       {c.intakeOwner && (
-                        <div className="text-[10px] text-brand-blue mt-0.5">{c.intakeOwner.name}</div>
+                        <div className="text-[10px] mt-1 font-medium" style={{ color: 'var(--status-blue)' }}>{c.intakeOwner.name}</div>
                       )}
                     </Link>
                   );

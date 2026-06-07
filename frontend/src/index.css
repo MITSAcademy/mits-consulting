@@ -155,17 +155,41 @@
     transition: filter 150ms ease;
   }
   .pill:hover { filter: brightness(1.08); }
-  /* Stronger contrast (border + fill) so pills read on cream paper AND
-     deep charcoal without being washed out. */
-  .pill-grey   { background: var(--pill-grey-bg);             color: var(--brand-textSecondary); border-color: var(--brand-border); }
-  .pill-green  { background: rgba(74,222,128,0.18);   color: var(--status-green);  border-color: rgba(74,222,128,0.32); }
-  .pill-amber  { background: rgba(245,158,11,0.18);   color: var(--status-amber);  border-color: rgba(245,158,11,0.36); }
-  .pill-red    { background: rgba(239,68,68,0.18);    color: var(--status-red);    border-color: rgba(239,68,68,0.32); }
-  .pill-blue   { background: rgba(91,141,239,0.18);   color: var(--status-blue);   border-color: rgba(91,141,239,0.32); }
-  .pill-purple { background: rgba(167,139,250,0.18);  color: var(--status-purple); border-color: rgba(167,139,250,0.32); }
-  .pill-pink   { background: rgba(236,72,153,0.18);   color: #EC4899; border-color: rgba(236,72,153,0.32); }
-  .pill-teal   { background: rgba(20,184,166,0.18);   color: var(--status-teal);   border-color: rgba(20,184,166,0.32); }
-  .pill-gold   { background: var(--accent-goldSoft);  color: var(--accent-gold);   border-color: rgba(229,178,76,0.40); }
+  /* Two-stop gradient fills + matching ring borders give pills a softly
+     embossed feel that reads on both cream paper and deep charcoal. */
+  .pill-grey   { background: var(--pill-grey-bg); color: var(--brand-textSecondary); border-color: var(--brand-border); }
+  .pill-green  {
+    background: linear-gradient(135deg, rgba(74,222,128,0.22) 0%, rgba(74,222,128,0.14) 100%);
+    color: var(--status-green); border-color: rgba(74,222,128,0.36);
+  }
+  .pill-amber  {
+    background: linear-gradient(135deg, rgba(245,158,11,0.22) 0%, rgba(245,158,11,0.14) 100%);
+    color: var(--status-amber); border-color: rgba(245,158,11,0.40);
+  }
+  .pill-red    {
+    background: linear-gradient(135deg, rgba(239,68,68,0.22) 0%, rgba(239,68,68,0.14) 100%);
+    color: var(--status-red); border-color: rgba(239,68,68,0.36);
+  }
+  .pill-blue   {
+    background: linear-gradient(135deg, rgba(91,141,239,0.22) 0%, rgba(91,141,239,0.14) 100%);
+    color: var(--status-blue); border-color: rgba(91,141,239,0.36);
+  }
+  .pill-purple {
+    background: linear-gradient(135deg, rgba(167,139,250,0.22) 0%, rgba(167,139,250,0.14) 100%);
+    color: var(--status-purple); border-color: rgba(167,139,250,0.36);
+  }
+  .pill-pink   {
+    background: linear-gradient(135deg, rgba(236,72,153,0.22) 0%, rgba(236,72,153,0.14) 100%);
+    color: #EC4899; border-color: rgba(236,72,153,0.36);
+  }
+  .pill-teal   {
+    background: linear-gradient(135deg, rgba(20,184,166,0.22) 0%, rgba(20,184,166,0.14) 100%);
+    color: var(--status-teal); border-color: rgba(20,184,166,0.36);
+  }
+  .pill-gold   {
+    background: linear-gradient(135deg, var(--accent-goldSoft) 0%, color-mix(in srgb, var(--accent-goldSoft) 60%, transparent) 100%);
+    color: var(--accent-gold); border-color: rgba(229,178,76,0.44);
+  }
 
   .card {
     background: var(--bg-card);
@@ -282,15 +306,15 @@
     border-left-color: var(--accent-gold);
   }
 
-  .form-row { margin-bottom: 12px; }
+  .form-row { margin-bottom: 14px; }
   .form-row label {
     display: block;
-    font-size: 10px;
+    font-size: 10.5px;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.10em;
     color: var(--brand-textMuted);
-    font-weight: 600;
-    margin-bottom: 5px;
+    font-weight: 700;
+    margin-bottom: 6px;
   }
 
   .input, input[type="text"], input[type="email"], input[type="password"],
