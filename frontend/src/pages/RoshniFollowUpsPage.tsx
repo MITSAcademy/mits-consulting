@@ -171,10 +171,13 @@ function RenewalRow({ r }: { r: RenewalItem }) {
   const riskColor = r.churnRisk === 'Red' ? 'red' : r.churnRisk === 'Amber' ? 'amber' : 'green';
 
   return (
-    <div className="bg-bg-input rounded p-3 flex justify-between items-start gap-3 flex-wrap">
+    <div
+      className="rounded-xl p-3.5 flex justify-between items-start gap-3 flex-wrap hover-lift"
+      style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+    >
       <div className="flex-1 min-w-[260px]">
         <div className="flex items-center gap-2 flex-wrap">
-          <Link to={`/clients/${r.id}`} className="font-medium text-sm hover:underline">{r.name}</Link>
+          <Link to={`/clients/${r.id}`} className="font-semibold text-sm hover:underline">{r.name}</Link>
           <span className="text-[11px] muted">· {r.lifecycle}</span>
           {r.churnRisk && <Pill color={riskColor}>{r.churnRisk}</Pill>}
           {r.salesOwner && <span className="text-[11px] muted">· {r.salesOwner.name}</span>}
@@ -237,10 +240,13 @@ function Row({ c }: { c: FollowUpItem }) {
   const waUrl = waPhone ? `https://wa.me/${waPhone}` : (c.whatsappGroupLink || '');
 
   return (
-    <div className="bg-bg-input rounded p-3 flex justify-between items-start gap-3 flex-wrap">
+    <div
+      className="rounded-xl p-3.5 flex justify-between items-start gap-3 flex-wrap hover-lift"
+      style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+    >
       <div className="flex-1 min-w-[260px]">
         <div className="flex items-center gap-2 flex-wrap">
-          <Link to={`/clients/${c.id}`} className="font-medium text-sm hover:underline">{c.name}</Link>
+          <Link to={`/clients/${c.id}`} className="font-semibold text-sm hover:underline">{c.name}</Link>
           <Pill color={subColor}>{subLabel}</Pill>
           <span className="text-[11px] muted">· {c.lifecycle}</span>
           {c.cycleAmount ? <span className="text-[11px] muted">· {c.currency || 'USD'} {c.cycleAmount}</span> : null}

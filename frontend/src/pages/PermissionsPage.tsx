@@ -49,11 +49,11 @@ export function PermissionsPage() {
             </thead>
             <tbody>
               {Object.entries(CLIENT_PERMS).map(([role, perms]) => (
-                <tr key={role}>
+                <tr key={role} className="clickable">
                   <td><strong className="capitalize">{role.replace(/_/g, ' ')}</strong></td>
                   {CLIENT_CATS.map((c) => (
                     <td key={c}>
-                      {perms[c] ? <Pill color="green">edit</Pill> : <Pill>read</Pill>}
+                      {perms[c] ? <Pill color="green">edit</Pill> : <Pill color="grey">read</Pill>}
                     </td>
                   ))}
                 </tr>
