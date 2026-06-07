@@ -28,6 +28,8 @@ const FreshPaymentsPage = lazy(() => import('@/pages/FreshPaymentsPage').then((m
 const FollowUpPaymentsPage = lazy(() => import('@/pages/FollowUpPaymentsPage').then((m) => ({ default: m.FollowUpPaymentsPage })));
 const MySessionsPage = lazy(() => import('@/pages/MySessionsPage').then((m) => ({ default: m.MySessionsPage })));
 const DemoTeamReportPage = lazy(() => import('@/pages/DemoTeamReportPage').then((m) => ({ default: m.DemoTeamReportPage })));
+const RegularTrainingsPage = lazy(() => import('@/pages/RegularTrainingsPage').then((m) => ({ default: m.RegularTrainingsPage })));
+const RegularTrainingDetailPage = lazy(() => import('@/pages/RegularTrainingDetailPage').then((m) => ({ default: m.RegularTrainingDetailPage })));
 const CalendarPage = lazy(() => import('@/pages/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const RenewalsPage = lazy(() => import('@/pages/RenewalsPage').then((m) => ({ default: m.RenewalsPage })));
 const FeedbackPage = lazy(() => import('@/pages/FeedbackPage').then((m) => ({ default: m.FeedbackPage })));
@@ -108,6 +110,8 @@ export default function App() {
           <Route path="/follow-up-payments" element={<FollowUpPaymentsPage />} />
           <Route path="/my-sessions" element={<MySessionsPage />} />
           <Route path="/reports/demo-team" element={<DemoTeamReportPage />} />
+          <Route path="/regular-trainings" element={<RegularTrainingsPage />} />
+          <Route path="/regular-trainings/:id" element={<RegularTrainingDetailPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/renewals" element={<RenewalsPage />} />
           <Route path="/dormant" element={<DormantClientsPage />} />

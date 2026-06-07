@@ -34,6 +34,8 @@ import { aiRouter } from './routes/ai';
 import { followUpPaymentsRouter } from './routes/followUpPayments';
 import { callLogsRouter } from './routes/callLogs';
 import { demoTeamReportRouter } from './routes/demoTeamReport';
+import { featuresRouter } from './routes/features';
+import { regularTrainingsRouter } from './routes/regularTrainings';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -86,6 +88,8 @@ app.use('/api/ai', aiRouter);
 app.use('/api/follow-up-payments', followUpPaymentsRouter);
 app.use('/api/call-logs', callLogsRouter);
 app.use('/api/reports/demo-team', demoTeamReportRouter);
+app.use('/api/features', featuresRouter);
+app.use('/api/regular-trainings', regularTrainingsRouter);
 
 // Global error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

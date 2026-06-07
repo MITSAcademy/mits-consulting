@@ -177,6 +177,8 @@ model User {
   demosConducted     Demo[]
   notifications      Notification[]
   callLogs           CallLog[]
+  hostedRegularTrainings RegularTraining[]  @relation("RegularTrainingHost")
+  hostedTrainingSessions TrainingSession[]  @relation("TrainingSessionHost")
 }
 
 // -------- NOTIFICATIONS --------
@@ -261,6 +263,7 @@ model Trainer {
   sessionLogs    SessionLog[]
   tasks          Task[]
   outboundMessages OutboundMessage[]
+  regularTrainings RegularTraining[]
   demos            Demo[]
 
   @@index([phoneDigits])  // auto-add dedup lookup
@@ -417,6 +420,7 @@ model Client {
   outboundMessages OutboundMessage[]
   demos            Demo[]
   callLogs         CallLog[]
+  regularTrainings RegularTraining[] @relation("RegularTrainingClient")
 
   @@index([lifecycle])                                    // every kanban/queue filters by stage
   @@index([nextRenewalDue])                               // RenewalsPage + Roshni queue
@@ -585,6 +589,67 @@ model AccountsQueueItem {
   payment    Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
   status     AccountsStatus @default(Pending)
   createdAt  DateTime       @default(now())
+}
+
+// -------- REGULAR TRAININGS (Mitali team's recurring sessions) --------
+// Mirrors the team's "RegularCalls - Recording links" sheet. Each row is one
+// ongoing recurring training (e.g. "Anita Training", "Okta Training"), with a
+// recording folder + a default host + optional schedule notes.
+//
+// Passwords for recording Gmail accounts are NEVER stored here — only the
+// email address is kept for reference. Password rotation stays in 1Password.
+//
+// GATED behind FEATURES_REGULAR_CALLS=true env flag. All routes return 404
+// when the flag is off. No existing tables touched.
+model RegularTraining {
+  id                       String   @id @default(cuid())
+  name                     String                          // "Anita Training", "Okta Training"
+  // Optional links into other systems
+  clientId                 String?
+  client                   Client?  @relation("RegularTrainingClient", fields: [clientId], references: [id], onDelete: SetNull)
+  trainerId                String?
+  trainer                  Trainer? @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  // Default host — whoever usually runs this training (Mitali, Bhavneet, Muskan, Kashish)
+  hostedByDefaultId        String?
+  hostedByDefault          User?    @relation("RegularTrainingHost", fields: [hostedByDefaultId], references: [id], onDelete: SetNull)
+  // Recording metadata — no password ever, just email + folder URL.
+  recordingAccountEmail    String?                         // "jobstraining44@gmail.com"
+  recordingAccountLabel    String?                         // "Account 1", "Trainer recording"
+  recordingFolderUrl       String?                         // Google Drive shareable folder URL
+  // Schedule (freeform — "Mon/Wed/Fri 7-8 PM IST" works fine, no need to model RRule)
+  scheduleNotes            String?
+  status                   String   @default("active")     // active | paused | archived
+  notes                    String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  sessions                 TrainingSession[]
+
+  @@index([status])
+  @@index([hostedByDefaultId])
+  @@index([clientId])
+}
+
+// One row per occurrence of a regular training — same punch-in/out + feedback
+// flow as CallLog, scoped to a recurring training.
+model TrainingSession {
+  id                       String          @id @default(cuid())
+  regularTrainingId        String
+  regularTraining          RegularTraining @relation(fields: [regularTrainingId], references: [id], onDelete: Cascade)
+  scheduledFor             DateTime
+  hostedById               String?
+  hostedBy                 User?           @relation("TrainingSessionHost", fields: [hostedById], references: [id], onDelete: SetNull)
+  status                   String          @default("scheduled") // scheduled | in_progress | completed | missed | cancelled
+  actualStartAt            DateTime?
+  actualEndAt              DateTime?
+  durationMinutes          Int?
+  recordingUrl             String?                         // session-specific recording (if separate from folder)
+  feedback                 String?
+  notes                    String?
+  createdAt                DateTime        @default(now())
+
+  @@index([regularTrainingId, scheduledFor])
+  @@index([hostedById, status, scheduledFor])
 }
 
 // -------- CALL LOG --------

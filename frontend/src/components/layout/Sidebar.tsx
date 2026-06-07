@@ -3,6 +3,7 @@ import { useAuth } from '@/store/auth';
 import { Avatar } from '@/components/ui/avatar';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useFeatures } from '@/hooks/useFeatures';
 import {
   Home, ArrowRightLeft, AlertCircle, Target, MessageSquare, ShieldCheck, Video,
   Briefcase, UserSearch, UserCog, FileCheck, DollarSign, LayoutGrid, Users, RefreshCw,
@@ -18,6 +19,8 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   roles: string[];
+  /** If set, the entry is only shown when the corresponding feature flag is on. */
+  feature?: 'regularCalls';
 }
 
 const NAV: NavItem[] = [
@@ -52,6 +55,7 @@ const NAV: NavItem[] = [
   { section: 'partners', page: '/partners', label: 'Partners', icon: Building, roles: ['founder', 'manager', 'sales_closer', 'accounts'] },
 
   { section: 'work',       page: '/my-sessions',  label: 'My sessions', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager'] },
+  { section: 'work',       page: '/regular-trainings', label: 'Regular trainings', icon: Video, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
   { section: 'trainerOps', page: '/session-logs', label: 'Session logs', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'accounts', 'payment_processor'] },
   { section: 'trainerOps', page: '/trainer-pay', label: 'Trainer payouts', icon: Wallet, roles: ['founder', 'manager', 'lead', 'accounts', 'payment_processor'] },
   { section: 'trainerOps', page: '/payout-batches', label: 'Payout batches', icon: Archive, roles: ['founder', 'manager', 'accounts', 'payment_processor', 'demo_lead'] },
@@ -89,6 +93,7 @@ const SECTIONS: Record<string, string> = {
 
 export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: boolean; onMobileClose?: () => void } = {}) {
   const user = useAuth((s) => s.user);
+  const features = useFeatures();
   const logout = useAuth((s) => s.logout);
   const location = useLocation();
 
@@ -162,7 +167,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
 
   if (!user) return null;
 
-  const filtered = NAV.filter((n) => n.roles.includes(user.role));
+  const filtered = NAV.filter((n) => n.roles.includes(user.role) && (!n.feature || features[n.feature]));
   const grouped: Record<string, NavItem[]> = {};
   filtered.forEach((n) => {
     (grouped[n.section] = grouped[n.section] || []).push(n);
