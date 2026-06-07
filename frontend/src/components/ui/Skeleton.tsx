@@ -26,9 +26,10 @@ export function SkeletonBlock({
         height: typeof h === 'number' ? `${h}px` : h,
         borderRadius: rounded,
         background:
-          'linear-gradient(90deg, var(--bg-cardHover) 0%, color-mix(in srgb, var(--bg-cardHover) 60%, var(--accent-gold) 4%) 50%, var(--bg-cardHover) 100%)',
+          'linear-gradient(90deg, var(--bg-cardHover) 0%, color-mix(in srgb, var(--bg-cardHover) 60%, var(--accent-gold) 6%) 50%, var(--bg-cardHover) 100%)',
         backgroundSize: '200% 100%',
-        animation: 'skeletonShimmer 1.4s ease-in-out infinite',
+        animation: 'skeletonShimmer 1.6s ease-in-out infinite',
+        boxShadow: 'inset 0 1px 1px rgba(0,0,0,0.05)',
       }}
       aria-hidden
     />

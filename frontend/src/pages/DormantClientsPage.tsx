@@ -158,9 +158,12 @@ export function DormantClientsPage() {
         )}
 
         {overdue.length > 0 && (
-          <div className="card mb-3" style={{ borderColor: '#EF4444' }}>
-            <div className="card-h" style={{ color: '#EF4444' }}>
-              <span>Overdue check-back · reach out now</span>
+          <div className="card mb-3" style={{ borderLeft: '3px solid var(--status-red)' }}>
+            <div className="card-h" style={{ color: 'var(--status-red)' }}>
+              <span className="flex items-center gap-2">
+                <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--status-red)', boxShadow: '0 0 8px var(--status-red)' }}/>
+                Overdue check-back · reach out now
+              </span>
               <Pill color="red">{overdue.length}</Pill>
             </div>
             <div className="space-y-2">{overdue.map(row)}</div>
