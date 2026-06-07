@@ -162,17 +162,18 @@ function WorkloadCard({ workload }: { workload: ReportData['workload'] }) {
                 {w.aged14 > 0 && <> · <span style={{ color: 'var(--status-red)' }}>{w.aged14} stuck 15d+</span></>}
               </span>
             </div>
-            <div className="flex h-[18px] rounded overflow-hidden" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+            <div className="flex h-[20px] rounded-lg overflow-hidden" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.10)' }}>
               {Object.entries(w.byStage).map(([stage, count]) => {
                 if (!count) return null;
                 const width = (count / max) * 100;
                 return (
                   <div
                     key={stage}
+                    className="transition-all hover:brightness-110"
                     style={{
                       width: `${width}%`,
-                      background: STAGE_COLORS[stage] || 'var(--brand-textMuted)',
-                      opacity: 0.85,
+                      background: `linear-gradient(180deg, ${STAGE_COLORS[stage]} 0%, color-mix(in srgb, ${STAGE_COLORS[stage]} 75%, #000) 100%)`,
+                      opacity: 0.92,
                     }}
                     title={`${stageLabels[stage] || stage}: ${count}`}
                   />
@@ -207,15 +208,17 @@ function FunnelCard({ funnel }: { funnel: ReportData['funnel'] }) {
           return (
             <div key={f.stage} className="flex items-center gap-2 text-[12px]">
               <div className="w-[120px] muted text-right">{stageLabels[f.stage] || f.stage}</div>
-              <div className="flex-1 h-[22px] rounded overflow-hidden flex items-center"
-                style={{ background: 'var(--bg-input)' }}
+              <div className="flex-1 h-[24px] rounded-lg overflow-hidden flex items-center"
+                style={{ background: 'var(--bg-input)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.10)' }}
               >
                 <div
+                  className="transition-all"
                   style={{
                     width: `${width}%`,
-                    background: `linear-gradient(90deg, ${STAGE_COLORS[f.stage]} 0%, color-mix(in srgb, ${STAGE_COLORS[f.stage]} 70%, transparent) 100%)`,
+                    background: `linear-gradient(90deg, ${STAGE_COLORS[f.stage]} 0%, color-mix(in srgb, ${STAGE_COLORS[f.stage]} 60%, transparent) 100%)`,
                     height: '100%',
-                    minWidth: f.count > 0 ? '6px' : 0,
+                    minWidth: f.count > 0 ? '8px' : 0,
+                    boxShadow: f.count > 0 ? `0 0 8px ${STAGE_COLORS[f.stage]}40` : 'none',
                   }}
                 />
               </div>
@@ -300,10 +303,10 @@ function RecommendationsCard({ recs }: { recs: ReportData['recommendations'] }) 
           <Link
             key={i}
             to={`/clients/${r.client.id}`}
-            className="block rounded p-2.5 transition-colors hover:bg-bg-cardHover"
+            className="block rounded-lg p-3 transition-all hover-lift"
             style={{
-              background: 'var(--bg-input)',
-              border: `1px solid ${r.severity === 'high' ? 'rgba(239,68,68,0.30)' : 'rgba(245,158,11,0.25)'}`,
+              background: `linear-gradient(90deg, ${r.severity === 'high' ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.06)'} 0%, var(--bg-input) 60%)`,
+              border: `1px solid ${r.severity === 'high' ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.22)'}`,
               borderLeft: `3px solid ${r.severity === 'high' ? 'var(--status-red)' : 'var(--status-amber)'}`,
             }}
           >
@@ -401,16 +404,17 @@ function DemoScheduleStrip({ demosByDay }: { demosByDay: Record<string, number> 
             <div key={date} className="flex-1 flex flex-col items-center gap-1">
               <div className="text-[11px] font-bold">{n || ''}</div>
               <div
-                className="w-full rounded-t flex-1 flex items-end"
-                style={{ background: 'var(--bg-input)' }}
+                className="w-full rounded-t-lg flex-1 flex items-end"
+                style={{ background: 'var(--bg-input)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.08)' }}
               >
                 <div
-                  className="w-full rounded-t"
+                  className="w-full rounded-t-lg"
                   style={{
-                    background: n > 0 ? 'var(--accent-gold)' : 'transparent',
+                    background: n > 0 ? 'linear-gradient(180deg, var(--accent-gold) 0%, var(--accent-goldDeep) 100%)' : 'transparent',
                     height: `${Math.max(2, height)}%`,
-                    transition: 'height 280ms ease',
+                    transition: 'height 380ms cubic-bezier(0.2,0.9,0.25,1)',
                     minHeight: n > 0 ? 4 : 0,
+                    boxShadow: n > 0 ? '0 -2px 8px var(--accent-goldGlow)' : 'none',
                   }}
                 />
               </div>

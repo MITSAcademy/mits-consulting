@@ -143,11 +143,9 @@ export function RegularTrainingsPage() {
         ) : (
           grouped.map(([accountEmail, rows]) => (
             <div key={accountEmail} className="mb-5">
-              <div className="flex items-center gap-2 mb-2">
-                <Mail size={13} className="muted"/>
-                <span className="text-[11px] font-semibold uppercase tracking-wider muted">
-                  Recording account: {accountEmail}
-                </span>
+              <div className="section-h">
+                <Mail size={11} style={{ color: 'var(--accent-gold)', marginLeft: -2 }}/>
+                <span>Recording account: <span style={{ color: 'var(--brand-text)' }}>{accountEmail}</span></span>
                 <span className="muted text-[10.5px]">· {rows.length} training{rows.length !== 1 ? 's' : ''}</span>
               </div>
               <div className="table-card">

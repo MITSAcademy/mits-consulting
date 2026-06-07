@@ -207,11 +207,17 @@ function RenewalRow({ r }: { r: RenewalItem }) {
 }
 
 function Section({ title, tone, children }: { title: string; tone: 'red' | 'amber' | 'grey'; children: React.ReactNode }) {
-  const borderColor = tone === 'red' ? '#EF4444' : tone === 'amber' ? '#F59E0B' : undefined;
+  const accentColor = tone === 'red' ? 'var(--status-red)' : tone === 'amber' ? 'var(--status-amber)' : 'var(--brand-textMuted)';
   return (
-    <div className="card mb-3" style={borderColor ? { borderColor } : undefined}>
-      <div className="card-h" style={borderColor ? { color: borderColor } : undefined}>
-        <span>{title}</span>
+    <div className="card mb-3" style={{ borderLeft: `3px solid ${accentColor}` }}>
+      <div className="card-h" style={{ color: accentColor }}>
+        <span className="flex items-center gap-2">
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full"
+            style={{ background: accentColor, boxShadow: `0 0 8px ${accentColor}` }}
+          />
+          {title}
+        </span>
       </div>
       <div className="space-y-2">{children}</div>
     </div>

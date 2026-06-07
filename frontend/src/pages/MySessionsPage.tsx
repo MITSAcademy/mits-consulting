@@ -236,8 +236,17 @@ function Section({ title, tone, children }: { title: string; tone: 'red' | 'ambe
     tone === 'green' ? 'var(--status-green)' :
     'var(--brand-textMuted)';
   return (
-    <div className="mb-4">
-      <div className="text-xs uppercase tracking-wider mb-2 font-semibold" style={{ color }}>{title}</div>
+    <div className="mb-5">
+      <div
+        className="text-[11px] uppercase tracking-[0.14em] font-bold mb-2.5 flex items-center gap-2"
+        style={{ color }}
+      >
+        <span
+          className="inline-block w-1.5 h-1.5 rounded-full"
+          style={{ background: color, boxShadow: `0 0 8px ${color}` }}
+        />
+        {title}
+      </div>
       <div className="space-y-2">{children}</div>
     </div>
   );
