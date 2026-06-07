@@ -161,8 +161,12 @@ export function VerificationsPage() {
             </div>
             <div className="space-y-1.5">
               {orphans.map((c: any) => (
-                <div key={c.id} className="bg-bg-input rounded p-2 flex justify-between items-center">
-                  <Link to={`/clients/${c.id}`} className="font-medium text-sm">{c.name}</Link>
+                <div
+                  key={c.id}
+                  className="rounded-xl p-2.5 flex justify-between items-center hover-lift"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+                >
+                  <Link to={`/clients/${c.id}`} className="font-semibold text-sm hover:underline">{c.name}</Link>
                   <div className="flex gap-1.5">
                     <Button size="sm" variant="amber" onClick={() => moveBack.mutate({ clientId: c.id, lifecycle: 'WithRecruiters' })}>
                       → With recruiters

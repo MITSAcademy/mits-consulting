@@ -62,12 +62,16 @@ export function HoldClientsPage() {
     const phoneWA = c.phoneDigits ? waLink(c.phoneCode, c.phoneDigits) : '';
     const sinceDays = c.holdSince ? Math.floor((+new Date(today) - +new Date(c.holdSince)) / (1000 * 60 * 60 * 24)) : 0;
     return (
-      <div key={c.id} className="bg-bg-input rounded p-3">
+      <div
+        key={c.id}
+        className="rounded-xl p-3 hover-lift"
+        style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+      >
         <div className="flex justify-between items-start gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <Link to={`/clients/${c.id}`} className="font-semibold text-sm hover:underline">{c.name}</Link>
-              {c.holdResumeFromStage && <Pill>Was: {stageLabel(c.holdResumeFromStage)}</Pill>}
+              {c.holdResumeFromStage && <Pill color="grey">Was: {stageLabel(c.holdResumeFromStage)}</Pill>}
               <span className="text-xs muted">· on hold {sinceDays}d</span>
               {c.holdCheckBackOn && (
                 <span className={`text-xs mono ${c.holdCheckBackOn < today ? 'text-brand-red' : c.holdCheckBackOn === today ? 'text-brand-amber' : 'muted'}`}>

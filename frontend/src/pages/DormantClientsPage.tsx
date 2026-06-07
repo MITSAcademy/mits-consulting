@@ -72,12 +72,16 @@ export function DormantClientsPage() {
     const phoneWA = c.phoneDigits ? waLink(c.phoneCode, c.phoneDigits) : '';
     const sinceDays = c.dormantSince ? Math.floor((+new Date(today) - +new Date(c.dormantSince)) / (1000 * 60 * 60 * 24)) : 0;
     return (
-      <div key={c.id} className="bg-bg-input rounded p-3">
+      <div
+        key={c.id}
+        className="rounded-xl p-3 hover-lift"
+        style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+      >
         <div className="flex justify-between items-start gap-3 flex-wrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <Link to={`/clients/${c.id}`} className="font-semibold text-sm hover:underline">{c.name}</Link>
-              <Pill>Was: {stageLabel(c.dormantResumeFromStage || c.lifecycle)}</Pill>
+              <Pill color="grey">Was: {stageLabel(c.dormantResumeFromStage || c.lifecycle)}</Pill>
               <span className="text-xs muted">· dormant {sinceDays}d</span>
               {c.dormantCheckBackOn && (
                 <span className={`text-xs mono ${c.dormantCheckBackOn <= today ? 'text-brand-red' : 'text-brand-amber'}`}>
