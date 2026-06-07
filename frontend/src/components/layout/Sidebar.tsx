@@ -215,20 +215,23 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
         ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}
       style={{
-        background: 'linear-gradient(180deg, var(--bg-sidebar) 0%, color-mix(in srgb, var(--bg-sidebar) 92%, #000) 100%)',
+        background:
+          'radial-gradient(600px 200px at 0% 0%, rgba(229,178,76,0.04), transparent 50%), ' +
+          'linear-gradient(180deg, var(--bg-sidebar) 0%, color-mix(in srgb, var(--bg-sidebar) 92%, #000) 100%)',
         borderColor: 'rgba(255,255,255,0.06)',
         color: '#E8E2D3',
         transitionDuration: '280ms',
         transitionTimingFunction: 'cubic-bezier(0.2, 0.9, 0.25, 1)',
+        boxShadow: '4px 0 24px rgba(0,0,0,0.30)',
       }}
     >
       {/* Brand header — clean MITS wordmark + thin gold rule underneath */}
       <div className="px-4 pb-3">
         <div className="flex items-center gap-2.5">
           <div
-            className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+            className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform hover:rotate-3"
             style={{
-              background: 'linear-gradient(135deg, #FAF5E7 0%, #E8DEC2 100%)',
+              background: 'linear-gradient(135deg, #FAF5E7 0%, #E8DEC2 50%, #D4B98C 100%)',
               boxShadow: '0 2px 10px rgba(229,178,76,0.20), inset 0 1px 0 rgba(255,255,255,0.40)',
               color: '#0F1115',
             }}

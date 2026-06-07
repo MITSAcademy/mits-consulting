@@ -109,9 +109,9 @@ export function LoginPage() {
           >
             Run the entire client lifecycle <span className="text-gold-grad">in one place.</span>
           </h1>
-          <p className="text-[14px] max-w-[460px]" style={{ color: 'rgba(240,232,214,0.65)' }}>
+          <p className="text-[14px] max-w-[460px] leading-relaxed" style={{ color: 'rgba(240,232,214,0.70)' }}>
             From the first lead, through demos, sourcing, sales close, and renewals —
-            everything the MITS team needs to move clients forward, together.
+            everything the MITS team needs to move clients forward, <em style={{ fontStyle: 'normal', color: 'var(--accent-gold)' }}>together</em>.
           </p>
         </div>
 
@@ -124,15 +124,24 @@ export function LoginPage() {
           ].map(({ Icon, label, sub }) => (
             <div
               key={label}
-              className="rounded-xl p-3"
+              className="rounded-xl p-3.5 transition-all hover:bg-white/10"
               style={{
                 background: 'rgba(255,255,255,0.04)',
                 border: '1px solid rgba(255,255,255,0.07)',
+                backdropFilter: 'blur(8px)',
               }}
             >
-              <Icon size={18} style={{ color: 'var(--accent-gold)' }} />
-              <div className="text-[12px] font-semibold mt-1.5" style={{ color: '#F0E8D6' }}>{label}</div>
-              <div className="text-[10px]" style={{ color: 'rgba(240,232,214,0.50)' }}>{sub}</div>
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center mb-2"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(229,178,76,0.22) 0%, rgba(229,178,76,0.10) 100%)',
+                  border: '1px solid rgba(229,178,76,0.20)',
+                }}
+              >
+                <Icon size={16} style={{ color: 'var(--accent-gold)' }} />
+              </div>
+              <div className="text-[12.5px] font-bold" style={{ color: '#F0E8D6', letterSpacing: '-0.005em' }}>{label}</div>
+              <div className="text-[10.5px] mt-0.5" style={{ color: 'rgba(240,232,214,0.55)' }}>{sub}</div>
             </div>
           ))}
         </div>

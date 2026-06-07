@@ -158,11 +158,13 @@ function AskAIPanel({ onClose }: { onClose: () => void }) {
       <aside
         className="fixed top-0 right-0 h-screen z-50 flex flex-col"
         style={{
-          width: 'min(440px, 100vw)',
-          background: 'var(--bg-card)',
+          width: 'min(460px, 100vw)',
+          background:
+            'radial-gradient(500px 200px at 0% 0%, rgba(229,178,76,0.05), transparent 60%), ' +
+            'var(--bg-card)',
           borderLeft: '1px solid var(--brand-border)',
-          boxShadow: '-12px 0 40px rgba(0,0,0,0.30)',
-          animation: 'slideInRight 280ms cubic-bezier(0.2, 0.9, 0.25, 1) both',
+          boxShadow: '-16px 0 48px rgba(0,0,0,0.35), -2px 0 8px rgba(229,178,76,0.06)',
+          animation: 'slideInRight 320ms cubic-bezier(0.2, 0.9, 0.25, 1) both',
         }}
       >
         {/* Header */}
@@ -230,13 +232,25 @@ function AskAIPanel({ onClose }: { onClose: () => void }) {
             </div>
           ) : (
             turns.map((t, i) => (
-              <div key={i} className={t.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+              <div key={i} className={t.role === 'user' ? 'flex justify-end' : 'flex justify-start'} style={{ animation: 'fadeUp 240ms ease-out both' }}>
                 <div
-                  className="max-w-[85%] px-3 py-2 rounded-xl text-[13px] leading-relaxed whitespace-pre-wrap"
+                  className="max-w-[85%] px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-wrap"
                   style={
                     t.role === 'user'
-                      ? { background: 'var(--accent-goldSoft)', border: '1px solid rgba(229,178,76,0.30)', color: 'var(--brand-text)' }
-                      : { background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }
+                      ? {
+                          background: 'linear-gradient(135deg, var(--accent-goldSoft) 0%, color-mix(in srgb, var(--accent-gold) 8%, transparent) 100%)',
+                          border: '1px solid rgba(229,178,76,0.30)',
+                          color: 'var(--brand-text)',
+                          borderRadius: '14px 14px 4px 14px',
+                          boxShadow: '0 1px 3px rgba(229,178,76,0.10)',
+                        }
+                      : {
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--brand-border)',
+                          color: 'var(--brand-text)',
+                          borderRadius: '14px 14px 14px 4px',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                        }
                   }
                 >
                   {t.content}
