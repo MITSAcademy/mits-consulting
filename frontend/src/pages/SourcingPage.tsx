@@ -495,7 +495,7 @@ function ProposalsCard({ req, trainers, qc, showToast, mode }: any) {
                           <summary className="cursor-pointer muted">▸ or attach a file (PDF / Excel / image)</summary>
                           <div className="mt-2">
                             {p.skillMatrixUrl ? (
-                              <div className="flex items-center gap-2 bg-bg-input rounded p-2 text-xs">
+                              <div className="flex items-center gap-2 rounded-lg p-2 text-xs" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
                                 <FileText size={14}/>
                                 <span className="flex-1 truncate">{p.skillMatrixFilename || p.skillMatrixUrl}</span>
                                 <a href={fileUrl(p.skillMatrixUrl)} target="_blank" rel="noreferrer" className="text-brand-blue">view</a>

@@ -177,7 +177,7 @@ export function DemoHistoryCard({ clientId, trainerId }: Props) {
               ? <XCircle size={14} className="text-brand-red" />
               : <CircleDot size={14} className="text-brand-amber" />;
             return (
-              <div key={d.id} className="bg-bg-input rounded p-3 text-xs">
+              <div key={d.id} className="rounded-xl p-3 text-xs" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
                 <div className="flex items-center gap-2 flex-wrap">
                   {icon}
                   <strong className="text-sm">

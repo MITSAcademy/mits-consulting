@@ -273,7 +273,7 @@ export function VerificationsPage() {
                       {/* Attached proofs */}
                       <div className="mt-2 space-y-1 text-[11px]">
                         {p.confirmationUrl && (
-                          <div className="flex items-center gap-2 bg-bg-input rounded p-1.5">
+                          <div className="flex items-center gap-2 rounded-lg p-1.5" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
                             <Pill color={p.confirmationKind === 'Audio' ? 'purple' : 'blue'}>
                               {p.confirmationKind}
                             </Pill>

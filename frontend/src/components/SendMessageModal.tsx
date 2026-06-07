@@ -148,7 +148,7 @@ export function SendMessageModal({ recipient, clientId, trainerId, stage, defaul
         </div>
 
         {/* Recipient line */}
-        <div className="bg-bg-input rounded p-2 text-xs mb-3">
+        <div className="rounded-lg p-2 text-xs mb-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
           <span className="muted">To:</span>{' '}
           <strong>{recipient.name || '—'}</strong>{' '}
           <span className="mono ml-2">{kind === 'Email' ? recipient.email : recipient.phone}</span>
@@ -220,7 +220,7 @@ export function MessagesHistoryCard({ clientId, trainerId }: { clientId?: string
       ) : (
         <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
           {data.map((m: any) => (
-            <div key={m.id} className="bg-bg-input rounded p-2 text-xs">
+            <div key={m.id} className="rounded-lg p-2 text-xs" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
               <div className="flex justify-between items-center mb-0.5">
                 <span className="flex items-center gap-1.5">
                   {m.kind === 'Email' ? <Mail size={12}/> : <MessageCircle size={12} style={{ color: '#25D366' }}/>}
