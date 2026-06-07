@@ -2638,14 +2638,23 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
           {daysSince !== null ? ` · ${ss} for ${daysSince}d` : ''}
         </span>
       </div>
-      {/* Progress dots */}
-      <div className="flex gap-1.5 mb-3">
+      {/* Progress bar */}
+      <div className="flex gap-1.5 mb-4">
         {steps.map((s, i) => (
           <div
             key={s.n}
-            className="flex-1 h-1.5 rounded"
+            className="flex-1 h-2 rounded-full transition-all"
             style={{
-              background: s.done ? '#0F8A5F' : i === firstUndoneIdx ? '#F59E0B' : '#33363D',
+              background: s.done
+                ? 'linear-gradient(90deg, var(--status-green) 0%, #16A34A 100%)'
+                : i === firstUndoneIdx
+                ? 'linear-gradient(90deg, var(--status-amber) 0%, #D97706 100%)'
+                : 'var(--bg-input)',
+              boxShadow: s.done
+                ? '0 0 6px rgba(74,222,128,0.30)'
+                : i === firstUndoneIdx
+                ? '0 0 6px rgba(245,158,11,0.30)'
+                : 'inset 0 1px 2px rgba(0,0,0,0.10)',
             }}
             title={`Step ${s.n}: ${s.title}${s.done ? ' ✓' : ''}`}
           />
@@ -2656,18 +2665,40 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
         {steps.map((s, i) => {
           const isCurrent = i === firstUndoneIdx;
           const isLocked = !s.done && i > firstUndoneIdx && !canOverride;
-          const borderColor = s.done ? '#0F8A5F' : isCurrent ? '#F59E0B' : '#33363D';
-          const opacity = isLocked ? 0.45 : 1;
+          const borderColor = s.done ? 'var(--status-green)' : isCurrent ? 'var(--status-amber)' : 'var(--brand-border)';
+          const opacity = isLocked ? 0.50 : 1;
           return (
             <div
               key={s.n}
-              className="rounded border p-2.5 flex items-start gap-3"
-              style={{ borderColor, opacity }}
+              className="rounded-xl border p-3 flex items-start gap-3 transition-all"
+              style={{
+                borderColor,
+                opacity,
+                background: isCurrent
+                  ? 'linear-gradient(90deg, color-mix(in srgb, var(--status-amber) 6%, var(--bg-card)) 0%, var(--bg-card) 60%)'
+                  : s.done
+                  ? 'linear-gradient(90deg, color-mix(in srgb, var(--status-green) 4%, var(--bg-card)) 0%, var(--bg-card) 60%)'
+                  : 'var(--bg-card)',
+                boxShadow: isCurrent
+                  ? '0 4px 16px rgba(245,158,11,0.10)'
+                  : s.done
+                  ? '0 1px 3px rgba(74,222,128,0.08)'
+                  : 'var(--shadow-sm)',
+              }}
             >
-              <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+              <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all"
                 style={{
-                  background: s.done ? '#0F8A5F' : isCurrent ? '#F59E0B' : '#2A2D33',
-                  color: s.done || isCurrent ? 'white' : '#9aa0a6',
+                  background: s.done
+                    ? 'linear-gradient(135deg, var(--status-green) 0%, #16A34A 100%)'
+                    : isCurrent
+                    ? 'linear-gradient(135deg, var(--status-amber) 0%, #D97706 100%)'
+                    : 'var(--bg-input)',
+                  color: s.done || isCurrent ? 'white' : 'var(--brand-textMuted)',
+                  boxShadow: s.done
+                    ? '0 2px 8px rgba(74,222,128,0.30)'
+                    : isCurrent
+                    ? '0 2px 8px rgba(245,158,11,0.30)'
+                    : 'none',
                 }}
               >
                 {s.done ? '✓' : s.n}
@@ -2698,12 +2729,25 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
       </div>
 
       {/* Outcome picker — only revealed once all 7 steps are done OR override is used. */}
-      <div className="mt-4 pt-3 border-t border-brand-border">
-        <div className="text-sm font-medium mb-1">
-          {allDone ? '✓ All steps done — pick the final outcome:' : 'Outcome (lock until all 7 steps done — or override)'}
+      <div className="mt-5 pt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
+        <div className="flex items-center gap-2 mb-1">
+          {allDone && (
+            <span
+              className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold text-white"
+              style={{ background: 'linear-gradient(135deg, var(--status-green) 0%, #16A34A 100%)', boxShadow: '0 0 12px rgba(74,222,128,0.40)' }}
+            >
+              ✓
+            </span>
+          )}
+          <div className="text-[14px] font-bold tracking-tight">
+            {allDone ? 'All steps done — pick the final outcome' : 'Outcome'}
+          </div>
         </div>
-        <div className="text-xs muted mb-2">
-          Training = engagement type; Paid = direct client paid; Employer-later = employer pays later.
+        <div className="text-xs muted mb-3">
+          {allDone
+            ? 'Choose which path the client is taking from here.'
+            : 'Locked until all 7 steps done (founder/manager can override).'}
+          {' '}Training = engagement type; Paid = direct client paid; Employer-later = employer pays later.
         </div>
         <div className="grid md:grid-cols-2 gap-2">
           {([

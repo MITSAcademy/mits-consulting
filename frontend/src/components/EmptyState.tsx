@@ -30,16 +30,28 @@ export function EmptyState({ icon: Icon, title, description, action, tone = 'gol
   const t = TONES[tone];
   return (
     <div
-      className={`flex flex-col items-center justify-center text-center py-10 px-6 ${className || ''}`}
-      style={{ animation: 'fadeUp 280ms ease-out both' }}
+      className={`flex flex-col items-center justify-center text-center py-12 px-6 ${className || ''}`}
+      style={{ animation: 'fadeUp 320ms cubic-bezier(0.2,0.9,0.25,1) both' }}
     >
       <div
-        className="w-14 h-14 rounded-full flex items-center justify-center mb-3"
-        style={{ background: t.bg }}
+        className="w-16 h-16 rounded-2xl flex items-center justify-center mb-3.5 relative"
+        style={{
+          background: `linear-gradient(135deg, ${t.bg} 0%, color-mix(in srgb, ${t.color} 4%, transparent) 100%)`,
+          boxShadow: `0 8px 24px ${t.bg}, inset 0 1px 0 rgba(255,255,255,0.06)`,
+          border: `1px solid color-mix(in srgb, ${t.color} 12%, transparent)`,
+        }}
       >
-        <Icon size={22} style={{ color: t.color }} />
+        <Icon size={24} style={{ color: t.color }} />
+        {/* Subtle outer halo ring */}
+        <div
+          className="absolute -inset-1 rounded-2xl pointer-events-none"
+          style={{
+            background: 'transparent',
+            border: `1px solid color-mix(in srgb, ${t.color} 8%, transparent)`,
+          }}
+        />
       </div>
-      <div className="text-[14px] font-semibold mb-1" style={{ color: 'var(--brand-text)' }}>
+      <div className="text-[15px] font-bold mb-1" style={{ color: 'var(--brand-text)', letterSpacing: '-0.01em' }}>
         {title}
       </div>
       {description && (
@@ -47,7 +59,7 @@ export function EmptyState({ icon: Icon, title, description, action, tone = 'gol
           {description}
         </div>
       )}
-      {action && <div className="mt-3">{action}</div>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }

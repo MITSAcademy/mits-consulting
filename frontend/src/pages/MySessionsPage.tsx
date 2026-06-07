@@ -284,11 +284,16 @@ function CallRow({ c }: { c: ScheduledCall }) {
   return (
     <>
       <div
-        className="rounded-lg p-3 flex justify-between items-start gap-3 flex-wrap"
+        className="rounded-xl p-3.5 flex justify-between items-start gap-3 flex-wrap transition-all hover-lift"
         style={{
-          background: 'var(--bg-card)',
-          border: `1px solid ${isLive ? 'rgba(74,222,128,0.4)' : isLate ? 'rgba(239,68,68,0.30)' : 'var(--brand-border)'}`,
+          background: isLive
+            ? 'linear-gradient(90deg, rgba(74,222,128,0.06) 0%, var(--bg-card) 60%)'
+            : isLate
+            ? 'linear-gradient(90deg, rgba(239,68,68,0.06) 0%, var(--bg-card) 60%)'
+            : 'var(--bg-card)',
+          border: `1px solid ${isLive ? 'rgba(74,222,128,0.40)' : isLate ? 'rgba(239,68,68,0.30)' : 'var(--brand-border)'}`,
           borderLeft: `3px solid ${isLive ? 'var(--status-green)' : isLate ? 'var(--status-red)' : 'var(--accent-gold)'}`,
+          boxShadow: isLive ? '0 4px 16px rgba(74,222,128,0.10)' : isLate ? '0 4px 16px rgba(239,68,68,0.08)' : 'var(--shadow-sm)',
         }}
       >
         <div className="min-w-0 flex-1">

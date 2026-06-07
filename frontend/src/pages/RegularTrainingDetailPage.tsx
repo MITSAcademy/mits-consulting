@@ -102,8 +102,8 @@ export function RegularTrainingDetailPage() {
       />
       <Page>
         {/* Header card */}
-        <div className="card mb-3">
-          <div className="grid md:grid-cols-4 gap-3 text-[12.5px]">
+        <div className="card-hero mb-4">
+          <div className="grid md:grid-cols-4 gap-4 text-[12.5px]">
             <HeaderField label="Status" value={<Pill color={data.status === 'active' ? 'green' : data.status === 'paused' ? 'amber' : 'grey'}>{data.status}</Pill>} />
             <HeaderField label="Default host" value={data.hostedByDefault?.name || '—'} />
             <HeaderField label="Recording account" value={data.recordingAccountEmail || '—'} sub={data.recordingAccountLabel || undefined} />
@@ -210,11 +210,14 @@ function SessionRow({ s, folderUrl }: { s: Session; trainingId: string; folderUr
   return (
     <>
       <div
-        className="rounded-lg p-3 flex justify-between items-start gap-3 flex-wrap"
+        className="rounded-xl p-3.5 flex justify-between items-start gap-3 flex-wrap transition-all hover-lift"
         style={{
-          background: 'var(--bg-card)',
+          background: isLive
+            ? 'linear-gradient(90deg, rgba(74,222,128,0.06) 0%, var(--bg-card) 60%)'
+            : 'var(--bg-card)',
           border: '1px solid var(--brand-border)',
           borderLeft: `3px solid ${isLive ? 'var(--status-green)' : 'var(--accent-gold)'}`,
+          boxShadow: isLive ? '0 4px 16px rgba(74,222,128,0.10)' : 'var(--shadow-sm)',
         }}
       >
         <div className="min-w-0 flex-1">
