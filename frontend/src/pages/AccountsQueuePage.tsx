@@ -3,7 +3,8 @@ import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Select } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
-import { Pill } from '@/components/ui/pill';
+import { EmptyState } from '@/components/EmptyState';
+import { Receipt } from 'lucide-react';
 
 const STATUSES = ['Pending', 'InvoiceSent', 'ReceiptSent', 'Booked', 'Done'];
 
@@ -24,10 +25,21 @@ export function AccountsQueuePage() {
           <table>
             <thead><tr><th>Client</th><th>Amount</th><th>Status</th></tr></thead>
             <tbody>
-              {(data || []).length === 0 ? <tr><td colSpan={3} className="text-center py-8 muted">No items in queue.</td></tr> :
+              {(data || []).length === 0 ? (
+                <tr><td colSpan={3}>
+                  <EmptyState
+                    icon={Receipt}
+                    tone="green"
+                    title="Nothing in the accounts queue"
+                    description="When payments come in, they show up here for booking + invoicing."
+                  />
+                </td></tr>
+              ) :
               (data || []).map((q: any) => (
-                <tr key={q.id}>
-                  <td>{q.client.name}</td>
+                <tr key={q.id} className="clickable">
+                  <td>
+                    <span className="font-semibold" style={{ color: 'var(--brand-text)' }}>{q.client.name}</span>
+                  </td>
                   <td className="mono">{q.client.currency} {q.client.cycleAmount}</td>
                   <td>
                     <Select className="!w-auto !py-1 !text-xs" value={q.status} onChange={(e) => upd.mutate({ id: q.id, status: e.target.value })}>

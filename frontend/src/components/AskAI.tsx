@@ -211,20 +211,31 @@ function AskAIPanel({ onClose }: { onClose: () => void }) {
                 Hey {firstName} 👋 — ask me anything about how to use the Hub or draft a message.
               </div>
               <div className="text-[11px] muted">Try one of these:</div>
-              <div className="grid gap-1.5">
+              <div className="grid gap-2">
                 {starters.map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => ask.mutate(s)}
                     disabled={ask.isPending}
-                    className="text-left text-[12px] px-2.5 py-1.5 rounded border transition-colors"
+                    className="text-left text-[12.5px] px-3 py-2 rounded-lg transition-all"
                     style={{
                       background: 'var(--bg-input)',
-                      borderColor: 'var(--brand-border)',
+                      border: '1px solid var(--brand-border)',
                       color: 'var(--brand-textSecondary)',
                     }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--accent-gold)';
+                      e.currentTarget.style.color = 'var(--brand-text)';
+                      e.currentTarget.style.background = 'color-mix(in srgb, var(--accent-gold) 4%, var(--bg-input))';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--brand-border)';
+                      e.currentTarget.style.color = 'var(--brand-textSecondary)';
+                      e.currentTarget.style.background = 'var(--bg-input)';
+                    }}
                   >
+                    <Sparkles size={11} style={{ display: 'inline', marginRight: 6, color: 'var(--accent-gold)' }}/>
                     {s}
                   </button>
                 ))}
