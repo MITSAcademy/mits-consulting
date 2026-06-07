@@ -382,7 +382,8 @@ function EventRow({ e, onOpen }: { e: Event; onOpen?: () => void }) {
     : <ClipboardList size={16} className="text-brand-amber"/>;
   return (
     <div
-      className={`bg-bg-input rounded p-3 flex items-start gap-3 ${onOpen ? 'cursor-pointer hover:bg-bg-card' : ''}`}
+      className={`rounded-xl p-3 flex items-start gap-3 ${onOpen ? 'hover-lift cursor-pointer' : ''}`}
+      style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
       onClick={onOpen}
       title={onOpen ? 'Click to view details' : undefined}
     >

@@ -340,7 +340,7 @@ function ProposalsCard({ req, trainers, qc, showToast, mode }: any) {
                 const waUrl = waPhoneUrl(effectivePhone, `Hi, this is from MITS Solution about a training engagement for "${req.client.name}". Are you available?`);
 
                 return (
-                  <div key={i} className="bg-bg-input rounded p-3 grid md:grid-cols-2 gap-2.5">
+                  <div key={i} className="rounded-xl p-3 grid md:grid-cols-2 gap-2.5" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
                     <div className="form-row md:col-span-2">
                       <Label>From pool (or fill new below)</Label>
                       <Select value={p.trainerId || ''} onChange={(e) => updateAt(i, { trainerId: e.target.value, trainerName: '', trainerSkills: '' })}>
@@ -586,7 +586,7 @@ function ProposalsCard({ req, trainers, qc, showToast, mode }: any) {
           </summary>
           <div className="mt-2 grid md:grid-cols-2 gap-2 text-xs">
             {req.client.demos.map((d: any) => (
-              <div key={d.id} className="bg-bg-input rounded p-2">
+              <div key={d.id} className="rounded-xl p-2.5" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
                 <div className="flex justify-between items-center mb-0.5">
                   <span className="font-medium">{d.trainer?.name || '(removed trainer)'}</span>
                   <Pill color={d.status === 'Done' ? (d.outcome === 'Positive' ? 'green' : d.outcome === 'Negative' ? 'red' : 'amber') : d.status === 'Cancelled' ? 'red' : 'grey'}>
@@ -660,7 +660,7 @@ function ProposalRowWithOutreach({ proposal }: { proposal: any }) {
   const notified = !!proposal.trainerNotifiedAt;
   const canNotify = hasEmail && (hasGroup || hasPhone);
   return (
-    <div className="bg-bg-input rounded p-2">
+    <div className="rounded-xl p-2.5" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
       <div className="font-medium flex justify-between items-center">
         <span>{proposal.trainer?.name || proposal.trainerName || '—'}</span>
         <Pill color={proposal.verification === 'Pass' ? 'green' : proposal.verification === 'Fail' ? 'red' : 'amber'}>{proposal.verification}</Pill>
@@ -834,7 +834,7 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
           </div>
         </div>
 
-        <div className="bg-bg-input rounded p-3 text-xs space-y-2">
+        <div className="rounded-xl p-3 text-xs space-y-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
           <div className="flex items-center justify-between">
             <div className="muted">
               {manualEdit
@@ -1032,7 +1032,7 @@ function SmartMatchForRecruiterModal({ clientId, clientName, onPick, onClose }: 
         description='Weighted ranking across active pool: skill match · cost · past success · recency · team-5 usage.'
         className="max-w-4xl"
       >
-        <div className="bg-bg-input rounded p-3 mb-3 text-xs">
+        <div className="rounded-xl p-3 mb-3 text-xs" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
           <div className="font-medium text-brand-text mb-1">Required skills (from client intake)</div>
           <div className="muted">{skillsRequired || '(none captured — match will use only metric weights)'}</div>
         </div>
