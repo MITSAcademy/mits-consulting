@@ -3824,52 +3824,110 @@ function EngagementLetterModal({ client, onClose }: any) {
       onClose();
     },
     onError: (e: any) => {
-      const msg = e?.response?.data?.error || e?.message || '';
-      const isNetworkErr = !e?.response || e?.code === 'ERR_NETWORK' || e?.code === 'ECONNABORTED';
+      const serverMsg = e?.response?.data?.error || '';
+      const serverCode = e?.response?.data?.code || '';
+      const isNetworkErr = !e?.response;
       if (isNetworkErr) {
-        showToast('Server is waking up — please wait 10 seconds and try again.', 'error');
-      } else if (e?.response?.data?.code === 'MISSING_APP_PASSWORD') {
-        showToast('Email not sent: Gmail App Password not configured. Go to Settings → My email to set it up.', 'error');
+        showToast('Cannot reach server — check your internet connection and try again.', 'error');
+      } else if (serverCode === 'MISSING_APP_PASSWORD' || serverMsg.includes('App Password')) {
+        showToast('Gmail App Password not configured. Go to Settings → My email to set it up, then retry.', 'error');
+      } else if (serverMsg) {
+        showToast(serverMsg, 'error');
       } else {
-        showToast(msg || 'Failed to send engagement letter', 'error');
+        showToast(`Send failed (${e?.response?.status || 'unknown error'}) — check Settings → My email.`, 'error');
       }
     },
   });
+
+  // Manual-send fallback: upload a pre-made PDF and mark the step as done
+  const markSentManually = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/mark-engagement-letter-sent`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      showToast('Engagement letter marked as sent manually.');
+      onClose();
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const [tab, setTab] = useState<'auto' | 'manual'>('auto');
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         title={`Engagement letter · ${client.name}`}
-        description='Confirms the engagement, CCs Mitali, and creates a handover task on her queue. Email + WhatsApp both go out.'
+        description='Confirms the engagement, CCs Mitali, and creates a handover task on her queue.'
         className="max-w-xl"
       >
-        <div className="space-y-2 text-sm">
-          <div><strong>To (email):</strong> {toEmail || <span className="text-brand-amber">missing</span>}</div>
-          <div><strong>To (WhatsApp):</strong> {hasPhone ? `${client.phoneCode || ''} ${client.phoneDigits}` : <span className="text-brand-amber">missing</span>}</div>
-          <div className="text-xs muted bg-bg-input p-2 rounded mt-2">
-            Subject: <strong>Engagement confirmed · Welcome aboard, {client.name}</strong><br/>
-            Includes engagement type, payment model, cycle dates, trainer name, and next-steps with Mitali's team.
-            Mitali is auto-CC'd on the email and gets a Task on her queue.
-          </div>
+        {/* Tab switcher */}
+        <div className="flex gap-1 mb-3 border-b border-brand-border pb-2">
+          <button
+            className={`text-xs px-3 py-1.5 rounded ${tab === 'auto' ? 'bg-brand-blue text-white' : 'muted hover:text-white'}`}
+            onClick={() => setTab('auto')}
+          >Send via portal</button>
+          <button
+            className={`text-xs px-3 py-1.5 rounded ${tab === 'manual' ? 'bg-brand-blue text-white' : 'muted hover:text-white'}`}
+            onClick={() => setTab('manual')}
+          >Sent manually (outside portal)</button>
         </div>
 
-        <DialogFooter>
-          {(!toEmail || !hasPhone) && (
-            <div className="text-xs text-brand-amber mr-auto self-center">
-              {!toEmail && '⚠ No client email. '}
-              {!hasPhone && '⚠ No client phone. '}
-              Both required.
+        {tab === 'auto' ? (
+          <>
+            <div className="space-y-2 text-sm">
+              <div><strong>To (email):</strong> {toEmail || <span className="text-brand-amber">missing</span>}</div>
+              <div><strong>To (WhatsApp):</strong> {hasPhone ? `${client.phoneCode || ''} ${client.phoneDigits}` : <span className="text-brand-amber">missing</span>}</div>
+              <div className="text-xs muted bg-bg-input p-2 rounded mt-2">
+                Subject: <strong>Engagement confirmed · Welcome aboard, {client.name}</strong><br/>
+                Includes engagement type, payment model, cycle dates, trainer name, and next-steps with Mitali's team.
+                Mitali is auto-CC'd on the email and gets a Task on her queue.
+              </div>
+              {send.isError && (
+                <div className="text-xs text-red-400 bg-red-950/30 border border-red-800/40 rounded p-2 mt-1">
+                  Send failed. If your Gmail App Password isn't set up, switch to "Sent manually" tab to mark it done.
+                </div>
+              )}
             </div>
-          )}
-          <Button onClick={onClose} disabled={send.isPending || previewing}>Cancel</Button>
-          <Button variant="default" disabled={send.isPending || previewing} onClick={downloadPreview} title="Download the PDF to verify before sending">
-            <FileText size={12}/> {previewing ? 'Generating…' : 'Preview PDF'}
-          </Button>
-          <Button variant="primary" disabled={!toEmail || !hasPhone || send.isPending || previewing} onClick={() => send.mutate()}>
-            <Mail size={12}/><MessageCircle size={12}/>{' '}
-            {send.isPending ? 'Sending… (may take 15–20s)' : 'Send (Email + WhatsApp) + Handover'}
-          </Button>
-        </DialogFooter>
+            <DialogFooter>
+              {(!toEmail || !hasPhone) && (
+                <div className="text-xs text-brand-amber mr-auto self-center">
+                  {!toEmail && '⚠ No client email. '}
+                  {!hasPhone && '⚠ No client phone. '}
+                  Both required.
+                </div>
+              )}
+              <Button onClick={onClose} disabled={send.isPending || previewing}>Cancel</Button>
+              <Button variant="default" disabled={send.isPending || previewing} onClick={downloadPreview} title="Download the PDF to verify before sending">
+                <FileText size={12}/> {previewing ? 'Generating…' : 'Preview PDF'}
+              </Button>
+              <Button variant="primary" disabled={!toEmail || !hasPhone || send.isPending || previewing} onClick={() => send.mutate()}>
+                <Mail size={12}/><MessageCircle size={12}/>{' '}
+                {send.isPending ? 'Sending…' : 'Send (Email + WhatsApp) + Handover'}
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <div className="space-y-2 text-sm">
+              <p className="muted text-xs">
+                Use this if you sent the engagement letter to the client outside the portal (email, WhatsApp, etc.).
+                This will mark the step as done and unlock the next steps for Mitali.
+              </p>
+              <ol className="text-xs space-y-1 list-decimal pl-4 muted">
+                <li>Download the PDF using "Preview PDF" and send it to the client yourself.</li>
+                <li>Once sent, click "Mark as sent" below to record it and notify Mitali.</li>
+              </ol>
+            </div>
+            <DialogFooter>
+              <Button onClick={onClose} disabled={markSentManually.isPending || previewing}>Cancel</Button>
+              <Button variant="default" disabled={previewing || markSentManually.isPending} onClick={downloadPreview}>
+                <FileText size={12}/> {previewing ? 'Generating…' : 'Preview / Download PDF'}
+              </Button>
+              <Button variant="amber" disabled={markSentManually.isPending} onClick={() => markSentManually.mutate()}>
+                <Check size={12}/> {markSentManually.isPending ? 'Saving…' : 'Mark as sent (manual)'}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
