@@ -1276,10 +1276,14 @@ clientsRouter.post('/:id/engagement-letter', async (req: AuthedRequest, res) => 
   }
 
   if (!toEmail) return res.status(400).json({ error: 'No email on file for this client' });
-  let fromUser;
-  if (me?.gmailAddress && me?.smtpAppPassword) {
-    fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword), sendAsAddress: me.sendAsAddress };
+  // Engagement letters are personal correspondence — must go from the sender's own account.
+  // Never fall through to the system (Vaibhav's) account silently.
+  if (!me?.gmailAddress || !me?.smtpAppPassword) {
+    const err: any = new Error(`${me?.name || 'You'} hasn't configured a Gmail App Password yet. Go to Settings → My email to set it up before sending the engagement letter.`);
+    err.code = 'MISSING_APP_PASSWORD';
+    return res.status(502).json({ error: err.message, code: err.code });
   }
+  const fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword), sendAsAddress: me.sendAsAddress };
   const msg = await prisma.outboundMessage.create({
     data: { kind: 'Email', toEmail, subject, body: text, clientId: client.id, sentById: req.user!.id, status: 'Queued', provider: 'smtp' },
   });
