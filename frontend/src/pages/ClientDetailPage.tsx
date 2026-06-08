@@ -547,85 +547,138 @@ export function ClientDetailPage() {
               </div>
             )}
 
-            {/* Proposed trainers — all proposals (Pass/Pending/Fail) for this client.
-                Anjali/Taran rely on this to review recordings, availability, rate, and
-                who they've Pass'd without leaving the client page. */}
+            {/* Proposed trainers — grouped by sourcing request round.
+                Most-recent request is shown expanded; older rounds are collapsed.
+                This prevents old Pass'd/Fail'd proposals from previous rounds from
+                cluttering the current round's pending trainers. */}
             {(() => {
-              const allProposals = (client.sourcingRequests || []).flatMap((r: any) =>
-                (r.proposals || []).map((p: any) => ({ ...p, _request: r })),
-              );
-              if (!allProposals.length) return null;
-              const sortRank = (v: string) => (v === 'Pass' ? 0 : v === 'Pending' ? 1 : 2);
-              allProposals.sort((a: any, b: any) => sortRank(a.verification) - sortRank(b.verification));
-              const passed = allProposals.filter((p: any) => p.verification === 'Pass');
+              const requests: any[] = (client.sourcingRequests || [])
+                .filter((r: any) => r.proposals?.length > 0)
+                .slice() // don't mutate original
+                .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+              if (!requests.length) return null;
+
+              const totalCount = requests.reduce((s: number, r: any) => s + (r.proposals?.length || 0), 0);
+              const totalPassed = requests.reduce((s: number, r: any) =>
+                s + (r.proposals?.filter((p: any) => p.verification === 'Pass').length || 0), 0);
+
+              const renderProposal = (p: any) => {
+                const tName = p.trainer?.name || p.trainerName || '—';
+                const tExp = p.trainer?.experienceYears ?? p.experienceYears ?? 0;
+                const tSkills = p.trainer?.skills || p.trainerSkills || '';
+                const slots = readAvailabilitySlots(p);
+                const isPrimary = client.primaryTrainerId && p.trainer?.id === client.primaryTrainerId;
+                const vColor = p.verification === 'Pass' ? 'green' : p.verification === 'Fail' ? 'red' : 'amber';
+                return (
+                  <div key={p.id} className={`border rounded p-2.5 ${p.verification === 'Pass' ? 'border-brand-green/50 bg-brand-green/5' : 'border-brand-border'}`}>
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {p.trainer?.id ? (
+                            <Link to={`/trainers/${p.trainer.id}`} className="font-medium text-brand-blue">{tName}</Link>
+                          ) : (
+                            <span className="font-medium">{tName}</span>
+                          )}
+                          <Pill color={vColor as any}>{p.verification}</Pill>
+                          {isPrimary && <Pill color="blue">★ primary</Pill>}
+                          <span className="muted text-[11px]">{tExp}y · ₹{p.rateInr}</span>
+                        </div>
+                        {tSkills && <div className="muted text-xs mt-0.5">{tSkills}</div>}
+                        <div className="muted text-[10px] mt-1">
+                          Proposed by <strong>{p.proposedBy?.name || '—'}</strong>
+                          {p.proposedAt && <> · {p.proposedAt}</>}
+                        </div>
+                        {slots.length > 0 && (
+                          <div className="text-[11px] mt-1">🕒 {formatAvailabilitySlots(slots)} IST</div>
+                        )}
+                      </div>
+                      {canIntake(user.role) && p.verification !== 'Pass' && (
+                        <PromoteToPassButton proposalId={p.id} clientId={client.id} trainerNotifiedAt={p.trainerNotifiedAt} />
+                      )}
+                    </div>
+                    {(p.confirmationUrl || p.skillMatrixUrl) && (
+                      <div className="mt-2 space-y-1">
+                        {p.confirmationUrl && (
+                          <div className="flex items-center gap-2 bg-bg-input rounded p-1.5">
+                            <Pill color={p.confirmationKind === 'Audio' ? 'purple' : 'blue'}>{p.confirmationKind}</Pill>
+                            {p.confirmationKind === 'Audio' ? (
+                              <audio controls src={fileUrl(p.confirmationUrl)} style={{ height: 28, flex: 1 }} />
+                            ) : (
+                              <a href={fileUrl(p.confirmationUrl)} target="_blank" rel="noreferrer" className="text-brand-blue text-xs underline">View screenshot</a>
+                            )}
+                          </div>
+                        )}
+                        {p.skillMatrixUrl && (
+                          <a href={fileUrl(p.skillMatrixUrl)} target="_blank" rel="noreferrer" className="text-brand-blue text-xs underline">View skill matrix →</a>
+                        )}
+                      </div>
+                    )}
+                    {p.verificationNotes && (
+                      <div className="muted text-[11px] italic mt-1">Note: {p.verificationNotes}</div>
+                    )}
+                  </div>
+                );
+              };
+
               return (
                 <div className="card">
                   <div className="card-h">
-                    Proposed trainers · {allProposals.length}
-                    {passed.length > 0 && (
-                      <span className="ml-2"><Pill color="green">{passed.length} passed</Pill></span>
+                    Proposed trainers · {totalCount}
+                    {totalPassed > 0 && (
+                      <span className="ml-2"><Pill color="green">{totalPassed} passed</Pill></span>
                     )}
                   </div>
-                  <div className="space-y-2">
-                    {allProposals.map((p: any) => {
-                      const tName = p.trainer?.name || p.trainerName || '—';
-                      const tExp = p.trainer?.experienceYears ?? p.experienceYears ?? 0;
-                      const tSkills = p.trainer?.skills || p.trainerSkills || '';
-                      const slots = readAvailabilitySlots(p);
-                      const isPrimary = client.primaryTrainerId && p.trainer?.id === client.primaryTrainerId;
-                      const vColor = p.verification === 'Pass' ? 'green' : p.verification === 'Fail' ? 'red' : 'amber';
-                      return (
-                        <div key={p.id} className={`border rounded p-2.5 ${p.verification === 'Pass' ? 'border-brand-green/50 bg-brand-green/5' : 'border-brand-border'}`}>
-                          <div className="flex items-start justify-between gap-2 flex-wrap">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {p.trainer?.id ? (
-                                  <Link to={`/trainers/${p.trainer.id}`} className="font-medium text-brand-blue">{tName}</Link>
-                                ) : (
-                                  <span className="font-medium">{tName}</span>
-                                )}
-                                <Pill color={vColor as any}>{p.verification}</Pill>
-                                {isPrimary && <Pill color="blue">★ primary</Pill>}
-                                <span className="muted text-[11px]">{tExp}y · ₹{p.rateInr}</span>
-                              </div>
-                              {tSkills && <div className="muted text-xs mt-0.5">{tSkills}</div>}
-                              <div className="muted text-[10px] mt-1">
-                                Proposed by <strong>{p.proposedBy?.name || '—'}</strong>
-                                {p.proposedAt && <> · {p.proposedAt}</>}
-                              </div>
-                              {slots.length > 0 && (
-                                <div className="text-[11px] mt-1">🕒 {formatAvailabilitySlots(slots)} IST</div>
-                              )}
-                            </div>
-                            {/* Allow Anjali/Taran to flip non-Pass'd proposals to Pass so they all
-                                land in the skill matrix. Useful for legacy Fail'd rows from before
-                                multi-pass was enabled, or for Pending ones picked up from this card. */}
-                            {canIntake(user.role) && p.verification !== 'Pass' && (
-                              <PromoteToPassButton proposalId={p.id} clientId={client.id} trainerNotifiedAt={p.trainerNotifiedAt} />
-                            )}
-                          </div>
-                          {/* Proof + skill matrix */}
-                          {(p.confirmationUrl || p.skillMatrixUrl) && (
-                            <div className="mt-2 space-y-1">
-                              {p.confirmationUrl && (
-                                <div className="flex items-center gap-2 bg-bg-input rounded p-1.5">
-                                  <Pill color={p.confirmationKind === 'Audio' ? 'purple' : 'blue'}>{p.confirmationKind}</Pill>
-                                  {p.confirmationKind === 'Audio' ? (
-                                    <audio controls src={fileUrl(p.confirmationUrl)} style={{ height: 28, flex: 1 }} />
-                                  ) : (
-                                    <a href={fileUrl(p.confirmationUrl)} target="_blank" rel="noreferrer" className="text-brand-blue text-xs underline">View screenshot</a>
-                                  )}
-                                </div>
-                              )}
-                              {p.skillMatrixUrl && (
-                                <a href={fileUrl(p.skillMatrixUrl)} target="_blank" rel="noreferrer" className="text-brand-blue text-xs underline">View skill matrix →</a>
-                              )}
-                            </div>
-                          )}
-                          {p.verificationNotes && (
-                            <div className="muted text-[11px] italic mt-1">Note: {p.verificationNotes}</div>
-                          )}
+                  <div className="space-y-4">
+                    {requests.map((r: any, idx: number) => {
+                      const sortRank = (v: string) => (v === 'Pass' ? 0 : v === 'Pending' ? 1 : 2);
+                      const proposals = [...(r.proposals || [])].sort(
+                        (a: any, b: any) => sortRank(a.verification) - sortRank(b.verification),
+                      );
+                      const passedCount = proposals.filter((p: any) => p.verification === 'Pass').length;
+                      const pendingCount = proposals.filter((p: any) => p.verification === 'Pending').length;
+                      const dateLabel = r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
+                      const isLatest = idx === 0;
+
+                      const roundHeader = (
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-brand-textMuted">
+                            {isLatest ? 'Current round' : 'Previous round'}
+                            {dateLabel && <> · {dateLabel}</>}
+                          </span>
+                          <span className="text-[11px] text-brand-textMuted">· {proposals.length} trainer{proposals.length !== 1 ? 's' : ''}</span>
+                          {passedCount > 0 && <Pill color="green">{passedCount} passed</Pill>}
+                          {pendingCount > 0 && <Pill color="amber">{pendingCount} pending</Pill>}
                         </div>
+                      );
+
+                      if (isLatest) {
+                        return (
+                          <div key={r.id}>
+                            {roundHeader}
+                            <div className="space-y-2">
+                              {proposals.map(renderProposal)}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <details key={r.id} className="group">
+                          <summary className="cursor-pointer list-none">
+                            <div className="flex items-center gap-2 flex-wrap opacity-60 hover:opacity-90 transition-opacity">
+                              <span className="text-[11px]">▶</span>
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-brand-textMuted">
+                                Previous round{dateLabel && ` · ${dateLabel}`}
+                              </span>
+                              <span className="text-[11px] text-brand-textMuted">· {proposals.length} trainer{proposals.length !== 1 ? 's' : ''}</span>
+                              {passedCount > 0 && <Pill color="green">{passedCount} passed</Pill>}
+                              {pendingCount > 0 && <Pill color="amber">{pendingCount} pending</Pill>}
+                            </div>
+                          </summary>
+                          <div className="mt-2 space-y-2 pl-3 border-l border-brand-border">
+                            {proposals.map(renderProposal)}
+                          </div>
+                        </details>
                       );
                     })}
                   </div>
