@@ -107,119 +107,21 @@ function emailWrapper(recipientName: string, shift: string, date: string, sectio
 </body></html>`;
 }
 
-// ── Team 2 briefing (Anjali + Taran) ─────────────────────────────────────────
+// ── Team 2 briefing (Anjali + Taran) — each person gets their own email ───────
 
 export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
   const today = todayIST();
 
-  // Clients Anjali or Taran own that need action
-  const clients = await prisma.client.findMany({
-    where: {
-      lifecycle: {
-        in: ['IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters',
-             'VerificationPending', 'DemoScheduled', 'DemoDone', 'FeedbackPending'],
-      },
-      intakeOwnerId: { in: ['u-anjali', 'u-taran'] },
-    },
-    select: {
-      id: true, name: true, lifecycle: true, intakeSkillHint: true,
-      demoDate: true, demoTimeIst: true, stageEnteredAt: true,
-      intakeOwner: { select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true } },
-    },
-    orderBy: { stageEnteredAt: 'asc' },
-  });
-
-  // Proposals pending verification that Anjali/Taran need to action
-  const pendingVerifications = await prisma.proposal.findMany({
-    where: { verification: 'Pending', trainerNotifiedAt: { not: null } },
-    include: {
-      request: { select: { client: { select: { name: true, lifecycle: true } } } },
-      trainer: { select: { name: true } },
-    },
-    orderBy: { proposedAt: 'asc' },
-    take: 20,
-  });
-
-  // Build sections
-  const intakeSent = clients.filter(c => c.lifecycle === 'IntakeSent');
-  const intakeReceived = clients.filter(c => c.lifecycle === 'IntakeReceived');
-  const internalSearch = clients.filter(c => ['InternalSearch', 'WithRecruiters'].includes(c.lifecycle));
-  const verPending = clients.filter(c => c.lifecycle === 'VerificationPending');
-  const demoToday = clients.filter(c => c.lifecycle === 'DemoScheduled' && c.demoDate === today);
-  const demoScheduled = clients.filter(c => c.lifecycle === 'DemoScheduled' && c.demoDate !== today);
-  const feedbackPending = clients.filter(c => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle));
-
-  const sections: string[] = [];
-
-  if (demoToday.length) {
-    sections.push(sectionHtml("🎯 Today's Demos", '#22c55e', demoToday.map(c =>
-      row(c.name, `${c.demoTimeIst || '?'} IST · ${c.intakeSkillHint || '—'}`, 'TODAY', '#16a34a',
-        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Owner: ${esc(c.intakeOwner?.name || '—')}</span>`)
-    )));
-  }
-
-  if (intakeReceived.length) {
-    sections.push(sectionHtml('📥 Intake Received — Process Now', '#f59e0b', intakeReceived.map(c =>
-      row(c.name, c.intakeSkillHint || 'Skills not filled', 'INTAKE IN', '#d97706',
-        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
-    )));
-  }
-
-  if (pendingVerifications.length) {
-    sections.push(sectionHtml('✅ Trainer Verifications Pending', '#6366f1', pendingVerifications.map(p =>
-      row((p as any).request?.client?.name || '—', `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, 'VERIFY', '#4f46e5')
-    )));
-  }
-
-  if (intakeSent.length) {
-    sections.push(sectionHtml('📤 Intake Form Sent — Awaiting Reply', '#64748b', intakeSent.map(c =>
-      row(c.name, c.intakeSkillHint || '—', 'WAITING', '#475569',
-        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
-    )));
-  }
-
-  if (internalSearch.length) {
-    sections.push(sectionHtml('🔍 With Recruiters / Internal Search', '#0ea5e9', internalSearch.map(c =>
-      row(c.name, c.intakeSkillHint || '—', c.lifecycle === 'WithRecruiters' ? 'RECRUITERS' : 'SEARCHING', '#0284c7',
-        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
-    )));
-  }
-
-  if (verPending.length) {
-    sections.push(sectionHtml('⏳ Verification Pending', '#f97316', verPending.map(c =>
-      row(c.name, c.intakeSkillHint || '—', 'VER PENDING', '#ea580c')
-    )));
-  }
-
-  if (feedbackPending.length) {
-    sections.push(sectionHtml('💬 Demo Done — Feedback Needed', '#ec4899', feedbackPending.map(c =>
-      row(c.name, c.intakeSkillHint || '—', 'FEEDBACK', '#db2777',
-        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
-    )));
-  }
-
-  if (demoScheduled.length) {
-    sections.push(sectionHtml('📅 Upcoming Demos', '#06b6d4', demoScheduled.map(c =>
-      row(c.name, `${fmtDate(c.demoDate)} · ${c.demoTimeIst || '?'} IST`, 'SCHEDULED', '#0891b2')
-    )));
-  }
-
-  const totalItems = clients.length + pendingVerifications.length;
-  const subject = totalItems > 0
-    ? `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · ${totalItems} item${totalItems !== 1 ? 's' : ''} need attention · ${today}`
-    : `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · All clear for ${today}`;
-
-  // Get CC addresses: Samita (manager) + Vaibhav
+  // CC: Samita + Vaibhav
   const ccUsers = await prisma.user.findMany({
     where: { id: { in: ['u-samita', 'u-vaibhav'] } },
     select: { gmailAddress: true, sendAsAddress: true, email: true },
   });
   const ccAddresses = ccUsers.map(u => u.sendAsAddress || u.gmailAddress || u.email).filter(Boolean) as string[];
 
-  // Get recipients: Anjali + Taran
   const recipients = await prisma.user.findMany({
     where: { id: { in: ['u-anjali', 'u-taran'] } },
-    select: { name: true, gmailAddress: true, sendAsAddress: true, email: true },
+    select: { id: true, name: true, gmailAddress: true, sendAsAddress: true, email: true },
   });
 
   const dateLabel = new Date(today).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -227,6 +129,100 @@ export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
   for (const recipient of recipients) {
     const toEmail = recipient.sendAsAddress || recipient.gmailAddress || recipient.email;
     if (!toEmail) continue;
+
+    // Clients this person owns
+    const myClients = await prisma.client.findMany({
+      where: {
+        lifecycle: {
+          in: ['IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters',
+               'VerificationPending', 'DemoScheduled', 'DemoDone', 'FeedbackPending'],
+        },
+        intakeOwnerId: recipient.id,
+      },
+      select: {
+        id: true, name: true, lifecycle: true, intakeSkillHint: true,
+        demoDate: true, demoTimeIst: true, stageEnteredAt: true,
+      },
+      orderBy: { stageEnteredAt: 'asc' },
+    });
+
+    // Proposals pending verification (shared — both can action these)
+    const pendingVerifications = await prisma.proposal.findMany({
+      where: { verification: 'Pending', trainerNotifiedAt: { not: null } },
+      include: {
+        request: { select: { client: { select: { name: true } } } },
+        trainer: { select: { name: true } },
+      },
+      orderBy: { proposedAt: 'asc' },
+      take: 20,
+    });
+
+    const demoToday = myClients.filter(c => c.lifecycle === 'DemoScheduled' && c.demoDate === today);
+    const intakeReceived = myClients.filter(c => c.lifecycle === 'IntakeReceived');
+    const intakeSent = myClients.filter(c => c.lifecycle === 'IntakeSent');
+    const internalSearch = myClients.filter(c => ['InternalSearch', 'WithRecruiters'].includes(c.lifecycle));
+    const verPending = myClients.filter(c => c.lifecycle === 'VerificationPending');
+    const demoScheduled = myClients.filter(c => c.lifecycle === 'DemoScheduled' && c.demoDate !== today);
+    const feedbackPending = myClients.filter(c => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle));
+
+    const sections: string[] = [];
+
+    if (demoToday.length) {
+      sections.push(sectionHtml("🎯 Today's Demos", '#22c55e', demoToday.map(c =>
+        row(c.name, `${c.demoTimeIst || '?'} IST · ${c.intakeSkillHint || '—'}`, 'TODAY', '#16a34a')
+      )));
+    }
+
+    if (intakeReceived.length) {
+      sections.push(sectionHtml('📥 Intake Received — Process Now', '#f59e0b', intakeReceived.map(c =>
+        row(c.name, c.intakeSkillHint || 'Skills not filled', 'INTAKE IN', '#d97706',
+          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
+      )));
+    }
+
+    if (pendingVerifications.length) {
+      sections.push(sectionHtml('✅ Trainer Verifications Pending', '#6366f1', pendingVerifications.map(p =>
+        row((p as any).request?.client?.name || '—', `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, 'VERIFY', '#4f46e5')
+      )));
+    }
+
+    if (intakeSent.length) {
+      sections.push(sectionHtml('📤 Intake Form Sent — Awaiting Reply', '#64748b', intakeSent.map(c =>
+        row(c.name, c.intakeSkillHint || '—', 'WAITING', '#475569',
+          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
+      )));
+    }
+
+    if (internalSearch.length) {
+      sections.push(sectionHtml('🔍 With Recruiters / Internal Search', '#0ea5e9', internalSearch.map(c =>
+        row(c.name, c.intakeSkillHint || '—', c.lifecycle === 'WithRecruiters' ? 'RECRUITERS' : 'SEARCHING', '#0284c7',
+          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
+      )));
+    }
+
+    if (verPending.length) {
+      sections.push(sectionHtml('⏳ Verification Pending', '#f97316', verPending.map(c =>
+        row(c.name, c.intakeSkillHint || '—', 'VER PENDING', '#ea580c')
+      )));
+    }
+
+    if (feedbackPending.length) {
+      sections.push(sectionHtml('💬 Demo Done — Feedback Needed', '#ec4899', feedbackPending.map(c =>
+        row(c.name, c.intakeSkillHint || '—', 'FEEDBACK', '#db2777',
+          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
+      )));
+    }
+
+    if (demoScheduled.length) {
+      sections.push(sectionHtml('📅 Upcoming Demos', '#06b6d4', demoScheduled.map(c =>
+        row(c.name, `${fmtDate(c.demoDate)} · ${c.demoTimeIst || '?'} IST`, 'SCHEDULED', '#0891b2')
+      )));
+    }
+
+    const totalItems = myClients.length + pendingVerifications.length;
+    const subject = totalItems > 0
+      ? `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · ${totalItems} item${totalItems !== 1 ? 's' : ''} need attention · ${today}`
+      : `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · All clear for ${today}`;
 
     const html = emailWrapper(
       recipient.name,
@@ -243,114 +239,15 @@ export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
       htmlBody: html,
       cc: ccAddresses.filter(e => e !== toEmail),
     });
-  }
 
-  console.log(`[briefing] Team 2 ${shift} sent — ${totalItems} items`);
+    console.log(`[briefing] Team 2 ${shift} → ${recipient.name} (${toEmail}) — ${totalItems} items`);
+  }
 }
 
-// ── Team 1 briefing (Aman + Kanchan) ─────────────────────────────────────────
+// ── Team 1 briefing (Aman + Kanchan) — each person gets their own email ───────
 
 export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
   const today = todayIST();
-
-  // Open sourcing requests (not yet proposed)
-  const openRequests = await prisma.sourcingRequest.findMany({
-    where: { status: 'Open' },
-    include: { client: { select: { name: true, intakeSkillHint: true } } },
-    orderBy: { createdAt: 'asc' },
-  });
-
-  // Proposals owned by Aman/Kanchan that are still Pending (not notified yet)
-  const pendingProposals = await prisma.proposal.findMany({
-    where: {
-      verification: 'Pending',
-      proposedById: { in: ['u-aman', 'u-kanchan'] },
-      trainerNotifiedAt: null,
-    },
-    include: {
-      request: { select: { client: { select: { name: true } } } },
-      trainer: { select: { name: true, skills: true } },
-      proposedBy: { select: { name: true } },
-    },
-    orderBy: { proposedAt: 'asc' },
-  });
-
-  // Also proposals routed to Aman/Kanchan (via sentToId)
-  const routedPending = await prisma.proposal.findMany({
-    where: {
-      verification: 'Pending',
-      trainerNotifiedAt: null,
-      request: { sentToId: { in: ['u-aman', 'u-kanchan'] } },
-      proposedById: { notIn: ['u-aman', 'u-kanchan'] },
-    },
-    include: {
-      request: { select: { client: { select: { name: true } }, sentTo: { select: { name: true } } } },
-      trainer: { select: { name: true, skills: true } },
-    },
-    orderBy: { proposedAt: 'asc' },
-  });
-
-  // Trainer leads that need action (New / Contacted / Vetting)
-  const activeLeads = await prisma.trainerLead.findMany({
-    where: {
-      stage: { in: ['New', 'Contacted', 'Vetting'] },
-      recruiterId: { in: ['u-aman', 'u-kanchan'] },
-    },
-    include: { recruiter: { select: { name: true } } },
-    orderBy: { createdAt: 'asc' },
-    take: 30,
-  });
-
-  const sections: string[] = [];
-
-  if (openRequests.length) {
-    sections.push(sectionHtml('🚨 Open Sourcing Requests — Propose Trainers', '#ef4444', openRequests.map(r =>
-      row(r.client?.name || '—', r.client?.intakeSkillHint || '—', 'PROPOSE NOW', '#dc2626')
-    )));
-  }
-
-  const unnotified = [...pendingProposals, ...routedPending];
-  if (unnotified.length) {
-    sections.push(sectionHtml('📣 Proposals Not Yet Notified to Trainer', '#f59e0b', unnotified.map(p =>
-      row(
-        (p as any).request?.client?.name || '—',
-        `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`,
-        'NOTIFY TRAINER',
-        '#d97706',
-        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">by ${esc((p as any).proposedBy?.name || (p as any).request?.sentTo?.name || '—')}</span>`
-      )
-    )));
-  }
-
-  const newLeads = activeLeads.filter(l => l.stage === 'New');
-  const contactedLeads = activeLeads.filter(l => l.stage === 'Contacted');
-  const vettingLeads = activeLeads.filter(l => l.stage === 'Vetting');
-
-  if (newLeads.length) {
-    sections.push(sectionHtml('🆕 New Trainer Leads — Contact Today', '#6366f1', newLeads.map(l =>
-      row(l.name, l.skills || '—', 'NEW', '#4f46e5',
-        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr · ${esc(l.recruiter?.name || '—')}</span>`)
-    )));
-  }
-
-  if (vettingLeads.length) {
-    sections.push(sectionHtml('🔎 Trainer Leads in Vetting', '#0ea5e9', vettingLeads.map(l =>
-      row(l.name, l.skills || '—', 'VETTING', '#0284c7',
-        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr · ${esc(l.recruiter?.name || '—')}</span>`)
-    )));
-  }
-
-  if (contactedLeads.length) {
-    sections.push(sectionHtml('📞 Trainer Leads Contacted — Follow Up', '#64748b', contactedLeads.map(l =>
-      row(l.name, l.skills || '—', 'FOLLOW UP', '#475569',
-        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr · ${esc(l.recruiter?.name || '—')}</span>`)
-    )));
-  }
-
-  const totalItems = openRequests.length + unnotified.length + activeLeads.length;
-  const subject = totalItems > 0
-    ? `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · ${totalItems} item${totalItems !== 1 ? 's' : ''} need attention · ${today}`
-    : `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · All clear for ${today}`;
 
   // CC: Samita + Vaibhav
   const ccUsers = await prisma.user.findMany({
@@ -361,14 +258,97 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
 
   const recipients = await prisma.user.findMany({
     where: { id: { in: ['u-aman', 'u-kanchan'] } },
-    select: { name: true, gmailAddress: true, sendAsAddress: true, email: true },
+    select: { id: true, name: true, gmailAddress: true, sendAsAddress: true, email: true },
   });
 
   const dateLabel = new Date(today).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
+  // Open sourcing requests are shared (routed to the team, not person-specific)
+  const openRequests = await prisma.sourcingRequest.findMany({
+    where: { status: 'Open', sentToId: { in: ['u-aman', 'u-kanchan'] } },
+    include: { client: { select: { name: true, intakeSkillHint: true } }, sentTo: { select: { id: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+
   for (const recipient of recipients) {
     const toEmail = recipient.sendAsAddress || recipient.gmailAddress || recipient.email;
     if (!toEmail) continue;
+
+    // Open requests routed specifically to this person
+    const myOpenRequests = openRequests.filter(r => r.sentTo?.id === recipient.id);
+
+    // Proposals this person submitted that are still unnotified
+    const myPendingProposals = await prisma.proposal.findMany({
+      where: {
+        verification: 'Pending',
+        proposedById: recipient.id,
+        trainerNotifiedAt: null,
+      },
+      include: {
+        request: { select: { client: { select: { name: true } } } },
+        trainer: { select: { name: true, skills: true } },
+      },
+      orderBy: { proposedAt: 'asc' },
+    });
+
+    // Trainer leads owned by this person
+    const myLeads = await prisma.trainerLead.findMany({
+      where: {
+        stage: { in: ['New', 'Contacted', 'Vetting'] },
+        recruiterId: recipient.id,
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 30,
+    });
+
+    const sections: string[] = [];
+
+    if (myOpenRequests.length) {
+      sections.push(sectionHtml('🚨 Open Sourcing Requests — Propose Trainers', '#ef4444', myOpenRequests.map(r =>
+        row(r.client?.name || '—', r.client?.intakeSkillHint || '—', 'PROPOSE NOW', '#dc2626')
+      )));
+    }
+
+    if (myPendingProposals.length) {
+      sections.push(sectionHtml('📣 Your Proposals — Notify Trainer', '#f59e0b', myPendingProposals.map(p =>
+        row(
+          (p as any).request?.client?.name || '—',
+          `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`,
+          'NOTIFY TRAINER',
+          '#d97706',
+        )
+      )));
+    }
+
+    const newLeads = myLeads.filter(l => l.stage === 'New');
+    const vettingLeads = myLeads.filter(l => l.stage === 'Vetting');
+    const contactedLeads = myLeads.filter(l => l.stage === 'Contacted');
+
+    if (newLeads.length) {
+      sections.push(sectionHtml('🆕 New Trainer Leads — Contact Today', '#6366f1', newLeads.map(l =>
+        row(l.name, l.skills || '—', 'NEW', '#4f46e5',
+          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr</span>`)
+      )));
+    }
+
+    if (vettingLeads.length) {
+      sections.push(sectionHtml('🔎 Trainer Leads in Vetting', '#0ea5e9', vettingLeads.map(l =>
+        row(l.name, l.skills || '—', 'VETTING', '#0284c7',
+          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr</span>`)
+      )));
+    }
+
+    if (contactedLeads.length) {
+      sections.push(sectionHtml('📞 Trainer Leads Contacted — Follow Up', '#64748b', contactedLeads.map(l =>
+        row(l.name, l.skills || '—', 'FOLLOW UP', '#475569',
+          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr</span>`)
+      )));
+    }
+
+    const totalItems = myOpenRequests.length + myPendingProposals.length + myLeads.length;
+    const subject = totalItems > 0
+      ? `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · ${totalItems} item${totalItems !== 1 ? 's' : ''} need attention · ${today}`
+      : `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · All clear for ${today}`;
 
     const html = emailWrapper(
       recipient.name,
@@ -385,7 +365,7 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
       htmlBody: html,
       cc: ccAddresses.filter(e => e !== toEmail),
     });
-  }
 
-  console.log(`[briefing] Team 1 ${shift} sent — ${totalItems} items`);
+    console.log(`[briefing] Team 1 ${shift} → ${recipient.name} (${toEmail}) — ${totalItems} items`);
+  }
 }
