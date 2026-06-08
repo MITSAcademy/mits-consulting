@@ -292,6 +292,60 @@ async function main() {
     });
   }
 
+  // ── TEST CLIENT for Roshni (SaleClosing flow) ──────────────────────────────
+  // Name: vb | Email: er.vaibhavaggarwal@gmail.com
+  // Delete this block when no longer needed for testing.
+  const TEST_CLIENT_ID = 'c-test-roshni-vb';
+  const testClientExists = await prisma.client.findUnique({ where: { id: TEST_CLIENT_ID } });
+  if (!testClientExists) {
+    await prisma.client.create({
+      data: {
+        id: TEST_CLIENT_ID,
+        name: 'vb',
+        email: 'er.vaibhavaggarwal@gmail.com',
+        phoneCode: '+1',
+        phoneDigits: '4155550199',
+        whatsappGroupName: 'vb - Java - Group',
+        country: 'US',
+        engagementType: 'Support',
+        paymentModel: 'BiWeekly',
+        currency: 'USD',
+        cycleAmount: 650,
+        lifecycle: 'SaleClosing',
+        funderType: 'Self',
+        source: 'Direct referral',
+        leadOwnerId: 'u-vaibhav',
+        salesOwnerId: 'u-roshni',
+        intakeOwnerId: null,
+        hostOwnerId: null,
+        primaryTrainerId: 't-anand',
+        engagementTrainerRateInr: 800,
+        preferredTimeIst: '09:00',
+        feedbackDay: 'Wednesday',
+        bankAccountId: 'b-mits-pvt',
+        accountNameRaw: 'Direct referral',
+        freshPaymentReceived: false,
+        freshPaymentDate: null,
+        freshPaymentAmount: 0,
+        cycleStart: null,
+        cycleEnd: null,
+        nextRenewalDue: null,
+        sessionsPerCycle: 10,
+        sessionsUsed: 0,
+        churnRisk: 'Green',
+        intakeSkillHint: 'Java, Spring Boot',
+        intakeData: {
+          detailed_skill_set: 'Java, Spring Boot, Microservices',
+          current_priority_task: 'Interview prep',
+          client_email: 'er.vaibhavaggarwal@gmail.com',
+          demo_timing_ist: 'Morning 9-11 IST',
+          session_timing_ist: '9 AM IST Mon-Fri',
+        },
+      },
+    });
+    console.log('✓ Test client "vb" created for Roshni (SaleClosing).');
+  }
+
   console.log('✓ Seed complete.');
   console.log('Login with any user email (e.g. vaibhav@mits.local) and password: password123');
 }

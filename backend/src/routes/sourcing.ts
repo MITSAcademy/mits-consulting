@@ -413,6 +413,27 @@ sourcingRouter.patch('/proposal/:proposalId', async (req: AuthedRequest, res) =>
   res.json(p);
 });
 
+// Remove a pending proposal — recruiter can remove their own; leadership can remove any.
+sourcingRouter.delete('/proposal/:proposalId', async (req: AuthedRequest, res) => {
+  const ROLE = req.user!.role;
+  const proposal = await prisma.proposal.findUnique({
+    where: { id: req.params.proposalId },
+    select: { id: true, verification: true, proposedById: true, request: { select: { sentToId: true } } },
+  });
+  if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+  if (proposal.verification === 'Pass') {
+    return res.status(400).json({ error: 'Cannot remove a passed proposal.' });
+  }
+  const isLeadership = ['founder', 'manager', 'demo_lead', 'demo_intake'].includes(ROLE);
+  const isOwner = proposal.proposedById === req.user!.id || proposal.request.sentToId === req.user!.id;
+  if (!isLeadership && !(ROLE === 'recruiter' && isOwner)) {
+    return res.status(403).json({ error: 'You can only remove proposals you submitted.' });
+  }
+  await prisma.proposal.delete({ where: { id: req.params.proposalId } });
+  await audit(req.user!.id, req.user!.name, 'PROPOSAL_REMOVE', req.params.proposalId);
+  res.json({ ok: true });
+});
+
 // Atomic "Pass" endpoint — runs the entire verification handoff server-side.
 // 1. Mark proposal Pass.
 // 2. Auto-fail other Pending proposals on the same request.

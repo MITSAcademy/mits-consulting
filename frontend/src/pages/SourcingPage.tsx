@@ -654,16 +654,39 @@ function AddTrainerInlineModal({ qc, showToast, onClose }: any) {
 // ─── Proposal row with "Notify trainer" buttons ──────────────────────────
 function ProposalRowWithOutreach({ proposal }: { proposal: any }) {
   const [open, setOpen] = useState(false);
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
   const hasEmail = !!(proposal.trainer?.email || proposal.trainerEmail);
   const hasGroup = !!proposal.trainer?.whatsappGroupLink;
   const hasPhone = !!(proposal.trainer?.phoneDigits || proposal.trainerPhone);
   const notified = !!proposal.trainerNotifiedAt;
   const canNotify = hasEmail && (hasGroup || hasPhone);
+  const isPassed = proposal.verification === 'Pass';
+
+  const removeMut = useMutation({
+    mutationFn: () => api.delete(`/sourcing/proposal/${proposal.id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sourcing'] });
+      showToast('Proposal removed');
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to remove proposal', 'error'),
+  });
+
   return (
     <div className="rounded-xl p-2.5" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
       <div className="font-medium flex justify-between items-center">
         <span>{proposal.trainer?.name || proposal.trainerName || '—'}</span>
-        <Pill color={proposal.verification === 'Pass' ? 'green' : proposal.verification === 'Fail' ? 'red' : 'amber'}>{proposal.verification}</Pill>
+        <div className="flex items-center gap-1.5">
+          <Pill color={proposal.verification === 'Pass' ? 'green' : proposal.verification === 'Fail' ? 'red' : 'amber'}>{proposal.verification}</Pill>
+          {!isPassed && (
+            <button
+              onClick={() => { if (confirm('Remove this trainer proposal?')) removeMut.mutate(); }}
+              disabled={removeMut.isPending}
+              title="Remove this proposal"
+              style={{ color: 'var(--status-red)', fontSize: 13, lineHeight: 1, padding: '0 4px', opacity: removeMut.isPending ? 0.4 : 1, cursor: 'pointer', background: 'none', border: 'none' }}
+            >✕</button>
+          )}
+        </div>
       </div>
       <div className="muted mt-0.5">{proposal.trainer?.skills || proposal.trainerSkills} · ₹{proposal.rateInr}</div>
 
