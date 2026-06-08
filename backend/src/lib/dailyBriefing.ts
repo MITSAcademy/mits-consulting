@@ -367,3 +367,145 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
     console.log(`[briefing] Team 1 ${shift} → ${recipient.name} (${toEmail}) — ${totalItems} items`);
   }
 }
+
+// ── Samita briefing (demo_lead) — team overview ───────────────────────────────
+// Samita manages Anjali + Taran. Her briefing shows the full pipeline state
+// with per-person breakdown so she can spot who is falling behind.
+// Schedule: 7 AM IST + 7 PM IST, CC Vaibhav.
+
+export async function sendSamitaBriefing(shift: 'morning' | 'evening') {
+  const today = todayIST();
+  const dateLabel = new Date(today).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  // All pipeline clients owned by Anjali or Taran
+  const allClients = await prisma.client.findMany({
+    where: {
+      lifecycle: {
+        in: ['Lead', 'IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters',
+             'VerificationPending', 'DemoScheduled', 'DemoDone', 'FeedbackPending', 'TrainerMatched'],
+      },
+      intakeOwnerId: { in: ['u-anjali', 'u-taran'] },
+    },
+    select: {
+      id: true, name: true, lifecycle: true, intakeSkillHint: true,
+      demoDate: true, demoTimeIst: true, stageEnteredAt: true,
+      intakeOwner: { select: { id: true, name: true } },
+    },
+    orderBy: { stageEnteredAt: 'asc' },
+  });
+
+  // All pending verifications (trainer notified, awaiting Anjali/Taran verify)
+  const pendingVerifications = await prisma.proposal.findMany({
+    where: { verification: 'Pending', trainerNotifiedAt: { not: null } },
+    include: {
+      request: { select: { client: { select: { name: true } }, sentTo: { select: { name: true } } } },
+      trainer: { select: { name: true } },
+    },
+    orderBy: { proposedAt: 'asc' },
+    take: 30,
+  });
+
+  // All open sourcing requests (not yet proposed by recruiters)
+  const openRequests = await prisma.sourcingRequest.findMany({
+    where: { status: 'Open' },
+    include: { client: { select: { name: true, intakeSkillHint: true } }, sentTo: { select: { name: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  // Unnotified proposals (recruiter proposed but hasn't notified trainer yet)
+  const unnotifiedProposals = await prisma.proposal.findMany({
+    where: { verification: 'Pending', trainerNotifiedAt: null },
+    include: {
+      request: { select: { client: { select: { name: true } }, sentTo: { select: { name: true } } } },
+      trainer: { select: { name: true } },
+      proposedBy: { select: { name: true } },
+    },
+    orderBy: { proposedAt: 'asc' },
+    take: 20,
+  });
+
+  // Build per-person breakdown rows for Anjali vs Taran
+  function ownerTag(ownerId: string) {
+    return ownerId === 'u-anjali' ? 'Anjali' : 'Taran';
+  }
+
+  const demoToday    = allClients.filter(c => c.lifecycle === 'DemoScheduled' && c.demoDate === today);
+  const intakeRcvd   = allClients.filter(c => c.lifecycle === 'IntakeReceived');
+  const feedbackPend = allClients.filter(c => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle));
+  const intakeSent   = allClients.filter(c => c.lifecycle === 'IntakeSent');
+  const withRec      = allClients.filter(c => ['InternalSearch', 'WithRecruiters'].includes(c.lifecycle));
+  const verPend      = allClients.filter(c => c.lifecycle === 'VerificationPending');
+  const demoSched    = allClients.filter(c => c.lifecycle === 'DemoScheduled' && c.demoDate !== today);
+  const trainerMatched = allClients.filter(c => c.lifecycle === 'TrainerMatched');
+
+  // Row with owner name appended
+  function ownerRow(c: typeof allClients[0], action: string): string {
+    return itemRow(c.name, c.intakeSkillHint, c.stageEnteredAt, `${action} · ${ownerTag(c.intakeOwner?.id || '')}`);
+  }
+
+  const sectionDefs = [
+    { items: demoToday,     label: "Today's Demos",          color: '#22c55e', rows: demoToday.map(c => ownerRow(c, 'DEMO TODAY')) },
+    { items: intakeRcvd,    label: 'Intake Received',         color: '#f59e0b', rows: intakeRcvd.map(c => ownerRow(c, 'PROCESS')) },
+    { items: pendingVerifications.map(p => ({ ...p, _name: (p as any).request?.client?.name || '—', _owner: (p as any).request?.sentTo?.name || '—' })),
+                            label: 'Verify Trainer',          color: '#6366f1',
+      rows: pendingVerifications.map(p => itemRow((p as any).request?.client?.name || '—', `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, p.proposedAt?.toString(), `VERIFY · ${(p as any).request?.sentTo?.name || '—'}`)) },
+    { items: feedbackPend,  label: 'Feedback Needed',         color: '#ec4899', rows: feedbackPend.map(c => ownerRow(c, 'FEEDBACK')) },
+    { items: unnotifiedProposals.map(p => p),
+                            label: 'Recruiter: Notify Trainer', color: '#f97316',
+      rows: unnotifiedProposals.map(p => itemRow((p as any).request?.client?.name || '—', `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, p.proposedAt?.toString(), `NOTIFY · ${(p as any).proposedBy?.name || (p as any).request?.sentTo?.name || '—'}`)) },
+    { items: openRequests,  label: 'Open Sourcing Requests',  color: '#ef4444',
+      rows: openRequests.map(r => itemRow(r.client?.name || '—', r.client?.intakeSkillHint, r.createdAt?.toString(), `PROPOSE · ${r.sentTo?.name || '—'}`)) },
+    { items: verPend,       label: 'Verification Pending',    color: '#f97316', rows: verPend.map(c => ownerRow(c, 'VER PENDING')) },
+    { items: withRec,       label: 'With Recruiters',         color: '#0ea5e9', rows: withRec.map(c => ownerRow(c, 'FOLLOW UP')) },
+    { items: trainerMatched,label: 'Trainer Matched',         color: '#06b6d4', rows: trainerMatched.map(c => ownerRow(c, 'SCHEDULE DEMO')) },
+    { items: intakeSent,    label: 'Intake Sent — Awaiting',  color: '#64748b', rows: intakeSent.map(c => ownerRow(c, 'WAITING')) },
+    { items: demoSched,     label: 'Upcoming Demos',          color: '#06b6d4', rows: demoSched.map(c => ownerRow(c, `${fmtDate(c.demoDate)}`)) },
+  ];
+
+  const sections: string[] = [];
+  for (const s of sectionDefs) {
+    if (!s.items.length) continue;
+    sections.push(sectionHtml(s.label, s.color, s.rows, s.items.length));
+  }
+
+  const totalItems = allClients.length + pendingVerifications.length + unnotifiedProposals.length + openRequests.length;
+  const subject = totalItems > 0
+    ? `[MITS] ${shift === 'morning' ? '🌅' : '🌙'} Team overview · ${totalItems} items · ${today}`
+    : `[MITS] ${shift === 'morning' ? '🌅' : '🌙'} All clear · ${today}`;
+
+  const summaryChips = summaryBar(sectionDefs.map(s => ({ label: s.label, count: s.items.length, color: s.color })));
+
+  // CC Vaibhav
+  const vaibhav = await prisma.user.findUnique({
+    where: { id: 'u-vaibhav' },
+    select: { gmailAddress: true, sendAsAddress: true, email: true },
+  });
+  const ccAddresses = [vaibhav?.sendAsAddress || vaibhav?.gmailAddress || vaibhav?.email].filter(Boolean) as string[];
+
+  const samita = await prisma.user.findUnique({
+    where: { id: 'u-samita' },
+    select: { name: true, gmailAddress: true, sendAsAddress: true, email: true },
+  });
+  const toEmail = samita?.sendAsAddress || samita?.gmailAddress || samita?.email;
+  if (!toEmail) { console.log('[briefing] Samita has no email configured — skipping'); return; }
+
+  const html = emailWrapper(
+    'Samita',
+    shift,
+    dateLabel,
+    totalItems,
+    summaryChips,
+    sections.join(''),
+    'Pipeline is clear — great work from the team!',
+  );
+
+  await sendEmail({
+    to: toEmail,
+    subject,
+    body: `Team overview for Samita — ${totalItems} items across the pipeline. View in HTML-capable email client.`,
+    htmlBody: html,
+    cc: ccAddresses.filter(e => e !== toEmail),
+  });
+
+  console.log(`[briefing] Samita ${shift} → ${toEmail} — ${totalItems} items`);
+}

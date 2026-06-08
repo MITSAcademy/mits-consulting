@@ -12,7 +12,7 @@
  */
 
 import cron from 'node-cron';
-import { sendTeam2Briefing, sendTeam1Briefing } from './dailyBriefing';
+import { sendTeam2Briefing, sendTeam1Briefing, sendSamitaBriefing } from './dailyBriefing';
 
 function safe(label: string, fn: () => Promise<void>) {
   fn().catch((e) => console.error(`[scheduler] ${label} failed:`, e));
@@ -39,7 +39,16 @@ export function initScheduler() {
     timezone: 'Asia/Kolkata',
   });
 
+  // Samita — 7:00 AM IST + 7:00 PM IST (team overview)
+  cron.schedule('0 7 * * *', () => safe('samita-morning', () => sendSamitaBriefing('morning')), {
+    timezone: 'Asia/Kolkata',
+  });
+  cron.schedule('0 19 * * *', () => safe('samita-evening', () => sendSamitaBriefing('evening')), {
+    timezone: 'Asia/Kolkata',
+  });
+
   console.log('[scheduler] Daily briefing crons registered (Asia/Kolkata timezone)');
   console.log('[scheduler]   Team 2 (Anjali + Taran) → 06:00 + 18:00 IST');
   console.log('[scheduler]   Team 1 (Aman + Kanchan) → 09:00 + 16:00 IST (CC Samita + Vaibhav)');
+  console.log('[scheduler]   Samita (team overview)  → 07:00 + 19:00 IST (CC Vaibhav)');
 }
