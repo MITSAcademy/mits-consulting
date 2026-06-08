@@ -29,9 +29,12 @@ export function buildWelcomeEmailHtml(opts: {
   senderPhone?: string;
   senderTitle?: string;
   signatureUrl?: string; // public URL to a signature image (PNG transparent ideal)
+  /** Name of the person hosting the demo call (defaults to senderName). */
+  hostName?: string;
 }): string {
   const greeting = opts.clientName ? `Hi ${escape(opts.clientName)},` : 'Hi Dear,';
   const senderName = opts.senderName || 'Samita Gupta';
+  const hostName = opts.hostName || senderName;
   const senderEmail = opts.senderEmail || 'samita@mitssolution.com';
   const senderPhone = opts.senderPhone || '+91 73476 13659';
   const senderTitle = opts.senderTitle || '';
@@ -70,11 +73,11 @@ export function buildWelcomeEmailHtml(opts: {
           </p>
 
           <p style="margin:0 0 12px;">
-            1. <b style="color:#1A6CDF;">Anjali</b> (Client Coordinator): She will be the host of the <b>demo meeting</b> arranged and <b>excels</b> in <b>coordinating</b> and <b>scheduling</b> calls to address your <b>needs</b> promptly.
+            1. <b style="color:#1A6CDF;">${escape(hostName)}</b> (Client Coordinator): They will be the host of the <b>demo meeting</b> and will <b>coordinate</b> and <b>schedule</b> calls to address your <b>needs</b> promptly.
           </p>
 
           <p style="margin:0 0 16px;">
-            2. <b>Samita</b> (Customer Success Manager): I will be your dedicated <b>Customer Success Manager</b>, I will oversee your satisfaction throughout our partnership. I will also be the point of escalation for <b>Level L1</b> issues and recurring payments.
+            2. <b>Samita</b> (Customer Success Manager): She will be your dedicated <b>Customer Success Manager</b>, overseeing your satisfaction throughout our partnership and serving as the point of escalation for any issues and recurring payments.
           </p>
 
           <p style="margin:0 0 16px;">

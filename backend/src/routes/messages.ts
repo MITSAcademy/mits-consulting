@@ -122,7 +122,7 @@ messagesRouter.post('/email', async (req: AuthedRequest, res) => {
     // Prefer the current user's own Gmail if configured (so emails go from their address)
     const me = await prisma.user.findUnique({
       where: { id: req.user!.id },
-      select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
+      select: { id: true, name: true, role: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
     });
     let fromUser;
     if (me?.gmailAddress && me?.smtpAppPassword) {
@@ -133,7 +133,23 @@ messagesRouter.post('/email', async (req: AuthedRequest, res) => {
         sendAsAddress: me.sendAsAddress,
       };
     }
-    const r = await sendEmail({ to, subject: finalSubject, body: finalBody, fromUser });
+
+    // CC Samita on every email sent by her reporting team (demo_intake, recruiter, sales_closer).
+    // This keeps Samita in the loop on all client-facing outreach without her needing to be CCed manually.
+    const SAMITA_CC_ROLES = ['demo_intake', 'recruiter', 'sales_closer'];
+    let ccAddresses: string[] = [];
+    if (me && SAMITA_CC_ROLES.includes(me.role)) {
+      const samita = await prisma.user.findFirst({
+        where: { role: 'demo_lead', active: true },
+        select: { gmailAddress: true, sendAsAddress: true, email: true },
+      });
+      const samitaEmail = samita?.sendAsAddress || samita?.gmailAddress || samita?.email;
+      if (samitaEmail && samitaEmail !== to) {
+        ccAddresses.push(samitaEmail);
+      }
+    }
+
+    const r = await sendEmail({ to, subject: finalSubject, body: finalBody, fromUser, cc: ccAddresses.length ? ccAddresses : undefined });
     await prisma.outboundMessage.update({
       where: { id: msg.id },
       data: { status: 'Sent', providerMessageId: r.id, provider: r.provider },
@@ -196,7 +212,7 @@ messagesRouter.get('/', async (req: AuthedRequest, res) => {
   // sent by anyone in the org (subject + body inclusive) to any logged-in
   // user. Require a client/trainer filter OR be founder/manager.
   const { clientId, trainerId, kind, limit } = req.query as any;
-  const isLeadership = ['founder', 'manager'].includes(req.user!.role);
+  const isLeadership = ['founder', 'manager', 'demo_lead'].includes(req.user!.role);
   if (!clientId && !trainerId && !isLeadership) {
     return res.status(400).json({
       error: 'clientId or trainerId query param required (founder/manager can omit).',

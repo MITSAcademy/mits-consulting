@@ -1946,6 +1946,7 @@ clientsRouter.post('/:id/welcome-email', async (req: AuthedRequest, res) => {
     senderPhone,
     senderTitle,
     signatureUrl: req.body?.signatureUrl || undefined,
+    hostName: senderName,
   });
   const plainText = [
     `Hi ${client.name || 'Dear'},`,
