@@ -1225,6 +1225,47 @@ clientsRouter.post('/:id/demos/backfill', async (req: AuthedRequest, res) => {
   res.status(201).json(demo);
 });
 
+// ─── Engagement letter preview — returns a PDF for download without sending ───
+// Roshni clicks "Preview PDF" in the modal to check the letter before sending.
+clientsRouter.get('/:id/engagement-letter/preview', async (req: AuthedRequest, res) => {
+  if (!['founder', 'manager', 'sales_closer', 'demo_lead'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    include: { primaryTrainer: true },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const me = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { name: true, gmailAddress: true },
+  });
+  const vars = {
+    clientName: client.name,
+    engagementType: client.engagementType,
+    paymentModel: client.paymentModel || undefined,
+    sessionsPerCycle: client.sessionsPerCycle || undefined,
+    cycleAmount: client.cycleAmount || undefined,
+    currency: client.currency,
+    cycleStart: client.cycleStart || undefined,
+    cycleEnd: client.cycleEnd || undefined,
+    preferredTimeIst: client.preferredTimeIst || undefined,
+    trainerName: client.primaryTrainer?.name || undefined,
+    senderName: me?.name || 'Roshni',
+    senderEmail: me?.gmailAddress || undefined,
+    handoverTo: 'Mitali',
+  };
+  try {
+    const pdfBuf = await buildEngagementLetterPdf(vars);
+    const safeName = (client.name || 'client').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="MITS_Engagement_Letter_${safeName}.pdf"`);
+    res.send(pdfBuf);
+  } catch (e: any) {
+    res.status(500).json({ error: 'PDF generation failed: ' + (e.message || String(e)) });
+  }
+});
+
 // ─── Engagement letter (Roshni → client on SaleWon) + handover trigger ─────
 // Sent by Roshni when the deal closes. Auto-CCs Mitali so she's aware.
 // Compulsory dual-send: email + WhatsApp (UI calls both endpoints in sequence).

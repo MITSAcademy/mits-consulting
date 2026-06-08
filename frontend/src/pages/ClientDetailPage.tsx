@@ -14,7 +14,7 @@ import { formatPhone, waLink, todayISO, stageLabel, backStagesFor, addDays } fro
 import { useUI } from '@/store/ui';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/store/auth';
-import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play, X, Download, Users } from 'lucide-react';
+import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play, X, Download, Users, FileText } from 'lucide-react';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 import { CallHistoryCard } from '@/components/CallHistoryCard';
@@ -3785,6 +3785,24 @@ function EngagementLetterModal({ client, onClose }: any) {
   const qc = useQueryClient();
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
   const hasPhone = !!client.phoneDigits;
+  const [previewing, setPreviewing] = useState(false);
+
+  async function downloadPreview() {
+    setPreviewing(true);
+    try {
+      const resp = await api.get(`/clients/${client.id}/engagement-letter/preview`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([resp.data], { type: 'application/pdf' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `MITS_Engagement_Letter_${(client.name || 'client').replace(/[^A-Za-z0-9_-]/g, '_')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      showToast(e?.response?.data?.error || 'Preview failed', 'error');
+    } finally {
+      setPreviewing(false);
+    }
+  }
 
   const send = useMutation({
     mutationFn: async () => {
@@ -3801,11 +3819,21 @@ function EngagementLetterModal({ client, onClose }: any) {
       qc.invalidateQueries({ queryKey: ['messages'] });
       qc.invalidateQueries({ queryKey: ['tasks'] });
       if (r.wa?.url) window.open(r.wa.url, '_blank', 'noopener');
-      showToast('🎉 Engagement letter sent · Mitali takes it from here');
+      showToast('Engagement letter sent · Mitali takes it from here');
       celebrate();
       onClose();
     },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+    onError: (e: any) => {
+      const msg = e?.response?.data?.error || e?.message || '';
+      const isNetworkErr = !e?.response || e?.code === 'ERR_NETWORK' || e?.code === 'ECONNABORTED';
+      if (isNetworkErr) {
+        showToast('Server is waking up — please wait 10 seconds and try again.', 'error');
+      } else if (e?.response?.data?.code === 'MISSING_APP_PASSWORD') {
+        showToast('Email not sent: Gmail App Password not configured. Go to Settings → My email to set it up.', 'error');
+      } else {
+        showToast(msg || 'Failed to send engagement letter', 'error');
+      }
+    },
   });
 
   return (
@@ -3833,10 +3861,13 @@ function EngagementLetterModal({ client, onClose }: any) {
               Both required.
             </div>
           )}
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!toEmail || !hasPhone || send.isPending} onClick={() => send.mutate()}>
+          <Button onClick={onClose} disabled={send.isPending || previewing}>Cancel</Button>
+          <Button variant="default" disabled={send.isPending || previewing} onClick={downloadPreview} title="Download the PDF to verify before sending">
+            <FileText size={12}/> {previewing ? 'Generating…' : 'Preview PDF'}
+          </Button>
+          <Button variant="primary" disabled={!toEmail || !hasPhone || send.isPending || previewing} onClick={() => send.mutate()}>
             <Mail size={12}/><MessageCircle size={12}/>{' '}
-            {send.isPending ? 'Sending…' : 'Send (Email + WhatsApp) + Handover'}
+            {send.isPending ? 'Sending… (may take 15–20s)' : 'Send (Email + WhatsApp) + Handover'}
           </Button>
         </DialogFooter>
       </DialogContent>
