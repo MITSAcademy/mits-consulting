@@ -352,9 +352,9 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
     ? `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · ${totalItems} item${totalItems !== 1 ? 's' : ''} need attention · ${today}`
     : `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · All clear for ${today}`;
 
-  // CC: Vaibhav (no direct manager for Team 1 in the chain, but Vaibhav oversees them)
+  // CC: Samita + Vaibhav
   const ccUsers = await prisma.user.findMany({
-    where: { id: 'u-vaibhav' },
+    where: { id: { in: ['u-samita', 'u-vaibhav'] } },
     select: { gmailAddress: true, sendAsAddress: true, email: true },
   });
   const ccAddresses = ccUsers.map(u => u.sendAsAddress || u.gmailAddress || u.email).filter(Boolean) as string[];

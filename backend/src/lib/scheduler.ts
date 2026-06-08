@@ -41,5 +41,5 @@ export function initScheduler() {
 
   console.log('[scheduler] Daily briefing crons registered (Asia/Kolkata timezone)');
   console.log('[scheduler]   Team 2 (Anjali + Taran) → 06:00 + 18:00 IST');
-  console.log('[scheduler]   Team 1 (Aman + Kanchan) → 09:00 + 16:00 IST');
+  console.log('[scheduler]   Team 1 (Aman + Kanchan) → 09:00 + 16:00 IST (CC Samita + Vaibhav)');
 }
