@@ -33,72 +33,113 @@ function fmtDate(d?: string | null) {
   catch { return d; }
 }
 
+/** Days since a date (positive = past, 0 = today). */
+function daysSince(iso?: string | null): number {
+  if (!iso) return 0;
+  try {
+    const ms = new Date(todayIST()).getTime() - new Date(iso.slice(0, 10)).getTime();
+    return Math.floor(ms / 86400000);
+  } catch { return 0; }
+}
+
+/** Urgency tier based on days pending. */
+function urgency(days: number): { label: string; bg: string; text: string; dot: string } {
+  if (days >= 3) return { label: `${days}d overdue`, bg: '#3d1010', text: '#ff6b6b', dot: '#ef4444' };
+  if (days === 2) return { label: '2d pending',   bg: '#2d1f00', text: '#fbbf24', dot: '#f59e0b' };
+  if (days === 1) return { label: '1d pending',   bg: '#1a2010', text: '#86efac', dot: '#22c55e' };
+  return              { label: 'today',           bg: '#0f1e2d', text: '#7dd3fc', dot: '#38bdf8' };
+}
+
+/** Truncate skills to first 2 comma-separated tokens, max 20 chars each. */
+function shortSkill(s?: string | null): string {
+  if (!s) return '';
+  return s.split(',').slice(0, 2).map(t => t.trim().slice(0, 20)).join(', ');
+}
+
 // ── HTML helpers ──────────────────────────────────────────────────────────────
 
 function esc(s: string): string {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function sectionHtml(title: string, color: string, rows: string[]): string {
+/**
+ * A compact item row: name | skill chip | days badge — no long text.
+ * stageEnteredAt drives the urgency colour.
+ */
+function itemRow(name: string, skill: string | null | undefined, stageEnteredAt: string | null | undefined, action: string): string {
+  const days = daysSince(stageEnteredAt);
+  const u = urgency(days);
+  const skillChip = skill ? `<span style="font-size:11px;color:#6b6f78;background:#1e2028;padding:1px 7px;border-radius:4px;margin-left:6px;">${esc(shortSkill(skill))}</span>` : '';
+  return `
+    <tr>
+      <td style="padding:7px 0;border-bottom:1px solid #1e2028;vertical-align:middle;">
+        <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${u.dot};margin-right:8px;vertical-align:middle;"></span>
+        <span style="font-weight:600;color:#f0f0f0;font-size:14px;">${esc(name)}</span>
+        ${skillChip}
+      </td>
+      <td style="padding:7px 0;border-bottom:1px solid #1e2028;text-align:right;white-space:nowrap;vertical-align:middle;">
+        <span style="font-size:11px;font-weight:700;color:${u.text};background:${u.bg};padding:2px 8px;border-radius:4px;margin-right:6px;">${esc(u.label)}</span>
+        <span style="font-size:11px;color:#4a4d56;text-transform:uppercase;letter-spacing:.05em;">${esc(action)}</span>
+      </td>
+    </tr>`;
+}
+
+function sectionHtml(title: string, color: string, rows: string[], count: number): string {
   if (!rows.length) return '';
   return `
-    <div style="margin:0 0 24px;">
-      <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${color};margin-bottom:10px;">${esc(title)}</div>
+    <div style="margin:0 0 20px;border-left:3px solid ${color};padding-left:12px;">
+      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:${color};margin-bottom:8px;">
+        ${esc(title)} <span style="font-weight:400;color:#4a4d56;">(${count})</span>
+      </div>
       <table style="width:100%;border-collapse:collapse;">
         ${rows.join('')}
       </table>
     </div>`;
 }
 
-function row(client: string, detail: string, badge: string, badgeColor: string, extra = ''): string {
-  return `
-    <tr style="border-bottom:1px solid #2a2d35;">
-      <td style="padding:8px 6px;font-weight:600;color:#f0f0f0;font-size:14px;">${esc(client)}</td>
-      <td style="padding:8px 6px;color:#9aa0a6;font-size:13px;">${esc(detail)}</td>
-      <td style="padding:8px 6px;white-space:nowrap;">
-        <span style="background:${badgeColor};color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;">${esc(badge)}</span>
-        ${extra}
-      </td>
-    </tr>`;
+function summaryBar(sections: Array<{ label: string; count: number; color: string }>): string {
+  const chips = sections.filter(s => s.count > 0).map(s =>
+    `<span style="display:inline-block;background:${s.color}22;color:${s.color};font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;margin:2px 4px 2px 0;">${s.count} ${esc(s.label)}</span>`
+  ).join('');
+  return chips ? `<div style="margin:0 0 24px;">${chips}</div>` : '';
 }
 
-function emailWrapper(recipientName: string, shift: string, date: string, sections: string, emptyCopy: string): string {
+function emailWrapper(recipientName: string, shift: string, date: string, totalItems: number, summary: string, sections: string, emptyCopy: string): string {
   const hasContent = sections.trim().length > 0;
+  const urgencyLine = totalItems >= 5
+    ? `<div style="margin-top:6px;font-size:12px;font-weight:700;color:#ef4444;letter-spacing:.04em;">⚠ ${totalItems} items need action — prioritise now</div>`
+    : totalItems > 0
+    ? `<div style="margin-top:6px;font-size:12px;color:#f59e0b;">${totalItems} item${totalItems !== 1 ? 's' : ''} pending</div>`
+    : `<div style="margin-top:6px;font-size:12px;color:#22c55e;">✓ All clear</div>`;
+
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"/></head>
 <body style="margin:0;padding:0;background:#0d0f12;font-family:'Inter','Helvetica Neue',Arial,sans-serif;color:#e8e8e8;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0d0f12;padding:24px 0;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0d0f12;padding:20px 0;">
     <tr><td align="center">
-      <table role="presentation" width="620" style="max-width:620px;width:100%;background:#16181e;border-radius:12px;overflow:hidden;">
+      <table role="presentation" width="580" style="max-width:580px;width:100%;background:#16181e;border-radius:10px;overflow:hidden;">
 
         <!-- Header -->
-        <tr><td style="background:linear-gradient(135deg,#1a1d24 0%,#1e2430 100%);padding:24px 28px 20px;border-bottom:1px solid #2a2d35;">
-          <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#6b6f78;margin-bottom:6px;">MITS Solution · Daily Briefing</div>
-          <div style="font-size:22px;font-weight:800;color:#f0f0f0;line-height:1.2;">Good ${shift === 'morning' ? 'Morning' : 'Evening'}, ${esc(recipientName)} 👋</div>
-          <div style="font-size:13px;color:#6b6f78;margin-top:4px;">${esc(date)} · ${shift === 'morning' ? 'Start-of-day priorities' : 'End-of-day wrap-up'}</div>
+        <tr><td style="background:#1a1d24;padding:20px 24px 16px;border-bottom:1px solid #2a2d35;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#4a4d56;">MITS · Daily Briefing · ${shift === 'morning' ? 'Morning' : 'Evening'}</div>
+          <div style="font-size:20px;font-weight:800;color:#f0f0f0;margin-top:4px;">${esc(recipientName)} — ${esc(date)}</div>
+          ${urgencyLine}
         </td></tr>
 
         <!-- Body -->
-        <tr><td style="padding:24px 28px;">
-          ${hasContent ? `
-            <p style="margin:0 0 20px;font-size:14px;color:#9aa0a6;line-height:1.6;">
-              Here's what needs your attention ${shift === 'morning' ? 'before you start your day' : 'before you wrap up'}. Tackle the highlighted items first.
-            </p>
-            ${sections}
-          ` : `
-            <div style="text-align:center;padding:32px 0;">
-              <div style="font-size:36px;margin-bottom:12px;">🎉</div>
-              <div style="font-size:18px;font-weight:700;color:#f0f0f0;">All clear!</div>
-              <p style="color:#6b6f78;font-size:14px;margin-top:6px;">${esc(emptyCopy)}</p>
+        <tr><td style="padding:20px 24px;">
+          ${hasContent ? `${summary}${sections}` : `
+            <div style="text-align:center;padding:28px 0;">
+              <div style="font-size:32px;margin-bottom:8px;">🎉</div>
+              <div style="font-size:16px;font-weight:700;color:#f0f0f0;">All clear!</div>
+              <p style="color:#6b6f78;font-size:13px;margin-top:4px;">${esc(emptyCopy)}</p>
             </div>
           `}
         </td></tr>
 
         <!-- Footer -->
-        <tr><td style="padding:16px 28px;border-top:1px solid #2a2d35;background:#13151a;">
-          <div style="font-size:12px;color:#4a4d56;line-height:1.6;">
-            <span style="font-weight:800;color:#6b6f78;">MITS</span> &nbsp;·&nbsp; Automated briefing &nbsp;·&nbsp; Do not reply
-          </div>
+        <tr><td style="padding:12px 24px;border-top:1px solid #1e2028;background:#13151a;">
+          <span style="font-size:11px;color:#4a4d56;"><b style="color:#6b6f78;">MITS</b> · Automated briefing · Do not reply</span>
         </td></tr>
 
       </table>
@@ -165,71 +206,42 @@ export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
     const demoScheduled = myClients.filter(c => c.lifecycle === 'DemoScheduled' && c.demoDate !== today);
     const feedbackPending = myClients.filter(c => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle));
 
+    const sectionDefs = [
+      { items: demoToday,          label: "Today's Demos",          color: '#22c55e', action: 'DEMO TODAY' },
+      { items: intakeReceived,     label: 'Intake Received',        color: '#f59e0b', action: 'PROCESS'   },
+      { items: pendingVerifications.map(p => ({ name: (p as any).request?.client?.name || '—', intakeSkillHint: `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, stageEnteredAt: p.proposedAt?.toString() })),
+                                   label: 'Verify Trainer',         color: '#6366f1', action: 'VERIFY'    },
+      { items: feedbackPending,    label: 'Feedback Needed',        color: '#ec4899', action: 'FEEDBACK'  },
+      { items: verPending,         label: 'Verification Pending',   color: '#f97316', action: 'VER PENDING'},
+      { items: internalSearch,     label: 'With Recruiters',        color: '#0ea5e9', action: 'FOLLOW UP' },
+      { items: intakeSent,         label: 'Intake Sent — Awaiting', color: '#64748b', action: 'WAITING'   },
+      { items: demoScheduled,      label: 'Upcoming Demos',         color: '#06b6d4', action: 'SCHEDULED' },
+    ];
+
     const sections: string[] = [];
-
-    if (demoToday.length) {
-      sections.push(sectionHtml("🎯 Today's Demos", '#22c55e', demoToday.map(c =>
-        row(c.name, `${c.demoTimeIst || '?'} IST · ${c.intakeSkillHint || '—'}`, 'TODAY', '#16a34a')
-      )));
-    }
-
-    if (intakeReceived.length) {
-      sections.push(sectionHtml('📥 Intake Received — Process Now', '#f59e0b', intakeReceived.map(c =>
-        row(c.name, c.intakeSkillHint || 'Skills not filled', 'INTAKE IN', '#d97706',
-          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
-      )));
-    }
-
-    if (pendingVerifications.length) {
-      sections.push(sectionHtml('✅ Trainer Verifications Pending', '#6366f1', pendingVerifications.map(p =>
-        row((p as any).request?.client?.name || '—', `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, 'VERIFY', '#4f46e5')
-      )));
-    }
-
-    if (intakeSent.length) {
-      sections.push(sectionHtml('📤 Intake Form Sent — Awaiting Reply', '#64748b', intakeSent.map(c =>
-        row(c.name, c.intakeSkillHint || '—', 'WAITING', '#475569',
-          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
-      )));
-    }
-
-    if (internalSearch.length) {
-      sections.push(sectionHtml('🔍 With Recruiters / Internal Search', '#0ea5e9', internalSearch.map(c =>
-        row(c.name, c.intakeSkillHint || '—', c.lifecycle === 'WithRecruiters' ? 'RECRUITERS' : 'SEARCHING', '#0284c7',
-          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
-      )));
-    }
-
-    if (verPending.length) {
-      sections.push(sectionHtml('⏳ Verification Pending', '#f97316', verPending.map(c =>
-        row(c.name, c.intakeSkillHint || '—', 'VER PENDING', '#ea580c')
-      )));
-    }
-
-    if (feedbackPending.length) {
-      sections.push(sectionHtml('💬 Demo Done — Feedback Needed', '#ec4899', feedbackPending.map(c =>
-        row(c.name, c.intakeSkillHint || '—', 'FEEDBACK', '#db2777',
-          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
-      )));
-    }
-
-    if (demoScheduled.length) {
-      sections.push(sectionHtml('📅 Upcoming Demos', '#06b6d4', demoScheduled.map(c =>
-        row(c.name, `${fmtDate(c.demoDate)} · ${c.demoTimeIst || '?'} IST`, 'SCHEDULED', '#0891b2')
-      )));
+    for (const s of sectionDefs) {
+      if (!s.items.length) continue;
+      sections.push(sectionHtml(s.label, s.color,
+        s.items.map(c => itemRow(c.name, (c as any).intakeSkillHint, (c as any).stageEnteredAt, s.action)),
+        s.items.length,
+      ));
     }
 
     const totalItems = myClients.length + pendingVerifications.length;
     const subject = totalItems > 0
-      ? `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · ${totalItems} item${totalItems !== 1 ? 's' : ''} need attention · ${today}`
-      : `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · All clear for ${today}`;
+      ? `[MITS] ${shift === 'morning' ? '🌅' : '🌙'} ${totalItems} pending · ${recipient.name.split(' ')[0]} · ${today}`
+      : `[MITS] ${shift === 'morning' ? '🌅' : '🌙'} All clear · ${today}`;
+
+    const summaryChips = summaryBar(sectionDefs.map(s => ({ label: s.label, count: s.items.length, color: s.color })));
 
     const html = emailWrapper(
-      recipient.name,
+      recipient.name.split(' ')[0],
       shift,
       dateLabel,
+      totalItems,
+      summaryChips,
       sections.join(''),
-      'No pending items right now. Great job keeping up!',
+      'No pending items. Great job keeping up!',
     );
 
     await sendEmail({
@@ -301,61 +313,47 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
       take: 30,
     });
 
-    const sections: string[] = [];
-
-    if (myOpenRequests.length) {
-      sections.push(sectionHtml('🚨 Open Sourcing Requests — Propose Trainers', '#ef4444', myOpenRequests.map(r =>
-        row(r.client?.name || '—', r.client?.intakeSkillHint || '—', 'PROPOSE NOW', '#dc2626')
-      )));
-    }
-
-    if (myPendingProposals.length) {
-      sections.push(sectionHtml('📣 Your Proposals — Notify Trainer', '#f59e0b', myPendingProposals.map(p =>
-        row(
-          (p as any).request?.client?.name || '—',
-          `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`,
-          'NOTIFY TRAINER',
-          '#d97706',
-        )
-      )));
-    }
-
     const newLeads = myLeads.filter(l => l.stage === 'New');
     const vettingLeads = myLeads.filter(l => l.stage === 'Vetting');
     const contactedLeads = myLeads.filter(l => l.stage === 'Contacted');
 
-    if (newLeads.length) {
-      sections.push(sectionHtml('🆕 New Trainer Leads — Contact Today', '#6366f1', newLeads.map(l =>
-        row(l.name, l.skills || '—', 'NEW', '#4f46e5',
-          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr</span>`)
-      )));
-    }
+    const sectionDefs = [
+      { items: myOpenRequests.map(r => ({ name: r.client?.name || '—', intakeSkillHint: r.client?.intakeSkillHint, stageEnteredAt: r.createdAt?.toString() })),
+                                    label: 'Propose Trainers',     color: '#ef4444', action: 'PROPOSE NOW' },
+      { items: myPendingProposals.map(p => ({ name: (p as any).request?.client?.name || '—', intakeSkillHint: `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, stageEnteredAt: p.proposedAt?.toString() })),
+                                    label: 'Notify Trainer',       color: '#f59e0b', action: 'NOTIFY'      },
+      { items: newLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: l.createdAt?.toString() })),
+                                    label: 'New Leads',            color: '#6366f1', action: 'CONTACT'     },
+      { items: vettingLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: l.createdAt?.toString() })),
+                                    label: 'Leads in Vetting',     color: '#0ea5e9', action: 'VETTING'     },
+      { items: contactedLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: l.createdAt?.toString() })),
+                                    label: 'Leads — Follow Up',    color: '#64748b', action: 'FOLLOW UP'   },
+    ];
 
-    if (vettingLeads.length) {
-      sections.push(sectionHtml('🔎 Trainer Leads in Vetting', '#0ea5e9', vettingLeads.map(l =>
-        row(l.name, l.skills || '—', 'VETTING', '#0284c7',
-          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr</span>`)
-      )));
-    }
-
-    if (contactedLeads.length) {
-      sections.push(sectionHtml('📞 Trainer Leads Contacted — Follow Up', '#64748b', contactedLeads.map(l =>
-        row(l.name, l.skills || '—', 'FOLLOW UP', '#475569',
-          `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr</span>`)
-      )));
+    const sections: string[] = [];
+    for (const s of sectionDefs) {
+      if (!s.items.length) continue;
+      sections.push(sectionHtml(s.label, s.color,
+        s.items.map(c => itemRow(c.name, c.intakeSkillHint, c.stageEnteredAt, s.action)),
+        s.items.length,
+      ));
     }
 
     const totalItems = myOpenRequests.length + myPendingProposals.length + myLeads.length;
     const subject = totalItems > 0
-      ? `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · ${totalItems} item${totalItems !== 1 ? 's' : ''} need attention · ${today}`
-      : `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · All clear for ${today}`;
+      ? `[MITS] ${shift === 'morning' ? '🌅' : '🌙'} ${totalItems} pending · ${recipient.name.split(' ')[0]} · ${today}`
+      : `[MITS] ${shift === 'morning' ? '🌅' : '🌙'} All clear · ${today}`;
+
+    const summaryChips = summaryBar(sectionDefs.map(s => ({ label: s.label, count: s.items.length, color: s.color })));
 
     const html = emailWrapper(
-      recipient.name,
+      recipient.name.split(' ')[0],
       shift,
       dateLabel,
+      totalItems,
+      summaryChips,
       sections.join(''),
-      'No open requests or pending trainer actions. Great work!',
+      'No open requests or pending actions. Great work!',
     );
 
     await sendEmail({
