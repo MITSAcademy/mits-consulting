@@ -1411,13 +1411,12 @@ clientsRouter.post('/:id/mark-engagement-letter-sent', async (req: AuthedRequest
     if (mitali) {
       await prisma.task.create({
         data: {
-          title: `Handover call — ${client.name}`,
-          description: `Engagement letter sent for ${client.name}. Schedule the onboarding call.`,
-          assignedToId: mitali.id,
+          title: `Handover call — ${client.name} (engagement letter sent)`,
+          ownerId: mitali.id,
           clientId: client.id,
-          createdById: req.user!.id,
           dueDate: today,
           status: 'Pending',
+          type: 'HANDOVER',
         },
       });
     }
