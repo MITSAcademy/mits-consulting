@@ -711,14 +711,74 @@ async function loadProposalContext(proposalId: string) {
   return proposal;
 }
 
+function to12h(hhmm: string): string {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm.trim());
+  if (!m) return hhmm;
+  let h = Number(m[1]);
+  const mm = m[2];
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${mm} ${ampm}`;
+}
+
 function formatDemoTimeFor(clientDemoDate?: string | null, clientDemoTimeIst?: string | null): string {
   if (!clientDemoDate) return '(to be confirmed)';
   try {
     const d = new Date(clientDemoDate + 'T12:00:00');
     const dateStr = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    const time = (clientDemoTimeIst || '').trim();
+    const raw = (clientDemoTimeIst || '').trim();
+    // Convert "20:00" style 24h strings to "8:00 PM" — if it's already human-readable, pass through
+    const time = raw && /^\d{1,2}:\d{2}$/.test(raw) ? to12h(raw) : raw;
     return time ? `${time} IST · ${dateStr}` : dateStr;
   } catch { return clientDemoDate; }
+}
+
+/**
+ * Convert proposal.availabilitySlots (the time Aman entered while proposing) into a
+ * human-readable "8:00 AM IST · 8 June 2026" string for the trainer notification email.
+ *
+ * Slot shape: { window?: string, fromIst?: "HH:MM", toIst?: "HH:MM", date?: string }
+ * Returns null if no usable slot found — caller falls back to client-level demo date.
+ */
+function formatSlotAsDemo(slots: any): string | null {
+  if (!Array.isArray(slots) || slots.length === 0) return null;
+  const slot = slots[0]; // take first slot
+  if (!slot) return null;
+  // Build time string from fromIst (24h "HH:MM") → 12h human
+  let timePart = '';
+  if (slot.fromIst) {
+    const m = /^(\d{1,2}):(\d{2})/.exec(slot.fromIst);
+    if (m) {
+      let h = Number(m[1]);
+      const mm = m[2];
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      timePart = `${h}:${mm} ${ampm}`;
+      if (slot.toIst) {
+        const m2 = /^(\d{1,2}):(\d{2})/.exec(slot.toIst);
+        if (m2) {
+          let h2 = Number(m2[1]);
+          const mm2 = m2[2];
+          const ampm2 = h2 >= 12 ? 'PM' : 'AM';
+          h2 = h2 % 12 || 12;
+          timePart += `–${h2}:${mm2} ${ampm2}`;
+        }
+      }
+      timePart += ' IST';
+    }
+  }
+  // Use window label (e.g. "Morning", "9 AM – 11 AM") as fallback time part
+  if (!timePart && slot.window) timePart = slot.window;
+  // Build date string from slot.date ("YYYY-MM-DD") or window text
+  let datePart = '';
+  if (slot.date) {
+    try {
+      const d = new Date(slot.date + 'T12:00:00');
+      datePart = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    } catch { datePart = slot.date; }
+  }
+  const parts = [timePart, datePart].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
 }
 
 function buildVarsFromProposal(p: any, overrides: Partial<TrainerOutreachVars> = {}, senderName?: string): TrainerOutreachVars {
@@ -727,6 +787,8 @@ function buildVarsFromProposal(p: any, overrides: Partial<TrainerOutreachVars> =
   const host = client.hostOwner || client.intakeOwner || null;
   const hostPhone = host?.phone || '';
   const hostEmail = host?.gmailAddress || host?.email || '';
+  // Demo time: prefer the slot Aman entered on the proposal, fall back to client-level demo date.
+  const proposalDemoTime = formatSlotAsDemo(p.availabilitySlots);
   return {
     trainerName: p.trainer?.name || p.trainerName || 'Trainer',
     hostName: host?.name || 'MITS Host',
@@ -735,7 +797,7 @@ function buildVarsFromProposal(p: any, overrides: Partial<TrainerOutreachVars> =
     rateInr: overrides.rateInr ?? p.rateInr ?? 0,
     hoursPerSession: overrides.hoursPerSession ?? 2,
     paymentClearanceDay: overrides.paymentClearanceDay,
-    demoCallTime: overrides.demoCallTime ?? formatDemoTimeFor(client.demoDate, client.demoTimeIst),
+    demoCallTime: overrides.demoCallTime ?? proposalDemoTime ?? formatDemoTimeFor(client.demoDate, client.demoTimeIst),
     guidelinesLink: overrides.guidelinesLink,
     websiteLink: overrides.websiteLink,
     senderName: senderName || overrides.senderName,

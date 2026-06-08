@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, uploadFile, fileUrl } from '@/lib/api';
 import type { AvailabilitySlot } from '@/lib/utils';
+import { readAvailabilitySlots, to12h } from '@/lib/utils';
 import { AvailabilitySlotsEditor } from '@/components/AvailabilitySlotsEditor';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -735,6 +736,30 @@ function ProposalRowWithOutreach({ proposal }: { proposal: any }) {
   );
 }
 
+/** Convert proposal.availabilitySlots into a pre-filled demo call time string. */
+function slotToDemoTime(proposal: any): string {
+  const slots = readAvailabilitySlots(proposal);
+  if (!slots.length) return '';
+  const s = slots[0];
+  let timePart = '';
+  if (s.fromIst) {
+    timePart = to12h(s.fromIst);
+    if (s.toIst) timePart += `–${to12h(s.toIst)}`;
+    timePart += ' IST';
+  } else if (s.window) {
+    timePart = s.window;
+  }
+  let datePart = '';
+  const slotWithDate = s as any;
+  if (slotWithDate.date) {
+    try {
+      const d = new Date(slotWithDate.date + 'T12:00:00');
+      datePart = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    } catch { datePart = slotWithDate.date; }
+  }
+  return [timePart, datePart].filter(Boolean).join(' · ');
+}
+
 function NotifyTrainerModal({ proposal, onClose }: any) {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
@@ -744,7 +769,8 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
   const [rateInr, setRateInr] = useState<number>(proposal.rateInr || 0);
   const [hoursPerSession, setHoursPerSession] = useState<number>(2);
   const [paymentClearanceDay, setPaymentClearanceDay] = useState('Every Wednesday');
-  const [demoCallTime, setDemoCallTime] = useState('');
+  // Pre-fill demo call time from the proposal's availability slot so Aman doesn't have to re-enter it.
+  const [demoCallTime, setDemoCallTime] = useState(() => slotToDemoTime(proposal));
   const [guidelinesLink, setGuidelinesLink] = useState('');
   const [subject, setSubject] = useState('');
   const [messageText, setMessageText] = useState('');
@@ -759,7 +785,9 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
     queryFn: () => api.get(`/sourcing/proposals/${proposal.id}/outreach`).then((r) => r.data),
   });
 
-  // Pre-fill editable fields from server's suggested vars on first load
+  // Pre-fill editable fields from server's suggested vars on first load.
+  // demoCallTime is already initialised from the proposal's availability slot;
+  // only override it with the server value if the slot produced nothing.
   useEffect(() => {
     if (initial) {
       setSubject((s) => s || initial.subject || '');
@@ -769,7 +797,7 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
       if (initial.vars?.rateInr && !rateInr) setRateInr(initial.vars.rateInr);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial?.subject]);
+  }, [initial]);
 
   // Auto-regenerate the body when structured fields change — BUT only if the recruiter
   // hasn't manually edited the text. Their edits always win.
