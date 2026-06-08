@@ -252,6 +252,11 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
     }
   }
 
+  // If only some proposals in the batch have a slot, propagate the first non-empty slot to
+  // the rest so Aman doesn't have to re-enter the same time for every trainer he submits.
+  const batchFallbackSlot: any[] | null =
+    (proposals as any[]).find((p) => Array.isArray(p.availabilitySlots) && p.availabilitySlots.length > 0)?.availabilitySlots ?? null;
+
   const created = await prisma.$transaction(async (tx) => {
     const ps = [];
     for (const p of proposals) {
@@ -316,7 +321,9 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
           trainerEmail: p.trainerEmail || null,
           rateInr: p.rateInr || 0,
           experienceYears: p.experienceYears || 0,
-          availabilitySlots: Array.isArray(p.availabilitySlots) ? p.availabilitySlots : null,
+          availabilitySlots: Array.isArray(p.availabilitySlots) && p.availabilitySlots.length > 0
+            ? p.availabilitySlots
+            : (batchFallbackSlot ?? null),
           notes: p.notes || null,
           proposedById: req.user!.id,
           proposedAt: new Date().toISOString().slice(0, 10),
@@ -703,6 +710,8 @@ async function loadProposalContext(proposalId: string) {
               hostOwner:   { select: { id: true, name: true, email: true, gmailAddress: true, phone: true } },
             },
           },
+          // Include sibling proposals so we can inherit slot from a sibling when this proposal has none.
+          proposals: { select: { id: true, availabilitySlots: true } },
         },
       },
     },
@@ -787,8 +796,17 @@ function buildVarsFromProposal(p: any, overrides: Partial<TrainerOutreachVars> =
   const host = client.hostOwner || client.intakeOwner || null;
   const hostPhone = host?.phone || '';
   const hostEmail = host?.gmailAddress || host?.email || '';
-  // Demo time: prefer the slot Aman entered on the proposal, fall back to client-level demo date.
-  const proposalDemoTime = formatSlotAsDemo(p.availabilitySlots);
+  // Demo time priority:
+  //   1. This proposal's own availability slots (freshest)
+  //   2. Any sibling proposal in the same request that has slots (batch-fill fallback)
+  //   3. Client-level demoDate (may be stale)
+  //   4. "(to be confirmed)"
+  const proposalDemoTime = formatSlotAsDemo(p.availabilitySlots)
+    ?? (() => {
+      const siblings: any[] = p.request?.proposals || [];
+      const sibling = siblings.find((s: any) => s.id !== p.id && Array.isArray(s.availabilitySlots) && s.availabilitySlots.length > 0);
+      return sibling ? formatSlotAsDemo(sibling.availabilitySlots) : null;
+    })();
   return {
     trainerName: p.trainer?.name || p.trainerName || 'Trainer',
     hostName: host?.name || 'MITS Host',
