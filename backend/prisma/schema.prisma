@@ -494,6 +494,9 @@ model Proposal {
   // Stamped automatically by the trainer-outreach email or WhatsApp endpoint.
   trainerNotifiedAt   String?   // ISO date when Aman/Kanchan notified the trainer
   trainerNotifiedById String?   // user id who triggered the notification
+  // Last notify vars — stored on every send so "Already notified" flow can show previous details.
+  // Shape: { rateInr, hoursPerSession, paymentClearanceDay, pricingMode, demoCallTime? }
+  lastNotifyVars      Json?
 
   @@index([requestId, verification]) // pass/fail filter per request
   @@index([trainerId])               // sourcing.ts pass auto-create lookup

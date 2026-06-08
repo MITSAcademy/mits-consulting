@@ -824,9 +824,10 @@ sourcingRouter.post('/proposals/:id/outreach/email', async (req: AuthedRequest, 
     });
     // Stamp the proposal as notified — unlocks verification Pass for Anjali/Taran
     const today = new Date().toISOString().slice(0, 10);
+    const notifyVarsToSave = { rateInr: vars.rateInr, hoursPerSession: overrides.hoursPerSession ?? 2, paymentClearanceDay: overrides.paymentClearanceDay ?? 'Every Wednesday', pricingMode: overrides.pricingMode ?? 'session', demoCallTime: overrides.demoCallTime ?? '' };
     await prisma.proposal.update({
       where: { id: p.id },
-      data: { trainerNotifiedAt: today, trainerNotifiedById: req.user!.id },
+      data: { trainerNotifiedAt: today, trainerNotifiedById: req.user!.id, lastNotifyVars: notifyVarsToSave },
     });
     await audit(req.user!.id, req.user!.name, 'TRAINER_OUTREACH_EMAIL', `${vars.trainerName} · ${toEmail} · ₹${vars.rateInr}`);
     res.status(201).json({ ok: true, messageId: msg.id, providerMessageId: r.id });
@@ -885,12 +886,65 @@ sourcingRouter.post('/proposals/:id/outreach/whatsapp', async (req: AuthedReques
   });
   // Stamp proposal as notified — unlocks verification Pass
   const today = new Date().toISOString().slice(0, 10);
+  const waNotifyVars = { rateInr: vars.rateInr, hoursPerSession: overrides.hoursPerSession ?? 2, paymentClearanceDay: overrides.paymentClearanceDay ?? 'Every Wednesday', pricingMode: overrides.pricingMode ?? 'session', demoCallTime: overrides.demoCallTime ?? '' };
   await prisma.proposal.update({
     where: { id: p.id },
-    data: { trainerNotifiedAt: today, trainerNotifiedById: req.user!.id },
+    data: { trainerNotifiedAt: today, trainerNotifiedById: req.user!.id, lastNotifyVars: waNotifyVars },
   });
   await audit(req.user!.id, req.user!.name, 'TRAINER_OUTREACH_WA', `${vars.trainerName} · ${channel} · ${groupLink || phoneRaw} · ₹${vars.rateInr}`);
   res.json({ ok: true, url, text, channel });
+});
+
+// ─── Mark as "already notified" (trainer was told outside the tool) ──────────
+// Recruiter confirms the details manually instead of sending via the tool.
+// Body: { rateInr, hoursPerSession, paymentClearanceDay, pricingMode, demoCallTime? }
+// All fields required (no history) OR all can be omitted if lastNotifyVars exists
+// and the recruiter checks the "same as last time" box (frontend sends confirmed:true).
+sourcingRouter.post('/proposals/:id/outreach/mark-notified', async (req: AuthedRequest, res) => {
+  if (!['founder', 'manager', 'recruiter'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only recruiters or admin can mark trainer as notified.' });
+  }
+  const p = await prisma.proposal.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, rateInr: true, lastNotifyVars: true, request: { select: { sentToId: true, clientId: true } } },
+  });
+  if (!p) return res.status(404).json({ error: 'Proposal not found' });
+  if (req.user!.role === 'recruiter' && p.request.sentToId !== req.user!.id) {
+    return res.status(403).json({ error: 'Not assigned to you' });
+  }
+
+  const { confirmed, rateInr, hoursPerSession, paymentClearanceDay, pricingMode, demoCallTime } = req.body as {
+    confirmed?: boolean;
+    rateInr?: number;
+    hoursPerSession?: number;
+    paymentClearanceDay?: string;
+    pricingMode?: string;
+    demoCallTime?: string;
+  };
+
+  let notifyVars: any;
+
+  if (confirmed && p.lastNotifyVars) {
+    // Recruiter confirmed same details as last time — reuse stored vars
+    notifyVars = p.lastNotifyVars;
+  } else {
+    // No history or recruiter changed details — require all fields
+    if (!rateInr || !hoursPerSession || !paymentClearanceDay || !pricingMode) {
+      return res.status(400).json({
+        error: 'Please fill in rate, hours/session, payment day, and pricing mode.',
+        requiresForm: true,
+      });
+    }
+    notifyVars = { rateInr, hoursPerSession, paymentClearanceDay, pricingMode, demoCallTime: demoCallTime || '' };
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  await prisma.proposal.update({
+    where: { id: p.id },
+    data: { trainerNotifiedAt: today, trainerNotifiedById: req.user!.id, lastNotifyVars: notifyVars },
+  });
+  await audit(req.user!.id, req.user!.name, 'TRAINER_NOTIFIED_MANUAL', `proposal ${p.id} · ₹${notifyVars.rateInr}`);
+  res.json({ ok: true, notifyVars });
 });
 
 // ─── Skill matrix per proposal (Aman fills criteria) ───────────────────────

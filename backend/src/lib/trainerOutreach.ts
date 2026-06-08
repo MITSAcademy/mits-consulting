@@ -19,6 +19,7 @@ export interface TrainerOutreachVars {
   hoursPerSession?: number;             // hours covered by the rate (default 1 hour of work = 60 min)
   paymentClearanceDay?: string;         // e.g. "Every Wednesday"
   demoCallTime?: string;                // e.g. "8 PM IST · 21 May 2026"
+  pricingMode?: 'session' | 'oneShot';  // saved to lastNotifyVars for "already notified" flow
   maxMinutesPerDay?: number;            // default 120
   guidelinesLink?: string;              // Google Drive PDF of "Meeting Do's and Don'ts"
   websiteLink?: string;                 // defaults to https://www.mitssolution.com

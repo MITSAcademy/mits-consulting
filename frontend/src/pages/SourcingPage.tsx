@@ -654,6 +654,7 @@ function AddTrainerInlineModal({ qc, showToast, onClose }: any) {
 // ─── Proposal row with "Notify trainer" buttons ──────────────────────────
 function ProposalRowWithOutreach({ proposal }: { proposal: any }) {
   const [open, setOpen] = useState(false);
+  const [alreadyOpen, setAlreadyOpen] = useState(false);
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
   const hasEmail = !!(proposal.trainer?.email || proposal.trainerEmail);
@@ -710,6 +711,16 @@ function ProposalRowWithOutreach({ proposal }: { proposal: any }) {
         >
           <Send size={11}/> {notified ? 'Re-notify trainer' : 'Notify trainer (required)'}
         </Button>
+        {!notified && (
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => setAlreadyOpen(true)}
+            title="Trainer was already notified outside this tool — confirm the details"
+          >
+            ✓ Already notified
+          </Button>
+        )}
         {!canNotify && (
           <span className="text-[10px] text-brand-amber">
             {!hasEmail && 'No email · '}
@@ -719,6 +730,7 @@ function ProposalRowWithOutreach({ proposal }: { proposal: any }) {
         )}
       </div>
       {open && <NotifyTrainerModal proposal={proposal} onClose={() => setOpen(false)} />}
+      {alreadyOpen && <AlreadyNotifiedModal proposal={proposal} onClose={() => { setAlreadyOpen(false); qc.invalidateQueries({ queryKey: ['sourcing'] }); }} />}
     </div>
   );
 }
@@ -913,6 +925,113 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
           >
             <Mail size={12}/><MessageCircle size={12}/>{' '}
             {sendBoth.isPending ? 'Sending…' : 'Send (Email + WhatsApp)'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Already notified modal ───────────────────────────────────────────────
+function AlreadyNotifiedModal({ proposal, onClose }: { proposal: any; onClose: () => void }) {
+  const showToast = useUI((s) => s.showToast);
+  const last = proposal.lastNotifyVars as any | null;
+  const trainerName = proposal.trainer?.name || proposal.trainerName || 'trainer';
+
+  // If history exists, default to "same as last time" mode
+  const [sameAsLast, setSameAsLast] = useState(!!last);
+  const [rateInr, setRateInr] = useState<number>(last?.rateInr || proposal.rateInr || 0);
+  const [hoursPerSession, setHoursPerSession] = useState<number>(last?.hoursPerSession || 2);
+  const [paymentClearanceDay, setPaymentClearanceDay] = useState(last?.paymentClearanceDay || 'Every Wednesday');
+  const [pricingMode, setPricingMode] = useState<'session' | 'oneShot'>(last?.pricingMode || 'session');
+  const [demoCallTime, setDemoCallTime] = useState(last?.demoCallTime || '');
+
+  const mut = useMutation({
+    mutationFn: () => api.post(`/sourcing/proposals/${proposal.id}/outreach/mark-notified`, {
+      confirmed: sameAsLast && !!last,
+      rateInr: sameAsLast && last ? undefined : rateInr,
+      hoursPerSession: sameAsLast && last ? undefined : hoursPerSession,
+      paymentClearanceDay: sameAsLast && last ? undefined : paymentClearanceDay,
+      pricingMode: sameAsLast && last ? undefined : pricingMode,
+      demoCallTime: sameAsLast && last ? undefined : demoCallTime,
+    }),
+    onSuccess: () => { showToast('Marked as notified'); onClose(); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const formNeeded = !sameAsLast || !last;
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        title={`Already notified · ${trainerName}`}
+        description="Trainer was told the deal details outside this tool. Confirm what was agreed so payment records stay accurate."
+        className="max-w-md"
+      >
+        {last && (
+          <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+            <div className="text-xs font-semibold mb-2" style={{ color: 'var(--brand-gold)' }}>Last notified details</div>
+            <div className="text-xs space-y-1 muted">
+              <div>Rate: <span className="text-white font-semibold">₹{last.rateInr?.toLocaleString('en-IN')}</span>
+                {last.pricingMode === 'session' ? ` · ${last.hoursPerSession}h/session` : ' (one-shot)'}</div>
+              <div>Payment day: <span className="text-white">{last.paymentClearanceDay}</span></div>
+              {last.demoCallTime && <div>Demo call: <span className="text-white">{last.demoCallTime}</span></div>}
+            </div>
+            <label className="flex items-center gap-2 mt-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sameAsLast}
+                onChange={(e) => setSameAsLast(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <span className="text-sm">Same details as last time — nothing changed</span>
+            </label>
+          </div>
+        )}
+
+        {formNeeded && (
+          <div className="space-y-2">
+            {!last && (
+              <p className="text-xs text-brand-amber mb-3">
+                ⚠ No previous notification on record. Please fill in the details that were agreed with the trainer — required for payment calculations.
+              </p>
+            )}
+            <div className="form-row">
+              <Label>Pricing mode</Label>
+              <div className="flex gap-2">
+                <Button size="sm" variant={pricingMode === 'session' ? 'primary' : 'default'} onClick={() => setPricingMode('session')}>Per session</Button>
+                <Button size="sm" variant={pricingMode === 'oneShot' ? 'primary' : 'default'} onClick={() => setPricingMode('oneShot')}>One-shot</Button>
+              </div>
+            </div>
+            <div className="form-row">
+              <Label>Rate (₹)</Label>
+              <Input type="number" value={rateInr} onChange={(e) => setRateInr(+e.target.value)} />
+            </div>
+            {pricingMode === 'session' && (
+              <div className="form-row">
+                <Label>Hours / session</Label>
+                <Input type="number" min={0.5} step={0.5} value={hoursPerSession} onChange={(e) => setHoursPerSession(+e.target.value)} />
+              </div>
+            )}
+            <div className="form-row">
+              <Label>Payment clearance day</Label>
+              <Input value={paymentClearanceDay} onChange={(e) => setPaymentClearanceDay(e.target.value)} placeholder="Every Wednesday" />
+            </div>
+            <div className="form-row">
+              <Label>Demo call time (optional)</Label>
+              <Input value={demoCallTime} onChange={(e) => setDemoCallTime(e.target.value)} placeholder="8 AM Tomorrow" />
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            disabled={mut.isPending || (formNeeded && (!rateInr || !paymentClearanceDay))}
+            onClick={() => mut.mutate()}
+          >
+            {mut.isPending ? 'Saving…' : '✓ Confirm & mark notified'}
           </Button>
         </DialogFooter>
       </DialogContent>
