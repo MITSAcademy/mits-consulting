@@ -1,0 +1,391 @@
+/**
+ * Daily briefing emails — sent automatically on a schedule to help each team
+ * start their shift knowing exactly what needs action.
+ *
+ * Team 2 (Anjali + Taran)  → 6 AM IST + 6 PM IST  — demo pipeline items
+ * Team 1 (Aman + Kanchan)  → 9 AM IST + 4 PM IST  — sourcing / recruiter items
+ *
+ * CC: manager of that team + Vaibhav (founder) on every send.
+ */
+
+import { prisma } from './prisma';
+import { sendEmail } from './mailer';
+
+// ── IST offset helpers ────────────────────────────────────────────────────────
+
+/** Returns current time as { h, m } in IST (UTC+5:30). */
+function nowIST() {
+  const utc = new Date();
+  const ist = new Date(utc.getTime() + 5.5 * 60 * 60 * 1000);
+  return { h: ist.getUTCHours(), m: ist.getUTCMinutes() };
+}
+
+/** Returns today's date string in IST (YYYY-MM-DD). */
+function todayIST(): string {
+  const utc = new Date();
+  const ist = new Date(utc.getTime() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().slice(0, 10);
+}
+
+function fmtDate(d?: string | null) {
+  if (!d) return '—';
+  try { return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }); }
+  catch { return d; }
+}
+
+// ── HTML helpers ──────────────────────────────────────────────────────────────
+
+function esc(s: string): string {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function sectionHtml(title: string, color: string, rows: string[]): string {
+  if (!rows.length) return '';
+  return `
+    <div style="margin:0 0 24px;">
+      <div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${color};margin-bottom:10px;">${esc(title)}</div>
+      <table style="width:100%;border-collapse:collapse;">
+        ${rows.join('')}
+      </table>
+    </div>`;
+}
+
+function row(client: string, detail: string, badge: string, badgeColor: string, extra = ''): string {
+  return `
+    <tr style="border-bottom:1px solid #2a2d35;">
+      <td style="padding:8px 6px;font-weight:600;color:#f0f0f0;font-size:14px;">${esc(client)}</td>
+      <td style="padding:8px 6px;color:#9aa0a6;font-size:13px;">${esc(detail)}</td>
+      <td style="padding:8px 6px;white-space:nowrap;">
+        <span style="background:${badgeColor};color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;">${esc(badge)}</span>
+        ${extra}
+      </td>
+    </tr>`;
+}
+
+function emailWrapper(recipientName: string, shift: string, date: string, sections: string, emptyCopy: string): string {
+  const hasContent = sections.trim().length > 0;
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#0d0f12;font-family:'Inter','Helvetica Neue',Arial,sans-serif;color:#e8e8e8;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0d0f12;padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="620" style="max-width:620px;width:100%;background:#16181e;border-radius:12px;overflow:hidden;">
+
+        <!-- Header -->
+        <tr><td style="background:linear-gradient(135deg,#1a1d24 0%,#1e2430 100%);padding:24px 28px 20px;border-bottom:1px solid #2a2d35;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#6b6f78;margin-bottom:6px;">MITS Solution · Daily Briefing</div>
+          <div style="font-size:22px;font-weight:800;color:#f0f0f0;line-height:1.2;">Good ${shift === 'morning' ? 'Morning' : 'Evening'}, ${esc(recipientName)} 👋</div>
+          <div style="font-size:13px;color:#6b6f78;margin-top:4px;">${esc(date)} · ${shift === 'morning' ? 'Start-of-day priorities' : 'End-of-day wrap-up'}</div>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="padding:24px 28px;">
+          ${hasContent ? `
+            <p style="margin:0 0 20px;font-size:14px;color:#9aa0a6;line-height:1.6;">
+              Here's what needs your attention ${shift === 'morning' ? 'before you start your day' : 'before you wrap up'}. Tackle the highlighted items first.
+            </p>
+            ${sections}
+          ` : `
+            <div style="text-align:center;padding:32px 0;">
+              <div style="font-size:36px;margin-bottom:12px;">🎉</div>
+              <div style="font-size:18px;font-weight:700;color:#f0f0f0;">All clear!</div>
+              <p style="color:#6b6f78;font-size:14px;margin-top:6px;">${esc(emptyCopy)}</p>
+            </div>
+          `}
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:16px 28px;border-top:1px solid #2a2d35;background:#13151a;">
+          <div style="font-size:12px;color:#4a4d56;line-height:1.6;">
+            <span style="font-weight:800;color:#6b6f78;">MITS</span> &nbsp;·&nbsp; Automated briefing &nbsp;·&nbsp; Do not reply
+          </div>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+}
+
+// ── Team 2 briefing (Anjali + Taran) ─────────────────────────────────────────
+
+export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
+  const today = todayIST();
+
+  // Clients Anjali or Taran own that need action
+  const clients = await prisma.client.findMany({
+    where: {
+      lifecycle: {
+        in: ['IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters',
+             'VerificationPending', 'DemoScheduled', 'DemoDone', 'FeedbackPending'],
+      },
+      intakeOwnerId: { in: ['u-anjali', 'u-taran'] },
+    },
+    select: {
+      id: true, name: true, lifecycle: true, intakeSkillHint: true,
+      demoDate: true, demoTimeIst: true, stageEnteredAt: true,
+      intakeOwner: { select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true } },
+    },
+    orderBy: { stageEnteredAt: 'asc' },
+  });
+
+  // Proposals pending verification that Anjali/Taran need to action
+  const pendingVerifications = await prisma.proposal.findMany({
+    where: { verification: 'Pending', trainerNotifiedAt: { not: null } },
+    include: {
+      request: { select: { client: { select: { name: true, lifecycle: true } } } },
+      trainer: { select: { name: true } },
+    },
+    orderBy: { proposedAt: 'asc' },
+    take: 20,
+  });
+
+  // Build sections
+  const intakeSent = clients.filter(c => c.lifecycle === 'IntakeSent');
+  const intakeReceived = clients.filter(c => c.lifecycle === 'IntakeReceived');
+  const internalSearch = clients.filter(c => ['InternalSearch', 'WithRecruiters'].includes(c.lifecycle));
+  const verPending = clients.filter(c => c.lifecycle === 'VerificationPending');
+  const demoToday = clients.filter(c => c.lifecycle === 'DemoScheduled' && c.demoDate === today);
+  const demoScheduled = clients.filter(c => c.lifecycle === 'DemoScheduled' && c.demoDate !== today);
+  const feedbackPending = clients.filter(c => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle));
+
+  const sections: string[] = [];
+
+  if (demoToday.length) {
+    sections.push(sectionHtml("🎯 Today's Demos", '#22c55e', demoToday.map(c =>
+      row(c.name, `${c.demoTimeIst || '?'} IST · ${c.intakeSkillHint || '—'}`, 'TODAY', '#16a34a',
+        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Owner: ${esc(c.intakeOwner?.name || '—')}</span>`)
+    )));
+  }
+
+  if (intakeReceived.length) {
+    sections.push(sectionHtml('📥 Intake Received — Process Now', '#f59e0b', intakeReceived.map(c =>
+      row(c.name, c.intakeSkillHint || 'Skills not filled', 'INTAKE IN', '#d97706',
+        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
+    )));
+  }
+
+  if (pendingVerifications.length) {
+    sections.push(sectionHtml('✅ Trainer Verifications Pending', '#6366f1', pendingVerifications.map(p =>
+      row((p as any).request?.client?.name || '—', `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, 'VERIFY', '#4f46e5')
+    )));
+  }
+
+  if (intakeSent.length) {
+    sections.push(sectionHtml('📤 Intake Form Sent — Awaiting Reply', '#64748b', intakeSent.map(c =>
+      row(c.name, c.intakeSkillHint || '—', 'WAITING', '#475569',
+        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
+    )));
+  }
+
+  if (internalSearch.length) {
+    sections.push(sectionHtml('🔍 With Recruiters / Internal Search', '#0ea5e9', internalSearch.map(c =>
+      row(c.name, c.intakeSkillHint || '—', c.lifecycle === 'WithRecruiters' ? 'RECRUITERS' : 'SEARCHING', '#0284c7',
+        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
+    )));
+  }
+
+  if (verPending.length) {
+    sections.push(sectionHtml('⏳ Verification Pending', '#f97316', verPending.map(c =>
+      row(c.name, c.intakeSkillHint || '—', 'VER PENDING', '#ea580c')
+    )));
+  }
+
+  if (feedbackPending.length) {
+    sections.push(sectionHtml('💬 Demo Done — Feedback Needed', '#ec4899', feedbackPending.map(c =>
+      row(c.name, c.intakeSkillHint || '—', 'FEEDBACK', '#db2777',
+        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">Since ${fmtDate(c.stageEnteredAt)}</span>`)
+    )));
+  }
+
+  if (demoScheduled.length) {
+    sections.push(sectionHtml('📅 Upcoming Demos', '#06b6d4', demoScheduled.map(c =>
+      row(c.name, `${fmtDate(c.demoDate)} · ${c.demoTimeIst || '?'} IST`, 'SCHEDULED', '#0891b2')
+    )));
+  }
+
+  const totalItems = clients.length + pendingVerifications.length;
+  const subject = totalItems > 0
+    ? `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · ${totalItems} item${totalItems !== 1 ? 's' : ''} need attention · ${today}`
+    : `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · All clear for ${today}`;
+
+  // Get CC addresses: Samita (manager) + Vaibhav
+  const ccUsers = await prisma.user.findMany({
+    where: { id: { in: ['u-samita', 'u-vaibhav'] } },
+    select: { gmailAddress: true, sendAsAddress: true, email: true },
+  });
+  const ccAddresses = ccUsers.map(u => u.sendAsAddress || u.gmailAddress || u.email).filter(Boolean) as string[];
+
+  // Get recipients: Anjali + Taran
+  const recipients = await prisma.user.findMany({
+    where: { id: { in: ['u-anjali', 'u-taran'] } },
+    select: { name: true, gmailAddress: true, sendAsAddress: true, email: true },
+  });
+
+  const dateLabel = new Date(today).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  for (const recipient of recipients) {
+    const toEmail = recipient.sendAsAddress || recipient.gmailAddress || recipient.email;
+    if (!toEmail) continue;
+
+    const html = emailWrapper(
+      recipient.name,
+      shift,
+      dateLabel,
+      sections.join(''),
+      'No pending items right now. Great job keeping up!',
+    );
+
+    await sendEmail({
+      to: toEmail,
+      subject,
+      body: `Daily briefing for ${recipient.name} — ${totalItems} items need attention. View in HTML-capable email client.`,
+      htmlBody: html,
+      cc: ccAddresses.filter(e => e !== toEmail),
+    });
+  }
+
+  console.log(`[briefing] Team 2 ${shift} sent — ${totalItems} items`);
+}
+
+// ── Team 1 briefing (Aman + Kanchan) ─────────────────────────────────────────
+
+export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
+  const today = todayIST();
+
+  // Open sourcing requests (not yet proposed)
+  const openRequests = await prisma.sourcingRequest.findMany({
+    where: { status: 'Open' },
+    include: { client: { select: { name: true, intakeSkillHint: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  // Proposals owned by Aman/Kanchan that are still Pending (not notified yet)
+  const pendingProposals = await prisma.proposal.findMany({
+    where: {
+      verification: 'Pending',
+      proposedById: { in: ['u-aman', 'u-kanchan'] },
+      trainerNotifiedAt: null,
+    },
+    include: {
+      request: { select: { client: { select: { name: true } } } },
+      trainer: { select: { name: true, skills: true } },
+      proposedBy: { select: { name: true } },
+    },
+    orderBy: { proposedAt: 'asc' },
+  });
+
+  // Also proposals routed to Aman/Kanchan (via sentToId)
+  const routedPending = await prisma.proposal.findMany({
+    where: {
+      verification: 'Pending',
+      trainerNotifiedAt: null,
+      request: { sentToId: { in: ['u-aman', 'u-kanchan'] } },
+      proposedById: { notIn: ['u-aman', 'u-kanchan'] },
+    },
+    include: {
+      request: { select: { client: { select: { name: true } }, sentTo: { select: { name: true } } } },
+      trainer: { select: { name: true, skills: true } },
+    },
+    orderBy: { proposedAt: 'asc' },
+  });
+
+  // Trainer leads that need action (New / Contacted / Vetting)
+  const activeLeads = await prisma.trainerLead.findMany({
+    where: {
+      stage: { in: ['New', 'Contacted', 'Vetting'] },
+      recruiterId: { in: ['u-aman', 'u-kanchan'] },
+    },
+    include: { recruiter: { select: { name: true } } },
+    orderBy: { createdAt: 'asc' },
+    take: 30,
+  });
+
+  const sections: string[] = [];
+
+  if (openRequests.length) {
+    sections.push(sectionHtml('🚨 Open Sourcing Requests — Propose Trainers', '#ef4444', openRequests.map(r =>
+      row(r.client?.name || '—', r.client?.intakeSkillHint || '—', 'PROPOSE NOW', '#dc2626')
+    )));
+  }
+
+  const unnotified = [...pendingProposals, ...routedPending];
+  if (unnotified.length) {
+    sections.push(sectionHtml('📣 Proposals Not Yet Notified to Trainer', '#f59e0b', unnotified.map(p =>
+      row(
+        (p as any).request?.client?.name || '—',
+        `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`,
+        'NOTIFY TRAINER',
+        '#d97706',
+        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">by ${esc((p as any).proposedBy?.name || (p as any).request?.sentTo?.name || '—')}</span>`
+      )
+    )));
+  }
+
+  const newLeads = activeLeads.filter(l => l.stage === 'New');
+  const contactedLeads = activeLeads.filter(l => l.stage === 'Contacted');
+  const vettingLeads = activeLeads.filter(l => l.stage === 'Vetting');
+
+  if (newLeads.length) {
+    sections.push(sectionHtml('🆕 New Trainer Leads — Contact Today', '#6366f1', newLeads.map(l =>
+      row(l.name, l.skills || '—', 'NEW', '#4f46e5',
+        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr · ${esc(l.recruiter?.name || '—')}</span>`)
+    )));
+  }
+
+  if (vettingLeads.length) {
+    sections.push(sectionHtml('🔎 Trainer Leads in Vetting', '#0ea5e9', vettingLeads.map(l =>
+      row(l.name, l.skills || '—', 'VETTING', '#0284c7',
+        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr · ${esc(l.recruiter?.name || '—')}</span>`)
+    )));
+  }
+
+  if (contactedLeads.length) {
+    sections.push(sectionHtml('📞 Trainer Leads Contacted — Follow Up', '#64748b', contactedLeads.map(l =>
+      row(l.name, l.skills || '—', 'FOLLOW UP', '#475569',
+        `<span style="font-size:11px;color:#6b6f78;margin-left:6px;">₹${l.expectedRateInr || '?'}/hr · ${esc(l.recruiter?.name || '—')}</span>`)
+    )));
+  }
+
+  const totalItems = openRequests.length + unnotified.length + activeLeads.length;
+  const subject = totalItems > 0
+    ? `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · ${totalItems} item${totalItems !== 1 ? 's' : ''} need attention · ${today}`
+    : `[MITS] ${shift === 'morning' ? '🌅 Morning' : '🌙 Evening'} Briefing · All clear for ${today}`;
+
+  // CC: Vaibhav (no direct manager for Team 1 in the chain, but Vaibhav oversees them)
+  const ccUsers = await prisma.user.findMany({
+    where: { id: 'u-vaibhav' },
+    select: { gmailAddress: true, sendAsAddress: true, email: true },
+  });
+  const ccAddresses = ccUsers.map(u => u.sendAsAddress || u.gmailAddress || u.email).filter(Boolean) as string[];
+
+  const recipients = await prisma.user.findMany({
+    where: { id: { in: ['u-aman', 'u-kanchan'] } },
+    select: { name: true, gmailAddress: true, sendAsAddress: true, email: true },
+  });
+
+  const dateLabel = new Date(today).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  for (const recipient of recipients) {
+    const toEmail = recipient.sendAsAddress || recipient.gmailAddress || recipient.email;
+    if (!toEmail) continue;
+
+    const html = emailWrapper(
+      recipient.name,
+      shift,
+      dateLabel,
+      sections.join(''),
+      'No open requests or pending trainer actions. Great work!',
+    );
+
+    await sendEmail({
+      to: toEmail,
+      subject,
+      body: `Daily briefing for ${recipient.name} — ${totalItems} items need attention. View in HTML-capable email client.`,
+      htmlBody: html,
+      cc: ccAddresses.filter(e => e !== toEmail),
+    });
+  }
+
+  console.log(`[briefing] Team 1 ${shift} sent — ${totalItems} items`);
+}

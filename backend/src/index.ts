@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import { initScheduler } from './lib/scheduler';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { authRouter } from './routes/auth';
@@ -36,6 +37,7 @@ import { callLogsRouter } from './routes/callLogs';
 import { demoTeamReportRouter } from './routes/demoTeamReport';
 import { featuresRouter } from './routes/features';
 import { regularTrainingsRouter } from './routes/regularTrainings';
+import { briefingRouter } from './routes/briefing';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -90,6 +92,7 @@ app.use('/api/call-logs', callLogsRouter);
 app.use('/api/reports/demo-team', demoTeamReportRouter);
 app.use('/api/features', featuresRouter);
 app.use('/api/regular-trainings', regularTrainingsRouter);
+app.use('/api/briefing', briefingRouter);
 
 // Global error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -99,4 +102,5 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 app.listen(PORT, () => {
   console.log(`[mits-backend] listening on :${PORT}`);
+  initScheduler();
 });
