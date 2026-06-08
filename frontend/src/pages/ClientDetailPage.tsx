@@ -255,10 +255,23 @@ export function ClientDetailPage() {
         <Mail size={12}/> Pre-demo reminder
       </Button>
     );
+    actions.push(
+      <Button key="matrix-resend-ds" size="sm" onClick={() => setModal('sendSkillMatrix')} title="Re-send skill matrix — useful for a second round of proposals">
+        <FileCheck size={12}/> Re-send matrix
+      </Button>
+    );
     actions.push(<Button key="done" variant="success" onClick={() => setModal('demoDone')}><Check size={14}/> Demo done</Button>);
     actions.push(
       <Button key="noshow" size="sm" variant="amber" onClick={() => setModal('noShow')} title="Client / trainer didn't show up — push the demo by a week or mark dormant.">
         <Clock size={12}/> No-show
+      </Button>
+    );
+  }
+  // Re-send matrix at DemoDone/FeedbackPending — for repeat sourcing rounds on the same client
+  if (canIntake(user.role) && (client.lifecycle === 'DemoDone' || client.lifecycle === 'FeedbackPending')) {
+    actions.push(
+      <Button key="matrix-resend-dd" size="sm" onClick={() => setModal('sendSkillMatrix')} title="Send / re-send skill matrix — useful when sourcing a second trainer for this client">
+        <FileCheck size={12}/> Re-send matrix
       </Button>
     );
   }
