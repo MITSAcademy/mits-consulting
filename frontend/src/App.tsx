@@ -81,7 +81,7 @@ export default function App() {
   }, [refresh]);
 
   return (
-    <Suspense fallback={<div className="p-10 text-brand-textMuted">Loading…</div>}>
+    <Suspense fallback={<div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '2px', background: 'var(--accent-gold)', animation: 'progress-bar 1s ease-in-out infinite' }} />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route

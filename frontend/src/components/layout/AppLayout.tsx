@@ -20,13 +20,13 @@ export function AppLayout() {
     <MobileNavCtx.Provider value={{ open: () => setMobileOpen(true) }}>
       <div className="flex min-h-screen">
         <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-        <main className="flex-1 min-w-0 w-full">
+        <main className="flex-1 min-w-0 w-full overflow-x-hidden">
           <Outlet />
         </main>
-        <Toaster />
-        <SetupAppPasswordModal />
-        <CelebrationLayer />
       </div>
+      <Toaster />
+      <SetupAppPasswordModal />
+      <CelebrationLayer />
     </MobileNavCtx.Provider>
   );
 }
