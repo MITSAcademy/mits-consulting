@@ -22,6 +22,7 @@ services:
     runtime: node
     plan: free                # cold-start friendly; bump to Starter ($7/mo) for no-sleep
     region: oregon
+    autoDeploy: yes
     rootDir: backend
     # Build: install deps, generate Prisma client, apply migrations, seed base data, then compile TS → dist/
     buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run seed && npm run build
@@ -70,6 +71,7 @@ services:
   - type: web
     name: mits-frontend
     runtime: static
+    autoDeploy: yes
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
