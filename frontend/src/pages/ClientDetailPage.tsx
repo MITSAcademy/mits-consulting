@@ -2698,6 +2698,12 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
           {ss === 'JBT-EmployerLater' && `Employer "${client.employerName || '—'}" committed for ${client.employerCommitDate || 'TBD'}; JBT engagement started.`}
           {ss === 'C' && 'Closed (no sale). Re-open by clearing the status from the action bar.'}
         </div>
+        {(client as any).hasEngagementLetterFile && (
+          <a href={`/api/clients/${client.id}/engagement-letter/file`} target="_blank" rel="noopener noreferrer"
+            className="text-xs flex items-center gap-1 mt-2" style={{ color: 'var(--accent-gold)' }}>
+            <FileText size={11} /> Download uploaded engagement letter
+          </a>
+        )}
       </div>
     );
   }
