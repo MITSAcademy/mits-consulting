@@ -11,7 +11,7 @@
 
 databases:
   - name: mits-postgres
-    plan: free                # 90-day free tier; upgrade to Basic-256MB ($7/mo) for prod
+    plan: basic-256mb
     databaseName: mits
     user: mits
 
