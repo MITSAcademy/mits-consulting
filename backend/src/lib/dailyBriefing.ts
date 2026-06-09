@@ -187,9 +187,13 @@ export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
       orderBy: { stageEnteredAt: 'asc' },
     });
 
-    // Proposals pending verification (shared — both can action these)
+    // Proposals pending verification — only where the sourcing request was owned by this recipient
     const pendingVerifications = await prisma.proposal.findMany({
-      where: { verification: 'Pending', trainerNotifiedAt: { not: null } },
+      where: {
+        verification: 'Pending',
+        trainerNotifiedAt: { not: null },
+        request: { sentToId: recipient.id },
+      },
       include: {
         request: { select: { client: { select: { name: true } } } },
         trainer: { select: { name: true } },
