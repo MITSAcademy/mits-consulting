@@ -393,6 +393,7 @@ model Client {
   // Wizard timestamps — each step in Roshni's close-out journey stamps one of
   // these on completion. Used to lock the next step until the previous is done.
   engagementLetterSentAt     String?   // ISO date — stamped by POST /engagement-letter
+  engagementLetterFileB64    String?   // base64-encoded PDF uploaded by Roshni (stored in DB, not disk)
   paymentWaSentAt            String?   // ISO date — manually marked by Roshni ("payment WA sent" button)
   mitaliIntroSentAt          String?   // ISO date — stamped by POST /handover-to-mitali
   // For JBT-Employer / Training-Employer paths — captured when sub-status moves

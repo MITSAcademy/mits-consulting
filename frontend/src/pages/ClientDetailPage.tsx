@@ -3841,7 +3841,7 @@ function EngagementLetterModal({ client, onClose }: any) {
       >
         <div className="space-y-3">
 
-          {/* Option 1 — Sent manually / upload */}
+          {/* Option 1 — Already sent / upload copy */}
           <div className="rounded-lg border p-3"
             style={{ borderColor: 'var(--brand-borderSoft)', background: 'var(--bg-input)' }}>
             <div className="flex items-start gap-3">
@@ -3884,6 +3884,15 @@ function EngagementLetterModal({ client, onClose }: any) {
                 {uploading ? 'Saving…' : uploadFile ? 'Upload & mark sent' : 'Mark as sent'}
               </Button>
             </div>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 py-1">
+            <div className="flex-1 h-px" style={{ background: 'var(--brand-border)' }} />
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--brand-textMuted)' }}>
+              or send system-generated letter
+            </span>
+            <div className="flex-1 h-px" style={{ background: 'var(--brand-border)' }} />
           </div>
 
           {/* Option 2 — Send via Email */}
