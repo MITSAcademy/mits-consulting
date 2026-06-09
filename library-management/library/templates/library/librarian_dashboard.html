@@ -1,0 +1,79 @@
+{% extends "library/base.html" %}
+{% block title %}Librarian Dashboard &middot; LibraryHub{% endblock %}
+{% block content %}
+<h3 class="fw-bold mb-4"><i class="bi bi-speedometer2 text-primary me-2"></i>Librarian Dashboard</h3>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="stat-card p-3" style="background:linear-gradient(135deg,#4f46e5,#6366f1)">
+      <div class="num">{{ stats.books }}</div><div>Total books</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card p-3" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8)">
+      <div class="num">{{ stats.students }}</div><div>Students</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card p-3" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)">
+      <div class="num">{{ stats.pending }}</div><div>Pending verification</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card p-3" style="background:linear-gradient(135deg,#10b981,#34d399)">
+      <div class="num">{{ stats.issued }}</div><div>Books issued</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="fw-bold mb-0"><i class="bi bi-person-check text-warning me-1"></i>Awaiting verification</h5>
+          <a href="{% url 'manage_students' %}" class="small">Manage all</a>
+        </div>
+        {% if pending %}
+          <ul class="list-group list-group-flush">
+            {% for s in pending %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <span>{{ s.name }} <span class="text-muted">({{ s.roll_number }})</span></span>
+              <form method="post" action="{% url 'verify_student' s.id %}">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-success"><i class="bi bi-check2"></i> Verify</button>
+              </form>
+            </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-muted mb-0">No students awaiting verification.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h5 class="fw-bold mb-0"><i class="bi bi-bookmark-check text-primary me-1"></i>Currently issued</h5>
+          <a href="{% url 'manage_books' %}" class="small">Manage books</a>
+        </div>
+        {% if recent_issues %}
+          <ul class="list-group list-group-flush">
+            {% for rec in recent_issues %}
+            <li class="list-group-item d-flex justify-content-between">
+              <span>{{ rec.book.name }}</span>
+              <span class="text-muted small">{{ rec.student.roll_number }} &middot; {{ rec.issued_at|date:"M d" }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-muted mb-0">No books currently issued.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -275,15 +275,9 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
 
   const dateLabel = new Date(today).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  // Open sourcing requests — routed to team or unassigned (sentToId null = whole team sees it)
+  // Open sourcing requests are shared (routed to the team, not person-specific)
   const openRequests = await prisma.sourcingRequest.findMany({
-    where: {
-      status: 'Open',
-      OR: [
-        { sentToId: { in: ['u-aman', 'u-kanchan'] } },
-        { sentToId: null },
-      ],
-    },
+    where: { status: 'Open', sentToId: { in: ['u-aman', 'u-kanchan'] } },
     include: { client: { select: { name: true, intakeSkillHint: true } }, sentTo: { select: { id: true } } },
     orderBy: { createdAt: 'asc' },
   });
@@ -292,8 +286,8 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
     const toEmail = recipient.sendAsAddress || recipient.gmailAddress || recipient.email;
     if (!toEmail) continue;
 
-    // Requests routed specifically to this person, OR unassigned (shared by whole team)
-    const myOpenRequests = openRequests.filter(r => !r.sentTo?.id || r.sentTo.id === recipient.id);
+    // Open requests routed specifically to this person
+    const myOpenRequests = openRequests.filter(r => r.sentTo?.id === recipient.id);
 
     // Proposals this person submitted that are still unnotified
     const myPendingProposals = await prisma.proposal.findMany({

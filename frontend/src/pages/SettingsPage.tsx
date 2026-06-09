@@ -7,7 +7,7 @@ import { Input, Label } from '@/components/ui/input';
 import { Toggle } from '@/components/ui/toggle';
 import { api } from '@/lib/api';
 import { useUI } from '@/store/ui';
-import { Mail, CheckCircle2, AlertTriangle, Trash2, Send, Zap } from 'lucide-react';
+import { Mail, CheckCircle2, AlertTriangle, Trash2, Send } from 'lucide-react';
 
 // Mirrors the source.html renderSettings sections + labels + descriptions exactly.
 const FLAG_SECTIONS: Array<{ title: string; flags: Array<{ key: string; label: string; desc: string }> }> = [
@@ -262,8 +262,6 @@ export function SettingsPage() {
 
         {isFounder && (
           <>
-            <BriefingTrigger />
-
             <div className="callout">
               Phase-1 launch. Mitali, Bhavneet, Kashish, Muskan, Areena, Ashok and Malika are disabled until you flip{' '}
               <strong>Phase 2 enabled</strong> on. Their data is preserved; their roles just can't sign in yet.
@@ -324,81 +322,6 @@ export function SettingsPage() {
         )}
       </Page>
     </>
-  );
-}
-
-function BriefingTrigger() {
-  const [status, setStatus] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'err'>>({});
-  const [allLoading, setAllLoading] = useState(false);
-
-  async function fire(team: string, shift: string) {
-    const key = `${team}-${shift}`;
-    setStatus(s => ({ ...s, [key]: 'loading' }));
-    try {
-      await api.post('/briefing/trigger', { team, shift });
-      setStatus(s => ({ ...s, [key]: 'ok' }));
-      setTimeout(() => setStatus(s => ({ ...s, [key]: 'idle' })), 4000);
-    } catch {
-      setStatus(s => ({ ...s, [key]: 'err' }));
-      setTimeout(() => setStatus(s => ({ ...s, [key]: 'idle' })), 5000);
-    }
-  }
-
-  async function fireAll() {
-    setAllLoading(true);
-    const all = [
-      ['team1', 'morning'], ['team1', 'evening'],
-      ['team2', 'morning'], ['team2', 'evening'],
-      ['samita', 'morning'], ['samita', 'evening'],
-    ];
-    await Promise.allSettled(all.map(([t, s]) => fire(t, s)));
-    setAllLoading(false);
-  }
-
-  const rows = [
-    { team: 'team1',  label: 'Team 1 (Aman + Kanchan)', shifts: ['morning', 'evening'] },
-    { team: 'team2',  label: 'Team 2 (Anjali + Taran)',  shifts: ['morning', 'evening'] },
-    { team: 'samita', label: 'Samita (overview)',         shifts: ['morning', 'evening'] },
-  ];
-
-  return (
-    <div className="table-card" style={{ padding: '16px 20px', marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-        <Zap size={14} color="#F59E0B" />
-        <span style={{ fontWeight: 600, fontSize: 13 }}>Daily briefing — manual trigger</span>
-        <span style={{ fontSize: 11, color: '#6B6F78', marginLeft: 4, flex: 1 }}>Fires the email immediately.</span>
-        <Button size="sm" disabled={allLoading} onClick={fireAll}
-          style={{ background: '#1A6CDF', color: '#fff', fontWeight: 600 }}>
-          {allLoading ? 'Sending all…' : '⚡ Send all now'}
-        </Button>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {rows.map(r => (
-          <div key={r.team} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 13, width: 220, color: '#D0D0D8' }}>{r.label}</span>
-            {r.shifts.map(shift => {
-              const key = `${r.team}-${shift}`;
-              const st = status[key] || 'idle';
-              return (
-                <Button
-                  key={shift}
-                  size="sm"
-                  disabled={st === 'loading' || allLoading}
-                  onClick={() => fire(r.team, shift)}
-                  style={{
-                    minWidth: 90,
-                    background: st === 'ok' ? '#14532d' : st === 'err' ? '#450a0a' : undefined,
-                    color: st === 'ok' ? '#86efac' : st === 'err' ? '#fca5a5' : undefined,
-                  }}
-                >
-                  {st === 'loading' ? '…' : st === 'ok' ? '✓ Sent' : st === 'err' ? '✗ Failed' : shift === 'morning' ? '🌅 Morning' : '🌙 Evening'}
-                </Button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign up &middot; Wanderlust Travel</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-hero">
+      <div class="logo" style="color:#fff;margin-bottom:24px;"><span class="mark">&#9992;&#65039;</span> Wanderlust</div>
+      <h1>Your next adventure starts here.</h1>
+      <p>Create a free profile to explore destinations, book curated packages and keep all your trips in one place.</p>
+    </div>
+    <div class="auth-panel">
+      <div class="auth-card">
+        <h2>Create your account</h2>
+        <p class="sub">It only takes a moment.</p>
+        <div id="alert" class="alert"></div>
+        <form id="signupForm">
+          <div class="field">
+            <label for="name">Full name</label>
+            <input type="text" id="name" placeholder="Jane Traveller" autocomplete="name" required />
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="At least 6 characters" autocomplete="new-password" required />
+          </div>
+          <button class="btn block lg" type="submit" id="submitBtn">Create account</button>
+        </form>
+        <p class="swap">Already have an account? <a href="/login.html">Log in</a></p>
+      </div>
+    </div>
+  </div>
+  <script src="/js/common.js"></script>
+  <script src="/js/signup.js"></script>
+</body>
+</html>

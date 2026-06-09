@@ -1225,47 +1225,6 @@ clientsRouter.post('/:id/demos/backfill', async (req: AuthedRequest, res) => {
   res.status(201).json(demo);
 });
 
-// ─── Engagement letter preview — returns a PDF for download without sending ───
-// Roshni clicks "Preview PDF" in the modal to check the letter before sending.
-clientsRouter.get('/:id/engagement-letter/preview', async (req: AuthedRequest, res) => {
-  if (!['founder', 'manager', 'sales_closer', 'demo_lead'].includes(req.user!.role)) {
-    return res.status(403).json({ error: 'Not allowed' });
-  }
-  const client = await prisma.client.findUnique({
-    where: { id: req.params.id },
-    include: { primaryTrainer: true },
-  });
-  if (!client) return res.status(404).json({ error: 'Client not found' });
-  const me = await prisma.user.findUnique({
-    where: { id: req.user!.id },
-    select: { name: true, gmailAddress: true },
-  });
-  const vars = {
-    clientName: client.name,
-    engagementType: client.engagementType,
-    paymentModel: client.paymentModel || undefined,
-    sessionsPerCycle: client.sessionsPerCycle || undefined,
-    cycleAmount: client.cycleAmount || undefined,
-    currency: client.currency,
-    cycleStart: client.cycleStart || undefined,
-    cycleEnd: client.cycleEnd || undefined,
-    preferredTimeIst: client.preferredTimeIst || undefined,
-    trainerName: client.primaryTrainer?.name || undefined,
-    senderName: me?.name || 'Roshni',
-    senderEmail: me?.gmailAddress || undefined,
-    handoverTo: 'Mitali',
-  };
-  try {
-    const pdfBuf = await buildEngagementLetterPdf(vars);
-    const safeName = (client.name || 'client').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40);
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="MITS_Engagement_Letter_${safeName}.pdf"`);
-    res.send(pdfBuf);
-  } catch (e: any) {
-    res.status(500).json({ error: 'PDF generation failed: ' + (e.message || String(e)) });
-  }
-});
-
 // ─── Engagement letter (Roshni → client on SaleWon) + handover trigger ─────
 // Sent by Roshni when the deal closes. Auto-CCs Mitali so she's aware.
 // Compulsory dual-send: email + WhatsApp (UI calls both endpoints in sequence).
@@ -1389,40 +1348,6 @@ clientsRouter.post('/:id/mark-payment-wa-sent', async (req: AuthedRequest, res) 
   });
   await audit(req.user!.id, req.user!.name, 'PAYMENT_WA_SENT', client.name);
   res.json(updated);
-});
-
-// Mark engagement letter as sent manually (outside the portal).
-// Stamps engagementLetterSentAt so Roshni's close-out wizard unlocks next step,
-// and creates the Mitali handover task — same outcome as the portal send, just no email goes out.
-clientsRouter.post('/:id/mark-engagement-letter-sent', async (req: AuthedRequest, res) => {
-  if (!['founder', 'manager', 'sales_closer', 'demo_lead'].includes(req.user!.role)) {
-    return res.status(403).json({ error: 'Not allowed' });
-  }
-  const client = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
-  if (!client) return res.status(404).json({ error: 'Client not found' });
-  const today = new Date().toISOString().slice(0, 10);
-  await prisma.client.update({
-    where: { id: client.id },
-    data: { engagementLetterSentAt: today },
-  });
-  // Also trigger Mitali handover task so her queue gets updated
-  try {
-    const mitali = await prisma.user.findUnique({ where: { id: 'u-mitali' }, select: { id: true, name: true } });
-    if (mitali) {
-      await prisma.task.create({
-        data: {
-          title: `Handover call — ${client.name} (engagement letter sent)`,
-          ownerId: mitali.id,
-          clientId: client.id,
-          dueDate: today,
-          status: 'Pending',
-          type: 'HANDOVER',
-        },
-      });
-    }
-  } catch { /* non-fatal */ }
-  await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · sent manually (outside portal)`);
-  res.json({ ok: true });
 });
 
 // Handover-to-Mitali notification (creates a Task on Mitali's queue so the call gets scheduled).

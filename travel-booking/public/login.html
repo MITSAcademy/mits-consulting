@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Log in &middot; Wanderlust Travel</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-hero">
+      <div class="logo" style="color:#fff;margin-bottom:24px;"><span class="mark">&#9992;&#65039;</span> Wanderlust</div>
+      <h1>Welcome back, explorer.</h1>
+      <p>Log in to pick up where you left off, browse handpicked destinations and manage your bookings.</p>
+    </div>
+    <div class="auth-panel">
+      <div class="auth-card">
+        <h2>Log in</h2>
+        <p class="sub">Enter your details to access your trips.</p>
+        <div id="alert" class="alert"></div>
+        <form id="loginForm">
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Your password" autocomplete="current-password" required />
+          </div>
+          <button class="btn block lg" type="submit" id="submitBtn">Log in</button>
+        </form>
+        <p class="swap">New to Wanderlust? <a href="/signup.html">Create an account</a></p>
+      </div>
+    </div>
+  </div>
+  <script src="/js/common.js"></script>
+  <script src="/js/login.js"></script>
+</body>
+</html>

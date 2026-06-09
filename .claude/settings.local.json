@@ -89,7 +89,12 @@
       "Bash(PGPASSWORD=mits_local_pw /Users/shivamaggarwal/.local/node20/bin/../../../Postgres.app/Contents/Versions/latest/bin/psql -h localhost -U mits -d postgres -c \"CREATE DATABASE mits_shadow OWNER mits;\")",
       "Bash(PGPASSWORD=mits_local_pw /Users/shivamaggarwal/Applications/Postgres.app/Contents/Versions/17/bin/psql -h localhost -U mits -d postgres -c \"CREATE DATABASE mits_shadow OWNER mits;\")",
       "Bash(PATH=/Users/shivamaggarwal/.local/node20/bin:/bin:/usr/bin /Users/shivamaggarwal/.local/node20/bin/npx prisma migrate resolve --applied 20260521120000_phase_one_complete)",
-      "Bash(PATH=/Users/shivamaggarwal/.local/node20/bin:/bin:/usr/bin /Users/shivamaggarwal/.local/node20/bin/npm run build)"
+      "Bash(PATH=/Users/shivamaggarwal/.local/node20/bin:/bin:/usr/bin /Users/shivamaggarwal/.local/node20/bin/npm run build)",
+      "Bash(gh --version)",
+      "Bash(claude mcp add --transport http mits-academy https://mitsacademy.in/api/mcp)",
+      "Bash(npm root -g)",
+      "Bash(node -e \"const fs=require\\(''fs''\\);const c=JSON.parse\\(fs.readFileSync\\(''/Users/shivamaggarwal/.claude.json'',''utf8''\\)\\);console.log\\(''top keys:'',Object.keys\\(c\\).join\\('', ''\\)\\);console.log\\(''global mcpServers:'',JSON.stringify\\(c.mcpServers||{},null,2\\)\\);console.log\\(''project keys:'',Object.keys\\(c.projects||{}\\).join\\(''\\\\n''\\)\\);\")",
+      "Bash(/usr/bin/python3 -:*)"
     ]
   }
 }

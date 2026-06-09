@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "travel-booking",
+      "runtimeExecutable": "/Users/shivamaggarwal/.local/node20/bin/node",
+      "runtimeArgs": ["server.js"],
+      "port": 4000
+    }
+  ]
+}

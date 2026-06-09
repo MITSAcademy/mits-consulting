@@ -1,0 +1,26 @@
+{% extends "library/base.html" %}
+{% block title %}Librarian Login &middot; LibraryHub{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-body p-4">
+        <h3 class="fw-bold mb-1"><i class="bi bi-person-badge text-primary me-2"></i>Librarian Login</h3>
+        <p class="text-muted">Sign in with your librarian (admin) credentials.</p>
+        <form method="post" novalidate>
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">Username</label>
+            {{ form.username }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Password</label>
+            {{ form.password }}
+          </div>
+          <button type="submit" class="btn btn-dark w-100">Log in</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wanderlust Travel</title>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div class="loading">Loading Wanderlust&hellip;</div>
+  <script src="/js/common.js"></script>
+  <script>
+    // Entry point: send the user to the right place based on login state.
+    location.replace(getToken() ? '/destinations.html' : '/login.html');
+  </script>
+</body>
+</html>

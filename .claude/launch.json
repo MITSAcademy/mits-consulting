@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "travel-booking",
+      "runtimeExecutable": "/Users/shivamaggarwal/.local/node20/bin/node",
+      "runtimeArgs": ["/Users/shivamaggarwal/mits-consulting/travel-booking/server.js"],
+      "port": 4000
+    },
+    {
+      "name": "library-management",
+      "runtimeExecutable": "/Users/shivamaggarwal/mits-consulting/lms-venv/bin/python",
+      "runtimeArgs": ["/Users/shivamaggarwal/mits-consulting/library-management/manage.py", "runserver", "8000"],
+      "port": 8000
+    }
+  ]
+}

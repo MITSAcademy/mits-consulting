@@ -1,0 +1,93 @@
+{% extends "library/base.html" %}
+{% block title %}My Dashboard &middot; LibraryHub{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <h3 class="fw-bold mb-0">Hi, {{ student.name }} <i class="bi bi-emoji-smile"></i></h3>
+    <span class="text-muted">Roll number: <strong>{{ student.roll_number }}</strong></span>
+  </div>
+  <span class="badge text-bg-primary fs-6">{{ active.count }} book(s) borrowed</span>
+</div>
+
+{% if active %}
+<div class="card mb-4">
+  <div class="card-body">
+    <h5 class="fw-bold mb-3"><i class="bi bi-bookmark-check text-primary me-1"></i>Currently borrowed</h5>
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead><tr><th>Book</th><th>Author</th><th>Issued</th><th class="text-end">Action</th></tr></thead>
+        <tbody>
+          {% for rec in active %}
+          <tr>
+            <td class="fw-semibold">{{ rec.book.name }}</td>
+            <td>{{ rec.book.author }}</td>
+            <td>{{ rec.issued_at|date:"M d, Y" }}</td>
+            <td class="text-end">
+              <form method="post" action="{% url 'return_book' rec.id %}">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-return-left"></i> Return</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-body">
+    <h5 class="fw-bold mb-3"><i class="bi bi-journals text-primary me-1"></i>Book catalogue</h5>
+    {% if books %}
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead><tr><th>Book name</th><th>Author</th><th>Availability</th><th class="text-end">Action</th></tr></thead>
+        <tbody>
+          {% for book in books %}
+          <tr>
+            <td class="fw-semibold">{{ book.name }}</td>
+            <td>{{ book.author }}</td>
+            <td>
+              {% if book.is_available %}
+                <span class="badge badge-soft-success">{{ book.available_copies }} available</span>
+              {% else %}
+                <span class="badge text-bg-secondary">Out of stock</span>
+              {% endif %}
+            </td>
+            <td class="text-end">
+              <form method="post" action="{% url 'borrow_book' book.id %}">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-primary" {% if not book.is_available %}disabled{% endif %}>
+                  <i class="bi bi-bag-plus"></i> Borrow
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <p class="text-muted mb-0">No books in the library yet. Please check back later.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if history %}
+<div class="card mt-4">
+  <div class="card-body">
+    <h5 class="fw-bold mb-3"><i class="bi bi-clock-history text-muted me-1"></i>Borrowing history</h5>
+    <ul class="list-group list-group-flush">
+      {% for rec in history %}
+      <li class="list-group-item d-flex justify-content-between">
+        <span>{{ rec.book.name }}</span>
+        <span class="text-muted small">Returned {{ rec.returned_at|date:"M d, Y" }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
