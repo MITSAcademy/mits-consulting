@@ -6,7 +6,48 @@ import { Button } from '@/components/ui/button';
 import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { EmptyState } from '@/components/EmptyState';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Send } from 'lucide-react';
+
+function BriefingTrigger() {
+  const showToast = useUI((s) => s.showToast);
+
+  const trigger = useMutation({
+    mutationFn: ({ team, shift }: { team: string; shift: string }) =>
+      api.post('/briefing/trigger', { team, shift }),
+    onSuccess: (_r, { team }) => showToast(`${team === 'team1' ? 'Team 1 (Aman/Kanchan)' : 'Team 2 (Anjali/Taran)'} briefing sent`),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed to send briefing', 'error'),
+  });
+
+  const sending = trigger.isPending;
+
+  return (
+    <div className="card mb-4">
+      <div className="card-h mb-3">
+        <Send size={14} />
+        <span className="font-bold">Send status briefing</span>
+        <span className="muted text-xs">Trigger on-demand email to any team</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-lg border p-3" style={{ borderColor: 'var(--brand-borderSoft)' }}>
+          <div className="text-xs font-semibold mb-1">Team 1 · Recruiters</div>
+          <div className="text-[11px] muted mb-2">Aman & Kanchan — sourcing pipeline</div>
+          <div className="flex gap-2">
+            <Button size="sm" disabled={sending} onClick={() => trigger.mutate({ team: 'team1', shift: 'morning' })}>Morning</Button>
+            <Button size="sm" disabled={sending} onClick={() => trigger.mutate({ team: 'team1', shift: 'evening' })}>Evening</Button>
+          </div>
+        </div>
+        <div className="rounded-lg border p-3" style={{ borderColor: 'var(--brand-borderSoft)' }}>
+          <div className="text-xs font-semibold mb-1">Team 2 · Demo intake</div>
+          <div className="text-[11px] muted mb-2">Anjali & Taran — demo pipeline</div>
+          <div className="flex gap-2">
+            <Button size="sm" disabled={sending} onClick={() => trigger.mutate({ team: 'team2', shift: 'morning' })}>Morning</Button>
+            <Button size="sm" disabled={sending} onClick={() => trigger.mutate({ team: 'team2', shift: 'evening' })}>Evening</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function VaibhavQueuePage() {
   const qc = useQueryClient();
@@ -32,6 +73,7 @@ export function VaibhavQueuePage() {
     <>
       <Topbar title="Pending on Vaibhav" subtitle={`${pending.length}`} />
       <Page>
+        <BriefingTrigger />
         <div className="callout gold">
           Clients flagged for Vaibhav to personally chase. Click a row to open, or unflag inline.
         </div>
