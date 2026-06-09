@@ -2513,6 +2513,13 @@ async function sendDemoInvite(
     });
   }
 
+  // Samita (demo_lead) always gets a CC copy so she has visibility of every demo booked by her team.
+  const samitaUser = await prisma.user.findUnique({
+    where: { id: 'u-samita' },
+    select: { sendAsAddress: true, gmailAddress: true, email: true },
+  });
+  const samitaEmail = samitaUser?.sendAsAddress || samitaUser?.gmailAddress || samitaUser?.email || 'samita@mitssolution.com';
+
   const sentTo: string[] = [];
   if (clientEmail) {
     await deliverOne(client.name, clientEmail, 'client');
@@ -2531,6 +2538,15 @@ async function sendDemoInvite(
       sentTo.push(`organizer(${orgEmail})`);
     } catch (e) {
       console.warn('[demo invite] organizer copy failed:', (e as any)?.message);
+    }
+  }
+  // CC Samita if she's not already receiving a copy (she books demos too sometimes).
+  if (samitaEmail && samitaEmail !== orgEmail && samitaEmail !== clientEmail && samitaEmail !== trainerEmail) {
+    try {
+      await deliverOne('Samita Gupta', samitaEmail, 'organizer');
+      sentTo.push(`samita-cc(${samitaEmail})`);
+    } catch (e) {
+      console.warn('[demo invite] Samita CC failed:', (e as any)?.message);
     }
   }
 
