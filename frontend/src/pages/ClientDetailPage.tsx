@@ -138,6 +138,7 @@ export function ClientDetailPage() {
   const intake = (client.intakeData as any) || {};
   const hasIntake = Object.values(intake).some(Boolean);
   const isTraining = client.engagementType === 'Training' || client.engagementType === 'TaskBased';
+  const isEmployerLater = client.saleClosingSubStatus === 'JBT-EmployerLater' || client.saleClosingSubStatus === 'Training-EmployerLater';
   const showAmt = canSeeFinancial(user.role);
 
   // Stage-specific actions (mirrors source.html renderClientDetail).
@@ -342,12 +343,15 @@ export function ClientDetailPage() {
   }
   // Roshni post-payment actions (SaleWon)
   if (canClose(user.role) && client.lifecycle === 'SaleWon') {
-    actions.push(
-      <Button key="paymentconfirm" size="sm" variant={client.paymentConfirmationPostedAt ? 'default' : 'primary'} onClick={() => setModal('paymentConfirmation')} title="Upload payment screenshot + post to MITS payment-confirmation group">
-        <Wallet size={12}/> {client.paymentConfirmationPostedAt ? 'Re-post confirmation' : 'Confirm payment received'}
-      </Button>
-    );
-    if (client.freshPaymentReceived) {
+    // EmployerLater: employer pays later — skip payment confirmation, rename group immediately
+    if (!isEmployerLater) {
+      actions.push(
+        <Button key="paymentconfirm" size="sm" variant={client.paymentConfirmationPostedAt ? 'default' : 'primary'} onClick={() => setModal('paymentConfirmation')} title="Upload payment screenshot + post to MITS payment-confirmation group">
+          <Wallet size={12}/> {client.paymentConfirmationPostedAt ? 'Re-post confirmation' : 'Confirm payment received'}
+        </Button>
+      );
+    }
+    if (isEmployerLater || client.freshPaymentReceived) {
       actions.push(
         <Button key="grouprename" size="sm" variant={client.whatsappGroupRenamedAt ? 'default' : 'primary'} onClick={() => setModal('groupRename')} title="Rename client's WA group to Training / JBT + share Mitali intro message">
           <MessageCircle size={12}/> {client.whatsappGroupRenamedAt ? 'Rename group again' : 'Rename group → Training/JBT'}
