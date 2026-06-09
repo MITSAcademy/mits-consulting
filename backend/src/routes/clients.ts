@@ -2488,7 +2488,7 @@ async function sendDemoInvite(
   // auto-add-to-Calendar treats it as a real invite addressed to them.
   // Per recipient, only that recipient is listed as the ICS attendee (privacy preserved —
   // the other party's email is never disclosed across recipients).
-  async function deliverOne(recipientName: string, recipientEmail: string, role: 'client' | 'trainer' | 'organizer') {
+  async function deliverOne(recipientName: string, recipientEmail: string, role: 'client' | 'trainer' | 'organizer', ccEmails?: string[]) {
     // Reuse the client/trainer body for the organizer copy (treat them as 'client' POV is closest).
     const bodyRole: 'client' | 'trainer' = role === 'trainer' ? 'trainer' : 'client';
     const { text, ics_desc } = buildBody(recipientName, bodyRole);
@@ -2505,7 +2505,8 @@ async function sendDemoInvite(
       method: 'REQUEST',
     });
     await sendEmail({
-      to: recipientEmail,           // recipient in To so Gmail auto-adds the ICS to their Calendar
+      to: recipientEmail,
+      cc: ccEmails?.length ? ccEmails : undefined,
       subject,
       body: text,
       icsAttachment: { filename: 'mits-demo-session.ics', content: ics, method: 'REQUEST' },
@@ -2513,25 +2514,26 @@ async function sendDemoInvite(
     });
   }
 
-  // Samita (demo_lead) always gets a CC copy so she has visibility of every demo booked by her team.
+  // Samita (demo_lead) gets CC on every invite sent by her team so she has full visibility.
   const samitaUser = await prisma.user.findUnique({
     where: { id: 'u-samita' },
     select: { sendAsAddress: true, gmailAddress: true, email: true },
   });
   const samitaEmail = samitaUser?.sendAsAddress || samitaUser?.gmailAddress || samitaUser?.email || 'samita@mitssolution.com';
+  // Don't CC Samita on her own sends
+  const samitaCc = samitaEmail !== orgEmail ? [samitaEmail] : [];
 
   const sentTo: string[] = [];
   if (clientEmail) {
-    await deliverOne(client.name, clientEmail, 'client');
+    await deliverOne(client.name, clientEmail, 'client', samitaCc);
     sentTo.push(`client(${clientEmail})`);
   }
   if (trainerEmail) {
-    await deliverOne(trainer.name, trainerEmail, 'trainer');
+    await deliverOne(trainer.name, trainerEmail, 'trainer', samitaCc);
     sentTo.push(`trainer(${trainerEmail})`);
   }
   // Also deliver an invite to the scheduler (organizer) so the demo lands on THEIR
   // Google Calendar too — fixes "calendar invites not syncing with email calendar".
-  // Only if the organizer has a real email and it's not the same as client/trainer already on the list.
   if (orgEmail && orgEmail !== clientEmail && orgEmail !== trainerEmail) {
     try {
       await deliverOne(orgName, orgEmail, 'organizer');
@@ -2540,15 +2542,7 @@ async function sendDemoInvite(
       console.warn('[demo invite] organizer copy failed:', (e as any)?.message);
     }
   }
-  // CC Samita if she's not already receiving a copy (she books demos too sometimes).
-  if (samitaEmail && samitaEmail !== orgEmail && samitaEmail !== clientEmail && samitaEmail !== trainerEmail) {
-    try {
-      await deliverOne('Samita Gupta', samitaEmail, 'organizer');
-      sentTo.push(`samita-cc(${samitaEmail})`);
-    } catch (e) {
-      console.warn('[demo invite] Samita CC failed:', (e as any)?.message);
-    }
-  }
+  if (samitaCc.length) sentTo.push(`samita-cc(${samitaEmail})`);
 
   await audit(
     req.user!.id, req.user!.name, 'DEMO_INVITE_SENT',
