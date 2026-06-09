@@ -2562,16 +2562,16 @@ function NoShowModal({ client, onClose }: any) {
   );
 }
 
-/** Roshni's close-out journey — the always-visible "what do I do with this client"
- *  card on a SaleClosing/SaleWon client page. Shows current status (RP by default)
- *  + the 4 destinations as cards with their required validation. Click any
- *  destination card to open the move-status modal pre-pointed at that target. */
-/** Roshni close-out wizard — 7 sequential steps. Each step is locked until
- *  the previous is done. Founder/manager get a small "skip" override.
- *  When all 7 are done, the outcome picker appears (4 win-state buttons + C). */
+/** Roshni's context-aware close-out wizard.
+ *
+ *  Phase 1 (RP) — 3 steps: checklist call, engagement letter, payment WA → pick CP / C / DP
+ *  CP checklist    — 2 items: no-pickup WA sent, next call set → pick C or DP
+ *  Phase 2 (C)  — 4 steps: record payment, post confirmation, rename group, intro Mitali → pick win outcome
+ *  Terminal        — DP / win outcomes show a result banner
+ */
 function RoshniJourneyCard({ client, onMove, onAction }: {
   client: any;
-  onMove: (t: 'CP' | 'C' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater') => void;
+  onMove: (t: 'CP' | 'C' | 'DP' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater') => void;
   onAction: (kind: 'checklist' | 'engagement' | 'paymentWa' | 'recordPayment' | 'postConfirmation' | 'groupRename' | 'mitaliIntro') => void;
 }) {
   const ss: string = client.saleClosingSubStatus || 'RP';
@@ -2582,15 +2582,12 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
   const since = client.saleClosingSubStatusAt ? new Date(client.saleClosingSubStatusAt) : null;
   const daysSince = since ? Math.floor((Date.now() - since.getTime()) / 86_400_000) : null;
 
-  // Step completion derived from existing fields. New fields are stamped by
-  // the backend on the corresponding action (engagement letter send /
-  // payment-confirmation post / etc.).
   const checklistDone = !!client.paymentChecklistCompletedAt;
   const engagementSent = !!client.engagementLetterSentAt;
   const paymentWaSent = !!client.paymentWaSentAt;
   const paymentRecorded = !!client.freshPaymentReceived || (client.freshPaymentAmount || 0) > 0;
-  const isEmployerLater = ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater';
-  const paymentResolved = paymentRecorded || isEmployerLater;
+  const isWinSS = ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater';
+  const paymentResolved = paymentRecorded || isWinSS;
   const confirmationPosted = !!client.paymentConfirmationPostedAt;
   const groupRenamed = !!client.whatsappGroupRenamedAt;
   const mitaliIntroDone = !!client.mitaliIntroSentAt;
@@ -2614,80 +2611,10 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
     extra?: React.ReactNode;
   };
 
-  const steps: Step[] = [
-    {
-      n: 1,
-      title: 'Walk the 10-point payment checklist on the call',
-      desc: 'Open the checklist while on the call with the client; tick each item as you discuss it.',
-      done: checklistDone,
-      doneAt: client.paymentChecklistCompletedAt,
-      button: { label: checklistDone ? 'Re-open checklist' : 'Open checklist', onClick: () => onAction('checklist') },
-    },
-    {
-      n: 2,
-      title: 'Send the engagement letter (email + PDF)',
-      desc: 'Branded email with terms + PDF attachment. CCs Mitali automatically.',
-      done: engagementSent,
-      doneAt: client.engagementLetterSentAt,
-      button: { label: engagementSent ? 'Re-send engagement letter' : 'Send engagement letter', onClick: () => onAction('engagement') },
-      extra: (client as any).hasEngagementLetterFile
-        ? <a href={`${API_BASE}/api/clients/${client.id}/engagement-letter/file`} target="_blank" rel="noopener noreferrer"
-            className="text-xs flex items-center gap-1 mt-1" style={{ color: 'var(--accent-gold)' }}>
-            <FileText size={11} /> Download uploaded copy
-          </a>
-        : null,
-    },
-    {
-      n: 3,
-      title: 'Send the payment WhatsApp with bank details',
-      desc: 'Paste the payment-WA template into the client\'s WhatsApp chat (bank account, GPay, etc.), then mark sent here.',
-      done: paymentWaSent,
-      doneAt: client.paymentWaSentAt,
-      button: { label: paymentWaSent ? 'Re-mark sent' : 'Mark payment WA sent', onClick: () => markPaymentWa.mutate() },
-    },
-    {
-      n: 4,
-      title: 'Record payment OR mark Employer-later',
-      desc: 'Either record the Fresh payment (direct-client paths) or, if the employer commits, capture employer details below at outcome step.',
-      done: paymentResolved,
-      doneAt: paymentRecorded ? client.freshPaymentDate : null,
-      button: paymentRecorded
-        ? null
-        : { label: 'Record payment', onClick: () => onAction('recordPayment') },
-    },
-    {
-      n: 5,
-      title: 'Post confirmation in MITS payment-confirmation group',
-      desc: 'Auto-generates the "X closed at Y USD" message + screenshot post for the internal coordination group.',
-      done: confirmationPosted,
-      doneAt: client.paymentConfirmationPostedAt,
-      button: { label: confirmationPosted ? 'Re-post confirmation' : 'Open confirmation', onClick: () => onAction('postConfirmation') },
-    },
-    {
-      n: 6,
-      title: 'Rename client WhatsApp group → Training / JBT',
-      desc: 'Auto-suggests "Training {client} {trainer} Z" or "JBT {client} {trainer} Z" based on engagement type.',
-      done: groupRenamed,
-      doneAt: client.whatsappGroupRenamedAt,
-      button: { label: groupRenamed ? 'Re-rename group' : 'Rename group', onClick: () => onAction('groupRename') },
-    },
-    {
-      n: 7,
-      title: 'Intro Mitali in the renamed group',
-      desc: 'Triggers the Mitali-handover task + paste the intro message in the group.',
-      done: mitaliIntroDone,
-      doneAt: client.mitaliIntroSentAt,
-      button: { label: mitaliIntroDone ? 'Re-send Mitali intro' : 'Hand over to Mitali', onClick: () => onAction('mitaliIntro') },
-    },
-  ];
-
-  const doneCount = steps.filter((s) => s.done).length;
-  const allDone = doneCount === steps.length;
-  const firstUndoneIdx = steps.findIndex((s) => !s.done);
-
-  // Already at a terminal state (or moved past) — show a result banner.
-  if (ss === 'C' || ss === 'DP' || ss === 'JBT-Paid' || ss === 'Training-Paid' || ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater') {
-    const isWin = ss !== 'C';
+  // ── Terminal states — show result banner ──────────────────────────────────
+  const isWinOutcomeSS = ss === 'JBT-Paid' || ss === 'Training-Paid' || ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater';
+  if (ss === 'DP' || isWinOutcomeSS) {
+    const isWin = isWinOutcomeSS;
     return (
       <div className="card mb-4" style={{ borderColor: isWin ? '#0F8A5F' : '#EF4444' }}>
         <div className="card-h" style={{ color: isWin ? '#0F8A5F' : '#EF4444' }}>
@@ -2700,7 +2627,6 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
           {ss === 'Training-EmployerLater' && `Employer "${client.employerName || '—'}" committed for ${client.employerCommitDate || 'TBD'}; Training engagement started.`}
           {ss === 'JBT-EmployerLater' && `Employer "${client.employerName || '—'}" committed for ${client.employerCommitDate || 'TBD'}; JBT engagement started.`}
           {ss === 'DP' && 'Dropped — WA group moved to DP. No further follow-up by Roshni.'}
-          {ss === 'C' && 'Closed (no sale). Re-open by clearing the status from the action bar.'}
         </div>
         {(client as any).hasEngagementLetterFile && (
           <a href={`${API_BASE}/api/clients/${client.id}/engagement-letter/file`} target="_blank" rel="noopener noreferrer"
@@ -2712,129 +2638,273 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
     );
   }
 
-  return (
-    <div className="card mb-4">
-      <div className="card-h">
-        <span>Close-out wizard</span>
-        <span className="px-2 py-0.5 rounded border text-xs border-brand-blue text-brand-blue">
-          {ss === 'CP' ? 'CP · Closure Pending' : 'RP · Ready for Payment'}
-        </span>
-        <span className="muted text-xs">
-          · {doneCount} of {steps.length} steps done
-          {daysSince !== null ? ` · ${ss} for ${daysSince}d` : ''}
-        </span>
-      </div>
-      {/* Progress bar */}
-      <div className="flex gap-1.5 mb-4">
-        {steps.map((s, i) => (
-          <div
-            key={s.n}
-            className="flex-1 h-2 rounded-full transition-all"
-            style={{
-              background: s.done
-                ? 'linear-gradient(90deg, var(--status-green) 0%, #16A34A 100%)'
-                : i === firstUndoneIdx
-                ? 'linear-gradient(90deg, var(--status-amber) 0%, #D97706 100%)'
-                : 'var(--bg-input)',
-              boxShadow: s.done
-                ? '0 0 6px rgba(74,222,128,0.30)'
-                : i === firstUndoneIdx
-                ? '0 0 6px rgba(245,158,11,0.30)'
-                : 'inset 0 1px 2px rgba(0,0,0,0.10)',
-            }}
-            title={`Step ${s.n}: ${s.title}${s.done ? ' ✓' : ''}`}
-          />
-        ))}
-      </div>
-
-      <div className="space-y-1.5">
-        {steps.map((s, i) => {
-          const isCurrent = i === firstUndoneIdx;
-          const isLocked = !s.done && i > firstUndoneIdx && !canOverride;
-          const borderColor = s.done ? 'var(--status-green)' : isCurrent ? 'var(--status-amber)' : 'var(--brand-border)';
-          const opacity = isLocked ? 0.50 : 1;
-          return (
-            <div
-              key={s.n}
-              className="rounded-xl border p-3 flex items-start gap-3 transition-all"
+  // ── Helper: step list renderer ────────────────────────────────────────────
+  function StepList({ steps }: { steps: Step[] }) {
+    const doneCount = steps.filter((s) => s.done).length;
+    const firstUndoneIdx = steps.findIndex((s) => !s.done);
+    return (
+      <>
+        {/* Progress bar */}
+        <div className="flex gap-1.5 mb-3">
+          {steps.map((s, i) => (
+            <div key={s.n} className="flex-1 h-1.5 rounded-full transition-all"
               style={{
-                borderColor,
-                opacity,
-                background: isCurrent
-                  ? 'linear-gradient(90deg, color-mix(in srgb, var(--status-amber) 6%, var(--bg-card)) 0%, var(--bg-card) 60%)'
-                  : s.done
-                  ? 'linear-gradient(90deg, color-mix(in srgb, var(--status-green) 4%, var(--bg-card)) 0%, var(--bg-card) 60%)'
-                  : 'var(--bg-card)',
-                boxShadow: isCurrent
-                  ? '0 4px 16px rgba(245,158,11,0.10)'
-                  : s.done
-                  ? '0 1px 3px rgba(74,222,128,0.08)'
-                  : 'var(--shadow-sm)',
+                background: s.done
+                  ? 'linear-gradient(90deg, var(--status-green) 0%, #16A34A 100%)'
+                  : i === firstUndoneIdx
+                  ? 'linear-gradient(90deg, var(--status-amber) 0%, #D97706 100%)'
+                  : 'var(--bg-input)',
+                boxShadow: s.done ? '0 0 4px rgba(74,222,128,0.25)' : i === firstUndoneIdx ? '0 0 4px rgba(245,158,11,0.25)' : undefined,
               }}
-            >
-              <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all"
+              title={`Step ${s.n}: ${s.title}${s.done ? ' ✓' : ''}`}
+            />
+          ))}
+        </div>
+        <div className="text-[10px] muted mb-3">{doneCount} of {steps.length} steps done{daysSince !== null ? ` · ${ss} for ${daysSince}d` : ''}</div>
+        <div className="space-y-1.5">
+          {steps.map((s, i) => {
+            const isCurrent = i === firstUndoneIdx;
+            const isLocked = !s.done && i > firstUndoneIdx && !canOverride;
+            const borderColor = s.done ? 'var(--status-green)' : isCurrent ? 'var(--status-amber)' : 'var(--brand-border)';
+            return (
+              <div key={s.n}
+                className="rounded-xl border p-3 flex items-start gap-3 transition-all"
                 style={{
-                  background: s.done
-                    ? 'linear-gradient(135deg, var(--status-green) 0%, #16A34A 100%)'
-                    : isCurrent
-                    ? 'linear-gradient(135deg, var(--status-amber) 0%, #D97706 100%)'
-                    : 'var(--bg-input)',
-                  color: s.done || isCurrent ? 'white' : 'var(--brand-textMuted)',
-                  boxShadow: s.done
-                    ? '0 2px 8px rgba(74,222,128,0.30)'
-                    : isCurrent
-                    ? '0 2px 8px rgba(245,158,11,0.30)'
-                    : 'none',
+                  borderColor,
+                  opacity: isLocked ? 0.50 : 1,
+                  background: isCurrent
+                    ? 'linear-gradient(90deg, color-mix(in srgb, var(--status-amber) 6%, var(--bg-card)) 0%, var(--bg-card) 60%)'
+                    : s.done
+                    ? 'linear-gradient(90deg, color-mix(in srgb, var(--status-green) 4%, var(--bg-card)) 0%, var(--bg-card) 60%)'
+                    : 'var(--bg-card)',
+                  boxShadow: isCurrent ? '0 4px 16px rgba(245,158,11,0.10)' : s.done ? '0 1px 3px rgba(74,222,128,0.08)' : 'var(--shadow-sm)',
                 }}
               >
-                {s.done ? '✓' : s.n}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium">
-                  {s.title}
-                  {s.done && s.doneAt && <span className="muted text-xs ml-2">· {s.doneAt}</span>}
-                  {isCurrent && <span className="ml-2 text-[10px] text-brand-amber font-bold">NEXT</span>}
-                  {isLocked && <span className="ml-2 text-[10px] muted">🔒 locked</span>}
-                </div>
-                <div className="text-xs muted mt-0.5">{s.desc}</div>
-                {s.extra}
-              </div>
-              {s.button && (
-                <Button
-                  size="sm"
-                  variant={isCurrent ? 'primary' : s.done ? 'default' : 'default'}
-                  disabled={isLocked && !canOverride}
-                  disabledReason={isLocked && !canOverride ? `Complete step ${firstUndoneIdx + 1} first.` : null}
-                  onClick={s.button.onClick}
+                <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                  style={{
+                    background: s.done
+                      ? 'linear-gradient(135deg, var(--status-green) 0%, #16A34A 100%)'
+                      : isCurrent
+                      ? 'linear-gradient(135deg, var(--status-amber) 0%, #D97706 100%)'
+                      : 'var(--bg-input)',
+                    color: s.done || isCurrent ? 'white' : 'var(--brand-textMuted)',
+                    boxShadow: s.done ? '0 2px 6px rgba(74,222,128,0.30)' : isCurrent ? '0 2px 6px rgba(245,158,11,0.30)' : 'none',
+                  }}
                 >
-                  {s.button.label}
-                </Button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                  {s.done ? '✓' : s.n}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium">
+                    {s.title}
+                    {s.done && s.doneAt && <span className="muted text-xs ml-2">· {s.doneAt}</span>}
+                    {isCurrent && <span className="ml-2 text-[10px] text-brand-amber font-bold">NEXT</span>}
+                    {isLocked && <span className="ml-2 text-[10px] muted">🔒 locked</span>}
+                  </div>
+                  <div className="text-xs muted mt-0.5">{s.desc}</div>
+                  {s.extra}
+                </div>
+                {s.button && (
+                  <Button size="sm"
+                    variant={isCurrent ? 'primary' : 'default'}
+                    disabled={isLocked && !canOverride}
+                    disabledReason={isLocked && !canOverride ? `Complete step ${firstUndoneIdx + 1} first.` : null}
+                    onClick={s.button.onClick}
+                  >
+                    {s.button.label}
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </>
+    );
+  }
 
-      {/* Outcome picker — only revealed once all 7 steps are done OR override is used. */}
-      <div className="mt-5 pt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
-        <div className="flex items-center gap-2 mb-1">
-          {allDone && (
-            <span
-              className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold text-white"
-              style={{ background: 'linear-gradient(135deg, var(--status-green) 0%, #16A34A 100%)', boxShadow: '0 0 12px rgba(74,222,128,0.40)' }}
+  // ── Phase badge + title line ──────────────────────────────────────────────
+  const phaseLabel = ss === 'CP'
+    ? 'CP · Discussed, parked'
+    : ss === 'C'
+    ? 'Phase 2 · Close the deal'
+    : 'Phase 1 · Close-out prep';
+  const phaseColor = ss === 'CP' ? '#D97706' : ss === 'C' ? '#1A6CDF' : '#1A6CDF';
+
+  // ── RP state — Phase 1 (3 steps) ─────────────────────────────────────────
+  if (ss === 'RP' || !ss) {
+    const phase1Steps: Step[] = [
+      {
+        n: 1,
+        title: 'Walk the 10-point payment checklist on the call',
+        desc: 'Open the checklist while on the call; tick each item as you discuss it.',
+        done: checklistDone,
+        doneAt: client.paymentChecklistCompletedAt,
+        button: { label: checklistDone ? 'Re-open checklist' : 'Open checklist', onClick: () => onAction('checklist') },
+      },
+      {
+        n: 2,
+        title: 'Send the engagement letter (email + PDF)',
+        desc: 'Branded email with terms + PDF attachment. CCs Mitali automatically.',
+        done: engagementSent,
+        doneAt: client.engagementLetterSentAt,
+        button: { label: engagementSent ? 'Re-send engagement letter' : 'Send engagement letter', onClick: () => onAction('engagement') },
+        extra: (client as any).hasEngagementLetterFile
+          ? <a href={`${API_BASE}/api/clients/${client.id}/engagement-letter/file`} target="_blank" rel="noopener noreferrer"
+              className="text-xs flex items-center gap-1 mt-1" style={{ color: 'var(--accent-gold)' }}>
+              <FileText size={11} /> Download uploaded copy
+            </a>
+          : null,
+      },
+      {
+        n: 3,
+        title: 'Send the payment WhatsApp with bank details',
+        desc: 'Paste the payment-WA template into the client\'s WhatsApp, then mark sent here.',
+        done: paymentWaSent,
+        doneAt: client.paymentWaSentAt,
+        button: { label: paymentWaSent ? 'Re-mark sent' : 'Mark payment WA sent', onClick: () => markPaymentWa.mutate() },
+      },
+    ];
+    const allPhase1Done = phase1Steps.every((s) => s.done);
+    return (
+      <div className="card mb-4">
+        <div className="card-h mb-3">
+          <span className="font-bold">Close-out wizard</span>
+          <span className="px-2 py-0.5 rounded border text-xs font-semibold" style={{ borderColor: phaseColor, color: phaseColor }}>{phaseLabel}</span>
+        </div>
+        <StepList steps={phase1Steps} />
+        {/* Next-step picker */}
+        <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
+          <div className="text-xs font-semibold mb-2" style={{ color: 'var(--brand-textSecondary)' }}>
+            After the call, move client to:
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="primary"
+              disabled={!allPhase1Done && !canOverride}
+              disabledReason={!allPhase1Done && !canOverride ? 'Complete all 3 steps first.' : null}
+              onClick={() => onMove('C')}
             >
-              ✓
-            </span>
+              C · Engagement letter sent
+            </Button>
+            <Button size="sm" variant="amber" onClick={() => onMove('CP')}>
+              CP · Discussed, parked
+            </Button>
+            <Button size="sm" variant="danger" onClick={() => onMove('DP')}>
+              DP · Dropped
+            </Button>
+          </div>
+          {canOverride && !allPhase1Done && (
+            <div className="text-[10px] muted mt-2">Founder/manager: override active — you can move regardless of step completion.</div>
           )}
-          <div className="text-[14px] font-bold tracking-tight">
-            {allDone ? 'All steps done — pick the final outcome' : 'Outcome'}
+        </div>
+      </div>
+    );
+  }
+
+  // ── CP state — CP checklist ───────────────────────────────────────────────
+  if (ss === 'CP') {
+    const cpSteps: Step[] = [
+      {
+        n: 1,
+        title: 'Copy & send the no-pickup WhatsApp message',
+        desc: 'Use the template below — paste into the client\'s chat to let them know you\'ll follow up.',
+        done: paymentWaSent,
+        doneAt: client.paymentWaSentAt,
+        button: { label: paymentWaSent ? 'Re-mark sent' : 'Mark WA sent', onClick: () => markPaymentWa.mutate() },
+      },
+      {
+        n: 2,
+        title: 'Set the next follow-up date',
+        desc: 'Revisit in 3 days. When you speak with them, move to C (engagement letter sent) or DP.',
+        done: !!client.roshniNextCallOn,
+        doneAt: client.roshniNextCallOn,
+        button: null,
+      },
+    ];
+    const allCpDone = cpSteps.every((s) => s.done);
+    return (
+      <div className="card mb-4">
+        <div className="card-h mb-3">
+          <span className="font-bold">Close-out wizard</span>
+          <span className="px-2 py-0.5 rounded border text-xs font-semibold" style={{ borderColor: phaseColor, color: phaseColor }}>{phaseLabel}</span>
+        </div>
+        <div className="callout amber text-xs mb-3">
+          Client discussed but not ready. Follow up in 3 days. Once they confirm, move to C (engagement letter sent).
+        </div>
+        <StepList steps={cpSteps} />
+        <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
+          <div className="text-xs font-semibold mb-2" style={{ color: 'var(--brand-textSecondary)' }}>Move client to:</div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="primary" onClick={() => onMove('C')}>
+              C · Engagement letter sent
+            </Button>
+            <Button size="sm" variant="danger" onClick={() => onMove('DP')}>
+              DP · Dropped
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── C state — Phase 2 (4 steps) ──────────────────────────────────────────
+  const phase2Steps: Step[] = [
+    {
+      n: 4,
+      title: 'Record payment OR mark Employer-later',
+      desc: 'Record Fresh payment (direct-client) or capture employer commitment details at the win-outcome step.',
+      done: paymentResolved,
+      doneAt: paymentRecorded ? client.freshPaymentDate : null,
+      button: paymentRecorded ? null : { label: 'Record payment', onClick: () => onAction('recordPayment') },
+    },
+    {
+      n: 5,
+      title: 'Post confirmation in MITS payment-confirmation group',
+      desc: 'Auto-generates the "X closed at Y USD" message for the internal group.',
+      done: confirmationPosted,
+      doneAt: client.paymentConfirmationPostedAt,
+      button: { label: confirmationPosted ? 'Re-post confirmation' : 'Open confirmation', onClick: () => onAction('postConfirmation') },
+    },
+    {
+      n: 6,
+      title: 'Rename client WhatsApp group → Training / JBT',
+      desc: 'Auto-suggests "Training {client} {trainer} Z" or "JBT {client} {trainer} Z".',
+      done: groupRenamed,
+      doneAt: client.whatsappGroupRenamedAt,
+      button: { label: groupRenamed ? 'Re-rename group' : 'Rename group', onClick: () => onAction('groupRename') },
+    },
+    {
+      n: 7,
+      title: 'Intro Mitali in the renamed group',
+      desc: 'Triggers Mitali-handover task + paste the intro message in the group.',
+      done: mitaliIntroDone,
+      doneAt: client.mitaliIntroSentAt,
+      button: { label: mitaliIntroDone ? 'Re-send Mitali intro' : 'Hand over to Mitali', onClick: () => onAction('mitaliIntro') },
+    },
+  ];
+  const allPhase2Done = phase2Steps.every((s) => s.done);
+  return (
+    <div className="card mb-4">
+      <div className="card-h mb-3">
+        <span className="font-bold">Close-out wizard</span>
+        <span className="px-2 py-0.5 rounded border text-xs font-semibold" style={{ borderColor: phaseColor, color: phaseColor }}>{phaseLabel}</span>
+      </div>
+      <div className="callout text-xs mb-3">
+        Engagement letter sent — follow up daily until payment confirmed. Once paid, complete steps 4–7 below.
+      </div>
+      <StepList steps={phase2Steps} />
+      {/* Win outcome picker */}
+      <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
+        <div className="flex items-center gap-2 mb-1">
+          {allPhase2Done && (
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold text-white"
+              style={{ background: 'linear-gradient(135deg, var(--status-green) 0%, #16A34A 100%)', boxShadow: '0 0 10px rgba(74,222,128,0.40)' }}>✓</span>
+          )}
+          <div className="text-[13px] font-bold">
+            {allPhase2Done ? 'All steps done — pick the win outcome' : 'Win outcome'}
           </div>
         </div>
         <div className="text-xs muted mb-3">
-          {allDone
-            ? 'Choose which path the client is taking from here.'
-            : 'Locked until all 7 steps done (founder/manager can override).'}
-          {' '}Training = engagement type; Paid = direct client paid; Employer-later = employer pays later.
+          {allPhase2Done ? 'Choose which path the client is taking.' : 'Complete steps 4–7 first, then pick the outcome.'}
+          {' '}Training / JBT = engagement type; Paid = direct; Employer-later = employer invoiced.
         </div>
         <div className="grid md:grid-cols-2 gap-2">
           {([
@@ -2843,30 +2913,18 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
             { k: 'Training-EmployerLater', label: 'Training · Employer pays later',  tone: '#1A6CDF' },
             { k: 'JBT-EmployerLater',      label: 'JBT · Employer pays later',       tone: '#1A6CDF' },
           ] as const).map((o) => (
-            <Button
-              key={o.k}
-              size="sm"
-              disabled={!allDone && !canOverride}
-              disabledReason={(!allDone && !canOverride) ? `Complete all ${steps.length} steps first (or ask founder/manager to override).` : null}
+            <Button key={o.k} size="sm"
+              disabled={!allPhase2Done && !canOverride}
+              disabledReason={(!allPhase2Done && !canOverride) ? 'Complete all 4 steps first (or ask founder/manager to override).' : null}
               onClick={() => onMove(o.k)}
-              style={{ borderColor: o.tone, color: allDone || canOverride ? o.tone : undefined }}
+              style={{ borderColor: o.tone, color: allPhase2Done || canOverride ? o.tone : undefined }}
             >
               {o.label}
             </Button>
           ))}
         </div>
-        <div className="flex gap-2 mt-2">
-          <Button size="sm" variant="amber" onClick={() => onMove('CP')}>
-            Move to CP · Closure pending
-          </Button>
-          <Button size="sm" variant="danger" onClick={() => onMove('C')}>
-            Move to C · Not starting (lost)
-          </Button>
-        </div>
-        {canOverride && !allDone && (
-          <div className="text-[10px] muted mt-2">
-            Founder/manager: lock-step override active. You can mark any outcome regardless of step completion.
-          </div>
+        {canOverride && !allPhase2Done && (
+          <div className="text-[10px] muted mt-2">Founder/manager: override active — you can pick any outcome.</div>
         )}
       </div>
     </div>

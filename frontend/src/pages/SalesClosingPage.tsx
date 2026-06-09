@@ -62,6 +62,183 @@ function daysSince(iso?: string | null): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 }
 
+// ── Tile board (Roshni / sales_closer view) ───────────────────────────────
+
+type TileColumn = {
+  key: string;
+  label: string;
+  accent: string;
+  desc: string;
+};
+
+const TILE_COLUMNS: TileColumn[] = [
+  { key: 'RP',       label: 'RP',       accent: '#1A6CDF', desc: 'Ready for payment call' },
+  { key: 'CP',       label: 'CP',       accent: '#D97706', desc: 'Discussed, parked' },
+  { key: 'C',        label: 'C',        accent: '#D97706', desc: 'Engagement letter sent' },
+  { key: 'SaleWon',  label: 'Won',      accent: '#7C3AED', desc: 'Activate client' },
+  { key: 'Active',   label: 'Active',   accent: '#0F8A5F', desc: 'With Mitali' },
+];
+
+function clientColKey(c: any): string {
+  const lc = c.lifecycle;
+  const ss = c.saleClosingSubStatus;
+  if (lc === 'SaleClosing') {
+    if (!ss || ss === 'RP') return 'RP';
+    if (ss === 'CP') return 'CP';
+    if (ss === 'C') return 'C';
+    // DP and win outcomes are terminal — show in "Won" column for wins, skip DP
+    if (ss === 'JBT-Paid' || ss === 'Training-Paid' || ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater') return 'SaleWon';
+    return 'RP';
+  }
+  if (lc === 'SaleWon') return 'SaleWon';
+  if (lc === 'Active') return 'Active';
+  return 'RP';
+}
+
+function ClientTile({ c }: { c: any }) {
+  const { label, urgent } = pendingAction(c);
+  const days = daysSince(c.stageEnteredAt);
+  const ss = c.saleClosingSubStatus;
+  return (
+    <Link
+      to={`/clients/${c.id}`}
+      className="block rounded-lg border p-2.5 mb-1.5 transition-all"
+      style={{
+        background: 'var(--bg-card)',
+        borderColor: urgent ? 'rgba(245,158,11,0.40)' : 'var(--brand-borderSoft)',
+        boxShadow: urgent ? '0 2px 8px rgba(245,158,11,0.08)' : 'var(--shadow-sm)',
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-cardHover)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-card)'; }}
+    >
+      <div className="font-semibold text-xs mb-1 truncate" style={{ color: 'var(--brand-text)' }}>{c.name}</div>
+      <div className="flex items-center gap-1 flex-wrap mb-1">
+        {ss && <Pill color={subStatusPillColor(ss)}>{ss}</Pill>}
+        {c.engagementType && <span className="text-[10px] muted">{c.engagementType}</span>}
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px]" style={{ color: urgent ? 'var(--status-amber)' : 'var(--brand-textMuted)' }}>
+          {urgent && '⚡ '}{label}
+        </span>
+        <span className="text-[10px] mono" style={{ color: days >= 5 ? 'var(--status-red)' : days >= 3 ? 'var(--status-amber)' : 'var(--brand-textMuted)' }}>
+          {days}d
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+function TileBoard({ items }: { items: any[] }) {
+  const byCol: Record<string, any[]> = {};
+  for (const col of TILE_COLUMNS) byCol[col.key] = [];
+  // exclude DP from board — they're dropped
+  for (const c of items) {
+    if (c.saleClosingSubStatus === 'DP') continue;
+    const key = clientColKey(c);
+    if (byCol[key]) byCol[key].push(c);
+  }
+  const droppedCount = items.filter(c => c.saleClosingSubStatus === 'DP').length;
+
+  return (
+    <>
+      <div className="flex gap-3 overflow-x-auto pb-2" style={{ alignItems: 'flex-start' }}>
+        {TILE_COLUMNS.map((col) => {
+          const clients = byCol[col.key] || [];
+          return (
+            <div key={col.key} className="flex-shrink-0 rounded-xl border p-3"
+              style={{
+                width: 220,
+                minHeight: 180,
+                background: 'var(--bg-card)',
+                borderColor: 'var(--brand-border)',
+              }}
+            >
+              {/* Column header */}
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold" style={{ color: col.accent }}>{col.label}</span>
+                  <span className="text-[10px] px-1.5 py-px rounded-full font-bold"
+                    style={{ background: `color-mix(in srgb, ${col.accent} 15%, var(--bg-input))`, color: col.accent }}>
+                    {clients.length}
+                  </span>
+                </div>
+              </div>
+              <div className="text-[10px] muted mb-2.5">{col.desc}</div>
+              {clients.length === 0 && (
+                <div className="text-[10px] muted text-center pt-4">Empty</div>
+              )}
+              {clients.map((c: any) => <ClientTile key={c.id} c={c} />)}
+            </div>
+          );
+        })}
+      </div>
+      {droppedCount > 0 && (
+        <div className="mt-3 text-[11px] muted">
+          {droppedCount} client{droppedCount !== 1 ? 's' : ''} in DP (dropped) — hidden from board. Open client page to view.
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Table view (founder / manager / other roles) ──────────────────────────
+
+function TableView({ items }: { items: any[] }) {
+  return (
+    <div className="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Stage</th>
+            <th>Sub-status</th>
+            <th>Engagement</th>
+            <th>Amount</th>
+            <th>Days in stage</th>
+            <th>Pending action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((c: any) => {
+            const { label, urgent } = pendingAction(c);
+            const days = daysSince(c.stageEnteredAt);
+            return (
+              <tr key={c.id} className="clickable">
+                <td>
+                  <Link to={`/clients/${c.id}`} className="font-semibold hover:underline"
+                    style={{ color: 'var(--brand-text)' }}>
+                    {c.name}
+                  </Link>
+                </td>
+                <td><Pill color={stagePillColor(c.lifecycle)}>{stageLabel(c.lifecycle)}</Pill></td>
+                <td>
+                  {c.saleClosingSubStatus
+                    ? <Pill color={subStatusPillColor(c.saleClosingSubStatus)}>{c.saleClosingSubStatus}</Pill>
+                    : <span className="muted text-xs">—</span>}
+                </td>
+                <td className="text-sm">{c.engagementType || '—'}</td>
+                <td className="mono text-sm">{c.currency} {c.cycleAmount || '—'}</td>
+                <td>
+                  <span className="mono text-sm" style={{ color: days >= 5 ? 'var(--status-red)' : days >= 3 ? 'var(--status-amber)' : 'var(--brand-textSecondary)' }}>
+                    {days}d
+                  </span>
+                </td>
+                <td>
+                  <span className="text-xs font-medium" style={{ color: urgent ? 'var(--status-amber)' : 'var(--brand-textSecondary)' }}>
+                    {urgent && '⚡ '}{label}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────
+
 export function SalesClosingPage() {
   const user = useAuth((s) => s.user)!;
   const { data } = useQuery({ queryKey: ['clients'], queryFn: () => api.get('/clients').then((r) => r.data) });
@@ -71,7 +248,6 @@ export function SalesClosingPage() {
     .filter((c: any) => {
       const inStage = STAGE_ORDER.includes(c.lifecycle);
       if (!inStage) return false;
-      // sales_closer sees only their own clients
       if (user.role === 'sales_closer') return c.salesOwnerId === user.id;
       return true;
     })
@@ -81,6 +257,8 @@ export function SalesClosingPage() {
     acc[s] = items.filter((c: any) => c.lifecycle === s).length;
     return acc;
   }, {} as Record<string, number>);
+
+  const isSalesCloser = user.role === 'sales_closer';
 
   return (
     <>
@@ -110,56 +288,10 @@ export function SalesClosingPage() {
             title="No clients in your pipeline"
             description="Clients appear here once they reach Demo Done and move through closing to Active."
           />
+        ) : isSalesCloser ? (
+          <TileBoard items={items} />
         ) : (
-          <div className="table-card">
-            <table>
-              <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Stage</th>
-                  <th>Sub-status</th>
-                  <th>Engagement</th>
-                  <th>Amount</th>
-                  <th>Days in stage</th>
-                  <th>Pending action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((c: any) => {
-                  const { label, urgent } = pendingAction(c);
-                  const days = daysSince(c.stageEnteredAt);
-                  return (
-                    <tr key={c.id} className="clickable">
-                      <td>
-                        <Link to={`/clients/${c.id}`} className="font-semibold hover:underline"
-                          style={{ color: 'var(--brand-text)' }}>
-                          {c.name}
-                        </Link>
-                      </td>
-                      <td><Pill color={stagePillColor(c.lifecycle)}>{stageLabel(c.lifecycle)}</Pill></td>
-                      <td>
-                        {c.saleClosingSubStatus
-                          ? <Pill color={subStatusPillColor(c.saleClosingSubStatus)}>{c.saleClosingSubStatus}</Pill>
-                          : <span className="muted text-xs">—</span>}
-                      </td>
-                      <td className="text-sm">{c.engagementType || '—'}</td>
-                      <td className="mono text-sm">{c.currency} {c.cycleAmount || '—'}</td>
-                      <td>
-                        <span className="mono text-sm" style={{ color: days >= 5 ? 'var(--status-red)' : days >= 3 ? 'var(--status-amber)' : 'var(--brand-textSecondary)' }}>
-                          {days}d
-                        </span>
-                      </td>
-                      <td>
-                        <span className="text-xs font-medium" style={{ color: urgent ? 'var(--status-amber)' : 'var(--brand-textSecondary)' }}>
-                          {urgent && '⚡ '}{label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <TableView items={items} />
         )}
       </Page>
     </>
