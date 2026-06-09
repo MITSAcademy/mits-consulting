@@ -70,7 +70,7 @@ export function ClientDetailPage() {
   const [modal, setModal] = useState<ModalKind>(null);
   // Sub-status modal target preset — set by the Close-out wizard so the
   // modal opens already pointed at the destination Roshni clicked.
-  const [subStatusTarget, setSubStatusTarget] = useState<'CP' | 'C' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater' | undefined>(undefined);
+  const [subStatusTarget, setSubStatusTarget] = useState<'CP' | 'C' | 'DP' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater' | undefined>(undefined);
 
   const { data: client, isLoading } = useQuery({
     queryKey: ['client', id],
@@ -298,13 +298,15 @@ export function ClientDetailPage() {
   if (canClose(user.role) && (client.lifecycle === 'SaleClosing' || client.lifecycle === 'SaleWon')) {
     const ss = client.saleClosingSubStatus;
     const isWin = ss === 'Training-Paid' || ss === 'JBT-Paid' || ss === 'Training-EmployerLater' || ss === 'JBT-EmployerLater';
-    const label = ss === 'RP' ? 'Move from RP → outcome'
-      : ss === 'CP' ? 'CP · closure pending'
-      : ss === 'C' ? 'C · not starting'
+    const label = ss === 'RP' ? 'RP → update status'
+      : ss === 'CP' ? 'CP · move to C or DP'
+      : ss === 'C' ? 'C · record win outcome'
+      : ss === 'DP' ? 'DP · dropped'
       : isWin ? ss
-      : 'Set status (default RP)';
+      : 'Set status';
     const variant = ss === 'CP' ? 'amber' as const
-      : ss === 'C' ? 'danger' as const
+      : ss === 'C' ? 'primary' as const
+      : ss === 'DP' ? 'danger' as const
       : ss === 'RP' ? 'primary' as const
       : isWin ? 'success' as const
       : 'amber' as const;
@@ -2684,7 +2686,7 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
   const firstUndoneIdx = steps.findIndex((s) => !s.done);
 
   // Already at a terminal state (or moved past) — show a result banner.
-  if (ss === 'C' || ss === 'JBT-Paid' || ss === 'Training-Paid' || ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater') {
+  if (ss === 'C' || ss === 'DP' || ss === 'JBT-Paid' || ss === 'Training-Paid' || ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater') {
     const isWin = ss !== 'C';
     return (
       <div className="card mb-4" style={{ borderColor: isWin ? '#0F8A5F' : '#EF4444' }}>
@@ -2697,6 +2699,7 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
           {ss === 'JBT-Paid' && 'Direct client paid; JBT engagement started.'}
           {ss === 'Training-EmployerLater' && `Employer "${client.employerName || '—'}" committed for ${client.employerCommitDate || 'TBD'}; Training engagement started.`}
           {ss === 'JBT-EmployerLater' && `Employer "${client.employerName || '—'}" committed for ${client.employerCommitDate || 'TBD'}; JBT engagement started.`}
+          {ss === 'DP' && 'Dropped — WA group moved to DP. No further follow-up by Roshni.'}
           {ss === 'C' && 'Closed (no sale). Re-open by clearing the status from the action bar.'}
         </div>
         {(client as any).hasEngagementLetterFile && (
@@ -2874,23 +2877,21 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
  *  RP is the implicit entry state (set automatically when Samita marks a positive
  *  demo). From RP she moves the client to ONE of CP / C / JBT / Training. Each
  *  target has its own validation gate enforced by the backend. */
-function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClose: () => void; initialTarget?: 'CP' | 'C' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater' }) {
+function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClose: () => void; initialTarget?: 'CP' | 'C' | 'DP' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater' }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const current: string | null = client.saleClosingSubStatus || null;
-  // 6 destinations — 4 win-states (Paid × EmployerLater × Training × JBT) + CP + C.
-  type Target = 'CP' | 'C' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater';
+  const current: string = client.saleClosingSubStatus || 'RP';
+
+  type Target = 'CP' | 'C' | 'DP' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater';
   const [target, setTarget] = useState<Target | null>(initialTarget || null);
   const [nextCallOn, setNextCallOn] = useState<string>(client.roshniNextCallOn || '');
-  const [reason, setReason] = useState('');
-  const [employerName, setEmployerName] = useState('');
-  const [employerCommitDate, setEmployerCommitDate] = useState('');
+  const [employerName, setEmployerName] = useState(client.employerName || '');
+  const [employerCommitDate, setEmployerCommitDate] = useState(client.employerCommitDate || '');
 
   const m = useMutation({
     mutationFn: () => api.post(`/clients/${client.id}/sub-status`, {
       subStatus: target,
       nextCallOn: nextCallOn || null,
-      reason,
       employerName: employerName || undefined,
       employerCommitDate: employerCommitDate || undefined,
     }),
@@ -2898,12 +2899,8 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['clients'] });
       qc.invalidateQueries({ queryKey: ['roshni-follow-ups'] });
-      qc.invalidateQueries({ queryKey: ['roshni-renewals-approaching'] });
-      // Win moves get a celebration — Training-Paid, JBT-Paid,
-      // Training-EmployerLater, JBT-EmployerLater are all "client is starting"
-      // outcomes worth a confetti moment. CP / C / cleared are quiet.
-      const isWin = !!target && target !== 'CP' && target !== 'C';
-      showToast(target ? (isWin ? `🎉 ${target} — closed!` : `Moved to ${target}`) : 'Status cleared');
+      const isWin = !!target && target !== 'CP' && target !== 'C' && target !== 'DP';
+      showToast(isWin ? `🎉 ${target} — closed!` : `Moved to ${target}`);
       if (isWin) celebrate();
       onClose();
     },
@@ -2912,122 +2909,86 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
 
   const paymentDone = !!client.freshPaymentReceived || (client.freshPaymentAmount || 0) > 0;
   const checklistDone = !!client.paymentChecklistCompletedAt;
-
   const isEmployerLaterTarget = target === 'Training-EmployerLater' || target === 'JBT-EmployerLater';
   const isPaidTarget = target === 'Training-Paid' || target === 'JBT-Paid';
 
-  const destinations: {
-    key: Target;
-    title: string;
-    when: string;
-    requires: string;
-    blockedReason: string | null;
-    tone: 'amber' | 'danger' | 'success';
-  }[] = [
-    {
-      key: 'Training-Paid',
-      title: 'Training · Paid by client',
-      when: 'Direct-client payment received. Engagement type is Training. After this you rename the WA group + intro Mitali.',
-      requires: 'A Fresh Payment must be recorded.',
-      blockedReason: !paymentDone ? 'Record the Fresh payment first.' : null,
-      tone: 'success',
-    },
-    {
-      key: 'JBT-Paid',
-      title: 'JBT · Paid by client',
-      when: 'Direct-client payment received. Engagement type is JBT.',
-      requires: 'A Fresh Payment must be recorded.',
-      blockedReason: !paymentDone ? 'Record the Fresh payment first.' : null,
-      tone: 'success',
-    },
-    {
-      key: 'Training-EmployerLater',
-      title: 'Training · Employer pays later',
-      when: 'Employer committed to pay. Client starts Training now; payment + invoice handled together later.',
-      requires: 'Employer name + commitment date.',
-      blockedReason: (!employerName?.trim() || !employerCommitDate) ? 'Fill employer name + commitment date below.' : null,
-      tone: 'success',
-    },
-    {
-      key: 'JBT-EmployerLater',
-      title: 'JBT · Employer pays later',
-      when: 'Employer committed to pay. Client starts JBT now; payment + invoice handled together later.',
-      requires: 'Employer name + commitment date.',
-      blockedReason: (!employerName?.trim() || !employerCommitDate) ? 'Fill employer name + commitment date below.' : null,
-      tone: 'success',
-    },
-    {
-      key: 'CP',
-      title: 'CP · Closure Pending — client silent',
-      when: 'Client not engaging on payment. Keep chasing (3 working days / 6 missed attempts is the SOP).',
-      requires: 'No validation — mark any time.',
-      blockedReason: null,
-      tone: 'amber',
-    },
-    {
-      key: 'C',
-      title: 'C · Not starting (lost)',
-      when: 'Client explicitly confirmed they\'re NOT proceeding. Terminal lost.',
-      requires: 'A reason — why isn\'t the client going ahead?',
-      blockedReason: !reason?.trim() ? 'Fill the reason field below.' : null,
-      tone: 'danger',
-    },
-  ];
+  // Context-aware destinations based on current sub-status
+  type DestDef = { key: Target; title: string; desc: string; tone: 'amber' | 'danger' | 'success' | 'grey' };
+  const destinations: DestDef[] = current === 'C'
+    ? [
+        { key: 'Training-Paid',         title: 'Training · Client paid',        desc: 'Direct-client payment received. Training engagement starts.',         tone: 'success' },
+        { key: 'JBT-Paid',              title: 'JBT · Client paid',             desc: 'Direct-client payment received. JBT engagement starts.',              tone: 'success' },
+        { key: 'Training-EmployerLater',title: 'Training · Employer pays later', desc: 'Employer committed. Client starts Training now, invoice follows.',     tone: 'success' },
+        { key: 'JBT-EmployerLater',     title: 'JBT · Employer pays later',     desc: 'Employer committed. Client starts JBT now, invoice follows.',          tone: 'success' },
+      ]
+    : current === 'CP'
+    ? [
+        { key: 'C',  title: 'C · Engagement letter sent', desc: 'Letter shared — client is engaged. Follow up daily until paid.',  tone: 'amber' },
+        { key: 'DP', title: 'DP · Dropped',               desc: 'No response after follow-up. Move WA group to DP. No further follow-up.', tone: 'danger' },
+      ]
+    : /* RP or null */ [
+        { key: 'CP', title: 'CP · Discussed, parked',       desc: 'Spoke with client — interested but not ready. Revisit in 3 days.',  tone: 'amber' },
+        { key: 'C',  title: 'C · Engagement letter sent',   desc: 'Letter shared — client is engaged. Follow up daily until paid.',    tone: 'amber' },
+        { key: 'DP', title: 'DP · Dropped',                 desc: 'No answer after 5 days of follow-up. Move WA group to DP.',         tone: 'danger' },
+      ];
+
+  // Default next call dates
+  const defaultNextCall = (t: Target | null) => {
+    if (!t) return '';
+    const d = new Date();
+    if (t === 'CP') d.setDate(d.getDate() + 3);
+    else if (t === 'C') d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  };
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent
-        title={`Move ${client.name} from RP →`}
-        description={`Current state: ${current || 'unclassified'} ${current === 'RP' ? '(default entry state)' : ''}. Pick where this client goes next. Each destination has its own validation.`}
-        className="max-w-2xl"
+        title={`${client.name} · ${current} → next step`}
+        description={
+          current === 'C' ? 'Engagement letter sent — pick the win outcome when client confirms.'
+          : current === 'CP' ? 'Client discussed but parked — move to C when letter is shared, or DP if dropped.'
+          : 'New close-out — pick what happened after your call.'
+        }
+        className="max-w-xl"
       >
-        {!current && (
-          <div className="callout amber mb-3 text-xs">
-            ⚠ This client has no status yet. New SaleClosing arrivals should auto-default to RP. If you see this, ping Vaibhav — the auto-set didn't run.
-          </div>
-        )}
-
         <div className="space-y-2">
           {destinations.map((d) => {
             const selected = target === d.key;
-            const blocked = !!d.blockedReason;
-            const borderColor = d.tone === 'danger' ? 'border-brand-red'
-              : d.tone === 'amber' ? 'border-brand-amber'
-              : 'border-brand-green';
+            const borderColor = d.tone === 'danger' ? '#ef4444' : d.tone === 'success' ? '#22c55e' : '#f59e0b';
             return (
-              <button
-                key={d.key}
-                type="button"
-                onClick={() => setTarget(d.key)}
-                className={`w-full text-left flex items-start gap-2.5 p-3 rounded border transition-colors ${
-                  selected ? `${borderColor} bg-bg-input` : 'border-brand-border hover:bg-bg-input'
-                }`}
+              <button key={d.key} type="button"
+                onClick={() => { setTarget(d.key); setNextCallOn(defaultNextCall(d.key)); }}
+                className="w-full text-left flex items-start gap-3 p-3 rounded-lg border transition-all"
+                style={{
+                  borderColor: selected ? borderColor : 'var(--brand-border)',
+                  background: selected ? `color-mix(in srgb, ${borderColor} 8%, var(--bg-input))` : 'var(--bg-card)',
+                }}
               >
-                <div className={`mt-1 w-3 h-3 rounded-full border-2 ${selected ? `${borderColor.replace('border', 'bg').replace('border-', 'bg-')}` : 'border-brand-border'}`} />
+                <div className="mt-1 w-3 h-3 rounded-full flex-shrink-0 border-2 transition-all"
+                  style={{ borderColor, background: selected ? borderColor : 'transparent' }} />
                 <div className="flex-1">
-                  <div className="text-sm font-medium">{d.title}</div>
-                  <div className="text-xs muted mt-0.5">{d.when}</div>
-                  <div className="text-[11px] mt-1.5">
-                    <span className="muted">Required: </span>
-                    <span className={blocked ? 'text-brand-red' : 'text-brand-green'}>
-                      {blocked ? `✗ ${d.blockedReason}` : `✓ ${d.requires}`}
-                    </span>
-                  </div>
+                  <div className="text-sm font-semibold">{d.title}</div>
+                  <div className="text-xs muted mt-0.5">{d.desc}</div>
                 </div>
               </button>
             );
           })}
         </div>
 
-        {target === 'CP' && (
-          <>
-            <div className="form-row mt-3">
-              <Label>Next call on (optional)</Label>
-              <Input type="date" value={nextCallOn} onChange={(e) => setNextCallOn(e.target.value)} />
-              <div className="text-[10px] muted mt-1">Used by My follow-ups to surface overdue calls.</div>
+        {/* Next call date for CP/C */}
+        {(target === 'CP' || target === 'C') && (
+          <div className="form-row mt-3">
+            <Label>Next follow-up date</Label>
+            <Input type="date" value={nextCallOn} onChange={(e) => setNextCallOn(e.target.value)} />
+            <div className="text-[10px] muted mt-1">
+              {target === 'CP' ? 'Default: 3 days from today.' : 'Default: tomorrow.'}
             </div>
-            <NoPickupTemplate clientId={client.id} nextCallOn={nextCallOn} />
-          </>
+          </div>
+        )}
+
+        {target === 'CP' && (
+          <NoPickupTemplate clientId={client.id} nextCallOn={nextCallOn} />
         )}
 
         {isEmployerLaterTarget && (
@@ -3039,40 +3000,30 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
             <div className="form-row mt-2">
               <Label>Payment commitment date *</Label>
               <Input type="date" value={employerCommitDate} onChange={(e) => setEmployerCommitDate(e.target.value)} />
-              <div className="text-[10px] muted mt-1">When will the employer settle the invoice? Accounts uses this to follow up.</div>
+              <div className="text-[10px] muted mt-1">When will the employer settle the invoice?</div>
             </div>
           </>
         )}
 
         {isPaidTarget && (
           <div className="callout mt-3 text-xs">
-            <strong>Next steps after this move:</strong> if you haven't already, rename the WhatsApp group + intro Mitali. Confirmation post in MITS group too.
-            {!checklistDone && <div className="text-brand-amber mt-1">⚠ Heads-up: your 10-point payment checklist isn't marked complete yet.</div>}
+            <strong>After this:</strong> rename the WA group → Training/JBT, then intro Mitali.
+            {!checklistDone && <div className="text-brand-amber mt-1">⚠ Payment checklist not marked complete yet.</div>}
           </div>
         )}
 
-        {target === 'C' && (
-          <div className="form-row mt-3">
-            <Label>Reason *</Label>
-            <Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why isn't the client proceeding? e.g. budget pushed to next quarter, found another vendor." />
-          </div>
+        {isPaidTarget && !paymentDone && (
+          <div className="callout amber mt-2 text-xs">⚠ No Fresh Payment recorded yet — record it first, then come back here.</div>
         )}
 
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
           <Button
-            variant={target === 'C' ? 'danger' : target === 'CP' ? 'amber' : 'primary'}
-            disabled={!target || m.isPending}
-            disabledReason={
-              !target ? 'Pick a destination above first.'
-              : isPaidTarget && !paymentDone ? 'Record the Fresh payment first.'
-              : isEmployerLaterTarget && (!employerName?.trim() || !employerCommitDate) ? 'Fill employer name + commitment date.'
-              : target === 'C' && !reason?.trim() ? 'A reason is required for C.'
-              : null
-            }
+            variant={target === 'DP' ? 'danger' : target === 'CP' ? 'amber' : 'primary'}
+            disabled={!target || m.isPending || (isPaidTarget && !paymentDone) || (isEmployerLaterTarget && (!employerName?.trim() || !employerCommitDate))}
             onClick={() => m.mutate()}
           >
-            {m.isPending ? 'Saving…' : target ? `Move to ${target}` : 'Pick destination'}
+            {m.isPending ? 'Saving…' : target ? `Move to ${target}` : 'Pick an option'}
           </Button>
         </DialogFooter>
       </DialogContent>

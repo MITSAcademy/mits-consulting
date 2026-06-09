@@ -143,12 +143,10 @@ clientsRouter.get('/roshni/follow-ups', async (req: AuthedRequest, res) => {
     where: {
       ...ownerFilter,
       lifecycle: { in: ['SaleClosing', 'SaleWon'] },
-      // Only show clients still in Roshni's hands:
-      // - null sub-status (triage — fresh handoff)
-      // - RP / CP (active close-out work)
-      // C / JBT / Training are terminal — they've left her queue.
+      // Active queue: null (triage), RP, CP, C
+      // DP / win outcomes are terminal — removed from queue
       OR: [
-        { saleClosingSubStatus: { in: ['RP', 'CP'] } },
+        { saleClosingSubStatus: { in: ['RP', 'CP', 'C'] } },
         { saleClosingSubStatus: null },
       ],
     },
@@ -803,23 +801,25 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   // Extended state machine — 5 statuses Roshni walks clients through:
   //   RP       — entry (auto-set on positive demo handoff)
   //   CP       — silent client, still chasing
-  //   C        — client confirmed not starting (terminal lost)
+  //   C        — engagement letter shared, active daily follow-up → leads to win outcomes
+  //   CP       — discussed but parked, revisit in 3 days
+  //   DP       — dropped, no follow-up (Roshni moves WA group to DP)
   //   JBT      — employer-paid path, client starts now (deferred payment) — terminal won
   //   Training — client paid, starts now — terminal won
   const { subStatus, nextCallOn, lastContactOutcome, reason, employerName, employerCommitDate } = req.body as {
-    subStatus: 'RP' | 'CP' | 'C' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater' | null;
+    subStatus: 'RP' | 'CP' | 'C' | 'DP' | 'Training-Paid' | 'JBT-Paid' | 'Training-EmployerLater' | 'JBT-EmployerLater' | null;
     nextCallOn?: string;
     lastContactOutcome?: string;
     reason?: string;
     employerName?: string;
     employerCommitDate?: string;
   };
-  // 4 terminal-win outcomes (engagementType × paymentMode matrix):
-  //   Training-Paid             — direct client paid; client is doing Training
-  //   JBT-Paid                  — direct client paid; client is doing JBT
-  //   Training-EmployerLater    — employer will pay later; client is doing Training
-  //   JBT-EmployerLater         — employer will pay later; client is doing JBT
-  const allowedSubStatuses = [null, 'RP', 'CP', 'C', 'Training-Paid', 'JBT-Paid', 'Training-EmployerLater', 'JBT-EmployerLater'];
+  // Sub-status flow:
+  //   RP → CP (parked, 3-day revisit) | C (engaged, letter sent, daily follow-up) | DP (dropped)
+  //   CP → C
+  //   C  → Training-Paid | JBT-Paid | Training-EmployerLater | JBT-EmployerLater (win outcomes)
+  //   DP — terminal, no follow-up
+  const allowedSubStatuses = [null, 'RP', 'CP', 'C', 'DP', 'Training-Paid', 'JBT-Paid', 'Training-EmployerLater', 'JBT-EmployerLater'];
   if (!allowedSubStatuses.includes(subStatus)) {
     return res.status(400).json({ error: `Invalid sub-status: ${subStatus}.` });
   }
@@ -842,13 +842,25 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   }
 
   // ── Per-transition validation gates ────────────────────────────────────
-  // 4-state outcome model:
-  //   *-Paid             → require a recorded Fresh Payment (client paid directly)
-  //   *-EmployerLater    → require employer name + commitment date
-  //   C                  → require a reason
-  //   CP / RP / null     → no validation
   const isPaidOutcome = subStatus === 'Training-Paid' || subStatus === 'JBT-Paid';
   const isEmployerLater = subStatus === 'Training-EmployerLater' || subStatus === 'JBT-EmployerLater';
+  const isWinOutcome = isPaidOutcome || isEmployerLater;
+  const currentSS = client.saleClosingSubStatus;
+
+  // Win outcomes only allowed from C (engagement letter sent, active follow-up)
+  if (isWinOutcome && currentSS !== 'C') {
+    return res.status(409).json({
+      error: `Win outcomes (Paid / EmployerLater) are only available once the client is at C (engagement letter sent). Current status: ${currentSS || 'RP'}.`,
+      code: 'WIN_REQUIRES_C',
+    });
+  }
+  // DP only from RP or CP
+  if (subStatus === 'DP' && !['RP', 'CP', null].includes(currentSS)) {
+    return res.status(409).json({
+      error: `DP (dropped) can only be set from RP or CP. Current status: ${currentSS}.`,
+      code: 'DP_INVALID_TRANSITION',
+    });
+  }
   if (isPaidOutcome) {
     if (!client.freshPaymentReceived && (client.freshPaymentAmount || 0) <= 0) {
       const existing = await prisma.payment.count({ where: { clientId: client.id, kind: 'Fresh' } });
@@ -868,21 +880,10 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
       });
     }
   }
-  if (subStatus === 'C') {
-    // C = terminal lost. Require a reason so it's auditable.
-    if (!reason?.trim()) {
-      return res.status(409).json({
-        error: 'Mark as C (not starting) requires a reason — why isn\'t the client proceeding?',
-        code: 'C_REQUIRES_REASON',
-      });
-    }
-  }
 
   const today = new Date().toISOString().slice(0, 10);
-  // When the user picks "Clear sub-status" (subStatus === null) or any terminal
-  // Status / wipe roshniNextCallOn for any terminal status (C + any win state)
-  // and persist employer fields for the *-EmployerLater outcomes.
-  const isTerminal = subStatus === null || subStatus === 'C' || isPaidOutcome || isEmployerLater;
+  // DP and win outcomes are terminal — clear next call date
+  const isTerminal = subStatus === null || subStatus === 'DP' || isPaidOutcome || isEmployerLater;
   // Map legacy aliases to current values for the persisted column.
   const persistedSubStatus = subStatus && aliasMap[subStatus] ? aliasMap[subStatus] : subStatus;
   // Win outcomes (Paid or EmployerLater) auto-advance lifecycle to SaleWon
@@ -910,13 +911,14 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
     },
     include,
   });
-  // Maintain a single follow-up Task per client owned by the actor — RP/CP with a next-call-on
-  // date creates/updates the Task; C or null clears it. Surfaces overdue calls on /tasks.
+  // Maintain follow-up tasks:
+  //   RP/CP/C with nextCallOn → upsert task
+  //   DP / null / win outcomes → clear tasks
   try {
-    if ((subStatus === 'RP' || subStatus === 'CP') && nextCallOn) {
-      const kind = subStatus === 'CP' ? 'no pickup' : 'payment promised';
+    if ((subStatus === 'RP' || subStatus === 'CP' || subStatus === 'C') && nextCallOn) {
+      const kind = subStatus === 'CP' ? 'parked — revisit' : subStatus === 'C' ? 'engagement letter sent' : 'payment promised';
       await upsertRoshniFollowUpTask(client.id, req.user!.id, client.name, nextCallOn, kind);
-    } else if (subStatus === 'C' || subStatus === null) {
+    } else if (subStatus === 'DP' || subStatus === null || isWinOutcome) {
       await closeRoshniFollowUpTasks(client.id);
     }
   } catch (e) {

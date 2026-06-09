@@ -127,7 +127,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
       ).length;
       const followUpsDue = cl.filter((c) =>
         ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
-        && (c.saleClosingSubStatus === 'RP' || c.saleClosingSubStatus === 'CP')
+        && (c.saleClosingSubStatus === 'RP' || c.saleClosingSubStatus === 'CP' || c.saleClosingSubStatus === 'C')
         && c.roshniNextCallOn && c.roshniNextCallOn <= today,
       ).length;
       const renewalsDue = cl.filter((c) =>

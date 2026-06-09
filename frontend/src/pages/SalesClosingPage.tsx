@@ -26,9 +26,11 @@ function stagePillColor(s: string): 'amber' | 'blue' | 'green' | 'purple' | 'gre
   return 'grey';
 }
 
-function subStatusPillColor(ss: string): 'amber' | 'green' | 'grey' | 'blue' {
+function subStatusPillColor(ss: string): 'amber' | 'green' | 'grey' | 'blue' | 'red' {
   if (ss === 'RP') return 'blue';
   if (ss === 'CP') return 'amber';
+  if (ss === 'C') return 'amber';
+  if (ss === 'DP') return 'red';
   if (ss === 'JBT-Paid' || ss === 'Training-Paid') return 'green';
   if (ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater') return 'green';
   return 'grey';
@@ -41,7 +43,9 @@ function pendingAction(c: any): { label: string; urgent: boolean } {
   if (lc === 'DemoDone' || lc === 'FeedbackPending') return { label: 'Start closing', urgent: false };
   if (lc === 'SaleClosing') {
     if (!ss || ss === 'RP') return { label: 'Call client — move from RP', urgent: true };
-    if (ss === 'CP') return { label: 'Follow up — closure pending', urgent: false };
+    if (ss === 'CP') return { label: 'Revisit in 3 days — move to C', urgent: false };
+    if (ss === 'C') return { label: 'Follow up daily — waiting for payment', urgent: true };
+    if (ss === 'DP') return { label: 'Dropped — no follow-up', urgent: false };
     if (ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater') return { label: 'Send engagement letter', urgent: false };
   }
   if (lc === 'SaleWon') {
