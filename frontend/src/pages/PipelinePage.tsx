@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
@@ -10,6 +11,8 @@ export function PipelinePage() {
     queryFn: () => api.get('/metrics/pipeline').then((r) => r.data),
   });
 
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
   return (
     <>
       <Topbar title="Pipeline overview" />
@@ -20,6 +23,8 @@ export function PipelinePage() {
         <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' }}>
           {LIFECYCLE.map((s) => {
             const clients = (data?.[s] || []) as any[];
+            const isExpanded = expanded.has(s);
+            const visible = isExpanded ? clients : clients.slice(0, 8);
             return (
               <div key={s} className="bg-bg-card border border-brand-border rounded-md p-2.5 min-h-[220px]">
                 <div className="text-[10px] font-semibold uppercase tracking-wider text-brand-textSecondary mb-2 flex justify-between">
@@ -31,7 +36,7 @@ export function PipelinePage() {
                 {clients.length === 0 && (
                   <div className="muted text-[11px] text-center pt-3">Empty</div>
                 )}
-                {clients.slice(0, 8).map((c) => (
+                {visible.map((c) => (
                   <Link
                     key={c.id}
                     to={`/clients/${c.id}`}
@@ -44,7 +49,19 @@ export function PipelinePage() {
                   </Link>
                 ))}
                 {clients.length > 8 && (
-                  <div className="muted text-[10px] text-center mt-1">+{clients.length - 8} more</div>
+                  <button
+                    onClick={() => setExpanded(prev => {
+                      const next = new Set(prev);
+                      isExpanded ? next.delete(s) : next.add(s);
+                      return next;
+                    })}
+                    className="w-full text-[10px] text-center mt-1 py-1 rounded transition-colors"
+                    style={{ color: 'var(--accent-gold)', background: 'rgba(229,178,76,0.07)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(229,178,76,0.14)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(229,178,76,0.07)'; }}
+                  >
+                    {isExpanded ? '▲ Show less' : `+${clients.length - 8} more`}
+                  </button>
                 )}
               </div>
             );
