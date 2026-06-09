@@ -886,8 +886,6 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   const isTerminal = subStatus === null || subStatus === 'DP' || isPaidOutcome || isEmployerLater;
   // Map legacy aliases to current values for the persisted column.
   const persistedSubStatus = subStatus && aliasMap[subStatus] ? aliasMap[subStatus] : subStatus;
-  // Win outcomes (Paid or EmployerLater) auto-advance lifecycle to SaleWon
-  const isWinOutcome = isPaidOutcome || isEmployerLater;
   const updated = await prisma.client.update({
     where: { id: client.id },
     data: {
