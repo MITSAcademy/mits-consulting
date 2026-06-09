@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, fileUrl, uploadFile } from '@/lib/api';
+import { api, fileUrl, uploadFile, API_BASE } from '@/lib/api';
 import { readAvailabilitySlots, formatAvailabilitySlots, to12h } from '@/lib/utils';
 import { Time12h } from '@/components/Time12h';
 import { celebrate } from '@/components/CelebrationLayer';
@@ -2629,7 +2629,7 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
       doneAt: client.engagementLetterSentAt,
       button: { label: engagementSent ? 'Re-send engagement letter' : 'Send engagement letter', onClick: () => onAction('engagement') },
       extra: (client as any).hasEngagementLetterFile
-        ? <a href={`/api/clients/${client.id}/engagement-letter/file`} target="_blank" rel="noopener noreferrer"
+        ? <a href={`${API_BASE}/api/clients/${client.id}/engagement-letter/file`} target="_blank" rel="noopener noreferrer"
             className="text-xs flex items-center gap-1 mt-1" style={{ color: 'var(--accent-gold)' }}>
             <FileText size={11} /> Download uploaded copy
           </a>
@@ -2700,7 +2700,7 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
           {ss === 'C' && 'Closed (no sale). Re-open by clearing the status from the action bar.'}
         </div>
         {(client as any).hasEngagementLetterFile && (
-          <a href={`/api/clients/${client.id}/engagement-letter/file`} target="_blank" rel="noopener noreferrer"
+          <a href={`${API_BASE}/api/clients/${client.id}/engagement-letter/file`} target="_blank" rel="noopener noreferrer"
             className="text-xs flex items-center gap-1 mt-2" style={{ color: 'var(--accent-gold)' }}>
             <FileText size={11} /> Download uploaded engagement letter
           </a>
