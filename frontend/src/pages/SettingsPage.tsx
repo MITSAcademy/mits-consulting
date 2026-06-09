@@ -329,6 +329,7 @@ export function SettingsPage() {
 
 function BriefingTrigger() {
   const [status, setStatus] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'err'>>({});
+  const [allLoading, setAllLoading] = useState(false);
 
   async function fire(team: string, shift: string) {
     const key = `${team}-${shift}`;
@@ -336,17 +337,28 @@ function BriefingTrigger() {
     try {
       await api.post('/briefing/trigger', { team, shift });
       setStatus(s => ({ ...s, [key]: 'ok' }));
-      setTimeout(() => setStatus(s => ({ ...s, [key]: 'idle' })), 3000);
+      setTimeout(() => setStatus(s => ({ ...s, [key]: 'idle' })), 4000);
     } catch {
       setStatus(s => ({ ...s, [key]: 'err' }));
-      setTimeout(() => setStatus(s => ({ ...s, [key]: 'idle' })), 4000);
+      setTimeout(() => setStatus(s => ({ ...s, [key]: 'idle' })), 5000);
     }
   }
 
+  async function fireAll() {
+    setAllLoading(true);
+    const all = [
+      ['team1', 'morning'], ['team1', 'evening'],
+      ['team2', 'morning'], ['team2', 'evening'],
+      ['samita', 'morning'], ['samita', 'evening'],
+    ];
+    await Promise.allSettled(all.map(([t, s]) => fire(t, s)));
+    setAllLoading(false);
+  }
+
   const rows = [
-    { team: 'team1', label: 'Team 1 (Aman + Kanchan)', shifts: ['morning', 'evening'] },
-    { team: 'team2', label: 'Team 2 (Anjali + Taran)',  shifts: ['morning', 'evening'] },
-    { team: 'samita', label: 'Samita (overview)',        shifts: ['morning', 'evening'] },
+    { team: 'team1',  label: 'Team 1 (Aman + Kanchan)', shifts: ['morning', 'evening'] },
+    { team: 'team2',  label: 'Team 2 (Anjali + Taran)',  shifts: ['morning', 'evening'] },
+    { team: 'samita', label: 'Samita (overview)',         shifts: ['morning', 'evening'] },
   ];
 
   return (
@@ -354,7 +366,11 @@ function BriefingTrigger() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
         <Zap size={14} color="#F59E0B" />
         <span style={{ fontWeight: 600, fontSize: 13 }}>Daily briefing — manual trigger</span>
-        <span style={{ fontSize: 11, color: '#6B6F78', marginLeft: 4 }}>Fires the email immediately. Use to verify email delivery.</span>
+        <span style={{ fontSize: 11, color: '#6B6F78', marginLeft: 4, flex: 1 }}>Fires the email immediately.</span>
+        <Button size="sm" disabled={allLoading} onClick={fireAll}
+          style={{ background: '#1A6CDF', color: '#fff', fontWeight: 600 }}>
+          {allLoading ? 'Sending all…' : '⚡ Send all now'}
+        </Button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {rows.map(r => (
@@ -367,7 +383,7 @@ function BriefingTrigger() {
                 <Button
                   key={shift}
                   size="sm"
-                  disabled={st === 'loading'}
+                  disabled={st === 'loading' || allLoading}
                   onClick={() => fire(r.team, shift)}
                   style={{
                     minWidth: 90,
