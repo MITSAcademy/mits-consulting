@@ -20,7 +20,7 @@ services:
   - type: web
     name: mits-backend
     runtime: node
-    plan: free                # cold-start friendly; bump to Starter ($7/mo) for no-sleep
+    plan: starter             # $7/mo — no cold starts
     region: oregon
     autoDeploy: yes
     rootDir: backend
