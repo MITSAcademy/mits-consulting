@@ -885,12 +885,17 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   const isTerminal = subStatus === null || subStatus === 'C' || isPaidOutcome || isEmployerLater;
   // Map legacy aliases to current values for the persisted column.
   const persistedSubStatus = subStatus && aliasMap[subStatus] ? aliasMap[subStatus] : subStatus;
+  // Win outcomes (Paid or EmployerLater) auto-advance lifecycle to SaleWon
+  const isWinOutcome = isPaidOutcome || isEmployerLater;
   const updated = await prisma.client.update({
     where: { id: client.id },
     data: {
       saleClosingSubStatus: persistedSubStatus,
       saleClosingSubStatusAt: new Date(),
       saleClosingSubStatusById: req.user!.id,
+      ...(isWinOutcome && client.lifecycle === 'SaleClosing'
+        ? { lifecycle: 'SaleWon', stageEnteredAt: today }
+        : {}),
       ...(isTerminal
         ? { roshniNextCallOn: null }
         : nextCallOn !== undefined ? { roshniNextCallOn: nextCallOn || null } : {}),
