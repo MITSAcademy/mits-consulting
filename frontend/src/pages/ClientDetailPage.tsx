@@ -3841,30 +3841,65 @@ function EngagementLetterModal({ client, onClose }: any) {
       >
         <div className="space-y-3">
 
-          {/* Option 1 — Already sent */}
-          <div className="rounded-lg border p-3 flex items-start gap-3"
+          {/* Option 1 — Sent manually / upload */}
+          <div className="rounded-lg border p-3"
             style={{ borderColor: 'var(--brand-borderSoft)', background: 'var(--bg-input)' }}>
-            <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--status-green)' }} />
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm">Already sent</div>
-              <div className="text-xs muted mt-0.5">I sent the engagement letter outside the portal (WhatsApp / email manually). Mark it done and create Mitali's handover task.</div>
+            <div className="flex items-start gap-3">
+              <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--status-green)' }} />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm">Already sent / upload copy</div>
+                <div className="text-xs muted mt-0.5">Sent it yourself outside the portal? Mark it done. Optionally attach the signed PDF for records.</div>
+              </div>
             </div>
-            <Button size="sm" disabled={busy} onClick={() => markSent.mutate()}
-              style={{ flexShrink: 0 }}>
-              {markSent.isPending ? 'Saving…' : 'Mark as sent'}
-            </Button>
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs px-3 py-1.5 rounded-lg"
+                style={{ border: '1px solid var(--brand-border)', color: 'var(--brand-textSecondary)', background: 'var(--bg-page)' }}>
+                <FileText size={12} />
+                {uploadFile ? uploadFile.name : 'Attach PDF (optional)'}
+                <input type="file" accept=".pdf,application/pdf" className="hidden"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+              </label>
+              {uploadFile && (
+                <button className="text-xs muted" onClick={() => setUploadFile(null)}>✕ remove</button>
+              )}
+              <Button size="sm" disabled={busy || uploading} className="ml-auto"
+                onClick={async () => {
+                  setUploading(true);
+                  try {
+                    if (uploadFile) {
+                      const fd = new FormData();
+                      fd.append('file', uploadFile);
+                      await api.post(`/clients/${client.id}/engagement-letter/upload`, fd);
+                    } else {
+                      await api.post(`/clients/${client.id}/mark-engagement-letter-sent`);
+                    }
+                    invalidate();
+                    showToast('Marked as sent — Mitali handover task created');
+                    celebrate();
+                    onClose();
+                  } catch (e: any) {
+                    showToast(e.response?.data?.error || 'Failed', 'error');
+                  } finally { setUploading(false); }
+                }}>
+                {uploading ? 'Saving…' : uploadFile ? 'Upload & mark sent' : 'Mark as sent'}
+              </Button>
+            </div>
           </div>
 
           {/* Option 2 — Send via Email */}
           <div className="rounded-lg border p-3 flex items-start gap-3"
-            style={{ borderColor: 'var(--brand-borderSoft)', background: 'var(--bg-input)' }}>
-            <Mail size={16} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-blue)' }} />
+            style={{
+              borderColor: !toEmail ? 'var(--brand-border)' : 'var(--brand-borderSoft)',
+              background: 'var(--bg-input)',
+              opacity: !toEmail ? 0.5 : 1,
+            }}>
+            <Mail size={16} className="mt-0.5 flex-shrink-0" style={{ color: !toEmail ? 'var(--brand-textMuted)' : 'var(--accent-blue)' }} />
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-sm">Send via Email</div>
               <div className="text-xs muted mt-0.5">
                 {toEmail
                   ? <>Sends PDF to <strong>{toEmail}</strong> from your Gmail account.</>
-                  : <span className="text-brand-amber">⚠ No email address on file.</span>}
+                  : <>No email address on file — add it on the client page first.</>}
               </div>
             </div>
             <Button size="sm" variant="primary" disabled={busy || !toEmail} onClick={() => sendEmail.mutate()}
@@ -3875,55 +3910,23 @@ function EngagementLetterModal({ client, onClose }: any) {
 
           {/* Option 3 — Send via WhatsApp */}
           <div className="rounded-lg border p-3 flex items-start gap-3"
-            style={{ borderColor: 'var(--brand-borderSoft)', background: 'var(--bg-input)' }}>
-            <MessageCircle size={16} className="mt-0.5 flex-shrink-0" style={{ color: '#25D366' }} />
+            style={{
+              borderColor: !hasPhone ? 'var(--brand-border)' : 'var(--brand-borderSoft)',
+              background: 'var(--bg-input)',
+              opacity: !hasPhone ? 0.5 : 1,
+            }}>
+            <MessageCircle size={16} className="mt-0.5 flex-shrink-0" style={{ color: !hasPhone ? 'var(--brand-textMuted)' : '#25D366' }} />
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-sm">Send via WhatsApp</div>
               <div className="text-xs muted mt-0.5">
                 {hasPhone
                   ? <>Opens WhatsApp to <strong>{client.phoneCode || ''} {client.phoneDigits}</strong> with the letter text.</>
-                  : <span className="text-brand-amber">⚠ No phone number on file.</span>}
+                  : <>No phone number on file — add it on the client page first.</>}
               </div>
             </div>
             <Button size="sm" disabled={busy || !hasPhone} onClick={() => sendWa.mutate()}
               style={{ flexShrink: 0 }}>
               {sendWa.isPending ? 'Opening…' : 'Open WhatsApp'}
-            </Button>
-          </div>
-
-          {/* Option 4 — Upload PDF */}
-          <div className="rounded-lg border p-3 flex items-start gap-3"
-            style={{ borderColor: 'var(--brand-borderSoft)', background: 'var(--bg-input)' }}>
-            <FileText size={16} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-gold)' }} />
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-sm">Upload signed copy</div>
-              <div className="text-xs muted mt-0.5">Upload the signed engagement letter PDF to keep on record.</div>
-              <label className="mt-2 flex items-center gap-2 cursor-pointer">
-                <span className="text-xs px-2 py-1 rounded border"
-                  style={{ borderColor: 'var(--brand-border)', color: 'var(--brand-textSecondary)' }}>
-                  {uploadFile ? uploadFile.name : 'Choose PDF…'}
-                </span>
-                <input type="file" accept=".pdf,application/pdf" className="hidden"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
-              </label>
-            </div>
-            <Button size="sm" disabled={busy || !uploadFile || uploading}
-              style={{ flexShrink: 0 }}
-              onClick={async () => {
-                if (!uploadFile) return;
-                setUploading(true);
-                try {
-                  const fd = new FormData();
-                  fd.append('file', uploadFile);
-                  await api.post(`/clients/${client.id}/engagement-letter/upload`, fd);
-                  invalidate();
-                  showToast('Engagement letter uploaded');
-                  onClose();
-                } catch (e: any) {
-                  showToast(e.response?.data?.error || 'Upload failed', 'error');
-                } finally { setUploading(false); }
-              }}>
-              {uploading ? 'Uploading…' : 'Upload'}
             </Button>
           </div>
 
