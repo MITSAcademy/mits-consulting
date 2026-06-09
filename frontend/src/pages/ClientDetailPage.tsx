@@ -3982,22 +3982,37 @@ function HandoverWelcomeModal({ client, onClose }: any) {
   const qc = useQueryClient();
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
   const hasPhone = !!client.phoneDigits;
+  const canSend = toEmail || hasPhone;
 
   const send = useMutation({
     mutationFn: async () => {
-      const e = await api.post(`/clients/${client.id}/handover-welcome`, { channel: 'email' });
-      const w = await api.post(`/clients/${client.id}/handover-welcome`, { channel: 'whatsapp' });
-      return { email: e.data, wa: w.data };
+      const results: any = {};
+      if (toEmail) results.email = await api.post(`/clients/${client.id}/handover-welcome`, { channel: 'email' }).then(r => r.data);
+      if (hasPhone) results.wa = await api.post(`/clients/${client.id}/handover-welcome`, { channel: 'whatsapp' }).then(r => r.data);
+      return results;
     },
     onSuccess: (r: any) => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['messages'] });
       if (r.wa?.url) window.open(r.wa.url, '_blank', 'noopener');
-      showToast('Handover welcome sent (Email + WhatsApp)');
+      const sent = [toEmail && 'Email', hasPhone && 'WhatsApp'].filter(Boolean).join(' + ');
+      showToast(`Handover welcome sent (${sent})`);
       onClose();
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
+
+  const markAlreadySent = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/handover-welcome`, { channel: 'already_sent' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      showToast('Marked as already sent · step completed');
+      onClose();
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const anyPending = send.isPending || markAlreadySent.isPending;
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -4015,18 +4030,25 @@ function HandoverWelcomeModal({ client, onClose }: any) {
           </div>
         </div>
 
+        {/* Already sent option */}
+        <div className="mt-3 p-2.5 rounded border" style={{ borderColor: 'var(--brand-borderSoft)', background: 'var(--bg-input)' }}>
+          <div className="text-xs font-medium mb-1">Already sent this outside the app?</div>
+          <div className="text-xs muted mb-2">Mark as done to complete the wizard step without sending again.</div>
+          <Button size="sm" disabled={anyPending} onClick={() => markAlreadySent.mutate()}>
+            {markAlreadySent.isPending ? 'Marking…' : '✓ Already sent — mark done'}
+          </Button>
+        </div>
+
         <DialogFooter>
-          {(!toEmail || !hasPhone) && (
+          {!canSend && (
             <div className="text-xs text-brand-amber mr-auto self-center">
-              {!toEmail && '⚠ No client email. '}
-              {!hasPhone && '⚠ No client phone. '}
-              Both required.
+              ⚠ No email or phone on file — use "Already sent" above.
             </div>
           )}
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!toEmail || !hasPhone || send.isPending} onClick={() => send.mutate()}>
+          <Button variant="primary" disabled={!canSend || anyPending} onClick={() => send.mutate()}>
             <Mail size={12}/><MessageCircle size={12}/>{' '}
-            {send.isPending ? 'Sending…' : 'Send (Email + WhatsApp)'}
+            {send.isPending ? 'Sending…' : `Send (${[toEmail && 'Email', hasPhone && 'WhatsApp'].filter(Boolean).join(' + ') || '—'})`}
           </Button>
         </DialogFooter>
       </DialogContent>
