@@ -2609,6 +2609,7 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
     done: boolean;
     doneAt?: string | null;
     button: { label: string; onClick: () => void } | null;
+    extra?: React.ReactNode;
   };
 
   const steps: Step[] = [
@@ -2793,7 +2794,7 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
                   {isLocked && <span className="ml-2 text-[10px] muted">🔒 locked</span>}
                 </div>
                 <div className="text-xs muted mt-0.5">{s.desc}</div>
-                {(s as any).extra}
+                {s.extra}
               </div>
               {s.button && (
                 <Button
