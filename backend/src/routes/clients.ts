@@ -1,4 +1,8 @@
 import { Router } from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
@@ -1348,6 +1352,69 @@ clientsRouter.post('/:id/mark-payment-wa-sent', async (req: AuthedRequest, res) 
   });
   await audit(req.user!.id, req.user!.name, 'PAYMENT_WA_SENT', client.name);
   res.json(updated);
+});
+
+// Mark engagement letter as already sent outside the portal.
+clientsRouter.post('/:id/mark-engagement-letter-sent', async (req: AuthedRequest, res) => {
+  if (!['founder', 'manager', 'sales_closer', 'demo_lead'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  const client = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const today = new Date().toISOString().slice(0, 10);
+  await prisma.client.update({ where: { id: client.id }, data: { engagementLetterSentAt: today } });
+  try {
+    const mitali = await prisma.user.findUnique({ where: { id: 'u-mitali' }, select: { id: true } });
+    if (mitali) {
+      await prisma.task.create({
+        data: {
+          title: `Handover call — ${client.name} (engagement letter sent)`,
+          ownerId: mitali.id,
+          clientId: client.id,
+          dueDate: today,
+          status: 'Pending',
+          type: 'HANDOVER',
+        },
+      });
+    }
+  } catch { /* non-fatal */ }
+  await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · marked sent manually`);
+  res.json({ ok: true });
+});
+
+// Upload signed engagement letter PDF — stores file, stamps engagementLetterSentAt.
+const elUploadDir = path.resolve(process.cwd(), 'uploads', 'engagement-letters');
+if (!fs.existsSync(elUploadDir)) fs.mkdirSync(elUploadDir, { recursive: true });
+const elUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, elUploadDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.pdf';
+      cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext.toLowerCase()}`);
+    },
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = file.mimetype === 'application/pdf' || path.extname(file.originalname).toLowerCase() === '.pdf';
+    ok ? cb(null, true) : cb(new Error('Only PDF files are allowed'));
+  },
+});
+
+clientsRouter.post('/:id/engagement-letter/upload', elUpload.single('file'), async (req: AuthedRequest, res) => {
+  if (!['founder', 'manager', 'sales_closer', 'demo_lead'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  if (!req.file) return res.status(400).json({ error: 'No file provided' });
+  const client = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const fileUrl = `/uploads/engagement-letters/${req.file.filename}`;
+  const today = new Date().toISOString().slice(0, 10);
+  await prisma.client.update({
+    where: { id: client.id },
+    data: { engagementLetterSentAt: today },
+  });
+  await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · uploaded signed copy · ${fileUrl}`);
+  res.json({ ok: true, fileUrl });
 });
 
 // Handover-to-Mitali notification (creates a Task on Mitali's queue so the call gets scheduled).

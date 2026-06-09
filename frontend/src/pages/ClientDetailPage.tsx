@@ -14,7 +14,7 @@ import { formatPhone, waLink, todayISO, stageLabel, backStagesFor, addDays } fro
 import { useUI } from '@/store/ui';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/store/auth';
-import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play, X, Download, Users } from 'lucide-react';
+import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play, X, Download, Users, FileText, CheckCircle2 } from 'lucide-react';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 import { CallHistoryCard } from '@/components/CallHistoryCard';
@@ -3785,59 +3785,152 @@ function EngagementLetterModal({ client, onClose }: any) {
   const qc = useQueryClient();
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
   const hasPhone = !!client.phoneDigits;
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
-  const send = useMutation({
-    mutationFn: async () => {
-      // 1. Email goes out immediately
-      const e = await api.post(`/clients/${client.id}/engagement-letter`, { channel: 'email' });
-      // 2. WhatsApp link built + logged + opens in new tab
-      const w = await api.post(`/clients/${client.id}/engagement-letter`, { channel: 'whatsapp' });
-      // 3. Trigger handover task for Mitali
-      await api.post(`/clients/${client.id}/handover-to-mitali`).catch(() => null);
-      return { email: e.data, wa: w.data };
-    },
-    onSuccess: (r: any) => {
-      qc.invalidateQueries({ queryKey: ['client', client.id] });
-      qc.invalidateQueries({ queryKey: ['messages'] });
-      qc.invalidateQueries({ queryKey: ['tasks'] });
-      if (r.wa?.url) window.open(r.wa.url, '_blank', 'noopener');
-      showToast('🎉 Engagement letter sent · Mitali takes it from here');
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['client', client.id] });
+    qc.invalidateQueries({ queryKey: ['messages'] });
+    qc.invalidateQueries({ queryKey: ['tasks'] });
+  };
+
+  // Already sent outside portal
+  const markSent = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/mark-engagement-letter-sent`),
+    onSuccess: () => {
+      invalidate();
+      showToast('Marked as sent — Mitali handover task created');
       celebrate();
       onClose();
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
+  // Send via email only
+  const sendEmail = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/engagement-letter`, { channel: 'email' }),
+    onSuccess: () => {
+      invalidate();
+      showToast('Engagement letter sent via email');
+      celebrate();
+      onClose();
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed to send email', 'error'),
+  });
+
+  // Send via WhatsApp only
+  const sendWa = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/engagement-letter`, { channel: 'whatsapp' }),
+    onSuccess: (r: any) => {
+      invalidate();
+      if (r.data?.url) window.open(r.data.url, '_blank', 'noopener');
+      showToast('WhatsApp link opened — mark as sent once delivered');
+      onClose();
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const busy = markSent.isPending || sendEmail.isPending || sendWa.isPending;
+
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         title={`Engagement letter · ${client.name}`}
-        description='Confirms the engagement, CCs Mitali, and creates a handover task on her queue. Email + WhatsApp both go out.'
-        className="max-w-xl"
+        description="Choose how the engagement letter was or will be sent."
+        className="max-w-lg"
       >
-        <div className="space-y-2 text-sm">
-          <div><strong>To (email):</strong> {toEmail || <span className="text-brand-amber">missing</span>}</div>
-          <div><strong>To (WhatsApp):</strong> {hasPhone ? `${client.phoneCode || ''} ${client.phoneDigits}` : <span className="text-brand-amber">missing</span>}</div>
-          <div className="text-xs muted bg-bg-input p-2 rounded mt-2">
-            Subject: <strong>Engagement confirmed · Welcome aboard, {client.name}</strong><br/>
-            Includes engagement type, payment model, cycle dates, trainer name, and next-steps with Mitali's team.
-            Mitali is auto-CC'd on the email and gets a Task on her queue.
+        <div className="space-y-3">
+
+          {/* Option 1 — Already sent */}
+          <div className="rounded-lg border p-3 flex items-start gap-3"
+            style={{ borderColor: 'var(--brand-borderSoft)', background: 'var(--bg-input)' }}>
+            <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--status-green)' }} />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm">Already sent</div>
+              <div className="text-xs muted mt-0.5">I sent the engagement letter outside the portal (WhatsApp / email manually). Mark it done and create Mitali's handover task.</div>
+            </div>
+            <Button size="sm" disabled={busy} onClick={() => markSent.mutate()}
+              style={{ flexShrink: 0 }}>
+              {markSent.isPending ? 'Saving…' : 'Mark as sent'}
+            </Button>
           </div>
+
+          {/* Option 2 — Send via Email */}
+          <div className="rounded-lg border p-3 flex items-start gap-3"
+            style={{ borderColor: 'var(--brand-borderSoft)', background: 'var(--bg-input)' }}>
+            <Mail size={16} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-blue)' }} />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm">Send via Email</div>
+              <div className="text-xs muted mt-0.5">
+                {toEmail
+                  ? <>Sends PDF to <strong>{toEmail}</strong> from your Gmail account.</>
+                  : <span className="text-brand-amber">⚠ No email address on file.</span>}
+              </div>
+            </div>
+            <Button size="sm" variant="primary" disabled={busy || !toEmail} onClick={() => sendEmail.mutate()}
+              style={{ flexShrink: 0 }}>
+              {sendEmail.isPending ? 'Sending…' : 'Send email'}
+            </Button>
+          </div>
+
+          {/* Option 3 — Send via WhatsApp */}
+          <div className="rounded-lg border p-3 flex items-start gap-3"
+            style={{ borderColor: 'var(--brand-borderSoft)', background: 'var(--bg-input)' }}>
+            <MessageCircle size={16} className="mt-0.5 flex-shrink-0" style={{ color: '#25D366' }} />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm">Send via WhatsApp</div>
+              <div className="text-xs muted mt-0.5">
+                {hasPhone
+                  ? <>Opens WhatsApp to <strong>{client.phoneCode || ''} {client.phoneDigits}</strong> with the letter text.</>
+                  : <span className="text-brand-amber">⚠ No phone number on file.</span>}
+              </div>
+            </div>
+            <Button size="sm" disabled={busy || !hasPhone} onClick={() => sendWa.mutate()}
+              style={{ flexShrink: 0 }}>
+              {sendWa.isPending ? 'Opening…' : 'Open WhatsApp'}
+            </Button>
+          </div>
+
+          {/* Option 4 — Upload PDF */}
+          <div className="rounded-lg border p-3 flex items-start gap-3"
+            style={{ borderColor: 'var(--brand-borderSoft)', background: 'var(--bg-input)' }}>
+            <FileText size={16} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-gold)' }} />
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-sm">Upload signed copy</div>
+              <div className="text-xs muted mt-0.5">Upload the signed engagement letter PDF to keep on record.</div>
+              <label className="mt-2 flex items-center gap-2 cursor-pointer">
+                <span className="text-xs px-2 py-1 rounded border"
+                  style={{ borderColor: 'var(--brand-border)', color: 'var(--brand-textSecondary)' }}>
+                  {uploadFile ? uploadFile.name : 'Choose PDF…'}
+                </span>
+                <input type="file" accept=".pdf,application/pdf" className="hidden"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+              </label>
+            </div>
+            <Button size="sm" disabled={busy || !uploadFile || uploading}
+              style={{ flexShrink: 0 }}
+              onClick={async () => {
+                if (!uploadFile) return;
+                setUploading(true);
+                try {
+                  const fd = new FormData();
+                  fd.append('file', uploadFile);
+                  await api.post(`/clients/${client.id}/engagement-letter/upload`, fd);
+                  invalidate();
+                  showToast('Engagement letter uploaded');
+                  onClose();
+                } catch (e: any) {
+                  showToast(e.response?.data?.error || 'Upload failed', 'error');
+                } finally { setUploading(false); }
+              }}>
+              {uploading ? 'Uploading…' : 'Upload'}
+            </Button>
+          </div>
+
         </div>
 
         <DialogFooter>
-          {(!toEmail || !hasPhone) && (
-            <div className="text-xs text-brand-amber mr-auto self-center">
-              {!toEmail && '⚠ No client email. '}
-              {!hasPhone && '⚠ No client phone. '}
-              Both required.
-            </div>
-          )}
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!toEmail || !hasPhone || send.isPending} onClick={() => send.mutate()}>
-            <Mail size={12}/><MessageCircle size={12}/>{' '}
-            {send.isPending ? 'Sending…' : 'Send (Email + WhatsApp) + Handover'}
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
