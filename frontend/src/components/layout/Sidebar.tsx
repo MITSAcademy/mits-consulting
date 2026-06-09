@@ -208,8 +208,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
         `}
       >
         {/* Brand header */}
-        <div className="px-3 pb-3 flex-shrink-0">
-          <div className="flex items-center gap-2.5">
+        <div className="pb-3 flex-shrink-0" style={{ padding: collapsed ? '0 8px 12px' : '0 12px 12px' }}>
+          <div className="flex items-center gap-2">
             <div
               className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform hover:rotate-3"
               style={{
@@ -221,7 +221,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
               <img src="/mits-logo.svg" alt="MITS" className="w-6 h-6" style={{ filter: 'none' }} />
             </div>
             {!collapsed && (
-              <div className="leading-tight overflow-hidden">
+              <div className="leading-tight overflow-hidden flex-1">
                 <div className="text-[10px] uppercase tracking-[0.14em] whitespace-nowrap" style={{ color: 'rgba(229,178,76,0.85)' }}>
                   Consulting Hub
                 </div>
@@ -230,21 +230,27 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
                 </div>
               </div>
             )}
-            {/* Collapse toggle — desktop only */}
-            <button
-              onClick={() => setCollapsed(c => !c)}
-              className="hidden md:flex ml-auto p-1 rounded transition-colors flex-shrink-0"
-              style={{ color: 'rgba(232,226,211,0.40)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(229,178,76,0.85)'; e.currentTarget.style.background = 'rgba(229,178,76,0.08)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(232,226,211,0.40)'; e.currentTarget.style.background = 'transparent'; }}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {collapsed ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
-            </button>
           </div>
+          {/* Collapse toggle — always visible on desktop */}
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            className="hidden md:flex items-center justify-center w-full mt-2 py-1.5 rounded-lg transition-colors"
+            style={{
+              color: 'rgba(229,178,76,0.9)',
+              background: 'rgba(229,178,76,0.10)',
+              border: '1px solid rgba(229,178,76,0.20)',
+              gap: 6,
+              fontSize: 11,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(229,178,76,0.20)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(229,178,76,0.10)'; }}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <ChevronsRight size={13} /> : <><ChevronsLeft size={13} /><span>Collapse</span></>}
+          </button>
           {!collapsed && (
             <div
-              className="mt-3 h-px"
+              className="mt-2 h-px"
               style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(229,178,76,0.40) 50%, transparent 100%)' }}
             />
           )}

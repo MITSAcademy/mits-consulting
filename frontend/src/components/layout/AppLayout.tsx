@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom';
-import { useState, createContext, useContext } from 'react';
+import { useState, createContext, useContext, Suspense } from 'react';
 import { Menu } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Toaster } from '@/components/ui/toast';
@@ -21,7 +21,9 @@ export function AppLayout() {
       <div className="flex min-h-screen">
         <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
         <main className="flex-1 min-w-0 w-full overflow-x-hidden">
-          <Outlet />
+          <Suspense fallback={<div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '2px', background: 'var(--accent-gold)', animation: 'progress-bar 1s ease-in-out infinite' }} />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       <Toaster />
