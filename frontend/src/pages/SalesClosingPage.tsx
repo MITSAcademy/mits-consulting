@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { LayoutGrid } from 'lucide-react';
 
 const STAGE_ORDER = ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon', 'Active'];
+const BOARD_STAGES = ['SaleClosing', 'SaleWon', 'Active'];
 
 function stageLabel(s: string) {
   if (s === 'DemoDone') return 'Demo done';
@@ -184,14 +185,13 @@ export function SalesClosingPage() {
   const all = (data || []) as any[];
   const items = all
     .filter((c: any) => {
-      const inStage = STAGE_ORDER.includes(c.lifecycle);
-      if (!inStage) return false;
+      if (!BOARD_STAGES.includes(c.lifecycle)) return false;
       if (user.role === 'sales_closer') return c.salesOwnerId === user.id;
       return true;
     })
     .sort((a: any, b: any) => STAGE_ORDER.indexOf(a.lifecycle) - STAGE_ORDER.indexOf(b.lifecycle));
 
-  const counts = STAGE_ORDER.reduce((acc, s) => {
+  const counts = BOARD_STAGES.reduce((acc, s) => {
     acc[s] = items.filter((c: any) => c.lifecycle === s).length;
     return acc;
   }, {} as Record<string, number>);
@@ -206,7 +206,7 @@ export function SalesClosingPage() {
         {/* Summary strip */}
         {items.length > 0 && (
           <div className="flex gap-2 flex-wrap mb-4">
-            {STAGE_ORDER.filter(s => counts[s] > 0).map(s => (
+            {BOARD_STAGES.filter(s => counts[s] > 0).map(s => (
               <div key={s} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
                 style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
                 <span style={{ color: 'var(--brand-textMuted)' }}>{stageLabel(s)}</span>
