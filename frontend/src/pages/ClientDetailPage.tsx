@@ -288,7 +288,7 @@ export function ClientDetailPage() {
   if (canClose(user.role) && (client.lifecycle === 'DemoDone' || client.lifecycle === 'FeedbackPending')) {
     actions.push(<Button key="close" variant="amber" onClick={() => stageM.mutate('SaleClosing')}><FileCheck size={14}/> Start closing</Button>);
   }
-  if (canClose(user.role) && client.lifecycle === 'SaleClosing' && canRecordPayment(user.role)) {
+  if (canClose(user.role) && client.lifecycle === 'SaleClosing' && canRecordPayment(user.role) && !isEmployerLater) {
     actions.push(<Button key="pay" variant="success" onClick={() => setModal('freshPayment')}><Wallet size={14}/> Fresh payment</Button>);
   }
   // Roshni state machine — RP is auto-set entry; outcomes are CP / C +
