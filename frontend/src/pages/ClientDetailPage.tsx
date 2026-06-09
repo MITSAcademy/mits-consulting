@@ -2623,6 +2623,12 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
       done: engagementSent,
       doneAt: client.engagementLetterSentAt,
       button: { label: engagementSent ? 'Re-send engagement letter' : 'Send engagement letter', onClick: () => onAction('engagement') },
+      extra: (client as any).hasEngagementLetterFile
+        ? <a href={`/api/clients/${client.id}/engagement-letter/file`} target="_blank" rel="noopener noreferrer"
+            className="text-xs flex items-center gap-1 mt-1" style={{ color: 'var(--accent-gold)' }}>
+            <FileText size={11} /> Download uploaded copy
+          </a>
+        : null,
     },
     {
       n: 3,
@@ -2777,6 +2783,7 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
                   {isLocked && <span className="ml-2 text-[10px] muted">🔒 locked</span>}
                 </div>
                 <div className="text-xs muted mt-0.5">{s.desc}</div>
+                {(s as any).extra}
               </div>
               {s.button && (
                 <Button

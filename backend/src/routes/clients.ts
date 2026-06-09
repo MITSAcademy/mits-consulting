@@ -206,7 +206,10 @@ clientsRouter.get('/:id', async (req: AuthedRequest, res) => {
     },
   });
   if (!client) return res.status(404).json({ error: 'Not found' });
-  res.json(redactClient(client, req.user!));
+  // Strip the large base64 blob from the default fetch — use GET /:id/engagement-letter/file to download
+  const { engagementLetterFileB64: _elb64, ...clientWithoutBlob } = client as any;
+  const hasEngagementLetterFile = !!_elb64;
+  res.json(redactClient({ ...clientWithoutBlob, hasEngagementLetterFile }, req.user!));
 });
 
 const allowedFields = [
@@ -1405,6 +1408,24 @@ clientsRouter.post('/:id/engagement-letter/upload', elUpload.single('file'), asy
   });
   await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · uploaded signed PDF copy (stored in DB)`);
   res.json({ ok: true });
+});
+
+// Download uploaded engagement letter PDF
+clientsRouter.get('/:id/engagement-letter/file', async (req: AuthedRequest, res) => {
+  if (!['founder', 'manager', 'sales_closer', 'demo_lead'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    select: { name: true, engagementLetterFileB64: true },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  if (!client.engagementLetterFileB64) return res.status(404).json({ error: 'No file uploaded' });
+  const buf = Buffer.from(client.engagementLetterFileB64, 'base64');
+  const filename = `Engagement-Letter-${client.name.replace(/[^a-zA-Z0-9]/g, '-')}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buf);
 });
 
 // Handover-to-Mitali notification (creates a Task on Mitali's queue so the call gets scheduled).
