@@ -7,7 +7,7 @@ import { Input, Label } from '@/components/ui/input';
 import { Toggle } from '@/components/ui/toggle';
 import { api } from '@/lib/api';
 import { useUI } from '@/store/ui';
-import { Mail, CheckCircle2, AlertTriangle, Trash2, Send } from 'lucide-react';
+import { Mail, CheckCircle2, AlertTriangle, Trash2, Send, Zap } from 'lucide-react';
 
 // Mirrors the source.html renderSettings sections + labels + descriptions exactly.
 const FLAG_SECTIONS: Array<{ title: string; flags: Array<{ key: string; label: string; desc: string }> }> = [
@@ -262,6 +262,8 @@ export function SettingsPage() {
 
         {isFounder && (
           <>
+            <BriefingTrigger />
+
             <div className="callout">
               Phase-1 launch. Mitali, Bhavneet, Kashish, Muskan, Areena, Ashok and Malika are disabled until you flip{' '}
               <strong>Phase 2 enabled</strong> on. Their data is preserved; their roles just can't sign in yet.
@@ -322,6 +324,65 @@ export function SettingsPage() {
         )}
       </Page>
     </>
+  );
+}
+
+function BriefingTrigger() {
+  const [status, setStatus] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'err'>>({});
+
+  async function fire(team: string, shift: string) {
+    const key = `${team}-${shift}`;
+    setStatus(s => ({ ...s, [key]: 'loading' }));
+    try {
+      await api.post('/briefing/trigger', { team, shift });
+      setStatus(s => ({ ...s, [key]: 'ok' }));
+      setTimeout(() => setStatus(s => ({ ...s, [key]: 'idle' })), 3000);
+    } catch {
+      setStatus(s => ({ ...s, [key]: 'err' }));
+      setTimeout(() => setStatus(s => ({ ...s, [key]: 'idle' })), 4000);
+    }
+  }
+
+  const rows = [
+    { team: 'team1', label: 'Team 1 (Aman + Kanchan)', shifts: ['morning', 'evening'] },
+    { team: 'team2', label: 'Team 2 (Anjali + Taran)',  shifts: ['morning', 'evening'] },
+    { team: 'samita', label: 'Samita (overview)',        shifts: ['morning', 'evening'] },
+  ];
+
+  return (
+    <div className="table-card" style={{ padding: '16px 20px', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <Zap size={14} color="#F59E0B" />
+        <span style={{ fontWeight: 600, fontSize: 13 }}>Daily briefing — manual trigger</span>
+        <span style={{ fontSize: 11, color: '#6B6F78', marginLeft: 4 }}>Fires the email immediately. Use to verify email delivery.</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {rows.map(r => (
+          <div key={r.team} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 13, width: 220, color: '#D0D0D8' }}>{r.label}</span>
+            {r.shifts.map(shift => {
+              const key = `${r.team}-${shift}`;
+              const st = status[key] || 'idle';
+              return (
+                <Button
+                  key={shift}
+                  size="sm"
+                  disabled={st === 'loading'}
+                  onClick={() => fire(r.team, shift)}
+                  style={{
+                    minWidth: 90,
+                    background: st === 'ok' ? '#14532d' : st === 'err' ? '#450a0a' : undefined,
+                    color: st === 'ok' ? '#86efac' : st === 'err' ? '#fca5a5' : undefined,
+                  }}
+                >
+                  {st === 'loading' ? '…' : st === 'ok' ? '✓ Sent' : st === 'err' ? '✗ Failed' : shift === 'morning' ? '🌅 Morning' : '🌙 Evening'}
+                </Button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
