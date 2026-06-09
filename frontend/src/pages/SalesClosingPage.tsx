@@ -18,13 +18,6 @@ function stageLabel(s: string) {
   return s;
 }
 
-function stagePillColor(s: string): 'amber' | 'blue' | 'green' | 'purple' | 'grey' {
-  if (s === 'DemoDone' || s === 'FeedbackPending') return 'blue';
-  if (s === 'SaleClosing') return 'amber';
-  if (s === 'SaleWon') return 'purple';
-  if (s === 'Active') return 'green';
-  return 'grey';
-}
 
 function subStatusPillColor(ss: string): 'amber' | 'green' | 'grey' | 'blue' | 'red' {
   if (ss === 'RP') return 'blue';
@@ -181,61 +174,6 @@ function TileBoard({ items }: { items: any[] }) {
   );
 }
 
-// ── Table view (founder / manager / other roles) ──────────────────────────
-
-function TableView({ items }: { items: any[] }) {
-  return (
-    <div className="table-card">
-      <table>
-        <thead>
-          <tr>
-            <th>Client</th>
-            <th>Stage</th>
-            <th>Sub-status</th>
-            <th>Engagement</th>
-            <th>Amount</th>
-            <th>Days in stage</th>
-            <th>Pending action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((c: any) => {
-            const { label, urgent } = pendingAction(c);
-            const days = daysSince(c.stageEnteredAt);
-            return (
-              <tr key={c.id} className="clickable">
-                <td>
-                  <Link to={`/clients/${c.id}`} className="font-semibold hover:underline"
-                    style={{ color: 'var(--brand-text)' }}>
-                    {c.name}
-                  </Link>
-                </td>
-                <td><Pill color={stagePillColor(c.lifecycle)}>{stageLabel(c.lifecycle)}</Pill></td>
-                <td>
-                  {c.saleClosingSubStatus
-                    ? <Pill color={subStatusPillColor(c.saleClosingSubStatus)}>{c.saleClosingSubStatus}</Pill>
-                    : <span className="muted text-xs">—</span>}
-                </td>
-                <td className="text-sm">{c.engagementType || '—'}</td>
-                <td className="mono text-sm">{c.currency} {c.cycleAmount || '—'}</td>
-                <td>
-                  <span className="mono text-sm" style={{ color: days >= 5 ? 'var(--status-red)' : days >= 3 ? 'var(--status-amber)' : 'var(--brand-textSecondary)' }}>
-                    {days}d
-                  </span>
-                </td>
-                <td>
-                  <span className="text-xs font-medium" style={{ color: urgent ? 'var(--status-amber)' : 'var(--brand-textSecondary)' }}>
-                    {urgent && '⚡ '}{label}
-                  </span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 // ── Page ──────────────────────────────────────────────────────────────────
 
@@ -257,8 +195,6 @@ export function SalesClosingPage() {
     acc[s] = items.filter((c: any) => c.lifecycle === s).length;
     return acc;
   }, {} as Record<string, number>);
-
-  const isSalesCloser = user.role === 'sales_closer';
 
   return (
     <>
@@ -288,10 +224,8 @@ export function SalesClosingPage() {
             title="No clients in your pipeline"
             description="Clients appear here once they reach Demo Done and move through closing to Active."
           />
-        ) : isSalesCloser ? (
-          <TileBoard items={items} />
         ) : (
-          <TableView items={items} />
+          <TileBoard items={items} />
         )}
       </Page>
     </>
