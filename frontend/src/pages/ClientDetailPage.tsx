@@ -2723,10 +2723,10 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
 
   // ── Phase badge + title line ──────────────────────────────────────────────
   const phaseLabel = ss === 'CP'
-    ? 'CP · Discussed, parked'
+    ? 'CP · Called, went silent'
     : ss === 'C'
-    ? 'Phase 2 · Close the deal'
-    : 'Phase 1 · Close-out prep';
+    ? 'Phase 2 · Onboard & close'
+    : 'Phase 1 · Call & close';
   const phaseColor = ss === 'CP' ? '#D97706' : ss === 'C' ? '#1A6CDF' : '#1A6CDF';
 
   // ── RP state — Phase 1 (3 steps) ─────────────────────────────────────────
@@ -2774,7 +2774,7 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
         {/* Next-step picker */}
         <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
           <div className="text-xs font-semibold mb-2" style={{ color: 'var(--brand-textSecondary)' }}>
-            After the call, move client to:
+            After the call, what happened?
           </div>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="primary"
@@ -2782,10 +2782,10 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
               disabledReason={!allPhase1Done && !canOverride ? 'Complete all 3 steps first.' : null}
               onClick={() => onMove('C')}
             >
-              C · Engagement letter sent
+              C · Letter sent, payment pending
             </Button>
             <Button size="sm" variant="amber" onClick={() => onMove('CP')}>
-              CP · Discussed, parked
+              CP · Called, went silent
             </Button>
             <Button size="sm" variant="danger" onClick={() => onMove('DP')}>
               DP · Dropped
@@ -2813,7 +2813,7 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
       {
         n: 2,
         title: 'Set the next follow-up date',
-        desc: 'Revisit in 3 days. When you speak with them, move to C (engagement letter sent) or DP.',
+        desc: 'Revisit in 3 days. When you reach them, send the letter and move to C.',
         done: !!client.roshniNextCallOn,
         doneAt: client.roshniNextCallOn,
         button: null,
@@ -2827,14 +2827,14 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
           <span className="px-2 py-0.5 rounded border text-xs font-semibold" style={{ borderColor: phaseColor, color: phaseColor }}>{phaseLabel}</span>
         </div>
         <div className="callout amber text-xs mb-3">
-          Client discussed but not ready. Follow up in 3 days. Once they confirm, move to C (engagement letter sent).
+          Called — client went silent. Send the no-pickup WA, set a follow-up date, and try again in 3 days. Once you reach them and send the letter, move to C.
         </div>
         <StepList steps={cpSteps} />
         <div className="mt-4 pt-3" style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
-          <div className="text-xs font-semibold mb-2" style={{ color: 'var(--brand-textSecondary)' }}>Move client to:</div>
+          <div className="text-xs font-semibold mb-2" style={{ color: 'var(--brand-textSecondary)' }}>When you reach them:</div>
           <div className="flex gap-2">
             <Button size="sm" variant="primary" onClick={() => onMove('C')}>
-              C · Engagement letter sent
+              C · Letter sent, payment pending
             </Button>
             <Button size="sm" variant="danger" onClick={() => onMove('DP')}>
               DP · Dropped
@@ -2888,7 +2888,7 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
         <span className="px-2 py-0.5 rounded border text-xs font-semibold" style={{ borderColor: phaseColor, color: phaseColor }}>{phaseLabel}</span>
       </div>
       <div className="callout text-xs mb-3">
-        Engagement letter sent — follow up daily until payment confirmed. Once paid, complete steps 4–7 below.
+        Letter sent — follow up daily until they pay. Once payment is in, complete steps 4–7 and pick the win outcome (JBT or Training).
       </div>
       <StepList steps={phase2Steps} />
       {/* Win outcome picker */}
@@ -2981,13 +2981,13 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
       ]
     : current === 'CP'
     ? [
-        { key: 'C',  title: 'C · Engagement letter sent', desc: 'Letter shared — client is engaged. Follow up daily until paid.',  tone: 'amber' },
-        { key: 'DP', title: 'DP · Dropped',               desc: 'No response after follow-up. Move WA group to DP. No further follow-up.', tone: 'danger' },
+        { key: 'C',  title: 'C · Letter sent, payment pending', desc: 'Letter shared — follow up daily until they pay. Drops out of RP queue.', tone: 'amber' },
+        { key: 'DP', title: 'DP · Dropped',                    desc: 'No response after follow-up. Move WA group to DP. No further follow-up.',  tone: 'danger' },
       ]
     : /* RP or null */ [
-        { key: 'CP', title: 'CP · Discussed, parked',       desc: 'Spoke with client — interested but not ready. Revisit in 3 days.',  tone: 'amber' },
-        { key: 'C',  title: 'C · Engagement letter sent',   desc: 'Letter shared — client is engaged. Follow up daily until paid.',    tone: 'amber' },
-        { key: 'DP', title: 'DP · Dropped',                 desc: 'No answer after 5 days of follow-up. Move WA group to DP.',         tone: 'danger' },
+        { key: 'CP', title: 'CP · Called, went silent',         desc: 'Called but no pickup. Send no-pickup WA, revisit in 3 days.',              tone: 'amber' },
+        { key: 'C',  title: 'C · Letter sent, payment pending', desc: 'Letter shared — follow up daily until they pay. Drops out of RP queue.',   tone: 'amber' },
+        { key: 'DP', title: 'DP · Dropped',                     desc: 'No answer after multiple attempts. Move WA group to DP.',                  tone: 'danger' },
       ];
 
   // Default next call dates
@@ -3004,9 +3004,9 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
       <DialogContent
         title={`${client.name} · ${current} → next step`}
         description={
-          current === 'C' ? 'Engagement letter sent — pick the win outcome when client confirms.'
-          : current === 'CP' ? 'Client discussed but parked — move to C when letter is shared, or DP if dropped.'
-          : 'New close-out — pick what happened after your call.'
+          current === 'C' ? 'Letter sent, payment pending — pick the win outcome once paid (JBT or Training).'
+          : current === 'CP' ? 'Client went silent — move to C once letter is shared, or DP if no response.'
+          : 'Called the client — what happened?'
         }
         className="max-w-xl"
       >

@@ -42,9 +42,9 @@ function pendingAction(c: any): { label: string; urgent: boolean } {
 
   if (lc === 'DemoDone' || lc === 'FeedbackPending') return { label: 'Start closing', urgent: false };
   if (lc === 'SaleClosing') {
-    if (!ss || ss === 'RP') return { label: 'Call client — move from RP', urgent: true };
-    if (ss === 'CP') return { label: 'Revisit in 3 days — move to C', urgent: false };
-    if (ss === 'C') return { label: 'Follow up daily — waiting for payment', urgent: true };
+    if (!ss || ss === 'RP') return { label: 'Call client · move to CP / C / JBT / Training', urgent: true };
+    if (ss === 'CP') return { label: 'Follow up in 3 days · reach them → move to C', urgent: false };
+    if (ss === 'C') return { label: 'Follow up daily · waiting for payment', urgent: true };
     if (ss === 'DP') return { label: 'Dropped — no follow-up', urgent: false };
     if (ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater') return { label: 'Send engagement letter', urgent: false };
   }
@@ -72,10 +72,10 @@ type TileColumn = {
 };
 
 const TILE_COLUMNS: TileColumn[] = [
-  { key: 'RP',       label: 'RP',       accent: '#1A6CDF', desc: 'Ready for payment call' },
-  { key: 'CP',       label: 'CP',       accent: '#D97706', desc: 'Discussed, parked' },
-  { key: 'C',        label: 'C',        accent: '#D97706', desc: 'Engagement letter sent' },
-  { key: 'SaleWon',  label: 'Won',      accent: '#7C3AED', desc: 'Activate client' },
+  { key: 'RP',       label: 'RP',       accent: '#1A6CDF', desc: 'Call them · move to CP / C / JBT / Training' },
+  { key: 'CP',       label: 'CP',       accent: '#D97706', desc: 'Called, went silent · follow up in 3 days' },
+  { key: 'C',        label: 'C',        accent: '#D97706', desc: 'Letter sent · follow up daily until paid' },
+  { key: 'SaleWon',  label: 'Won',      accent: '#7C3AED', desc: 'JBT / Training · activate client' },
   { key: 'Active',   label: 'Active',   accent: '#0F8A5F', desc: 'With Mitali' },
 ];
 
