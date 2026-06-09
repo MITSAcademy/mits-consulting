@@ -10,15 +10,6 @@ import { LayoutGrid } from 'lucide-react';
 const STAGE_ORDER = ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon', 'Active'];
 const BOARD_STAGES = ['SaleClosing', 'SaleWon', 'Active'];
 
-function stageLabel(s: string) {
-  if (s === 'DemoDone') return 'Demo done';
-  if (s === 'FeedbackPending') return 'Feedback pending';
-  if (s === 'SaleClosing') return 'Sale closing';
-  if (s === 'SaleWon') return 'Sale won';
-  if (s === 'Active') return 'Active';
-  return s;
-}
-
 
 function subStatusPillColor(ss: string): 'amber' | 'green' | 'grey' | 'blue' | 'red' {
   if (ss === 'RP') return 'blue';
@@ -191,11 +182,6 @@ export function SalesClosingPage() {
     })
     .sort((a: any, b: any) => STAGE_ORDER.indexOf(a.lifecycle) - STAGE_ORDER.indexOf(b.lifecycle));
 
-  const counts = BOARD_STAGES.reduce((acc, s) => {
-    acc[s] = items.filter((c: any) => c.lifecycle === s).length;
-    return acc;
-  }, {} as Record<string, number>);
-
   return (
     <>
       <Topbar
@@ -203,19 +189,7 @@ export function SalesClosingPage() {
         subtitle={`${items.length} client${items.length !== 1 ? 's' : ''} across closing stages`}
       />
       <Page>
-        {/* Summary strip */}
-        {items.length > 0 && (
-          <div className="flex gap-2 flex-wrap mb-4">
-            {BOARD_STAGES.filter(s => counts[s] > 0).map(s => (
-              <div key={s} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-                style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
-                <span style={{ color: 'var(--brand-textMuted)' }}>{stageLabel(s)}</span>
-                <span className="px-1.5 py-px rounded-full text-[10px] font-bold"
-                  style={{ background: 'var(--accent-gold)', color: '#0F1115' }}>{counts[s]}</span>
-              </div>
-            ))}
-          </div>
-        )}
+
 
         {items.length === 0 ? (
           <EmptyState
