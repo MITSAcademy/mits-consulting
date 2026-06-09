@@ -39,7 +39,7 @@ const NAV: NavItem[] = [
   { section: 'recruit', page: '/trainer-leads', label: 'Trainer leads (admin)', icon: UserSearch, roles: ['founder'] },
   { section: 'recruit', page: '/trainers', label: 'Trainer pool', icon: UserCog, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'payment_processor'] },
 
-  { section: 'sales', page: '/sales-closing', label: 'Sales closing', icon: FileCheck, roles: ['founder', 'manager', 'sales_closer'] },
+  { section: 'sales', page: '/sales-closing', label: 'My pipeline', icon: LayoutGrid, roles: ['founder', 'manager', 'sales_closer'] },
   { section: 'sales', page: '/roshni/follow-ups', label: 'My follow-ups', icon: Clock, roles: ['founder', 'manager', 'sales_closer'] },
   { section: 'sales', page: '/fresh-payments', label: 'Fresh payments', icon: DollarSign, roles: ['founder', 'manager', 'sales_closer', 'accounts'] },
 
@@ -122,8 +122,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
       const demosToday = cl.filter((c) => c.lifecycle === 'DemoScheduled' && c.demoDate && c.demoDate <= weekOut).length;
       const feedbackPending = cl.filter((c) => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle)).length;
       const salesClosingActive = cl.filter((c) =>
-        ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
-        && (c.saleClosingSubStatus === null || c.saleClosingSubStatus === 'RP' || c.saleClosingSubStatus === 'CP'),
+        ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon'].includes(c.lifecycle)
+        && c.lifecycle !== 'Active',
       ).length;
       const followUpsDue = cl.filter((c) =>
         ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
