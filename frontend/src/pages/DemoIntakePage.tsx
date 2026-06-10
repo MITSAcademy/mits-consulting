@@ -12,26 +12,44 @@ import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { Plus } from 'lucide-react';
 
-// WithRecruiters is intentionally excluded — once a client moves there,
-// the work belongs to Aman/Kanchan (Team 1). Anjali/Taran see a count-only
-// indicator but not the full column, to avoid confusion over ownership.
-const STAGES = [
-  { key: 'Lead', label: 'New leads' },
-  { key: 'IntakeSent', label: 'Intake sent' },
-  { key: 'IntakeReceived', label: 'Intake done' },
-  { key: 'InternalSearch', label: 'Internal search' },
-  { key: 'VerificationPending', label: 'Verify proposal' },
-  { key: 'TrainerMatched', label: 'Trainer matched' },
-  { key: 'DemoScheduled', label: 'Demo scheduled' },
-  { key: 'DemoDone', label: 'Demo done' },
-  { key: 'FeedbackPending', label: 'Feedback (Samita)' },
+// readOnly = true means cards are visible but not clickable (another team owns that stage)
+const TEAM2_STAGES = [
+  { key: 'Lead',               label: 'New leads',          readOnly: false },
+  { key: 'IntakeSent',         label: 'Intake sent',        readOnly: false },
+  { key: 'IntakeReceived',     label: 'Intake done',        readOnly: false },
+  { key: 'InternalSearch',     label: 'Internal search',    readOnly: false },
+  { key: 'WithRecruiters',     label: 'With recruiters',    readOnly: true  }, // Team 1 owns this
+  { key: 'VerificationPending',label: 'Verify proposal',    readOnly: false },
+  { key: 'TrainerMatched',     label: 'Trainer matched',    readOnly: false },
+  { key: 'DemoScheduled',      label: 'Demo scheduled',     readOnly: false },
+  { key: 'DemoDone',           label: 'Demo done',          readOnly: false },
+  { key: 'FeedbackPending',    label: 'Feedback (Samita)',  readOnly: false },
+];
+
+// Aman/Kanchan see the full pipeline but can only open cards in their own stages
+const TEAM1_STAGES = [
+  { key: 'Lead',               label: 'New leads',          readOnly: true  },
+  { key: 'IntakeSent',         label: 'Intake sent',        readOnly: true  },
+  { key: 'IntakeReceived',     label: 'Intake done',        readOnly: true  },
+  { key: 'InternalSearch',     label: 'Internal search',    readOnly: true  },
+  { key: 'WithRecruiters',     label: 'With recruiters',    readOnly: false }, // Team 1 owns this
+  { key: 'VerificationPending',label: 'Verify proposal',    readOnly: false }, // Team 1 owns this
+  { key: 'TrainerMatched',     label: 'Trainer matched',    readOnly: true  },
+  { key: 'DemoScheduled',      label: 'Demo scheduled',     readOnly: true  },
+  { key: 'DemoDone',           label: 'Demo done',          readOnly: true  },
+  { key: 'FeedbackPending',    label: 'Feedback (Samita)',  readOnly: true  },
 ];
 
 export function DemoIntakePage() {
   const user = useAuth((s) => s.user)!;
   const [openNew, setOpenNew] = useState(false);
-  // Default to Mine for demo_intake (Anjali/Taran). Samita/founder/manager default to All.
-  const [mineOnly, setMineOnly] = useState(user.role === 'demo_intake');
+
+  const isRecruiter = user.role === 'recruiter';
+  const STAGES = isRecruiter ? TEAM1_STAGES : TEAM2_STAGES;
+
+  // Default to Mine for demo_intake (Anjali/Taran) and recruiter (Aman/Kanchan).
+  // Samita/founder/manager default to All.
+  const [mineOnly, setMineOnly] = useState(user.role === 'demo_intake' || isRecruiter);
 
   const { data } = useQuery({
     queryKey: ['clients'],
@@ -39,33 +57,51 @@ export function DemoIntakePage() {
   });
 
   const all = (data || []) as any[];
-  const filtered = mineOnly ? all.filter((c) => c.intakeOwnerId === user.id) : all;
+  // For recruiters "mine" means clients where sentToId matches — fall back to intakeOwnerId for Team 2
+  const filtered = mineOnly
+    ? isRecruiter
+      ? all // recruiters see all WithRecruiters regardless — they don't have intakeOwnerId
+      : all.filter((c: any) => c.intakeOwnerId === user.id)
+    : all;
+
   const grouped: Record<string, any[]> = {};
   STAGES.forEach((s) => (grouped[s.key] = filtered.filter((c: any) => c.lifecycle === s.key)));
-  // WithRecruiters count — shown as an info badge in the subtitle, not as a kanban column
-  const withRecruitersCount = filtered.filter((c: any) => c.lifecycle === 'WithRecruiters').length;
+
+  const title = isRecruiter ? 'Pipeline view' : 'Demo intake';
+  const subtitle = isRecruiter
+    ? `${grouped['WithRecruiters'].length} with recruiters · ${grouped['VerificationPending'].length} verify proposal`
+    : mineOnly ? `Mine · ${filtered.length} clients` : `All Team 2 · ${filtered.length} of ${all.length}`;
 
   return (
     <>
       <Topbar
-        title="Demo intake"
-        subtitle={`${mineOnly ? `Mine · ${filtered.length} clients` : `All Team 2 · ${filtered.length} of ${all.length}`}${withRecruitersCount > 0 ? ` · ${withRecruitersCount} with recruiters (Team 1)` : ''}`}
+        title={title}
+        subtitle={subtitle}
         actions={
           <>
-            <div className="flex gap-1.5">
-              <Button size="sm" variant={mineOnly ? 'primary' : 'default'} onClick={() => setMineOnly(true)}>Mine</Button>
-              <Button size="sm" variant={!mineOnly ? 'primary' : 'default'} onClick={() => setMineOnly(false)}>All Team 2</Button>
-            </div>
-            <Button variant="primary" onClick={() => setOpenNew(true)}><Plus size={14}/> New lead</Button>
+            {!isRecruiter && (
+              <div className="flex gap-1.5">
+                <Button size="sm" variant={mineOnly ? 'primary' : 'default'} onClick={() => setMineOnly(true)}>Mine</Button>
+                <Button size="sm" variant={!mineOnly ? 'primary' : 'default'} onClick={() => setMineOnly(false)}>All Team 2</Button>
+              </div>
+            )}
+            {!isRecruiter && <Button variant="primary" onClick={() => setOpenNew(true)}><Plus size={14}/> New lead</Button>}
           </>
         }
       />
       <Page>
-        <div className="callout">
-          Anyone punches in a lead. Team 2 takes it through:{' '}
-          <strong>send 8-point intake → capture replies → search internal trainer pool → (if no match) push to recruiters → verify proposals → conduct demo</strong>.
-          Once demo is done, lead goes to Roshni for sale closing.
-        </div>
+        {!isRecruiter && (
+          <div className="callout">
+            Anyone punches in a lead. Team 2 takes it through:{' '}
+            <strong>send 8-point intake → capture replies → search internal trainer pool → (if no match) push to recruiters → verify proposals → conduct demo</strong>.
+            Once demo is done, lead goes to Roshni for sale closing.
+          </div>
+        )}
+        {isRecruiter && (
+          <div className="callout">
+            Your active stages: <strong>With recruiters</strong> (find & propose trainer) → <strong>Verify proposal</strong> (Anjali/Taran verify after you notify). All other stages are view-only.
+          </div>
+        )}
 
         <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
           {STAGES.map((s) => {
@@ -76,21 +112,43 @@ export function DemoIntakePage() {
                 key={s.key}
                 className="rounded-xl p-3 min-h-[260px] transition-all"
                 style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--brand-border)',
-                  boxShadow: 'var(--shadow-sm)',
+                  background: s.readOnly ? 'var(--bg-input)' : 'var(--bg-card)',
+                  border: `1px solid ${s.readOnly ? 'var(--brand-borderSoft)' : 'var(--brand-border)'}`,
+                  boxShadow: s.readOnly ? 'none' : 'var(--shadow-sm)',
+                  opacity: s.readOnly ? 0.75 : 1,
                 }}
               >
                 <div className="flex justify-between items-center mb-2.5 pb-2" style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--brand-textSecondary)' }}>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: s.readOnly ? 'var(--brand-textMuted)' : 'var(--brand-textSecondary)' }}>
                     {s.label}
+                    {s.readOnly && <span className="ml-1 normal-case font-normal" style={{ color: 'var(--brand-textMuted)' }}>· {isRecruiter ? 'Team 2' : 'Team 1'}</span>}
                   </span>
                   <Pill color={stageColor(s.key) as any}>{items.length}</Pill>
                 </div>
                 {isEmpty && <div className="text-[10.5px] muted text-center py-4 italic">Empty</div>}
                 {items.map((c: any) => {
                   const skill = (c.intakeData as any)?.detailed_skill_set || c.intakeSkillHint || c.engagementType;
-                  return (
+                  const card = (
+                    <div className="font-semibold text-xs mb-0.5" style={{ color: 'var(--brand-text)' }}>{c.name}</div>
+                  );
+                  return s.readOnly ? (
+                    <div
+                      key={c.id}
+                      className="block rounded-lg p-2 mb-1.5"
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--brand-borderSoft)',
+                        cursor: 'default',
+                      }}
+                      title={`Managed by ${isRecruiter ? 'Team 2 (Anjali/Taran)' : 'Team 1 (Aman/Kanchan)'} — view only`}
+                    >
+                      {card}
+                      <div className="text-[10px] muted mono truncate" title={skill}>{skill}</div>
+                      {c.intakeOwner && (
+                        <div className="text-[10px] mt-1 font-medium" style={{ color: 'var(--brand-textMuted)' }}>{c.intakeOwner.name}</div>
+                      )}
+                    </div>
+                  ) : (
                     <Link
                       key={c.id}
                       to={`/clients/${c.id}`}
@@ -100,7 +158,7 @@ export function DemoIntakePage() {
                         border: '1px solid var(--brand-borderSoft)',
                       }}
                     >
-                      <div className="font-semibold text-xs mb-0.5" style={{ color: 'var(--brand-text)' }}>{c.name}</div>
+                      {card}
                       <div className="text-[10px] muted mono truncate" title={skill}>{skill}</div>
                       {c.intakeOwner && (
                         <div className="text-[10px] mt-1 font-medium" style={{ color: 'var(--status-blue)' }}>{c.intakeOwner.name}</div>

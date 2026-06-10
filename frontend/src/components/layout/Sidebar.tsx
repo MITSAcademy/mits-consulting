@@ -36,6 +36,7 @@ const NAV: NavItem[] = [
   { section: 'intake', page: '/demos', label: 'Demo schedule', icon: Video, roles: ['founder', 'manager', 'demo_lead', 'demo_intake'] },
   { section: 'intake', page: '/feedback-pending', label: 'Feedback queue (Samita)', icon: MessageCircle, roles: ['founder', 'manager', 'demo_lead'] },
 
+  { section: 'recruit', page: '/demo-intake', label: 'Pipeline view', icon: LayoutGrid, roles: ['recruiter'] },
   { section: 'recruit', page: '/sourcing', label: 'Sourcing requests', icon: Briefcase, roles: ['founder', 'manager', 'recruiter'] },
   { section: 'recruit', page: '/trainer-leads', label: 'Trainer leads (admin)', icon: UserSearch, roles: ['founder'] },
   { section: 'recruit', page: '/trainers', label: 'Trainer pool', icon: UserCog, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'payment_processor'] },
