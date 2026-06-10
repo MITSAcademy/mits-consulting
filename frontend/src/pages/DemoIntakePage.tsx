@@ -131,10 +131,10 @@ export function DemoIntakePage() {
                   // For WithRecruiters, show the assigned recruiter (Aman/Kanchan) not the intake owner
                   const assignedRecruiter = c.sourcingRequests?.[0]?.sentTo?.name;
                   const ownerName = s.key === 'WithRecruiters'
-                    ? (assignedRecruiter || 'Team 1')
+                    ? (assignedRecruiter || 'Unassigned')
                     : c.intakeOwner?.name;
                   const ownerColor = s.key === 'WithRecruiters'
-                    ? 'var(--status-green)'
+                    ? (assignedRecruiter ? 'var(--status-green)' : 'var(--status-amber)')
                     : s.readOnly ? 'var(--brand-textMuted)' : 'var(--status-blue)';
 
                   const cardContent = (

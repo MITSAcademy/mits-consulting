@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { prisma } from '../lib/prisma';
+import { SourcingStatus } from '@prisma/client';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 import { notify } from '../lib/notify';
@@ -28,7 +29,7 @@ const include = {
   primaryTrainer: true,
   regularTrainings: { select: { id: true, scheduleNotes: true, status: true }, where: { status: 'active' }, take: 1 },
   // Active sourcing request — used to show the assigned recruiter on kanban cards
-  sourcingRequests: { select: { id: true, sentTo: { select: { id: true, name: true } } }, where: { status: 'Open' }, take: 1 },
+  sourcingRequests: { select: { id: true, sentTo: { select: { id: true, name: true } } }, where: { status: { in: [SourcingStatus.Open, SourcingStatus.Proposed] } }, orderBy: { createdAt: 'desc' as const }, take: 1 },
 };
 
 // PII redaction rules:
