@@ -2613,6 +2613,20 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
 
   // ── Terminal states — show result banner ──────────────────────────────────
   const isWinOutcomeSS = ss === 'JBT-Paid' || ss === 'Training-Paid' || ss === 'JBT-EmployerLater' || ss === 'Training-EmployerLater';
+
+  const reopen = useMutation({
+    mutationFn: (target: 'RP' | 'DemoScheduled') =>
+      target === 'RP'
+        ? api.post(`/clients/${client.id}/sub-status`, { subStatus: 'RP', reason: 'Reopened — client returned' })
+        : api.patch(`/clients/${client.id}`, { lifecycle: 'DemoScheduled', saleClosingSubStatus: null }),
+    onSuccess: (_, target) => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      qc.invalidateQueries({ queryKey: ['clients'] });
+      showToast(target === 'RP' ? 'Reopened → RP · back in your queue' : 'Moved to Demo Scheduled');
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
   if (ss === 'DP' || isWinOutcomeSS) {
     const isWin = isWinOutcomeSS;
     return (
@@ -2633,6 +2647,19 @@ function RoshniJourneyCard({ client, onMove, onAction }: {
             className="text-xs flex items-center gap-1 mt-2" style={{ color: 'var(--accent-gold)' }}>
             <FileText size={11} /> Download uploaded engagement letter
           </a>
+        )}
+        {ss === 'DP' && (
+          <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(239,68,68,0.20)' }}>
+            <div className="text-xs muted mb-2">Client returned? Reopen:</div>
+            <div className="flex gap-2">
+              <Button size="sm" disabled={reopen.isPending} onClick={() => reopen.mutate('RP')}>
+                → RP · back to closing queue
+              </Button>
+              <Button size="sm" disabled={reopen.isPending} onClick={() => reopen.mutate('DemoScheduled')}>
+                → Schedule new demo
+              </Button>
+            </div>
+          </div>
         )}
       </div>
     );
@@ -2978,6 +3005,7 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
         { key: 'JBT-Paid',              title: 'JBT · Client paid',             desc: 'Direct-client payment received. JBT engagement starts.',              tone: 'success' },
         { key: 'Training-EmployerLater',title: 'Training · Employer pays later', desc: 'Employer committed. Client starts Training now, invoice follows.',     tone: 'success' },
         { key: 'JBT-EmployerLater',     title: 'JBT · Employer pays later',     desc: 'Employer committed. Client starts JBT now, invoice follows.',          tone: 'success' },
+        { key: 'DP',                    title: 'DP · Dropped',                   desc: '2–3 follow-ups, no payment, no response. Move to DP.',                tone: 'danger' },
       ]
     : current === 'CP'
     ? [

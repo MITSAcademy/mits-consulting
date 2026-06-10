@@ -816,9 +816,9 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   };
   // Sub-status flow:
   //   RP → CP (parked, 3-day revisit) | C (engaged, letter sent, daily follow-up) | DP (dropped)
-  //   CP → C
-  //   C  → Training-Paid | JBT-Paid | Training-EmployerLater | JBT-EmployerLater (win outcomes)
-  //   DP — terminal, no follow-up
+  //   CP → C | DP
+  //   C  → Training-Paid | JBT-Paid | Training-EmployerLater | JBT-EmployerLater (win outcomes) | DP
+  //   DP → RP (reopen — client returned after drop)
   const allowedSubStatuses = [null, 'RP', 'CP', 'C', 'DP', 'Training-Paid', 'JBT-Paid', 'Training-EmployerLater', 'JBT-EmployerLater'];
   if (!allowedSubStatuses.includes(subStatus)) {
     return res.status(400).json({ error: `Invalid sub-status: ${subStatus}.` });
@@ -847,6 +847,14 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   const isWinOutcome = isPaidOutcome || isEmployerLater;
   const currentSS = client.saleClosingSubStatus;
 
+  // Reopen: RP is allowed from DP (client returned after drop)
+  if (subStatus === 'RP' && currentSS !== 'DP' && currentSS !== null) {
+    return res.status(409).json({
+      error: `Can only reset to RP from DP (reopen). Current status: ${currentSS}.`,
+      code: 'RP_REOPEN_ONLY',
+    });
+  }
+
   // Win outcomes only allowed from C (engagement letter sent, active follow-up)
   if (isWinOutcome && currentSS !== 'C') {
     return res.status(409).json({
@@ -854,10 +862,10 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
       code: 'WIN_REQUIRES_C',
     });
   }
-  // DP only from RP or CP
-  if (subStatus === 'DP' && !['RP', 'CP', null].includes(currentSS)) {
+  // DP allowed from any active sub-status (RP, CP, or C — client went silent despite follow-ups)
+  if (subStatus === 'DP' && !['RP', 'CP', 'C', null].includes(currentSS)) {
     return res.status(409).json({
-      error: `DP (dropped) can only be set from RP or CP. Current status: ${currentSS}.`,
+      error: `DP (dropped) cannot be set from ${currentSS}.`,
       code: 'DP_INVALID_TRANSITION',
     });
   }
