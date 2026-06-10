@@ -229,6 +229,7 @@ model Partner {
 // -------- TRAINERS --------
 model Trainer {
   id                  String   @id @default(cuid())
+  seqId               Int?     @unique @default(autoincrement())
   name                String
   email               String?
   phoneCode           String?
@@ -288,6 +289,7 @@ model TrainerLead {
 // -------- CLIENTS --------
 model Client {
   id                       String         @id @default(cuid())
+  seqId                    Int?           @unique @default(autoincrement())
   name                     String
   email                    String?
   phoneCode                String?

@@ -146,6 +146,16 @@ export function homePathFor(role?: string): string {
 // Roles allowed to see the financial Home dashboard.
 export const HOME_ROLES = ['founder', 'manager', 'demo_lead'] as const;
 
+/** Format a sequential ID as a human-readable reference: C-0042, T-0017 */
+export function fmtClientId(seqId?: number | null): string {
+  if (!seqId) return '';
+  return `C-${String(seqId).padStart(4, '0')}`;
+}
+export function fmtTrainerId(seqId?: number | null): string {
+  if (!seqId) return '';
+  return `T-${String(seqId).padStart(4, '0')}`;
+}
+
 export const ROLE_LABELS: Record<string, string> = {
   founder: 'Founder',
   demo_lead: 'Demo lead',

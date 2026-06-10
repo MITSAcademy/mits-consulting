@@ -64,7 +64,16 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
   const { lifecycle, search } = req.query as any;
   const where: any = {};
   if (lifecycle) where.lifecycle = lifecycle;
-  if (search) where.name = { contains: String(search), mode: 'insensitive' };
+  if (search) {
+    const s = String(search);
+    // Support searching by C-NNNN or just the number
+    const seqMatch = s.match(/^[Cc]-?(\d+)$/);
+    if (seqMatch) {
+      where.seqId = parseInt(seqMatch[1], 10);
+    } else {
+      where.name = { contains: s, mode: 'insensitive' };
+    }
+  }
   // account_manager (Kashish / Muskan) only see Active/LeverageGranted clients
   // Filtered to their own hostOwnerId where assigned; falls back to all Active if none assigned yet
   if (req.user!.role === 'account_manager') {

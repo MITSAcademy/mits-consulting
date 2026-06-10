@@ -6,7 +6,7 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
-import { formatPhone, readAvailabilitySlots, formatAvailabilitySlots } from '@/lib/utils';
+import { formatPhone, readAvailabilitySlots, formatAvailabilitySlots, fmtTrainerId } from '@/lib/utils';
 import { AvailabilitySlotsEditor } from '@/components/AvailabilitySlotsEditor';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
@@ -53,7 +53,7 @@ export function TrainerDetailPage() {
   return (
     <>
       <Topbar
-        title={t.name}
+        title={`${t.name}${t.seqId ? ` · ${fmtTrainerId(t.seqId)}` : ''}`}
         subtitle={`${t.skills || '—'}`}
         actions={
           edit ? (

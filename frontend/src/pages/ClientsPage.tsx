@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components
 import { Link } from 'react-router-dom';
 import { Plus, Users } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
-import { stageColor, stageLabel } from '@/lib/utils';
+import { stageColor, stageLabel, fmtClientId } from '@/lib/utils';
 import { useAuth } from '@/store/auth';
 import { useUI } from '@/store/ui';
 
@@ -200,7 +200,10 @@ export function ClientsPage() {
                 <tr key={c.id} className="clickable">
                   <td>
                     <Link to={`/clients/${c.id}`}>
-                      <div className="font-medium">{c.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium">{c.name}</span>
+                        {c.seqId && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'var(--accent-goldSoft)', color: 'var(--accent-gold)' }}>{fmtClientId(c.seqId)}</span>}
+                      </div>
                       <div className="muted text-[11px]">
                         {c.phoneCode && c.phoneDigits ? `${c.phoneCode} ${c.phoneDigits}` : c.email || '—'}
                       </div>

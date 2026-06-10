@@ -9,7 +9,7 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { Pill } from '@/components/ui/pill';
-import { formatPhone, waLink, readAvailabilitySlots, formatAvailabilitySlots } from '@/lib/utils';
+import { formatPhone, waLink, readAvailabilitySlots, formatAvailabilitySlots, fmtTrainerId } from '@/lib/utils';
 import type { AvailabilitySlot } from '@/lib/utils';
 import { AvailabilitySlotsEditor } from '@/components/AvailabilitySlotsEditor';
 import { MessageCircle, ArrowUp, ArrowDown, Filter, X, UserSearch } from 'lucide-react';
@@ -96,7 +96,7 @@ export function TrainersPage() {
       if (skillChips.length > 0 && !skillChips.every((c) => skillsLower.includes(c))) return false;
       // free-text search across many fields
       if (q) {
-        const hay = `${t.name} ${t.skills || ''} ${t.email || ''} ${t.phoneCode || ''}${t.phoneDigits || ''} ${t.upiId || ''} ${t.recruitedBy?.name || ''}`.toLowerCase();
+        const hay = `${t.name} ${t.skills || ''} ${t.email || ''} ${t.phoneCode || ''}${t.phoneDigits || ''} ${t.upiId || ''} ${t.recruitedBy?.name || ''} ${t.seqId ? `T-${String(t.seqId).padStart(4,'0')}` : ''}`.toLowerCase();
         const ok = q.toLowerCase().split(/\s+/).every((tok) => hay.includes(tok));
         if (!ok) return false;
       }
@@ -375,7 +375,10 @@ export function TrainersPage() {
                 return (
                   <tr key={t.id} className="clickable">
                     <td>
-                      <Link to={`/trainers/${t.id}`} className="font-medium">{t.name}</Link>
+                      <div className="flex items-center gap-1.5">
+                        <Link to={`/trainers/${t.id}`} className="font-medium">{t.name}</Link>
+                        {t.seqId && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded" style={{ background: 'rgba(14,165,233,0.12)', color: '#38bdf8' }}>{fmtTrainerId(t.seqId)}</span>}
+                      </div>
                       <div className="muted text-[11px]">{t.email}</div>
                     </td>
                     <td>

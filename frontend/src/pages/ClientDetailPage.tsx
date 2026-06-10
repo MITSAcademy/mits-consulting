@@ -10,7 +10,7 @@ import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea, Label, Select } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
-import { formatPhone, waLink, todayISO, stageLabel, backStagesFor, addDays } from '@/lib/utils';
+import { formatPhone, waLink, todayISO, stageLabel, backStagesFor, addDays, fmtClientId } from '@/lib/utils';
 import { useUI } from '@/store/ui';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/store/auth';
@@ -427,7 +427,7 @@ export function ClientDetailPage() {
   return (
     <>
       <Topbar
-        title={client.name}
+        title={`${client.name}${client.seqId ? ` · ${fmtClientId(client.seqId)}` : ''}`}
         subtitle={`${client.engagementType}${showAmt && client.cycleAmount ? ` · ${client.currency} ${client.cycleAmount}` : ''}${currentRecruiter ? ` · sourcing: ${currentRecruiter}` : ''}`}
         actions={
           <>
