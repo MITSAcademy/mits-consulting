@@ -47,6 +47,7 @@ const NAV: NavItem[] = [
   { section: 'clients', page: '/follow-up-payments', label: 'Payment follow-up', icon: Receipt, roles: ['founder', 'manager', 'lead', 'accounts'] },
   { section: 'clients', page: '/calendar', label: 'Work calendar', icon: LayoutGrid, roles: ['founder', 'manager', 'lead', 'staff'] },
   { section: 'clients', page: '/clients', label: 'Clients', icon: Users, roles: ['founder', 'manager', 'lead', 'sales_closer', 'accounts', 'demo_lead', 'demo_intake', 'account_manager'] },
+  { section: 'clients', page: '/trainers', label: 'My trainers', icon: UserCog, roles: ['account_manager'] },
   { section: 'clients', page: '/renewals', label: 'Renewals', icon: RefreshCw, roles: ['founder', 'manager'] },
   { section: 'clients', page: '/dormant', label: 'Dormant clients', icon: Moon, roles: ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'] },
   { section: 'clients', page: '/hold', label: 'On Hold · follow-ups', icon: Clock, roles: ['founder', 'manager', 'demo_lead', 'sales_closer'] },
