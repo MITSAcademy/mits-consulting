@@ -176,7 +176,7 @@ export function TrainersPage() {
             <Button size="sm" variant={showInactive ? 'primary' : 'default'} onClick={() => setShowInactive(!showInactive)}>
               {showInactive ? 'Hiding inactive' : 'Show inactive'}
             </Button>
-            <Dialog open={open} onOpenChange={setOpen}>
+            {!isAM && <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button variant="primary">+ Add trainer</Button>
               </DialogTrigger>
@@ -241,7 +241,7 @@ export function TrainersPage() {
                   <Button variant="primary" disabled={!form.name} onClick={() => create.mutate()}>Create</Button>
                 </DialogFooter>
               </DialogContent>
-            </Dialog>
+            </Dialog>}
           </>
         }
       />
@@ -353,7 +353,7 @@ export function TrainersPage() {
                 <th>Recruiter</th>
                 <th>Channel</th>
                 <th>Status</th>
-                <th></th>
+                {!isAM && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -415,6 +415,7 @@ export function TrainersPage() {
                       )}
                     </td>
                     <td>{t.active ? <Pill color="green">Active</Pill> : <Pill color="red">Inactive</Pill>}</td>
+                    {!isAM && (
                     <td>
                       <Button
                         size="sm"
@@ -424,6 +425,7 @@ export function TrainersPage() {
                         {t.active ? 'Deactivate' : 'Activate'}
                       </Button>
                     </td>
+                    )}
                   </tr>
                 );
               })}
