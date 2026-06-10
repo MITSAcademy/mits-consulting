@@ -27,6 +27,8 @@ const include = {
   hostOwner: { select: { id: true, name: true, role: true } },
   primaryTrainer: true,
   regularTrainings: { select: { id: true, scheduleNotes: true, status: true }, where: { status: 'active' }, take: 1 },
+  // Active sourcing request — used to show the assigned recruiter on kanban cards
+  sourcingRequests: { select: { id: true, sentTo: { select: { id: true, name: true } } }, where: { status: 'Open' }, take: 1 },
 };
 
 // PII redaction rules:

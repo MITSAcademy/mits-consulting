@@ -128,9 +128,25 @@ export function DemoIntakePage() {
                 {isEmpty && <div className="text-[10.5px] muted text-center py-4 italic">Empty</div>}
                 {items.map((c: any) => {
                   const skill = (c.intakeData as any)?.detailed_skill_set || c.intakeSkillHint || c.engagementType;
-                  const card = (
-                    <div className="font-semibold text-xs mb-0.5" style={{ color: 'var(--brand-text)' }}>{c.name}</div>
+                  // For WithRecruiters, show the assigned recruiter (Aman/Kanchan) not the intake owner
+                  const assignedRecruiter = c.sourcingRequests?.[0]?.sentTo?.name;
+                  const ownerName = s.key === 'WithRecruiters'
+                    ? (assignedRecruiter || 'Team 1')
+                    : c.intakeOwner?.name;
+                  const ownerColor = s.key === 'WithRecruiters'
+                    ? 'var(--status-green)'
+                    : s.readOnly ? 'var(--brand-textMuted)' : 'var(--status-blue)';
+
+                  const cardContent = (
+                    <>
+                      <div className="font-semibold text-xs mb-0.5" style={{ color: 'var(--brand-text)' }}>{c.name}</div>
+                      <div className="text-[10px] muted mono truncate" title={skill}>{skill}</div>
+                      {ownerName && (
+                        <div className="text-[10px] mt-1 font-medium" style={{ color: ownerColor }}>{ownerName}</div>
+                      )}
+                    </>
                   );
+
                   return s.readOnly ? (
                     <div
                       key={c.id}
@@ -142,11 +158,7 @@ export function DemoIntakePage() {
                       }}
                       title={`Managed by ${isRecruiter ? 'Team 2 (Anjali/Taran)' : 'Team 1 (Aman/Kanchan)'} — view only`}
                     >
-                      {card}
-                      <div className="text-[10px] muted mono truncate" title={skill}>{skill}</div>
-                      {c.intakeOwner && (
-                        <div className="text-[10px] mt-1 font-medium" style={{ color: 'var(--brand-textMuted)' }}>{c.intakeOwner.name}</div>
-                      )}
+                      {cardContent}
                     </div>
                   ) : (
                     <Link
@@ -158,11 +170,7 @@ export function DemoIntakePage() {
                         border: '1px solid var(--brand-borderSoft)',
                       }}
                     >
-                      {card}
-                      <div className="text-[10px] muted mono truncate" title={skill}>{skill}</div>
-                      {c.intakeOwner && (
-                        <div className="text-[10px] mt-1 font-medium" style={{ color: 'var(--status-blue)' }}>{c.intakeOwner.name}</div>
-                      )}
+                      {cardContent}
                     </Link>
                   );
                 })}
