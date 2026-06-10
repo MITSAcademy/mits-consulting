@@ -55,7 +55,7 @@ const NAV: NavItem[] = [
   { section: 'partners', page: '/partners', label: 'Partners', icon: Building, roles: ['founder', 'manager', 'sales_closer', 'accounts'] },
 
   { section: 'work', page: '/my-sessions', label: 'My sessions', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager'] },
-  { section: 'work', page: '/regular-trainings', label: 'Regular trainings', icon: Video, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
+  { section: 'clients', page: '/regular-trainings', label: 'Regular trainings', icon: Video, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
   { section: 'trainerOps', page: '/session-logs', label: 'Session logs', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager', 'accounts', 'payment_processor'] },
   { section: 'trainerOps', page: '/trainer-pay-sheet', label: 'Payment sheet', icon: TableProperties, roles: ['founder', 'manager', 'lead', 'account_manager', 'accounts', 'payment_processor'] },
   { section: 'trainerOps', page: '/trainer-pay', label: 'Trainer payouts', icon: Wallet, roles: ['founder', 'manager', 'lead', 'accounts', 'payment_processor'] },
@@ -65,7 +65,7 @@ const NAV: NavItem[] = [
   { section: 'work', page: '/leverage', label: 'Leverage', icon: Clock, roles: ['founder', 'manager'] },
   { section: 'work', page: '/accounts-queue', label: 'Accounts queue', icon: Receipt, roles: ['founder', 'manager', 'accounts'] },
   { section: 'work', page: '/daily-report', label: 'Daily report', icon: Notebook, roles: ['founder', 'manager', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'lead', 'staff'] },
-  { section: 'work', page: '/my-calendar', label: 'My calendar', icon: Calendar, roles: ['founder', 'manager', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'lead', 'staff'] },
+  { section: 'work', page: '/my-calendar', label: 'My calendar', icon: Calendar, roles: ['founder', 'manager', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'lead', 'staff', 'account_manager'] },
 
   { section: 'admin', page: '/reports-dashboard', label: 'Reports dashboard', icon: ChartLine, roles: ['founder', 'demo_lead', 'manager'] },
   { section: 'admin', page: '/bulk-upload', label: 'Bulk upload', icon: Upload, roles: ['founder', 'demo_lead', 'manager'] },

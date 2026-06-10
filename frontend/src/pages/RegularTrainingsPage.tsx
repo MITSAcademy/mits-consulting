@@ -197,11 +197,105 @@ function Row({ t }: { t: Training }) {
         <Pill color={t.status === 'active' ? 'green' : t.status === 'paused' ? 'amber' : 'grey'}>{t.status}</Pill>
       </td>
       <td className="text-right">
-        <Link to={`/regular-trainings/${t.id}`}>
-          <Button size="sm">Open →</Button>
-        </Link>
+        <div className="flex items-center gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
+          <SendInviteButton training={t} />
+          <Link to={`/regular-trainings/${t.id}`}>
+            <Button size="sm">Open →</Button>
+          </Link>
+        </div>
       </td>
     </tr>
+  );
+}
+
+function SendInviteButton({ training }: { training: Training }) {
+  const [open, setOpen] = useState(false);
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
+
+  const today = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const defaultDate = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  const [date, setDate] = useState(defaultDate);
+  const [time, setTime] = useState('19:00');
+  const [duration, setDuration] = useState('60');
+  const [meetingLink, setMeetingLink] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const invite = useMutation({
+    mutationFn: () => {
+      // Combine local date+time as IST → send as ISO string with +05:30 offset
+      const iso = `${date}T${time}:00+05:30`;
+      return api.post(`/regular-trainings/trainings/${training.id}/sessions/invite`, {
+        scheduledFor: iso,
+        durationMinutes: Number(duration),
+        meetingLink,
+        notes,
+      });
+    },
+    onSuccess: (r) => {
+      const sent: string[] = r.data.sent || [];
+      const errs: string[] = r.data.errors || [];
+      if (sent.length) showToast(`Invite sent to ${sent.length} recipient${sent.length > 1 ? 's' : ''}`);
+      if (errs.length) showToast(`Some invites failed: ${errs[0]}`, 'error');
+      qc.invalidateQueries({ queryKey: ['regular-trainings'] });
+      setOpen(false);
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to send invite', 'error'),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="primary" title="Schedule session + send calendar invite">
+          <CalendarIcon size={11}/> Invite
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        title={`Schedule · ${training.name}`}
+        description="Creates a session record and sends a calendar invite (.ics) to the trainer, client, and you."
+      >
+        <div className="grid md:grid-cols-2 gap-2.5">
+          <div className="form-row">
+            <Label>Date *</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <Label>Time (IST) *</Label>
+            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <Label>Duration (minutes)</Label>
+            <Select value={duration} onChange={(e) => setDuration(e.target.value)}>
+              <option value="30">30 min</option>
+              <option value="45">45 min</option>
+              <option value="60">60 min</option>
+              <option value="90">90 min</option>
+              <option value="120">2 hours</option>
+            </Select>
+          </div>
+          <div className="form-row">
+            <Label>Meeting link <span className="muted normal-case">(optional)</span></Label>
+            <Input value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} placeholder="https://zoom.us/…" />
+          </div>
+        </div>
+        <div className="form-row mt-1">
+          <Label>Notes <span className="muted normal-case">(optional, added to invite)</span></Label>
+          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Agenda, topics to cover…" />
+        </div>
+        {training.scheduleNotes && (
+          <div className="text-[11px] mt-2" style={{ color: 'rgba(229,178,76,0.8)' }}>
+            📅 Usual schedule: {training.scheduleNotes}
+          </div>
+        )}
+        <DialogFooter>
+          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="primary" disabled={!date || !time || invite.isPending} onClick={() => invite.mutate()}>
+            {invite.isPending ? 'Sending…' : 'Schedule & Send invite'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

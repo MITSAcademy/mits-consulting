@@ -11,7 +11,7 @@ import { todayISO } from '@/lib/utils';
 
 interface Event {
   id: string;
-  kind: 'demo' | 'session' | 'google';
+  kind: 'demo' | 'session' | 'training' | 'google';
   title: string;
   date: string;
   timeIst: string;
@@ -123,6 +123,7 @@ export function MyCalendarPage() {
     total: events.length,
     demos: events.filter((e) => e.kind === 'demo').length,
     sessions: events.filter((e) => e.kind === 'session').length,
+    trainings: events.filter((e) => e.kind === 'training').length,
     google: events.filter((e) => e.source === 'google').length,
   };
   const selectedEvents = selectedDay ? (byDay.get(selectedDay) || []) : [];
@@ -131,7 +132,7 @@ export function MyCalendarPage() {
     <>
       <Topbar
         title="My calendar"
-        subtitle={`${monthTitle} · ${counts.total} events${counts.demos ? ` · ${counts.demos} demos` : ''}${counts.sessions ? ` · ${counts.sessions} sessions` : ''}${counts.google ? ` · ${counts.google} Google` : ''}`}
+        subtitle={`${monthTitle} · ${counts.total} events${counts.demos ? ` · ${counts.demos} demos` : ''}${counts.sessions ? ` · ${counts.sessions} sessions` : ''}${counts.trainings ? ` · ${counts.trainings} trainings` : ''}${counts.google ? ` · ${counts.google} Google` : ''}`}
         actions={
           <div className="flex items-center gap-1.5 flex-wrap">
             <Button size="sm" onClick={() => navigateMonth(-1)} title="Previous month"><ChevronLeft size={14}/></Button>
@@ -205,10 +206,12 @@ export function MyCalendarPage() {
                               background:
                                 e.source === 'google' ? 'rgba(66, 133, 244, 0.18)' :
                                 e.kind === 'demo' ? 'rgba(59, 130, 246, 0.18)' :
+                                e.kind === 'training' ? 'rgba(34, 197, 94, 0.18)' :
                                 'rgba(245, 158, 11, 0.18)',
                               color:
                                 e.source === 'google' ? '#9DBEF5' :
                                 e.kind === 'demo' ? '#9EC0F8' :
+                                e.kind === 'training' ? '#86EFAC' :
                                 '#FBC56B',
                             }}
                             title={e.title + ' — click to view details'}
@@ -313,7 +316,7 @@ function EventDetailModal({ e, onClose }: { e: Event; onClose: () => void }) {
           {e.kind && (
             <div className="text-xs muted">
               <strong>Type:</strong>{' '}
-              {e.kind === 'demo' ? 'Demo session' : e.kind === 'session' ? 'Training session' : e.kind === 'google' ? 'Google event' : e.kind}
+              {e.kind === 'demo' ? 'Demo session' : e.kind === 'session' ? 'Session task' : e.kind === 'training' ? 'Regular training' : e.kind === 'google' ? 'Google event' : e.kind}
             </div>
           )}
           {e.clientName && (

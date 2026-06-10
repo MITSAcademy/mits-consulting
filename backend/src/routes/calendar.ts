@@ -154,6 +154,26 @@ calendarRouter.get('/mine', async (req: AuthedRequest, res) => {
     },
   });
 
+  // Training sessions I host (or where I'm the default host)
+  const trainingSessions = await prisma.trainingSession.findMany({
+    where: {
+      hostedById: me,
+      status: { not: 'cancelled' },
+      scheduledFor: { gte: new Date(from + 'T00:00:00Z'), lte: new Date(to + 'T23:59:59Z') },
+    },
+    include: {
+      regularTraining: {
+        select: {
+          id: true, name: true,
+          client: { select: { id: true, name: true } },
+          trainer: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: { scheduledFor: 'asc' },
+    take: 200,
+  });
+
   const events = [
     ...demos.map((d) => ({
       id: `demo-${d.id}`,
@@ -182,6 +202,24 @@ calendarRouter.get('/mine', async (req: AuthedRequest, res) => {
       status: t.status,
       link: t.client ? `/clients/${t.client.id}` : null,
     })),
+    ...trainingSessions.map((s) => {
+      const ist = s.scheduledFor.toLocaleString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+      const date = s.scheduledFor.toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' }); // YYYY-MM-DD in IST
+      return {
+        id: `training-${s.id}`,
+        kind: 'training' as const,
+        title: s.regularTraining.name,
+        date,
+        timeIst: ist,
+        clientId: s.regularTraining.client?.id,
+        clientName: s.regularTraining.client?.name,
+        trainerId: s.regularTraining.trainer?.id,
+        trainerName: s.regularTraining.trainer?.name,
+        status: s.status,
+        outcome: null,
+        link: s.regularTraining.client ? `/clients/${s.regularTraining.client.id}` : null,
+      };
+    }),
   ]
     .filter((e) => e.date)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.timeIst || '').localeCompare(b.timeIst || ''));

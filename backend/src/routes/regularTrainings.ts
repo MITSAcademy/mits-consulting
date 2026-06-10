@@ -18,6 +18,8 @@ import { prisma } from '../lib/prisma';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 import { flagOn } from '../lib/features';
+import { buildIcsInvite } from '../lib/ical';
+import { sendEmail, safeBuildFromUser } from '../lib/mailer';
 
 export const regularTrainingsRouter = Router();
 regularTrainingsRouter.use(requireAuth);
@@ -179,6 +181,107 @@ regularTrainingsRouter.post('/trainings/:id/sessions', async (req: AuthedRequest
   });
   await audit(req.user!.id, req.user!.name, 'TRAINING_SESSION_SCHEDULED', `${t.name} · ${dt.toISOString().slice(0, 16)}`);
   res.status(201).json(created);
+});
+
+// Schedule session + send ICS calendar invite to trainer, client, and the host (AM)
+regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: AuthedRequest, res) => {
+  if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const training = await prisma.regularTraining.findUnique({
+    where: { id: req.params.id },
+    include: {
+      client:  { select: { id: true, name: true, email: true } },
+      trainer: { select: { id: true, name: true, email: true } },
+      hostedByDefault: { select: { id: true, name: true, email: true } },
+    },
+  });
+  if (!training) return res.status(404).json({ error: 'Training not found' });
+
+  const b = req.body || {};
+  if (!b.scheduledFor) return res.status(400).json({ error: 'scheduledFor required (ISO datetime)' });
+  const dt = new Date(b.scheduledFor);
+  if (isNaN(dt.getTime())) return res.status(400).json({ error: 'scheduledFor invalid' });
+  const durationMinutes = Number(b.durationMinutes) || 60;
+
+  // Create the session record
+  const session = await prisma.trainingSession.create({
+    data: {
+      regularTrainingId: training.id,
+      scheduledFor: dt,
+      hostedById: b.hostedById || training.hostedByDefault?.id || req.user!.id,
+      status: 'scheduled',
+      notes: b.notes || null,
+    },
+  });
+
+  // Who is the organiser? The requesting user (Kashish/AM)
+  const organiser = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { id: true, name: true, email: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
+  });
+  const organiserEmail = organiser?.gmailAddress || organiser?.email || process.env.SMTP_USER!;
+
+  const startISO = dt.toISOString();
+  const uid = `training-${session.id}`;
+  const summary = `${training.name} · Session`;
+  const location = b.meetingLink || b.location || 'Online (link will be shared)';
+  const istLabel = dt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+  const description = [
+    `Training: ${training.name}`,
+    training.client  ? `Client:  ${training.client.name}`  : null,
+    training.trainer ? `Trainer: ${training.trainer.name}` : null,
+    `Date/time: ${istLabel} IST`,
+    `Duration: ${durationMinutes} min`,
+    b.notes ? `\nNotes: ${b.notes}` : null,
+  ].filter(Boolean).join('\n');
+
+  const results: string[] = [];
+  const errors: string[] = [];
+
+  // Recipients: trainer email, client email, organiser email
+  const recipients: Array<{ name: string; email: string }> = [];
+  if (training.trainer?.email) recipients.push({ name: training.trainer.name, email: training.trainer.email });
+  if (training.client?.email)  recipients.push({ name: training.client.name,  email: training.client.email });
+  // Always include the organiser (so it lands on their calendar)
+  if (organiserEmail && !recipients.find((r) => r.email === organiserEmail)) {
+    recipients.push({ name: organiser?.name || 'Organiser', email: organiserEmail });
+  }
+  // Samita CC on all invites
+  const samitaEmail = 'samita@mitssolution.com';
+
+  const fromUser = organiser ? safeBuildFromUser(organiser) : undefined;
+
+  for (const recipient of recipients) {
+    const ics = buildIcsInvite({
+      uid,
+      summary,
+      description,
+      location,
+      organizerName: organiser?.name || 'MITS',
+      organizerEmail,
+      startISO,
+      durationMinutes,
+      attendees: [{ name: recipient.name, email: recipient.email }],
+      method: 'REQUEST',
+    });
+    try {
+      const cc = [samitaEmail].filter((a) => a !== recipient.email && a !== organiserEmail);
+      await sendEmail({
+        to: recipient.email,
+        subject: `📅 ${summary} · ${istLabel} IST`,
+        body: description,
+        fromUser,
+        cc: cc.length ? cc : undefined,
+        icsAttachment: { filename: 'session-invite.ics', content: ics, method: 'REQUEST' },
+      });
+      results.push(recipient.email);
+    } catch (e: any) {
+      errors.push(`${recipient.email}: ${e.message}`);
+    }
+  }
+
+  await audit(req.user!.id, req.user!.name, 'TRAINING_SESSION_INVITE',
+    `${training.name} · ${dt.toISOString().slice(0, 16)} → ${results.join(', ')}`);
+  res.status(201).json({ session, sent: results, errors });
 });
 
 // Punch in
