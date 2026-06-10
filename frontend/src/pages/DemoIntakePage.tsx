@@ -10,7 +10,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, CircleDot } from 'lucide-react';
 
 // readOnly = true means cards are visible but not clickable (another team owns that stage)
 const TEAM2_STAGES = [
@@ -39,6 +39,59 @@ const TEAM1_STAGES = [
   { key: 'DemoDone',           label: 'Demo done',          readOnly: true  },
   { key: 'FeedbackPending',    label: 'Feedback (Samita)',  readOnly: true  },
 ];
+
+function DemoFeedbackPanel({ demos }: { demos: any[] }) {
+  const [open, setOpen] = useState(false);
+  if (!demos || demos.length === 0) return null;
+  return (
+    <div className="mt-1.5" style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
+      <button
+        className="flex items-center gap-1 w-full pt-1.5 text-[10px] font-semibold"
+        style={{ color: 'var(--brand-textSecondary)', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 0 2px' }}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((v) => !v); }}
+      >
+        {open ? <ChevronUp size={11}/> : <ChevronDown size={11}/>}
+        {demos.length} demo{demos.length > 1 ? 's' : ''} done
+      </button>
+      {open && (
+        <div className="space-y-1.5 mt-1">
+          {demos.map((d: any) => {
+            const outcomeColor = d.outcome === 'Positive'
+              ? 'var(--status-green)' : d.outcome === 'Negative'
+              ? 'var(--status-red)' : 'var(--status-amber)';
+            return (
+              <div key={d.id} className="rounded-lg p-2 text-[10px]" style={{ background: 'var(--bg-base)', border: '1px solid var(--brand-borderSoft)' }}>
+                <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                  <CheckCircle2 size={11} style={{ color: 'var(--status-green)', flexShrink: 0 }} />
+                  <span className="font-semibold" style={{ color: 'var(--brand-text)' }}>{d.trainer?.name || 'Unknown trainer'}</span>
+                  {d.outcome && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase" style={{ background: outcomeColor + '22', color: outcomeColor }}>
+                      {d.outcome}
+                    </span>
+                  )}
+                  {d.actualDate && <span className="muted">{d.actualDate}</span>}
+                </div>
+                {d.trainer?.skills && (
+                  <div className="muted truncate mb-0.5">{d.trainer.skills.split(',').slice(0, 3).join(', ')}</div>
+                )}
+                {d.feedback && (
+                  <div className="mt-0.5" style={{ color: 'var(--brand-textSecondary)' }}>
+                    <span className="font-semibold">Feedback: </span>{d.feedback}
+                  </div>
+                )}
+                {d.nextSteps && (
+                  <div className="mt-0.5 muted">
+                    <span className="font-semibold">Next: </span>{d.nextSteps}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function DemoIntakePage() {
   const user = useAuth((s) => s.user)!;
@@ -143,6 +196,9 @@ export function DemoIntakePage() {
                       <div className="text-[10px] muted mono truncate" title={skill}>{skill}</div>
                       {ownerName && (
                         <div className="text-[10px] mt-1 font-medium" style={{ color: ownerColor }}>{ownerName}</div>
+                      )}
+                      {isRecruiter && c.demos?.length > 0 && (
+                        <DemoFeedbackPanel demos={c.demos} />
                       )}
                     </>
                   );
