@@ -213,7 +213,7 @@ export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
     const sectionDefs = [
       { items: demoToday,          label: "Today's Demos",          color: '#22c55e', action: 'DEMO TODAY' },
       { items: intakeReceived,     label: 'Intake Received',        color: '#f59e0b', action: 'PROCESS'   },
-      { items: pendingVerifications.map(p => ({ name: (p as any).request?.client?.name || '—', intakeSkillHint: `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, stageEnteredAt: p.proposedAt?.toISOString() })),
+      { items: pendingVerifications.map(p => ({ name: (p as any).request?.client?.name || '—', intakeSkillHint: `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, stageEnteredAt: (p.proposedAt ? new Date(p.proposedAt).toISOString() : undefined) })),
                                    label: 'Verify Trainer',         color: '#6366f1', action: 'VERIFY'    },
       { items: feedbackPending,    label: 'Feedback Needed',        color: '#ec4899', action: 'FEEDBACK'  },
       { items: verPending,         label: 'Verification Pending',   color: '#f97316', action: 'VER PENDING'},
@@ -322,15 +322,15 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
     const contactedLeads = myLeads.filter(l => l.stage === 'Contacted');
 
     const sectionDefs = [
-      { items: myOpenRequests.map(r => ({ name: r.client?.name || '—', intakeSkillHint: r.client?.intakeSkillHint, stageEnteredAt: r.createdAt?.toISOString() })),
+      { items: myOpenRequests.map(r => ({ name: r.client?.name || '—', intakeSkillHint: r.client?.intakeSkillHint, stageEnteredAt: (r.createdAt ? new Date(r.createdAt).toISOString() : undefined) })),
                                     label: 'Propose Trainers',     color: '#ef4444', action: 'PROPOSE NOW' },
-      { items: myPendingProposals.map(p => ({ name: (p as any).request?.client?.name || '—', intakeSkillHint: `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, stageEnteredAt: p.proposedAt?.toISOString() })),
+      { items: myPendingProposals.map(p => ({ name: (p as any).request?.client?.name || '—', intakeSkillHint: `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, stageEnteredAt: (p.proposedAt ? new Date(p.proposedAt).toISOString() : undefined) })),
                                     label: 'Notify Trainer',       color: '#f59e0b', action: 'NOTIFY'      },
-      { items: newLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: l.createdAt?.toISOString() })),
+      { items: newLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: (l.createdAt ? new Date(l.createdAt).toISOString() : undefined) })),
                                     label: 'New Leads',            color: '#6366f1', action: 'CONTACT'     },
-      { items: vettingLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: l.createdAt?.toISOString() })),
+      { items: vettingLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: (l.createdAt ? new Date(l.createdAt).toISOString() : undefined) })),
                                     label: 'Leads in Vetting',     color: '#0ea5e9', action: 'VETTING'     },
-      { items: contactedLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: l.createdAt?.toISOString() })),
+      { items: contactedLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: (l.createdAt ? new Date(l.createdAt).toISOString() : undefined) })),
                                     label: 'Leads — Follow Up',    color: '#64748b', action: 'FOLLOW UP'   },
     ];
 
@@ -452,13 +452,13 @@ export async function sendSamitaBriefing(shift: 'morning' | 'evening') {
     { items: intakeRcvd,    label: 'Intake Received',         color: '#f59e0b', rows: intakeRcvd.map(c => ownerRow(c, 'PROCESS')) },
     { items: pendingVerifications.map(p => ({ ...p, _name: (p as any).request?.client?.name || '—', _owner: (p as any).request?.sentTo?.name || '—' })),
                             label: 'Verify Trainer',          color: '#6366f1',
-      rows: pendingVerifications.map(p => itemRow((p as any).request?.client?.name || '—', `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, p.proposedAt?.toISOString(), `VERIFY · ${(p as any).request?.sentTo?.name || '—'}`)) },
+      rows: pendingVerifications.map(p => itemRow((p as any).request?.client?.name || '—', `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, (p.proposedAt ? new Date(p.proposedAt).toISOString() : undefined), `VERIFY · ${(p as any).request?.sentTo?.name || '—'}`)) },
     { items: feedbackPend,  label: 'Feedback Needed',         color: '#ec4899', rows: feedbackPend.map(c => ownerRow(c, 'FEEDBACK')) },
     { items: unnotifiedProposals.map(p => p),
                             label: 'Recruiter: Notify Trainer', color: '#f97316',
-      rows: unnotifiedProposals.map(p => itemRow((p as any).request?.client?.name || '—', `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, p.proposedAt?.toISOString(), `NOTIFY · ${(p as any).proposedBy?.name || (p as any).request?.sentTo?.name || '—'}`)) },
+      rows: unnotifiedProposals.map(p => itemRow((p as any).request?.client?.name || '—', `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, (p.proposedAt ? new Date(p.proposedAt).toISOString() : undefined), `NOTIFY · ${(p as any).proposedBy?.name || (p as any).request?.sentTo?.name || '—'}`)) },
     { items: openRequests,  label: 'Open Sourcing Requests',  color: '#ef4444',
-      rows: openRequests.map(r => itemRow(r.client?.name || '—', r.client?.intakeSkillHint, r.createdAt?.toISOString(), `PROPOSE · ${r.sentTo?.name || '—'}`)) },
+      rows: openRequests.map(r => itemRow(r.client?.name || '—', r.client?.intakeSkillHint, (r.createdAt ? new Date(r.createdAt).toISOString() : undefined), `PROPOSE · ${r.sentTo?.name || '—'}`)) },
     { items: verPend,       label: 'Verification Pending',    color: '#f97316', rows: verPend.map(c => ownerRow(c, 'VER PENDING')) },
     { items: withRec,       label: 'With Recruiters',         color: '#0ea5e9', rows: withRec.map(c => ownerRow(c, 'FOLLOW UP')) },
     { items: trainerMatched,label: 'Trainer Matched',         color: '#06b6d4', rows: trainerMatched.map(c => ownerRow(c, 'SCHEDULE DEMO')) },

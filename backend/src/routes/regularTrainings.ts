@@ -257,7 +257,7 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
       description,
       location,
       organizerName: organiser?.name || 'MITS',
-      organizerEmail,
+      organizerEmail: organiserEmail,
       startISO,
       durationMinutes,
       attendees: [{ name: recipient.name, email: recipient.email }],
