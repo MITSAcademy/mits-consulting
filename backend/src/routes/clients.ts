@@ -361,7 +361,7 @@ const STAGE_TRANSITION_PERMS: Record<string, string[]> = {
   Lead:                ['founder', 'manager', 'demo_lead', 'demo_intake'],
   IntakeSent:          ['founder', 'manager', 'demo_lead', 'demo_intake'],
   IntakeReceived:      ['founder', 'manager', 'demo_lead', 'demo_intake'],
-  InternalSearch:      ['founder', 'manager', 'demo_lead', 'demo_intake'],
+  InternalSearch:      ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'],
   WithRecruiters:      ['founder', 'manager', 'demo_lead', 'demo_intake'],
   VerificationPending: ['founder', 'manager', 'demo_lead', 'demo_intake', 'recruiter'],
   TrainerMatched:      ['founder', 'manager', 'demo_lead', 'demo_intake'],
@@ -399,7 +399,7 @@ const BACK_TRANSITIONS: Record<string, string[]> = {
   Lead:                ['IntakeSent', 'Dormant'],
   IntakeSent:          ['IntakeReceived', 'Dormant'],
   IntakeReceived:      ['InternalSearch', 'WithRecruiters', 'VerificationPending', 'Dormant'],
-  InternalSearch:      ['WithRecruiters', 'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone', 'Dormant'],
+  InternalSearch:      ['WithRecruiters', 'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone', 'SaleClosing', 'SaleWon', 'Dormant'],
   // DemoDone → WithRecruiters is the bad-feedback re-loop (Samita reassigns back to Anjali's recruiters)
   WithRecruiters:      ['InternalSearch', 'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone', 'Hold', 'Dormant'],
   VerificationPending: ['TrainerMatched', 'DemoScheduled', 'DemoDone', 'Dormant'],
@@ -494,6 +494,15 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
     data.dormantReason = null;
     data.dormantCheckBackOn = null;
     data.dormantResumeFromStage = null;
+  }
+
+  // Moving back to demo-team stages — clear Roshni's sub-status so the client
+  // re-enters the demo pipeline cleanly with no stale DP/CP flag.
+  if (['InternalSearch', 'WithRecruiters', 'Lead', 'IntakeSent', 'IntakeReceived'].includes(lifecycle)
+      && ['SaleClosing', 'SaleWon'].includes(current.lifecycle)) {
+    data.saleClosingSubStatus = null;
+    data.saleClosingSubStatusAt = null;
+    data.roshniNextCallOn = null;
   }
 
   // Auto-assign salesOwnerId to Roshni AND default sub-status to 'RP' when a
