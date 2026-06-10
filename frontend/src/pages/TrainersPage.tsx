@@ -102,6 +102,13 @@ export function TrainersPage() {
     (expMin ? 1 : 0) + (expMax ? 1 : 0) +
     (onlyVerified ? 1 : 0) + (onlyWithGroup ? 1 : 0);
 
+  const PAGE_SIZE = 25;
+  const [page, setPage] = useState(1);
+  // Reset to page 1 whenever the filtered list changes (filter/search applied)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   const [form, setForm] = useState<any>({
     name: '', email: '', phoneCode: '+91', phoneDigits: '',
     skills: '', defaultRateInr: 1000, rateModel: 'hourly',
@@ -327,7 +334,7 @@ export function TrainersPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {paginated.length === 0 && filtered.length === 0 ? (
                 <tr><td colSpan={9}>
                   <EmptyState
                     icon={UserSearch}
@@ -339,7 +346,7 @@ export function TrainersPage() {
                     }
                   />
                 </td></tr>
-              ) : filtered.map((t: any) => {
+              ) : paginated.map((t: any) => {
                 const phone = formatPhone(t.phoneCode, t.phoneDigits);
                 const wa = t.phoneDigits ? waLink(t.phoneCode, t.phoneDigits) : '';
                 return (
@@ -400,6 +407,17 @@ export function TrainersPage() {
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-3 text-xs muted">
+            <span>{filtered.length} trainers · page {safePage} of {totalPages}</span>
+            <div className="flex gap-1">
+              <Button size="sm" disabled={safePage === 1} onClick={() => setPage(1)}>«</Button>
+              <Button size="sm" disabled={safePage === 1} onClick={() => setPage(p => p - 1)}>‹ Prev</Button>
+              <Button size="sm" disabled={safePage === totalPages} onClick={() => setPage(p => p + 1)}>Next ›</Button>
+              <Button size="sm" disabled={safePage === totalPages} onClick={() => setPage(totalPages)}>»</Button>
+            </div>
+          </div>
+        )}
       </Page>
     </>
   );

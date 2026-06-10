@@ -27,16 +27,22 @@ sessionLogsRouter.get('/', async (req, res) => {
 });
 
 sessionLogsRouter.post('/', async (req: AuthedRequest, res) => {
-  const { trainerId, clientId, date, hours, rateSnapshot, rateModel, notes, amountInr: amountOverride } = req.body;
+  const { trainerId, clientId, date, hours, rateSnapshot, rateModel, notes, amountInr: amountOverride, feedback } = req.body;
   if (!trainerId || !date || !hours) return res.status(400).json({ error: 'trainerId, date, hours required' });
   const defaultAmount = rateModel === 'hourly' ? Math.round(hours * rateSnapshot) : rateSnapshot;
   const amount = (amountOverride != null && !isNaN(Number(amountOverride))) ? Math.round(Number(amountOverride)) : defaultAmount;
   const log = await prisma.sessionLog.create({
-    data: { trainerId, clientId, date, hours, rateSnapshot, rateModel, amountInr: amount, status: 'Logged', notes },
+    data: {
+      trainerId, clientId, date, hours, rateSnapshot, rateModel,
+      amountInr: amount, status: 'Logged', notes,
+      feedback: feedback || null,
+      loggedById: req.user!.id,
+    },
     include,
   });
   const overrideNote = (amountOverride != null && amount !== defaultAmount) ? ` · amount overridden to ₹${amount} (default ₹${defaultAmount})` : '';
-  await audit(req.user!.id, req.user!.name, 'SESSION_LOG', `${log.trainer.name} · ${date}${overrideNote}`);
+  const feedbackNote = feedback ? ` · feedback: ${feedback}` : '';
+  await audit(req.user!.id, req.user!.name, 'SESSION_LOG', `${log.trainer.name} · ${date}${overrideNote}${feedbackNote}`);
   res.status(201).json(log);
 });
 
