@@ -56,24 +56,35 @@ export const useAuth = create<AuthState>()(
       },
       impersonate: async (userId: string) => {
         const currentUser = get().user;
-        const currentToken = get().realToken;
+        // Preserve the existing realToken — if we're the founder switching between
+        // team members, realToken is already set from login and must not be overwritten.
+        const founderToken = get().realToken;
         const r = await api.post(`/auth/impersonate/${userId}`);
-        // Cookie is now set to the target user by the server.
-        // Store the founder's original token so we can restore the cookie on exit.
-        set({ realUser: currentUser, realToken: currentToken, user: r.data.user });
+        set({
+          realUser: currentUser,
+          // Keep existing founderToken; fall back to the token the server just issued
+          // for the impersonated user (so exit can still hit /exit-impersonation with
+          // a token — but note: that token is for the TARGET, not the founder, so
+          // exit without the founder token will fail and redirect to /login instead).
+          realToken: founderToken || null,
+          user: r.data.user,
+        });
       },
       exitImpersonation: async () => {
         const real = get().realUser;
         const token = get().realToken;
-        // If we lost the token (e.g. after a page reload), still restore the real user
-        // by hitting exit-impersonation without the header — server will clear the cookie
-        // and the user can log back in as founder.
         try {
-          await api.post('/auth/exit-impersonation', {}, token ? {
-            headers: { Authorization: `Bearer ${token}` },
-          } : {});
+          if (token) {
+            // Normal path: restore using the stored founder token
+            await api.post('/auth/exit-impersonation', {}, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          } else if (real?.id) {
+            // Fallback: token was lost (page reload) — server re-issues from founderId
+            await api.post('/auth/exit-impersonation', { founderId: real.id });
+          }
         } catch {}
-        set({ user: real || null, realUser: null, realToken: null });
+        set({ user: real || null, realUser: null, realToken: token || null });
         if (!real) window.location.href = '/login';
       },
     }),

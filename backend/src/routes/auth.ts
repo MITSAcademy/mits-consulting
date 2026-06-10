@@ -80,22 +80,40 @@ authRouter.post('/impersonate/:userId', requireAuth, async (req: AuthedRequest, 
   res.json({ user: { id: target.id, name: target.name, email: target.email, role: target.role }, token });
 });
 
-// Exit impersonation: restore the founder's session using a Bearer token stored client-side
+// Exit impersonation: restore the founder's session.
+// Accepts either:
+//   a) Bearer <founderToken> header — verifies and restores cookie
+//   b) { founderId } body — re-issues a fresh token for that founder (fallback for lost token)
 authRouter.post('/exit-impersonation', async (req, res) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'Bearer token required' });
-  const founderToken = authHeader.slice(7);
-  try {
-    const founder = await verifyAndGetUser(founderToken);
-    if (!founder || !founder.active || founder.role !== 'founder') {
-      return res.status(403).json({ error: 'Not a founder token' });
+  // Path A: have the founder token
+  if (authHeader?.startsWith('Bearer ')) {
+    const founderToken = authHeader.slice(7);
+    try {
+      const founder = await verifyAndGetUser(founderToken);
+      if (!founder || !founder.active || founder.role !== 'founder') {
+        return res.status(403).json({ error: 'Not a founder token' });
+      }
+      setAuthCookie(res, founderToken);
+      await audit(founder.id, founder.name, 'EXIT_IMPERSONATION', '');
+      return res.json({ user: { id: founder.id, name: founder.name, email: founder.email, role: founder.role } });
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' });
     }
-    setAuthCookie(res, founderToken);
-    await audit(founder.id, founder.name, 'EXIT_IMPERSONATION', '');
-    res.json({ user: { id: founder.id, name: founder.name, email: founder.email, role: founder.role } });
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' });
   }
+  // Path B: lost the token — re-issue using founderId from body
+  const { founderId } = req.body || {};
+  if (founderId) {
+    const founder = await prisma.user.findUnique({ where: { id: founderId } });
+    if (!founder || !founder.active || founder.role !== 'founder') {
+      return res.status(403).json({ error: 'Not a founder account' });
+    }
+    const freshToken = signToken({ id: founder.id });
+    setAuthCookie(res, freshToken);
+    await audit(founder.id, founder.name, 'EXIT_IMPERSONATION', 'token-reissued');
+    return res.json({ user: { id: founder.id, name: founder.name, email: founder.email, role: founder.role } });
+  }
+  return res.status(400).json({ error: 'Provide Bearer token or founderId' });
 });
 
 // List all users (founder only) — lightweight, for the impersonate picker
