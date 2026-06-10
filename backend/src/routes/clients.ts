@@ -2554,15 +2554,14 @@ async function sendDemoInvite(
     });
   }
 
-  // Samita + Vaibhav get CC on every demo invite for full visibility.
+  // CC Samita on every demo invite for visibility.
   const samitaUser = await prisma.user.findUnique({
     where: { id: 'u-samita' },
     select: { sendAsAddress: true, gmailAddress: true, email: true },
   });
   const samitaEmail = samitaUser?.sendAsAddress || samitaUser?.gmailAddress || samitaUser?.email || 'samita@mitssolution.com';
-  const vaibhavEmail = 'vaibhav.aggarwal@mitssolution.com';
   // Don't CC someone on their own send
-  const samitaCc = [samitaEmail, vaibhavEmail].filter((a) => a !== orgEmail);
+  const samitaCc = [samitaEmail].filter((a) => a !== orgEmail);
 
   const sentTo: string[] = [];
   if (clientEmail) {
