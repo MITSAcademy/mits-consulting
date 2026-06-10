@@ -1466,8 +1466,8 @@ clientsRouter.post('/:id/handover-to-mitali', async (req: AuthedRequest, res) =>
 // Introduces her team + feedback rhythm + payment cadence.
 clientsRouter.post('/:id/handover-welcome', async (req: AuthedRequest, res) => {
   const channel = (req.body?.channel || 'email') as 'email' | 'whatsapp' | 'already_sent';
-  if (!['founder', 'manager'].includes(req.user!.role)) {
-    return res.status(403).json({ error: 'Only Mitali (manager) or founder can send the handover welcome' });
+  if (!['founder', 'manager', 'sales_closer'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only Mitali (manager), sales closer, or founder can send the handover welcome' });
   }
   // "Already sent" — just stamp the wizard step, no actual send
   if (channel === 'already_sent') {
