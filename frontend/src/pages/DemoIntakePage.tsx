@@ -12,12 +12,14 @@ import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { Plus } from 'lucide-react';
 
+// WithRecruiters is intentionally excluded — once a client moves there,
+// the work belongs to Aman/Kanchan (Team 1). Anjali/Taran see a count-only
+// indicator but not the full column, to avoid confusion over ownership.
 const STAGES = [
   { key: 'Lead', label: 'New leads' },
   { key: 'IntakeSent', label: 'Intake sent' },
   { key: 'IntakeReceived', label: 'Intake done' },
   { key: 'InternalSearch', label: 'Internal search' },
-  { key: 'WithRecruiters', label: 'With recruiters' },
   { key: 'VerificationPending', label: 'Verify proposal' },
   { key: 'TrainerMatched', label: 'Trainer matched' },
   { key: 'DemoScheduled', label: 'Demo scheduled' },
@@ -40,12 +42,14 @@ export function DemoIntakePage() {
   const filtered = mineOnly ? all.filter((c) => c.intakeOwnerId === user.id) : all;
   const grouped: Record<string, any[]> = {};
   STAGES.forEach((s) => (grouped[s.key] = filtered.filter((c: any) => c.lifecycle === s.key)));
+  // WithRecruiters count — shown as an info badge in the subtitle, not as a kanban column
+  const withRecruitersCount = filtered.filter((c: any) => c.lifecycle === 'WithRecruiters').length;
 
   return (
     <>
       <Topbar
         title="Demo intake"
-        subtitle={mineOnly ? `Mine · ${filtered.length} clients` : `All Team 2 · ${filtered.length} of ${all.length}`}
+        subtitle={`${mineOnly ? `Mine · ${filtered.length} clients` : `All Team 2 · ${filtered.length} of ${all.length}`}${withRecruitersCount > 0 ? ` · ${withRecruitersCount} with recruiters (Team 1)` : ''}`}
         actions={
           <>
             <div className="flex gap-1.5">
