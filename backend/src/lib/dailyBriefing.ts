@@ -11,6 +11,31 @@
 import { prisma } from './prisma';
 import { sendEmail } from './mailer';
 
+/**
+ * Dedup guard — prevents duplicate sends when Render spins up multiple
+ * instances during zero-downtime deploys (both fire the same cron).
+ *
+ * Uses AuditLog as a distributed lock: write a BRIEFING_SENT record first
+ * (upsert-like via createMany skipDuplicates), then check if it was ours.
+ * If another instance beat us within the last 5 minutes, skip.
+ *
+ * key format: "briefing:<team>:<shift>:<YYYY-MM-DD>"
+ */
+async function acquireBriefingLock(team: string, shift: string): Promise<boolean> {
+  const key = `briefing:${team}:${shift}:${todayIST()}`;
+  const window = new Date(Date.now() - 5 * 60 * 1000); // 5 min ago
+  const existing = await prisma.auditLog.findFirst({
+    where: { action: 'BRIEFING_SENT', details: key, createdAt: { gte: window } },
+    select: { id: true },
+  });
+  if (existing) {
+    console.log(`[briefing] SKIP ${key} — already sent by another instance`);
+    return false;
+  }
+  await prisma.auditLog.create({ data: { byName: 'system', action: 'BRIEFING_SENT', details: key } });
+  return true;
+}
+
 // ── IST offset helpers ────────────────────────────────────────────────────────
 
 /** Returns current time as { h, m } in IST (UTC+5:30). */
@@ -151,6 +176,7 @@ function emailWrapper(recipientName: string, shift: string, date: string, totalI
 // ── Team 2 briefing (Anjali + Taran) — each person gets their own email ───────
 
 export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
+  if (!await acquireBriefingLock('team2', shift)) return;
   const today = todayIST();
 
   // CC: Samita + Vaibhav
@@ -171,11 +197,11 @@ export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
     const toEmail = recipient.sendAsAddress || recipient.gmailAddress || recipient.email;
     if (!toEmail) continue;
 
-    // Clients this person owns
+    // Clients this person owns (WithRecruiters excluded — those go to Team 1 recruiters)
     const myClients = await prisma.client.findMany({
       where: {
         lifecycle: {
-          in: ['IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters',
+          in: ['IntakeSent', 'IntakeReceived', 'InternalSearch',
                'VerificationPending', 'DemoScheduled', 'DemoDone', 'FeedbackPending'],
         },
         intakeOwnerId: recipient.id,
@@ -205,7 +231,7 @@ export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
     const demoToday = myClients.filter(c => c.lifecycle === 'DemoScheduled' && c.demoDate === today);
     const intakeReceived = myClients.filter(c => c.lifecycle === 'IntakeReceived');
     const intakeSent = myClients.filter(c => c.lifecycle === 'IntakeSent');
-    const internalSearch = myClients.filter(c => ['InternalSearch', 'WithRecruiters'].includes(c.lifecycle));
+    const internalSearch = myClients.filter(c => c.lifecycle === 'InternalSearch');
     const verPending = myClients.filter(c => c.lifecycle === 'VerificationPending');
     const demoScheduled = myClients.filter(c => c.lifecycle === 'DemoScheduled' && c.demoDate !== today);
     const feedbackPending = myClients.filter(c => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle));
@@ -217,7 +243,7 @@ export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
                                    label: 'Verify Trainer',         color: '#6366f1', action: 'VERIFY'    },
       { items: feedbackPending,    label: 'Feedback Needed',        color: '#ec4899', action: 'FEEDBACK'  },
       { items: verPending,         label: 'Verification Pending',   color: '#f97316', action: 'VER PENDING'},
-      { items: internalSearch,     label: 'With Recruiters',        color: '#0ea5e9', action: 'FOLLOW UP' },
+      { items: internalSearch,     label: 'Internal Search',        color: '#0ea5e9', action: 'SEARCHING'  },
       { items: intakeSent,         label: 'Intake Sent — Awaiting', color: '#64748b', action: 'WAITING'   },
       { items: demoScheduled,      label: 'Upcoming Demos',         color: '#06b6d4', action: 'SCHEDULED' },
     ];
@@ -263,6 +289,7 @@ export async function sendTeam2Briefing(shift: 'morning' | 'evening') {
 // ── Team 1 briefing (Aman + Kanchan) — each person gets their own email ───────
 
 export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
+  if (!await acquireBriefingLock('team1', shift)) return;
   const today = todayIST();
 
   // CC: Samita + Vaibhav
@@ -284,6 +311,13 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
     where: { status: 'Open', sentToId: { in: ['u-aman', 'u-kanchan'] } },
     include: { client: { select: { name: true, intakeSkillHint: true } }, sentTo: { select: { id: true } } },
     orderBy: { createdAt: 'asc' },
+  });
+
+  // WithRecruiters clients — all of them belong to Aman/Kanchan's team to follow up on
+  const withRecruitersClients = await prisma.client.findMany({
+    where: { lifecycle: 'WithRecruiters' },
+    select: { id: true, name: true, intakeSkillHint: true, stageEnteredAt: true },
+    orderBy: { stageEnteredAt: 'asc' },
   });
 
   for (const recipient of recipients) {
@@ -326,10 +360,12 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
                                     label: 'Propose Trainers',     color: '#ef4444', action: 'PROPOSE NOW' },
       { items: myPendingProposals.map(p => ({ name: (p as any).request?.client?.name || '—', intakeSkillHint: `Trainer: ${(p as any).trainer?.name || p.trainerName || '—'}`, stageEnteredAt: (p.proposedAt ? new Date(p.proposedAt).toISOString() : undefined) })),
                                     label: 'Notify Trainer',       color: '#f59e0b', action: 'NOTIFY'      },
+      { items: withRecruitersClients.map(c => ({ name: c.name, intakeSkillHint: c.intakeSkillHint, stageEnteredAt: (c.stageEnteredAt ? new Date(c.stageEnteredAt).toISOString() : undefined) })),
+                                    label: 'With Recruiters',      color: '#0ea5e9', action: 'FOLLOW UP'   },
       { items: newLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: (l.createdAt ? new Date(l.createdAt).toISOString() : undefined) })),
                                     label: 'New Leads',            color: '#6366f1', action: 'CONTACT'     },
       { items: vettingLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: (l.createdAt ? new Date(l.createdAt).toISOString() : undefined) })),
-                                    label: 'Leads in Vetting',     color: '#0ea5e9', action: 'VETTING'     },
+                                    label: 'Leads in Vetting',     color: '#8b5cf6', action: 'VETTING'     },
       { items: contactedLeads.map(l => ({ name: l.name, intakeSkillHint: l.skills, stageEnteredAt: (l.createdAt ? new Date(l.createdAt).toISOString() : undefined) })),
                                     label: 'Leads — Follow Up',    color: '#64748b', action: 'FOLLOW UP'   },
     ];
@@ -343,7 +379,7 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
       ));
     }
 
-    const totalItems = myOpenRequests.length + myPendingProposals.length + myLeads.length;
+    const totalItems = myOpenRequests.length + myPendingProposals.length + myLeads.length + withRecruitersClients.length;
     const subject = totalItems > 0
       ? `[MITS] ${shift === 'morning' ? '🌅' : '🌙'} ${totalItems} pending · ${recipient.name.split(' ')[0]} · ${today}`
       : `[MITS] ${shift === 'morning' ? '🌅' : '🌙'} All clear · ${today}`;
@@ -378,6 +414,7 @@ export async function sendTeam1Briefing(shift: 'morning' | 'evening') {
 // Schedule: 7 AM IST + 7 PM IST, CC Vaibhav.
 
 export async function sendSamitaBriefing(shift: 'morning' | 'evening') {
+  if (!await acquireBriefingLock('samita', shift)) return;
   const today = todayIST();
   const dateLabel = new Date(today).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
