@@ -35,6 +35,7 @@ interface Training {
   recordingAccountLabel: string | null;
   recordingFolderUrl: string | null;
   scheduleNotes: string | null;
+  meetingMode: string | null;
   notes: string | null;
   hostedByDefault: { id: string; name: string } | null;
   client: { id: string; name: string } | null;
@@ -43,6 +44,8 @@ interface Training {
   createdAt: string;
   updatedAt: string;
 }
+
+const MEETING_MODES = ['Zoom', 'GoToMeeting', 'Teams', 'Google Meet', 'Phone', 'Other'];
 
 export function RegularTrainingsPage() {
   const features = useFeatures();
@@ -184,7 +187,10 @@ function Row({ t }: { t: Training }) {
         {t.notes && <div className="text-[10.5px] muted mt-0.5 truncate" title={t.notes}>{t.notes.slice(0, 60)}</div>}
       </td>
       <td>{t.hostedByDefault?.name || <span className="muted">—</span>}</td>
-      <td className="text-[11.5px]">{t.scheduleNotes || <span className="muted">—</span>}</td>
+      <td className="text-[11.5px]">
+        <div>{t.scheduleNotes || <span className="muted">—</span>}</div>
+        {t.meetingMode && <div className="text-[10.5px] muted mt-0.5">{t.meetingMode}</div>}
+      </td>
       <td>
         {t.recordingFolderUrl ? (
           <a href={t.recordingFolderUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] hover:underline" style={{ color: 'var(--accent-gold)' }}>
@@ -309,6 +315,7 @@ function CreateTrainingButton() {
     recordingAccountLabel: '',
     recordingFolderUrl: '',
     scheduleNotes: '',
+    meetingMode: '',
     hostedByDefaultId: '',
     notes: '',
   });
@@ -329,7 +336,7 @@ function CreateTrainingButton() {
       qc.invalidateQueries({ queryKey: ['regular-trainings'] });
       showToast('Training created');
       setOpen(false);
-      setForm({ name: '', recordingAccountEmail: '', recordingAccountLabel: '', recordingFolderUrl: '', scheduleNotes: '', hostedByDefaultId: '', notes: '' });
+      setForm({ name: '', recordingAccountEmail: '', recordingAccountLabel: '', recordingFolderUrl: '', scheduleNotes: '', meetingMode: '', hostedByDefaultId: '', notes: '' });
     },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
@@ -380,6 +387,13 @@ function CreateTrainingButton() {
           <div className="form-row">
             <Label>Schedule notes</Label>
             <Input value={form.scheduleNotes} onChange={(e) => setForm({ ...form, scheduleNotes: e.target.value })} placeholder="Mon/Wed/Fri 7-8 PM IST" />
+          </div>
+          <div className="form-row">
+            <Label>Meeting mode</Label>
+            <Select value={form.meetingMode} onChange={(e) => setForm({ ...form, meetingMode: e.target.value })}>
+              <option value="">— pick —</option>
+              {MEETING_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+            </Select>
           </div>
         </div>
         <div className="form-row">

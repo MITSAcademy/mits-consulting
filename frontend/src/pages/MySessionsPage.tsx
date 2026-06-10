@@ -26,9 +26,18 @@ import { todayISO } from '@/lib/utils';
 import { EmptyState } from '@/components/EmptyState';
 import {
   ClipboardList, Plus, Calendar as CalendarIcon, CheckCircle2, Phone, Play, Square,
-  Clock, MessageSquare, AlertCircle,
+  Clock, MessageSquare, AlertCircle, Video,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+
+const MEETING_MODE_ICONS: Record<string, string> = {
+  Zoom: '🎥',
+  GoToMeeting: '🟢',
+  Teams: '💜',
+  'Google Meet': '🔵',
+  Phone: '📞',
+  Other: '💻',
+};
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /* Google Calendar pre-fill — same helper as before, kept for session tasks */
@@ -77,8 +86,16 @@ export function MySessionsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
 
+  const isAM = user.role === 'account_manager';
   const today = todayISO();
   const sevenAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10); })();
+
+  // AM session sheet — active clients with upcoming training sessions
+  const { data: mySessions, isLoading: mySessionsLoading } = useQuery({
+    queryKey: ['my-sessions-sheet', user.id],
+    queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
+    enabled: isAM,
+  });
 
   // Today + upcoming scheduled/in-progress calls owned by me.
   const { data: scheduledCalls } = useQuery<ScheduledCall[]>({
@@ -133,6 +150,46 @@ export function MySessionsPage() {
         }
       />
       <Page>
+        {/* ── AM session sheet ── */}
+        {isAM && (
+          <div className="mb-6">
+            <div className="text-[11px] uppercase tracking-[0.14em] font-bold mb-2.5 flex items-center gap-2" style={{ color: 'var(--accent-gold)' }}>
+              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent-gold)', boxShadow: '0 0 8px var(--accent-gold)' }} />
+              My clients &amp; sessions ({(mySessions || []).length})
+            </div>
+            {mySessionsLoading ? (
+              <div className="muted text-sm">Loading…</div>
+            ) : (mySessions || []).length === 0 ? (
+              <div className="rounded-xl p-5 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+                <Video size={28} style={{ color: 'var(--accent-gold)', margin: '0 auto 8px' }} />
+                <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>No active trainings assigned to you yet</div>
+                <div className="text-[12px] muted mt-1">Ask Vaibhav to set you as the host on a regular training.</div>
+              </div>
+            ) : (
+              <div className="table-card">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Client</th>
+                      <th>Trainer</th>
+                      <th>Schedule</th>
+                      <th>Mode</th>
+                      <th>Next session</th>
+                      <th>Notes</th>
+                      <th className="text-right">Invite</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(mySessions || []).map((t: any) => (
+                      <AMSessionRow key={t.id} t={t} onInviteSent={() => {}} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         {inProgress.length > 0 && (
           <Section title={`Live calls (${inProgress.length})`} tone="green">
             {inProgress.map((c) => <CallRow key={c.id} c={c} />)}
@@ -524,6 +581,140 @@ function TaskRow({ t, onDone }: { t: any; onDone: () => void }) {
         <Button size="sm" variant="success" onClick={onDone}><CheckCircle2 size={11}/> Hosted</Button>
       </div>
     </div>
+  );
+}
+
+/* ──────────────────────── AM Session Row ────────────────────────────────── */
+
+function AMSessionRow({ t, onInviteSent }: { t: any; onInviteSent: () => void }) {
+  const nextSession = t.sessions?.[0];
+  const modeIcon = MEETING_MODE_ICONS[t.meetingMode] || '';
+
+  const fmtDateTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
+
+  return (
+    <tr className="clickable">
+      <td>
+        {t.client
+          ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: 'var(--brand-text)' }}>{t.client.name}</Link>
+          : <span className="muted">—</span>
+        }
+      </td>
+      <td>{t.trainer?.name || <span className="muted">—</span>}</td>
+      <td className="text-[11.5px]" style={{ color: 'var(--accent-gold)' }}>{t.scheduleNotes || <span className="muted">—</span>}</td>
+      <td>
+        {t.meetingMode
+          ? <span className="text-[12px]">{modeIcon} {t.meetingMode}</span>
+          : <span className="muted">—</span>
+        }
+      </td>
+      <td className="mono text-[11.5px]">
+        {nextSession
+          ? <span style={{ color: 'var(--status-green)' }}>{fmtDateTime(nextSession.scheduledFor)}</span>
+          : <span className="muted">Not scheduled</span>
+        }
+      </td>
+      <td className="text-[11.5px] muted max-w-[160px] truncate" title={t.notes || ''}>
+        {t.notes || <span>—</span>}
+      </td>
+      <td className="text-right" onClick={(e) => e.stopPropagation()}>
+        <AMSendInviteButton training={t} onSent={onInviteSent} />
+      </td>
+    </tr>
+  );
+}
+
+function AMSendInviteButton({ training, onSent }: { training: any; onSent: () => void }) {
+  const [open, setOpen] = useState(false);
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const today = new Date();
+  const defaultDate = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  const [date, setDate] = useState(defaultDate);
+  const [time, setTime] = useState('19:00');
+  const [duration, setDuration] = useState('60');
+  const [meetingLink, setMeetingLink] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const invite = useMutation({
+    mutationFn: () => {
+      const iso = `${date}T${time}:00+05:30`;
+      return api.post(`/regular-trainings/trainings/${training.id}/sessions/invite`, {
+        scheduledFor: iso,
+        durationMinutes: Number(duration),
+        meetingLink,
+        notes,
+      });
+    },
+    onSuccess: (r) => {
+      const sent: string[] = r.data.sent || [];
+      const errs: string[] = r.data.errors || [];
+      if (sent.length) showToast(`Invite sent to ${sent.length} recipient${sent.length > 1 ? 's' : ''}`);
+      if (errs.length) showToast(`Some invites failed: ${errs[0]}`, 'error');
+      qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] });
+      onSent();
+      setOpen(false);
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to send invite', 'error'),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="primary" title="Schedule session + send calendar invite">
+          <CalendarIcon size={11}/> Invite
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        title={`Schedule · ${training.client?.name || training.name}`}
+        description={`Trainer: ${training.trainer?.name || '—'} · Creates a session + sends .ics invite to trainer, client, and you.`}
+      >
+        <div className="grid md:grid-cols-2 gap-2.5">
+          <div className="form-row">
+            <Label>Date *</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <Label>Time (IST) *</Label>
+            <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <Label>Duration (minutes)</Label>
+            <Select value={duration} onChange={(e) => setDuration(e.target.value)}>
+              <option value="30">30 min</option>
+              <option value="45">45 min</option>
+              <option value="60">60 min</option>
+              <option value="90">90 min</option>
+              <option value="120">2 hours</option>
+            </Select>
+          </div>
+          <div className="form-row">
+            <Label>Meeting link <span className="muted normal-case">(optional)</span></Label>
+            <Input value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} placeholder="https://zoom.us/…" />
+          </div>
+        </div>
+        <div className="form-row mt-1">
+          <Label>Notes <span className="muted normal-case">(optional)</span></Label>
+          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Agenda, topics to cover…" />
+        </div>
+        {training.scheduleNotes && (
+          <div className="text-[11px] mt-2" style={{ color: 'rgba(229,178,76,0.8)' }}>
+            📅 Usual schedule: {training.scheduleNotes}
+          </div>
+        )}
+        <DialogFooter>
+          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="primary" disabled={!date || !time || invite.isPending} onClick={() => invite.mutate()}>
+            {invite.isPending ? 'Sending…' : 'Schedule & Send invite'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

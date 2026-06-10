@@ -624,6 +624,7 @@ model RegularTraining {
   recordingFolderUrl       String?                         // Google Drive shareable folder URL
   // Schedule (freeform — "Mon/Wed/Fri 7-8 PM IST" works fine, no need to model RRule)
   scheduleNotes            String?
+  meetingMode              String?                         // Zoom | GoToMeeting | Teams | Google Meet | Phone | Other
   status                   String   @default("active")     // active | paused | archived
   notes                    String?
   createdAt                DateTime @default(now())
@@ -649,6 +650,7 @@ model TrainingSession {
   actualStartAt            DateTime?
   actualEndAt              DateTime?
   durationMinutes          Int?
+  meetingLink              String?                         // Zoom/GTM/Teams link for this specific session
   recordingUrl             String?                         // session-specific recording (if separate from folder)
   feedback                 String?
   notes                    String?

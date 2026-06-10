@@ -49,7 +49,7 @@ regularTrainingsRouter.get('/trainings', async (req: AuthedRequest, res) => {
     select: {
       id: true, name: true, status: true,
       recordingAccountEmail: true, recordingAccountLabel: true, recordingFolderUrl: true,
-      scheduleNotes: true, notes: true,
+      scheduleNotes: true, meetingMode: true, notes: true,
       hostedByDefault: { select: { id: true, name: true } },
       client:          { select: { id: true, name: true } },
       trainer:         { select: { id: true, name: true } },
@@ -75,6 +75,7 @@ regularTrainingsRouter.post('/trainings', async (req: AuthedRequest, res) => {
       recordingAccountLabel: b.recordingAccountLabel  || null,
       recordingFolderUrl:    b.recordingFolderUrl     || null,
       scheduleNotes:         b.scheduleNotes          || null,
+      meetingMode:           b.meetingMode            || null,
       notes:                 b.notes                  || null,
       status:                b.status                 || 'active',
     },
@@ -111,7 +112,7 @@ regularTrainingsRouter.patch('/trainings/:id', async (req: AuthedRequest, res) =
   if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const b = req.body || {};
   const data: any = {};
-  for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId']) {
+  for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'meetingMode', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId']) {
     if (k in b) data[k] = b[k] === '' ? null : b[k];
   }
   const updated = await prisma.regularTraining.update({ where: { id: req.params.id }, data });
@@ -127,6 +128,32 @@ regularTrainingsRouter.delete('/trainings/:id', async (req: AuthedRequest, res) 
   await prisma.regularTraining.update({ where: { id: req.params.id }, data: { status: 'archived' } });
   await audit(req.user!.id, req.user!.name, 'REGULAR_TRAINING_ARCHIVE', t.name);
   res.json({ ok: true });
+});
+
+// ── Account-manager session sheet ─────────────────────────────────────────
+// GET /trainings/my-sessions — returns all active RegularTrainings hosted by
+// the current user, enriched with the most recent upcoming TrainingSession.
+// Used by the "My clients & sessions" table on MySessionsPage for AM role.
+
+regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
+  if (!canRead(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const now = new Date();
+  const trainings = await prisma.regularTraining.findMany({
+    where: { hostedByDefaultId: req.user!.id, status: 'active' },
+    select: {
+      id: true, name: true, scheduleNotes: true, meetingMode: true, notes: true,
+      client:  { select: { id: true, name: true } },
+      trainer: { select: { id: true, name: true } },
+      sessions: {
+        where: { status: { in: ['scheduled', 'in_progress'] }, scheduledFor: { gte: now } },
+        select: { id: true, scheduledFor: true, meetingLink: true, notes: true, status: true },
+        orderBy: { scheduledFor: 'asc' },
+        take: 1,
+      },
+    },
+    orderBy: { name: 'asc' },
+  });
+  res.json(trainings);
 });
 
 // ── Sessions ──────────────────────────────────────────────────────────────
@@ -209,6 +236,7 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
       scheduledFor: dt,
       hostedById: b.hostedById || training.hostedByDefault?.id || req.user!.id,
       status: 'scheduled',
+      meetingLink: b.meetingLink || null,
       notes: b.notes || null,
     },
   });
