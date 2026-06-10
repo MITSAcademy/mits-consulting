@@ -2077,9 +2077,12 @@ clientsRouter.post('/:id/welcome-email', async (req: AuthedRequest, res) => {
     },
   });
   try {
+    // Always CC both Samita and Vaibhav for full visibility
+    const welcomeCc = ['samita@mitssolution.com', 'vaibhav.aggarwal@mitssolution.com']
+      .filter((a) => a !== senderEmail && a !== toEmail);
     const r = await sendEmail({
       to: toEmail,
-      cc: req.body?.cc || 'vaibhav.aggarwal@mitssolution.com',
+      cc: welcomeCc.length ? welcomeCc : undefined,
       subject: WELCOME_EMAIL_SUBJECT,
       body: plainText,
       htmlBody: html,
@@ -2514,14 +2517,15 @@ async function sendDemoInvite(
     });
   }
 
-  // Samita (demo_lead) gets CC on every invite sent by her team so she has full visibility.
+  // Samita + Vaibhav get CC on every demo invite for full visibility.
   const samitaUser = await prisma.user.findUnique({
     where: { id: 'u-samita' },
     select: { sendAsAddress: true, gmailAddress: true, email: true },
   });
   const samitaEmail = samitaUser?.sendAsAddress || samitaUser?.gmailAddress || samitaUser?.email || 'samita@mitssolution.com';
-  // Don't CC Samita on her own sends
-  const samitaCc = samitaEmail !== orgEmail ? [samitaEmail] : [];
+  const vaibhavEmail = 'vaibhav.aggarwal@mitssolution.com';
+  // Don't CC someone on their own send
+  const samitaCc = [samitaEmail, vaibhavEmail].filter((a) => a !== orgEmail);
 
   const sentTo: string[] = [];
   if (clientEmail) {
