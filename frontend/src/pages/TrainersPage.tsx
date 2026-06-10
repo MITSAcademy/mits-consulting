@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Input, Label, Select } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
+import { useAuth } from '@/store/auth';
 import { Pill } from '@/components/ui/pill';
 import { formatPhone, waLink, readAvailabilitySlots, formatAvailabilitySlots } from '@/lib/utils';
 import type { AvailabilitySlot } from '@/lib/utils';
@@ -19,10 +20,28 @@ type SortKey = 'name' | 'rate' | 'experience' | 'recent';
 export function TrainersPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const user = useAuth((s) => s.user)!;
+  const isAM = user.role === 'account_manager';
+
   const { data } = useQuery({
     queryKey: ['trainers'],
     queryFn: () => api.get('/trainers').then((r) => r.data),
   });
+
+  // For account_manager: get their active clients to derive which trainers they work with
+  const { data: myClients } = useQuery({
+    queryKey: ['clients-active'],
+    queryFn: () => api.get('/clients').then((r) =>
+      r.data.filter((c: any) => ['Active', 'LeverageGranted'].includes(c.lifecycle))
+    ),
+    enabled: isAM,
+  });
+
+  // Set of trainer IDs assigned to AM's clients
+  const myTrainerIds = isAM
+    ? new Set((myClients || []).map((c: any) => c.primaryTrainerId).filter(Boolean))
+    : null;
+
   const [open, setOpen] = useState(false);
 
   // ─── Filter / sort state ──────────────────────────────────────────────
@@ -65,6 +84,8 @@ export function TrainersPage() {
     const emin = expMin ? +expMin : -Infinity;
     const emax = expMax ? +expMax : Infinity;
     let list = (data || []).filter((t: any) => {
+      // account_manager only sees trainers assigned to their active clients
+      if (myTrainerIds && !myTrainerIds.has(t.id)) return false;
       if (!showInactive && !t.active) return false;
       if (onlyVerified && t.requiresVerification) return false; // verified = doesn't require verification
       if (onlyWithGroup && !t.whatsappGroupLink) return false;
@@ -94,7 +115,7 @@ export function TrainersPage() {
       return av < bv ? -1 * dir : av > bv ? 1 * dir : 0;
     });
     return list;
-  }, [data, q, showInactive, skillChips, rateMin, rateMax, expMin, expMax, onlyVerified, onlyWithGroup, sortKey, sortDir]);
+  }, [data, myTrainerIds, q, showInactive, skillChips, rateMin, rateMax, expMin, expMax, onlyVerified, onlyWithGroup, sortKey, sortDir]);
 
   const activeFilterCount =
     (skillChips.length) +
@@ -136,8 +157,10 @@ export function TrainersPage() {
   return (
     <>
       <Topbar
-        title="Trainer pool"
-        subtitle={`${filtered.length} of ${data?.length || 0}${activeFilterCount ? ` · ${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''} active` : ''}`}
+        title={isAM ? 'My trainers' : 'Trainer pool'}
+        subtitle={isAM
+          ? `${filtered.length} trainer${filtered.length !== 1 ? 's' : ''} on your active clients`
+          : `${filtered.length} of ${data?.length || 0}${activeFilterCount ? ` · ${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''} active` : ''}`}
         actions={
           <>
             <Input
