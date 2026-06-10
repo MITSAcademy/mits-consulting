@@ -65,12 +65,16 @@ export const useAuth = create<AuthState>()(
       exitImpersonation: async () => {
         const real = get().realUser;
         const token = get().realToken;
-        if (!real || !token) return;
-        // Send the founder's original token — server restores the cookie
-        await api.post('/auth/exit-impersonation', {}, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        set({ user: real, realUser: null });
+        // If we lost the token (e.g. after a page reload), still restore the real user
+        // by hitting exit-impersonation without the header — server will clear the cookie
+        // and the user can log back in as founder.
+        try {
+          await api.post('/auth/exit-impersonation', {}, token ? {
+            headers: { Authorization: `Bearer ${token}` },
+          } : {});
+        } catch {}
+        set({ user: real || null, realUser: null, realToken: null });
+        if (!real) window.location.href = '/login';
       },
     }),
     {
