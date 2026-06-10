@@ -93,9 +93,20 @@ const SECTIONS: Record<string, string> = {
 
 export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: boolean; onMobileClose?: () => void } = {}) {
   const user = useAuth((s) => s.user);
+  const realUser = useAuth((s) => s.realUser);
+  const impersonate = useAuth((s) => s.impersonate);
+  const exitImpersonation = useAuth((s) => s.exitImpersonation);
   const features = useFeatures();
   const logout = useAuth((s) => s.logout);
   const location = useLocation();
+
+  const { data: allUsers } = useQuery({
+    queryKey: ['auth-users'],
+    queryFn: () => api.get('/auth/users').then((r) => r.data),
+    enabled: !!user && (realUser ? realUser.role === 'founder' : user?.role === 'founder'),
+    staleTime: 300_000,
+  });
+  const isImpersonating = !!realUser;
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem('sidebar-collapsed') === 'true'; } catch { return false; }
@@ -349,6 +360,49 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
           )}
         </div>
 
+        {/* View as — founder only */}
+        {!collapsed && (realUser ? realUser.role === 'founder' : user?.role === 'founder') && allUsers && (
+          <div className="mx-2 mb-2 flex-shrink-0">
+            {isImpersonating ? (
+              <div
+                className="px-2 py-1.5 rounded-lg flex items-center justify-between gap-2"
+                style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.30)' }}
+              >
+                <span className="text-[11px]" style={{ color: '#FCA5A5' }}>
+                  Viewing as <strong>{user.name}</strong>
+                </span>
+                <button
+                  onClick={exitImpersonation}
+                  className="text-[10px] px-2 py-0.5 rounded font-semibold"
+                  style={{ background: 'rgba(239,68,68,0.25)', color: '#FCA5A5' }}
+                >
+                  Exit
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.12em] mb-1 px-1" style={{ color: 'rgba(229,178,76,0.55)' }}>
+                  View as
+                </div>
+                <select
+                  className="input !text-[11px] !py-1"
+                  value=""
+                  onChange={(e) => { if (e.target.value) impersonate(e.target.value); }}
+                >
+                  <option value="">— pick a team member —</option>
+                  {(allUsers || [])
+                    .filter((u: any) => u.id !== user?.id)
+                    .map((u: any) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} · {u.role.replace(/_/g, ' ')}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* User footer */}
         <div
           className="mx-2 px-2 py-2 rounded-lg flex items-center gap-2 flex-shrink-0"
@@ -357,8 +411,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
           <Avatar name={user.name} ring />
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-[13px] truncate" style={{ color: '#F5EFE0' }}>{user.name}</div>
-              <div className="text-[10.5px] uppercase tracking-[0.10em]" style={{ color: 'rgba(229,178,76,0.75)' }}>
+              <div className="font-semibold text-[13px] truncate" style={{ color: isImpersonating ? '#FCA5A5' : '#F5EFE0' }}>{user.name}</div>
+              <div className="text-[10.5px] uppercase tracking-[0.10em]" style={{ color: isImpersonating ? 'rgba(252,165,165,0.75)' : 'rgba(229,178,76,0.75)' }}>
                 {user.role.replace(/_/g, ' ')}
               </div>
             </div>

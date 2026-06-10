@@ -12,17 +12,22 @@ export interface User {
 interface AuthState {
   user: User | null;
   loading: boolean;
+  // impersonation: stored real founder identity while viewing as another user
+  realUser: User | null;
   setUser: (u: User | null) => void;
   refresh: () => Promise<void>;
   login: (email: string, password: string) => Promise<User>;
   register: (name: string, email: string, password: string, role?: string) => Promise<User>;
   logout: () => Promise<void>;
+  impersonate: (userId: string) => Promise<void>;
+  exitImpersonation: () => void;
 }
 
 export const useAuth = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
+      realUser: null,
       loading: true,
       setUser: (u) => set({ user: u, loading: false }),
       refresh: async () => {
@@ -45,18 +50,22 @@ export const useAuth = create<AuthState>()(
       },
       logout: async () => {
         try { await api.post('/auth/logout'); } catch {}
-        set({ user: null });
+        set({ user: null, realUser: null });
+      },
+      impersonate: async (userId: string) => {
+        const currentUser = get().user;
+        const r = await api.post(`/auth/impersonate/${userId}`);
+        // Store the real founder so we can restore later
+        set({ realUser: currentUser, user: r.data.user });
+      },
+      exitImpersonation: () => {
+        const real = get().realUser;
+        if (real) set({ user: real, realUser: null });
       },
     }),
     {
       name: 'mits-auth',
-      partialize: (s) => ({ user: s.user }),
-      // When persist rehydrates from localStorage, flip `loading` to false if
-      // we already have a user. Without this every page reload shows the
-      // "Loading…" splash for the duration of /auth/me, even though we already
-      // know who the user is from last time. /auth/me still runs in the
-      // background to refresh the user object — but we render the app
-      // optimistically in the meantime.
+      partialize: (s) => ({ user: s.user, realUser: s.realUser }),
       onRehydrateStorage: () => (state) => {
         if (state && state.user) state.loading = false;
       },

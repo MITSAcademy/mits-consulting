@@ -67,3 +67,24 @@ authRouter.post('/logout', requireAuth, async (req: AuthedRequest, res) => {
 authRouter.get('/me', requireAuth, async (req: AuthedRequest, res) => {
   res.json({ user: req.user });
 });
+
+// Founder-only: issue a short-lived token for another user (view-as / impersonate)
+authRouter.post('/impersonate/:userId', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
+  const target = await prisma.user.findUnique({ where: { id: req.params.userId } });
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  const token = signToken({ id: target.id });
+  await audit(req.user!.id, req.user!.name, 'IMPERSONATE', `→ ${target.name} (${target.role})`);
+  res.json({ user: { id: target.id, name: target.name, email: target.email, role: target.role }, token });
+});
+
+// List all users (founder only) — lightweight, for the impersonate picker
+authRouter.get('/users', requireAuth, async (req: AuthedRequest, res) => {
+  if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
+  const users = await prisma.user.findMany({
+    where: { active: true },
+    select: { id: true, name: true, email: true, role: true },
+    orderBy: { name: 'asc' },
+  });
+  res.json(users);
+});
