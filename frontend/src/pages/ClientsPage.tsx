@@ -24,7 +24,7 @@ const SHOW_MINE_FILTER_ROLES = ['demo_intake', 'demo_lead', 'recruiter', 'sales_
 
 export function ClientsPage() {
   const user = useAuth((s) => s.user)!;
-  const isAM = user.role === 'account_manager';
+  const isAM = user.role === 'account_manager' || user.role === 'lead';
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const [search, setSearch] = useState('');

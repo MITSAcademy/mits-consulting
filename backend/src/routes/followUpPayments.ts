@@ -18,7 +18,7 @@ import { audit } from '../lib/audit';
 export const followUpPaymentsRouter = Router();
 followUpPaymentsRouter.use(requireAuth);
 
-const ALLOWED = ['founder', 'manager', 'lead', 'accounts'];
+const ALLOWED = ['founder', 'manager', 'accounts'];
 
 followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
   if (!ALLOWED.includes(req.user!.role)) {

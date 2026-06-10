@@ -21,7 +21,7 @@ export function TrainersPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user)!;
-  const isAM = user.role === 'account_manager';
+  const isAM = user.role === 'account_manager' || user.role === 'lead';
 
   const { data } = useQuery({
     queryKey: ['trainers'],

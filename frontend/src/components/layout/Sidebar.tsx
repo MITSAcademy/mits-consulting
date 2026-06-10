@@ -44,10 +44,10 @@ const NAV: NavItem[] = [
   { section: 'sales', page: '/roshni/follow-ups', label: 'My follow-ups', icon: Clock, roles: ['founder', 'manager', 'sales_closer'] },
   { section: 'sales', page: '/fresh-payments', label: 'Fresh payments', icon: DollarSign, roles: ['founder', 'manager', 'sales_closer', 'accounts'] },
 
-  { section: 'clients', page: '/follow-up-payments', label: 'Payment follow-up', icon: Receipt, roles: ['founder', 'manager', 'lead', 'accounts'] },
+  { section: 'clients', page: '/follow-up-payments', label: 'Payment follow-up', icon: Receipt, roles: ['founder', 'manager', 'accounts'] },
   { section: 'clients', page: '/calendar', label: 'Work calendar', icon: LayoutGrid, roles: ['founder', 'manager', 'lead', 'staff'] },
   { section: 'clients', page: '/clients', label: 'Clients', icon: Users, roles: ['founder', 'manager', 'lead', 'sales_closer', 'accounts', 'demo_lead', 'demo_intake', 'account_manager'] },
-  { section: 'clients', page: '/trainers', label: 'My trainers', icon: UserCog, roles: ['account_manager'] },
+  { section: 'clients', page: '/trainers', label: 'My trainers', icon: UserCog, roles: ['account_manager', 'lead'] },
   { section: 'clients', page: '/renewals', label: 'Renewals', icon: RefreshCw, roles: ['founder', 'manager'] },
   { section: 'clients', page: '/dormant', label: 'Dormant clients', icon: Moon, roles: ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'] },
   { section: 'clients', page: '/hold', label: 'On Hold · follow-ups', icon: Clock, roles: ['founder', 'manager', 'demo_lead', 'sales_closer'] },
@@ -57,8 +57,8 @@ const NAV: NavItem[] = [
   { section: 'work', page: '/my-sessions', label: 'My sessions', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager'] },
   { section: 'clients', page: '/regular-trainings', label: 'Regular trainings', icon: Video, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
   { section: 'trainerOps', page: '/session-logs', label: 'Session logs', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager', 'accounts', 'payment_processor'] },
-  { section: 'trainerOps', page: '/trainer-pay-sheet', label: 'Payment sheet', icon: TableProperties, roles: ['founder', 'manager', 'lead', 'account_manager', 'accounts', 'payment_processor'] },
-  { section: 'trainerOps', page: '/trainer-pay', label: 'Trainer payouts', icon: Wallet, roles: ['founder', 'manager', 'lead', 'accounts', 'payment_processor'] },
+  { section: 'trainerOps', page: '/trainer-pay-sheet', label: 'Payment sheet', icon: TableProperties, roles: ['founder', 'manager', 'account_manager', 'accounts', 'payment_processor'] },
+  { section: 'trainerOps', page: '/trainer-pay', label: 'Trainer payouts', icon: Wallet, roles: ['founder', 'manager', 'accounts', 'payment_processor'] },
   { section: 'trainerOps', page: '/payout-batches', label: 'Payout batches', icon: Archive, roles: ['founder', 'manager', 'accounts', 'payment_processor', 'demo_lead'] },
 
   { section: 'work', page: '/tasks', label: 'My tasks', icon: CheckSquare, roles: ['founder', 'manager', 'lead', 'staff', 'accounts', 'sales_closer', 'demo_lead', 'demo_intake', 'recruiter', 'payment_processor'] },
