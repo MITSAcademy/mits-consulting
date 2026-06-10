@@ -26,6 +26,7 @@ const include = {
   salesOwner: { select: { id: true, name: true, role: true } },
   hostOwner: { select: { id: true, name: true, role: true } },
   primaryTrainer: true,
+  regularTrainings: { select: { id: true, scheduleNotes: true, status: true }, where: { status: 'active' }, take: 1 },
 };
 
 // PII redaction rules:

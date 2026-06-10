@@ -24,6 +24,7 @@ const SHOW_MINE_FILTER_ROLES = ['demo_intake', 'demo_lead', 'recruiter', 'sales_
 
 export function ClientsPage() {
   const user = useAuth((s) => s.user)!;
+  const isAM = user.role === 'account_manager';
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const [search, setSearch] = useState('');
@@ -190,7 +191,7 @@ export function ClientsPage() {
                 <th>Engagement</th>
                 {showAmt && <th>Amount</th>}
                 <th>Trainer</th>
-                <th>Source</th>
+                {isAM ? <th>Session schedule</th> : <th>Source</th>}
                 <th>Flags</th>
               </tr>
             </thead>
@@ -217,7 +218,15 @@ export function ClientsPage() {
                     <td className="mono">{c.cycleAmount ? `${c.currency} ${c.cycleAmount}` : '—'}</td>
                   )}
                   <td>{c.primaryTrainer?.name || '—'}</td>
-                  <td className="muted text-[12px]">{c.source || '—'}</td>
+                  {isAM ? (
+                    <td className="text-[12px]">
+                      {c.regularTrainings?.[0]?.scheduleNotes
+                        ? <span style={{ color: 'rgba(229,178,76,0.9)' }}>{c.regularTrainings[0].scheduleNotes}</span>
+                        : <span className="muted">—</span>}
+                    </td>
+                  ) : (
+                    <td className="muted text-[12px]">{c.source || '—'}</td>
+                  )}
                   <td>
                     {c.paymentPendingVaibhav && <Pill color="amber">Vaibhav</Pill>}{' '}
                     {c.partner && <Pill color="purple">Partner</Pill>}

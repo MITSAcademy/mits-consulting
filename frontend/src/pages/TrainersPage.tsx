@@ -176,7 +176,7 @@ export function TrainersPage() {
             <Button size="sm" variant={showInactive ? 'primary' : 'default'} onClick={() => setShowInactive(!showInactive)}>
               {showInactive ? 'Hiding inactive' : 'Show inactive'}
             </Button>
-            {!isAM && <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button variant="primary">+ Add trainer</Button>
               </DialogTrigger>
@@ -241,7 +241,7 @@ export function TrainersPage() {
                   <Button variant="primary" disabled={!form.name} onClick={() => create.mutate()}>Create</Button>
                 </DialogFooter>
               </DialogContent>
-            </Dialog>}
+            </Dialog>
           </>
         }
       />
