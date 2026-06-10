@@ -187,3 +187,40 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
 
   res.json({ ok: true, created, updated, skipped, log });
 });
+
+// POST /api/seed/cleanup — archive dummy clients + their RegularTrainings
+seedRouter.post('/cleanup', async (req: AuthedRequest, res) => {
+  if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
+
+  // Find all clients whose name starts with dummy_ or is a known test name
+  const dummies = await prisma.client.findMany({
+    where: {
+      OR: [
+        { name: { startsWith: 'dummy_', mode: 'insensitive' } },
+        { name: { startsWith: 'test_', mode: 'insensitive' } },
+        { name: { startsWith: 'seed_', mode: 'insensitive' } },
+      ],
+    },
+    select: { id: true, name: true },
+  });
+
+  const log: string[] = [];
+  let archived = 0;
+
+  for (const c of dummies) {
+    // Archive their RegularTrainings
+    await prisma.regularTraining.updateMany({
+      where: { clientId: c.id },
+      data: { status: 'archived' },
+    });
+    // Set client lifecycle to Churned (terminal state for dummy/test data)
+    await prisma.client.update({
+      where: { id: c.id },
+      data: { lifecycle: 'Churned' },
+    });
+    log.push(`archived: ${c.name}`);
+    archived++;
+  }
+
+  res.json({ ok: true, archived, log });
+});

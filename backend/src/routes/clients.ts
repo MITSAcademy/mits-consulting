@@ -79,10 +79,10 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
       where.name = { contains: s, mode: 'insensitive' };
     }
   }
-  // account_manager (Kashish / Muskan) only see Active/LeverageGranted clients
-  // Filtered to their own hostOwnerId where assigned; falls back to all Active if none assigned yet
-  if (req.user!.role === 'account_manager') {
+  // account_manager (Kashish / Muskan / Bhavneet lead) only see their own Active clients
+  if (req.user!.role === 'account_manager' || req.user!.role === 'lead') {
     if (!lifecycle) where.lifecycle = { in: ['Active', 'LeverageGranted'] };
+    where.hostOwnerId = req.user!.id;
   }
   const clients = await prisma.client.findMany({ where, include, orderBy: { createdAt: 'desc' } });
   res.json(clients.map((c) => redactClient(c, req.user!)));
