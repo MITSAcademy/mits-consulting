@@ -626,7 +626,10 @@ model RegularTraining {
   recordingFolderUrl       String?                         // Google Drive shareable folder URL
   // Schedule (freeform — "Mon/Wed/Fri 7-8 PM IST" works fine, no need to model RRule)
   scheduleNotes            String?
+  defaultTimeIst           String?                         // fixed daily call time e.g. "08:00", "21:30"
   meetingMode              String?                         // Zoom | GoToMeeting | Teams | Google Meet | Phone | Other
+  lastSessionStatus        String?                         // Yes-Proper session | No | Partial — updated inline by AM
+  lastSessionComment       String?                         // comments like "@Kashish:- will connect at 09:00 pm ist"
   status                   String   @default("active")     // active | paused | archived
   notes                    String?
   createdAt                DateTime @default(now())

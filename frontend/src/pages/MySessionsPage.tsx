@@ -137,6 +137,14 @@ export function MySessionsPage() {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  // Group sessions by host (AM) for the sheet view
+  const sessionsByHost = (mySessions || []).reduce((acc: Record<string, any[]>, t: any): Record<string, any[]> => {
+    const hostName = t.hostedByDefault?.name || 'Unassigned';
+    if (!acc[hostName]) acc[hostName] = [];
+    acc[hostName].push(t);
+    return acc;
+  }, {} as Record<string, any[]>);
+  const hostGroups = Object.entries(sessionsByHost).sort(([a], [b]) => a.localeCompare(b)) as [string, any[]][];
   const sessionCount = (mySessions || []).length;
 
   return (
@@ -154,42 +162,27 @@ export function MySessionsPage() {
         }
       />
       <Page>
-        {/* ── AM / lead: session sheet is the primary view ── */}
+        {/* ── AM / lead: sheet grouped by host ── */}
         {isAM && (
           <div className="mb-6">
-            <div className="text-[11px] uppercase tracking-[0.14em] font-bold mb-2.5 flex items-center gap-2" style={{ color: 'var(--accent-gold)' }}>
-              <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent-gold)', boxShadow: '0 0 8px var(--accent-gold)' }} />
-              Active client sessions ({sessionCount})
-            </div>
             {mySessionsLoading ? (
-              <div className="muted text-sm py-4">Loading…</div>
+              <div className="muted text-sm py-8 text-center">Loading…</div>
             ) : sessionCount === 0 ? (
-              <div className="rounded-xl p-6 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+              <div className="rounded-xl p-8 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
                 <Video size={28} style={{ color: 'var(--accent-gold)', margin: '0 auto 8px' }} />
                 <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>No active regular trainings yet</div>
                 <div className="text-[12px] muted mt-1">Go to Regular trainings and create one to see it here.</div>
               </div>
             ) : (
-              <div className="table-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Client</th>
-                      <th>Trainer</th>
-                      <th>Host</th>
-                      <th>Schedule</th>
-                      <th>Mode</th>
-                      <th>Next session</th>
-                      <th>Notes</th>
-                      <th className="text-right">Invite</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(mySessions || []).map((t: any) => (
-                      <AMSessionRow key={t.id} t={t} onInviteSent={() => qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] })} />
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-6">
+                {hostGroups.map(([hostName, rows]) => (
+                  <AMHostGroup
+                    key={hostName}
+                    hostName={hostName}
+                    rows={rows}
+                    onChanged={() => qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] })}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -588,63 +581,139 @@ function TaskRow({ t, onDone }: { t: any; onDone: () => void }) {
   );
 }
 
-/* ──────────────────────── AM Session Row ────────────────────────────────── */
+/* ──────────────────────── AM Host Group (sheet grouped by host) ─────────── */
 
-function AMSessionRow({ t, onInviteSent }: { t: any; onInviteSent: () => void }) {
-  const nextSession = t.sessions?.[0];
-  const modeIcon = MEETING_MODE_ICONS[t.meetingMode] || '';
+const SESSION_STATUS_OPTIONS = [
+  { value: '', label: '— not set —' },
+  { value: 'Yes-Proper session', label: 'Yes — Proper session' },
+  { value: 'No', label: 'No' },
+  { value: 'Partial', label: 'Partial' },
+  { value: 'Rescheduled', label: 'Rescheduled' },
+];
 
-  const fmtDateTime = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-  };
+function AMHostGroup({ hostName, rows, onChanged }: { hostName: string; rows: any[]; onChanged: () => void }) {
+  const accentColor = hostName === 'Kashish'
+    ? 'var(--accent-gold)'
+    : hostName === 'Muskan'
+    ? 'var(--status-blue)'
+    : hostName === 'Bhavneet'
+    ? 'var(--status-green)'
+    : 'var(--brand-textSecondary)';
 
   return (
-    <tr className="clickable">
-      <td>
+    <div>
+      <div className="flex items-center gap-3 mb-2">
+        <div className="text-[11px] uppercase tracking-[0.14em] font-bold flex items-center gap-2" style={{ color: accentColor }}>
+          <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: accentColor, boxShadow: `0 0 8px ${accentColor}` }} />
+          {hostName}
+        </div>
+        <span className="text-[11px] muted">{rows.length} client{rows.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--brand-border)', boxShadow: 'var(--shadow-sm)' }}>
+        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ background: 'var(--bg-input)', borderBottom: '1px solid var(--brand-border)' }}>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '14%' }}>Client</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '11%' }}>Trainer</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '14%' }}>Skills</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '7%' }}>Tool</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '6%' }}>Time IST</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '16%' }}>Session happened</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '20%' }}>Comments</th>
+              <th className="text-right px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '12%' }}>Schedule</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((t: any, i: number) => (
+              <AMSheetRow key={t.id} t={t} isLast={i === rows.length - 1} onChanged={onChanged} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AMSheetRow({ t, isLast, onChanged }: { t: any; isLast: boolean; onChanged: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const modeIcon = MEETING_MODE_ICONS[t.meetingMode] || '💻';
+  const skills = t.trainer?.skills || '—';
+
+  const updateStatus = useMutation({
+    mutationFn: (val: string) => api.patch(`/regular-trainings/trainings/${t.id}`, { lastSessionStatus: val || null }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); onChanged(); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const statusColor = !t.lastSessionStatus ? 'var(--brand-textMuted)'
+    : t.lastSessionStatus === 'Yes-Proper session' ? 'var(--status-green)'
+    : t.lastSessionStatus === 'No' ? 'var(--status-red)'
+    : 'var(--status-amber)';
+
+  return (
+    <tr style={{ borderTop: '1px solid var(--brand-borderSoft)', background: 'var(--bg-card)' }}
+        className="hover:bg-[var(--bg-input)] transition-colors">
+      <td className="px-3 py-2.5">
         {t.client
           ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: 'var(--brand-text)' }}>{t.client.name}</Link>
-          : <span className="muted">—</span>
+          : <span className="font-semibold" style={{ color: 'var(--brand-text)' }}>{t.name}</span>
         }
       </td>
-      <td>{t.trainer?.name || <span className="muted">—</span>}</td>
-      <td className="text-[11.5px]">{t.hostedByDefault?.name || <span className="muted">—</span>}</td>
-      <td className="text-[11.5px]" style={{ color: 'var(--accent-gold)' }}>{t.scheduleNotes || <span className="muted">—</span>}</td>
-      <td>
-        {t.meetingMode
-          ? <span className="text-[12px]">{modeIcon} {t.meetingMode}</span>
-          : <span className="muted">—</span>
-        }
+      <td className="px-3 py-2.5" style={{ color: 'var(--brand-textSecondary)' }}>
+        {t.trainer?.name || <span className="muted">—</span>}
       </td>
-      <td className="mono text-[11.5px]">
-        {nextSession
-          ? <span style={{ color: 'var(--status-green)' }}>{fmtDateTime(nextSession.scheduledFor)}</span>
-          : <span className="muted">Not scheduled</span>
-        }
+      <td className="px-3 py-2.5" style={{ maxWidth: 0, width: '14%' }}>
+        <span className="block truncate muted text-[11px]" title={skills}>{skills}</span>
       </td>
-      <td className="text-[11.5px] muted max-w-[160px] truncate" title={t.notes || ''}>
-        {t.notes || <span>—</span>}
+      <td className="px-3 py-2.5 text-[13px]" title={t.meetingMode || 'Zoom'}>
+        {modeIcon}
       </td>
-      <td className="text-right" onClick={(e) => e.stopPropagation()}>
-        <AMSendInviteButton training={t} onSent={onInviteSent} />
+      <td className="px-3 py-2.5 mono font-semibold text-[12px]" style={{ color: 'var(--accent-gold)' }}>
+        {t.defaultTimeIst || <span className="muted text-[10px]">—</span>}
+      </td>
+      <td className="px-3 py-2.5">
+        <select
+          className="text-[11px] rounded px-1.5 py-0.5 font-medium cursor-pointer"
+          style={{ background: 'transparent', color: statusColor, border: 'none', outline: 'none', minWidth: 120 }}
+          value={t.lastSessionStatus || ''}
+          onChange={(e) => updateStatus.mutate(e.target.value)}
+        >
+          {SESSION_STATUS_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </td>
+      <td className="px-3 py-2.5 text-[11px]" style={{ color: 'var(--brand-textSecondary)', maxWidth: 0, width: '20%' }}>
+        <span className="block truncate" title={t.lastSessionComment || ''}>
+          {t.lastSessionComment || <span className="muted">—</span>}
+        </span>
+      </td>
+      <td className="px-3 py-2.5 text-right">
+        <AMScheduleButton training={t} onSent={onChanged} />
       </td>
     </tr>
   );
 }
 
-function AMSendInviteButton({ training, onSent }: { training: any; onSent: () => void }) {
+function AMScheduleButton({ training, onSent }: { training: any; onSent: () => void }) {
   const [open, setOpen] = useState(false);
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
 
   const pad = (n: number) => String(n).padStart(2, '0');
-  const today = new Date();
-  const defaultDate = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+  const todayDate = new Date();
+  const defaultDate = `${todayDate.getFullYear()}-${pad(todayDate.getMonth() + 1)}-${pad(todayDate.getDate())}`;
   const [date, setDate] = useState(defaultDate);
-  const [time, setTime] = useState('19:00');
+  const [time, setTime] = useState(training.defaultTimeIst || '08:00');
   const [duration, setDuration] = useState('60');
   const [meetingLink, setMeetingLink] = useState('');
   const [notes, setNotes] = useState('');
+
+  const nextSession = training.sessions?.[0];
+  const fmtSession = (iso: string) => new Date(iso).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+  });
 
   const invite = useMutation({
     mutationFn: () => {
@@ -652,14 +721,14 @@ function AMSendInviteButton({ training, onSent }: { training: any; onSent: () =>
       return api.post(`/regular-trainings/trainings/${training.id}/sessions/invite`, {
         scheduledFor: iso,
         durationMinutes: Number(duration),
-        meetingLink,
-        notes,
+        meetingLink: meetingLink || null,
+        notes: notes || null,
       });
     },
     onSuccess: (r) => {
       const sent: string[] = r.data.sent || [];
       const errs: string[] = r.data.errors || [];
-      if (sent.length) showToast(`Invite sent to ${sent.length} recipient${sent.length > 1 ? 's' : ''}`);
+      if (sent.length) showToast(`Invite sent to ${sent.join(', ')}`);
       if (errs.length) showToast(`Some invites failed: ${errs[0]}`, 'error');
       qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] });
       onSent();
@@ -669,32 +738,37 @@ function AMSendInviteButton({ training, onSent }: { training: any; onSent: () =>
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) setTime(training.defaultTimeIst || '08:00'); }}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="primary" title="Schedule session + send calendar invite">
-          <CalendarIcon size={11}/> Invite
+        <Button size="sm" variant="primary">
+          <CalendarIcon size={11}/> Schedule
         </Button>
       </DialogTrigger>
       <DialogContent
         title={`Schedule · ${training.client?.name || training.name}`}
-        description={`Trainer: ${training.trainer?.name || '—'} · Creates a session + sends .ics invite to trainer, client, and you.`}
+        description={`${training.trainer?.name || 'No trainer'} · ${training.meetingMode || 'Zoom'} · Sends .ics invite to trainer + client`}
       >
-        <div className="grid md:grid-cols-2 gap-2.5">
+        {nextSession && (
+          <div className="rounded-lg px-3 py-2 mb-1 text-[11px]" style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)', color: 'var(--status-green)' }}>
+            Already scheduled: {fmtSession(nextSession.scheduledFor)} IST
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2.5">
           <div className="form-row">
             <Label>Date *</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="form-row">
-            <Label>Time (IST) *</Label>
+            <Label>Time IST * <span className="muted normal-case">(pre-filled)</span></Label>
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           </div>
           <div className="form-row">
-            <Label>Duration (minutes)</Label>
+            <Label>Duration</Label>
             <Select value={duration} onChange={(e) => setDuration(e.target.value)}>
               <option value="30">30 min</option>
               <option value="45">45 min</option>
-              <option value="60">60 min</option>
-              <option value="90">90 min</option>
+              <option value="60">1 hour</option>
+              <option value="90">1.5 hours</option>
               <option value="120">2 hours</option>
             </Select>
           </div>
@@ -705,11 +779,11 @@ function AMSendInviteButton({ training, onSent }: { training: any; onSent: () =>
         </div>
         <div className="form-row mt-1">
           <Label>Notes <span className="muted normal-case">(optional)</span></Label>
-          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Agenda, topics to cover…" />
+          <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Topics to cover, agenda…" />
         </div>
         {training.scheduleNotes && (
-          <div className="text-[11px] mt-2" style={{ color: 'rgba(229,178,76,0.8)' }}>
-            📅 Usual schedule: {training.scheduleNotes}
+          <div className="text-[11px] mt-2 px-2 py-1.5 rounded" style={{ background: 'rgba(229,178,76,0.08)', color: 'rgba(229,178,76,0.85)' }}>
+            📅 {training.scheduleNotes}
           </div>
         )}
         <DialogFooter>

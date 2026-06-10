@@ -49,7 +49,8 @@ regularTrainingsRouter.get('/trainings', async (req: AuthedRequest, res) => {
     select: {
       id: true, name: true, status: true,
       recordingAccountEmail: true, recordingAccountLabel: true, recordingFolderUrl: true,
-      scheduleNotes: true, meetingMode: true, notes: true,
+      scheduleNotes: true, defaultTimeIst: true, meetingMode: true,
+      lastSessionStatus: true, lastSessionComment: true, notes: true,
       hostedByDefault: { select: { id: true, name: true } },
       client:          { select: { id: true, name: true } },
       trainer:         { select: { id: true, name: true } },
@@ -75,7 +76,10 @@ regularTrainingsRouter.post('/trainings', async (req: AuthedRequest, res) => {
       recordingAccountLabel: b.recordingAccountLabel  || null,
       recordingFolderUrl:    b.recordingFolderUrl     || null,
       scheduleNotes:         b.scheduleNotes          || null,
+      defaultTimeIst:        b.defaultTimeIst         || null,
       meetingMode:           b.meetingMode            || null,
+      lastSessionStatus:     b.lastSessionStatus      || null,
+      lastSessionComment:    b.lastSessionComment     || null,
       notes:                 b.notes                  || null,
       status:                b.status                 || 'active',
     },
@@ -112,7 +116,7 @@ regularTrainingsRouter.patch('/trainings/:id', async (req: AuthedRequest, res) =
   if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const b = req.body || {};
   const data: any = {};
-  for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'meetingMode', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId']) {
+  for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'defaultTimeIst', 'meetingMode', 'lastSessionStatus', 'lastSessionComment', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId']) {
     if (k in b) data[k] = b[k] === '' ? null : b[k];
   }
   const updated = await prisma.regularTraining.update({ where: { id: req.params.id }, data });
@@ -143,10 +147,11 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
   const trainings = await prisma.regularTraining.findMany({
     where: { status: 'active' },
     select: {
-      id: true, name: true, scheduleNotes: true, meetingMode: true, notes: true,
+      id: true, name: true, scheduleNotes: true, defaultTimeIst: true,
+      meetingMode: true, lastSessionStatus: true, lastSessionComment: true, notes: true,
       hostedByDefault: { select: { id: true, name: true } },
       client:  { select: { id: true, name: true } },
-      trainer: { select: { id: true, name: true } },
+      trainer: { select: { id: true, name: true, skills: true } },
       sessions: {
         where: { status: { in: ['scheduled', 'in_progress'] }, scheduledFor: { gte: now } },
         select: { id: true, scheduledFor: true, meetingLink: true, notes: true, status: true },
@@ -154,7 +159,7 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
         take: 1,
       },
     },
-    orderBy: { name: 'asc' },
+    orderBy: [{ hostedByDefault: { name: 'asc' } }, { name: 'asc' }],
   });
   res.json(trainings);
 });
