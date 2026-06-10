@@ -372,7 +372,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
                   Viewing as <strong>{user.name}</strong>
                 </span>
                 <button
-                  onClick={exitImpersonation}
+                  onClick={() => exitImpersonation()}
                   className="text-[10px] px-2 py-0.5 rounded font-semibold"
                   style={{ background: 'rgba(239,68,68,0.25)', color: '#FCA5A5' }}
                 >

@@ -67,6 +67,11 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   }
 }
 
+export async function verifyAndGetUser(token: string) {
+  const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
+  return prisma.user.findUnique({ where: { id: decoded.id } });
+}
+
 export function requireRole(...roles: string[]) {
   return (req: AuthedRequest, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
