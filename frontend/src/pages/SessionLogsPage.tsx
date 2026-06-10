@@ -21,6 +21,9 @@ function LogSessionForm({ onDone }: { onDone: () => void }) {
   const [date, setDate] = useState(todayISO());
   const [days, setDays] = useState('1');
   const [notes, setNotes] = useState('');
+  const [overrideAmount, setOverrideAmount] = useState(false);
+  const [customAmount, setCustomAmount] = useState('');
+  const [overrideReason, setOverrideReason] = useState('');
 
   const { data: trainers } = useQuery({
     queryKey: ['trainers-active'],
@@ -37,20 +40,28 @@ function LogSessionForm({ onDone }: { onDone: () => void }) {
   });
 
   const selectedTrainer = (trainers || []).find((t: any) => t.id === trainerId);
-  const rate = selectedTrainer?.defaultRateInr || 0;
-  const total = Math.round((parseFloat(days) || 0) * rate);
+  const defaultRate = selectedTrainer?.defaultRateInr || 0;
+  const effectiveRate = overrideAmount && customAmount ? Math.round(parseFloat(customAmount) / (parseFloat(days) || 1)) : defaultRate;
+  const total = overrideAmount && customAmount ? Math.round(parseFloat(customAmount) || 0) : Math.round((parseFloat(days) || 0) * defaultRate);
+
+  const canSubmit = !!trainerId && (!overrideAmount || (!!customAmount && !!overrideReason.trim()));
 
   const create = useMutation({
     mutationFn: () => {
       if (!trainerId) throw new Error('Select a trainer');
+      if (overrideAmount && !overrideReason.trim()) throw new Error('Reason required for amount override');
+      const finalNotes = overrideAmount && overrideReason
+        ? `[Override: ${overrideReason}]${notes ? ' · ' + notes : ''}`
+        : notes || undefined;
       return api.post('/session-logs', {
         trainerId,
         clientId: clientId || undefined,
         date,
         hours: parseFloat(days) || 1,
-        rateSnapshot: rate || 1200,
+        rateSnapshot: effectiveRate || defaultRate || 1200,
         rateModel: selectedTrainer?.rateModel || 'per_session',
-        notes: notes || undefined,
+        amountInr: overrideAmount && customAmount ? Math.round(parseFloat(customAmount)) : undefined,
+        notes: finalNotes,
       });
     },
     onSuccess: () => {
@@ -71,7 +82,7 @@ function LogSessionForm({ onDone }: { onDone: () => void }) {
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
           <label className="label">Trainer *</label>
-          <select className="input" value={trainerId} onChange={(e) => setTrainerId(e.target.value)}>
+          <select className="input" value={trainerId} onChange={(e) => { setTrainerId(e.target.value); setOverrideAmount(false); setCustomAmount(''); }}>
             <option value="">— select trainer —</option>
             {(trainers || []).map((t: any) => (
               <option key={t.id} value={t.id}>
@@ -102,13 +113,57 @@ function LogSessionForm({ onDone }: { onDone: () => void }) {
           </select>
         </div>
       </div>
+
+      {/* Rate summary + override toggle */}
       {selectedTrainer && (
-        <div className="callout mb-3 text-xs">
-          Rate: <strong>₹{rate.toLocaleString()}</strong> per session ·
-          Sessions: <strong>{days}</strong> ·
-          Total this entry: <strong>₹{total.toLocaleString()}</strong>
+        <div className="callout mb-3 text-xs flex items-center justify-between gap-3">
+          <span>
+            Rate: <strong>₹{defaultRate.toLocaleString()}</strong>/session ·
+            Sessions: <strong>{days}</strong> ·
+            Total: <strong>₹{total.toLocaleString()}</strong>
+            {overrideAmount && customAmount && (
+              <span className="ml-1" style={{ color: 'var(--status-amber)' }}>
+                {' '}(overridden from ₹{Math.round((parseFloat(days) || 0) * defaultRate).toLocaleString()})
+              </span>
+            )}
+          </span>
+          <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0" style={{ color: overrideAmount ? 'var(--status-amber)' : undefined }}>
+            <input
+              type="checkbox"
+              checked={overrideAmount}
+              onChange={(e) => { setOverrideAmount(e.target.checked); if (!e.target.checked) { setCustomAmount(''); setOverrideReason(''); } }}
+            />
+            <span className="text-[11px]">Override amount</span>
+          </label>
         </div>
       )}
+
+      {/* Override fields */}
+      {overrideAmount && (
+        <div className="grid grid-cols-2 gap-3 mb-3 p-3 rounded-lg" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)' }}>
+          <div>
+            <label className="label" style={{ color: 'var(--status-amber)' }}>Custom total amount ₹ *</label>
+            <input
+              type="number"
+              className="input"
+              placeholder={`Default: ₹${Math.round((parseFloat(days) || 0) * defaultRate)}`}
+              value={customAmount}
+              onChange={(e) => setCustomAmount(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label" style={{ color: 'var(--status-amber)' }}>Reason for override *</label>
+            <input
+              type="text"
+              className="input"
+              placeholder="e.g. partial session, negotiated rate"
+              value={overrideReason}
+              onChange={(e) => setOverrideReason(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="mb-3">
         <label className="label">Notes (optional)</label>
         <input
@@ -121,7 +176,7 @@ function LogSessionForm({ onDone }: { onDone: () => void }) {
       </div>
       <div className="flex justify-end gap-2">
         <Button onClick={onDone}>Cancel</Button>
-        <Button variant="primary" disabled={!trainerId || create.isPending} onClick={() => create.mutate()}>
+        <Button variant="primary" disabled={!canSubmit || create.isPending} onClick={() => create.mutate()}>
           Log session
         </Button>
       </div>

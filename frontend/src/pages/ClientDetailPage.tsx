@@ -34,7 +34,7 @@ const INTAKE_FIELDS = [
 // Role gates that mirror source.html
 const canIntake = (role: string) => ['founder', 'manager', 'demo_lead', 'demo_intake'].includes(role);
 const canClose = (role: string) => ['founder', 'manager', 'sales_closer'].includes(role);
-const canActivate = (role: string) => ['founder', 'manager'].includes(role);
+const canActivate = (role: string) => ['founder', 'manager', 'sales_closer'].includes(role);
 // Only Samita (demo_lead) and Vaibhav (founder) may assign/reassign intake owners.
 const canAssignOwner = (role: string) => ['founder', 'demo_lead'].includes(role);
 const canRecordPayment = (role: string) => ['founder', 'demo_lead', 'manager', 'sales_closer'].includes(role);

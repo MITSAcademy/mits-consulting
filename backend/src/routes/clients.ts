@@ -366,7 +366,7 @@ const STAGE_TRANSITION_PERMS: Record<string, string[]> = {
   // SaleClosing — Samita can route here directly from positive feedback (via post-demo-feedback endpoint)
   SaleClosing:         ['founder', 'manager', 'sales_closer', 'demo_lead'],
   SaleWon:             ['founder', 'manager', 'sales_closer'],
-  Active:              ['founder', 'manager'],
+  Active:              ['founder', 'manager', 'sales_closer'],
   LeverageGranted:     ['founder', 'manager'],
   // Hold = client said "need time to decide" post-demo. Roshni gets 3-day reminder.
   Hold:                ['founder', 'manager', 'demo_lead', 'sales_closer'],
