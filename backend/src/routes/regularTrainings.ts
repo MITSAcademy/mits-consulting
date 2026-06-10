@@ -138,10 +138,13 @@ regularTrainingsRouter.delete('/trainings/:id', async (req: AuthedRequest, res) 
 regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
   if (!canRead(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const now = new Date();
+  // Return all active trainings for AM/lead — they manage all active clients.
+  // If the user is a specific host, also include trainings where they're set as host.
   const trainings = await prisma.regularTraining.findMany({
-    where: { hostedByDefaultId: req.user!.id, status: 'active' },
+    where: { status: 'active' },
     select: {
       id: true, name: true, scheduleNotes: true, meetingMode: true, notes: true,
+      hostedByDefault: { select: { id: true, name: true } },
       client:  { select: { id: true, name: true } },
       trainer: { select: { id: true, name: true } },
       sessions: {

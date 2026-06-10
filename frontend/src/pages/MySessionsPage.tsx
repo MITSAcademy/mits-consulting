@@ -137,33 +137,37 @@ export function MySessionsPage() {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  const sessionCount = (mySessions || []).length;
+
   return (
     <>
       <Topbar
-        title="My calls & sessions"
-        subtitle={`${inProgress.length} live · ${scheduledToday.length} today · ${overdueCalls.length} overdue`}
+        title="My sessions"
+        subtitle={isAM
+          ? `${sessionCount} active training${sessionCount !== 1 ? 's' : ''} · ${inProgress.length} live call${inProgress.length !== 1 ? 's' : ''}`
+          : `${inProgress.length} live · ${scheduledToday.length} today · ${overdueCalls.length} overdue`}
         actions={
           <>
             <ScheduleCallButton onCreated={() => qc.invalidateQueries({ queryKey: ['call-logs'] })} />
-            <LogSessionButton  onCreated={() => qc.invalidateQueries({ queryKey: ['session-logs'] })} />
+            {!isAM && <LogSessionButton onCreated={() => qc.invalidateQueries({ queryKey: ['session-logs'] })} />}
           </>
         }
       />
       <Page>
-        {/* ── AM session sheet ── */}
+        {/* ── AM / lead: session sheet is the primary view ── */}
         {isAM && (
           <div className="mb-6">
             <div className="text-[11px] uppercase tracking-[0.14em] font-bold mb-2.5 flex items-center gap-2" style={{ color: 'var(--accent-gold)' }}>
               <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent-gold)', boxShadow: '0 0 8px var(--accent-gold)' }} />
-              My clients &amp; sessions ({(mySessions || []).length})
+              Active client sessions ({sessionCount})
             </div>
             {mySessionsLoading ? (
-              <div className="muted text-sm">Loading…</div>
-            ) : (mySessions || []).length === 0 ? (
-              <div className="rounded-xl p-5 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+              <div className="muted text-sm py-4">Loading…</div>
+            ) : sessionCount === 0 ? (
+              <div className="rounded-xl p-6 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
                 <Video size={28} style={{ color: 'var(--accent-gold)', margin: '0 auto 8px' }} />
-                <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>No active trainings assigned to you yet</div>
-                <div className="text-[12px] muted mt-1">Ask Vaibhav to set you as the host on a regular training.</div>
+                <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>No active regular trainings yet</div>
+                <div className="text-[12px] muted mt-1">Go to Regular trainings and create one to see it here.</div>
               </div>
             ) : (
               <div className="table-card">
@@ -172,6 +176,7 @@ export function MySessionsPage() {
                     <tr>
                       <th>Client</th>
                       <th>Trainer</th>
+                      <th>Host</th>
                       <th>Schedule</th>
                       <th>Mode</th>
                       <th>Next session</th>
@@ -181,7 +186,7 @@ export function MySessionsPage() {
                   </thead>
                   <tbody>
                     {(mySessions || []).map((t: any) => (
-                      <AMSessionRow key={t.id} t={t} onInviteSent={() => {}} />
+                      <AMSessionRow key={t.id} t={t} onInviteSent={() => qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] })} />
                     ))}
                   </tbody>
                 </table>
@@ -190,6 +195,7 @@ export function MySessionsPage() {
           </div>
         )}
 
+        {/* ── Calls section (live + overdue + today + upcoming) ── */}
         {inProgress.length > 0 && (
           <Section title={`Live calls (${inProgress.length})`} tone="green">
             {inProgress.map((c) => <CallRow key={c.id} c={c} />)}
@@ -202,20 +208,17 @@ export function MySessionsPage() {
           </Section>
         )}
 
-        <Section title={`Calls today (${scheduledToday.length})`} tone="amber">
-          {scheduledToday.length === 0 ? (
-            <EmptyState
-              icon={Phone}
-              tone="green"
-              title="No calls scheduled for today"
-              description="Use + Schedule call to plan one, or just punch in at the start of any client call to log it live."
-            />
-          ) : (
-            scheduledToday
-              .sort((a, b) => (a.scheduledFor || '').localeCompare(b.scheduledFor || ''))
-              .map((c) => <CallRow key={c.id} c={c} />)
-          )}
-        </Section>
+        {!isAM || scheduledToday.length > 0 || inProgress.length > 0 ? (
+          <Section title={`Calls today (${scheduledToday.length})`} tone="amber">
+            {scheduledToday.length === 0 ? (
+              <div className="muted text-[12px] py-2">No calls scheduled for today. Use + Schedule call to plan one.</div>
+            ) : (
+              scheduledToday
+                .sort((a, b) => (a.scheduledFor || '').localeCompare(b.scheduledFor || ''))
+                .map((c) => <CallRow key={c.id} c={c} />)
+            )}
+          </Section>
+        ) : null}
 
         {upcomingCalls.length > 0 && (
           <Section title={`Upcoming calls (${upcomingCalls.length})`} tone="grey">
@@ -223,13 +226,14 @@ export function MySessionsPage() {
           </Section>
         )}
 
-        {overdueTasks.length > 0 && (
+        {/* ── Session tasks — hidden for AM/lead (replaced by the sheet above) ── */}
+        {!isAM && overdueTasks.length > 0 && (
           <Section title={`Overdue session tasks (${overdueTasks.length})`} tone="red">
             {overdueTasks.map((t: any) => <TaskRow key={t.id} t={t} onDone={() => markTaskDone.mutate(t.id)} />)}
           </Section>
         )}
 
-        {todayTasks.length > 0 && (
+        {!isAM && todayTasks.length > 0 && (
           <Section title={`Session tasks today (${todayTasks.length})`} tone="amber">
             {todayTasks.map((t: any) => <TaskRow key={t.id} t={t} onDone={() => markTaskDone.mutate(t.id)} />)}
           </Section>
@@ -604,6 +608,7 @@ function AMSessionRow({ t, onInviteSent }: { t: any; onInviteSent: () => void })
         }
       </td>
       <td>{t.trainer?.name || <span className="muted">—</span>}</td>
+      <td className="text-[11.5px]">{t.hostedByDefault?.name || <span className="muted">—</span>}</td>
       <td className="text-[11.5px]" style={{ color: 'var(--accent-gold)' }}>{t.scheduleNotes || <span className="muted">—</span>}</td>
       <td>
         {t.meetingMode
