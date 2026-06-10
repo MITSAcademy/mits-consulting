@@ -92,7 +92,7 @@ export function ClientsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <Dialog open={open} onOpenChange={setOpen}>
+            {user.role !== 'account_manager' && <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button variant="primary">
                   <Plus size={14} /> New lead
@@ -176,7 +176,7 @@ export function ClientsPage() {
                   </Button>
                 </DialogFooter>
               </DialogContent>
-            </Dialog>
+            </Dialog>}
           </>
         }
       />
