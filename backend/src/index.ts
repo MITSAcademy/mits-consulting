@@ -38,6 +38,7 @@ import { demoTeamReportRouter } from './routes/demoTeamReport';
 import { featuresRouter } from './routes/features';
 import { regularTrainingsRouter } from './routes/regularTrainings';
 import { briefingRouter } from './routes/briefing';
+import { seedRouter } from './routes/seed';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -93,6 +94,7 @@ app.use('/api/reports/demo-team', demoTeamReportRouter);
 app.use('/api/features', featuresRouter);
 app.use('/api/regular-trainings', regularTrainingsRouter);
 app.use('/api/briefing', briefingRouter);
+app.use('/api/seed', seedRouter);
 
 // Global error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
