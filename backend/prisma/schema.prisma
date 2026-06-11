@@ -630,6 +630,10 @@ model RegularTraining {
   meetingMode              String?                         // Zoom | GoToMeeting | Teams | Google Meet | Phone | Other
   lastSessionStatus        String?                         // Yes-Proper session | No | Partial — updated inline by AM
   lastSessionComment       String?                         // comments like "@Kashish:- will connect at 09:00 pm ist"
+  lastClientFeedback       String?                         // feedback from client after session
+  lastTrainerFeedback      String?                         // feedback from trainer after session
+  lastSessionDate          String?                         // ISO date of last session e.g. "2026-06-11"
+  weeklySessionCount       Int?                            // auto-calculated sessions this week, AM can override
   status                   String   @default("active")     // active | paused | archived
   notes                    String?
   createdAt                DateTime @default(now())

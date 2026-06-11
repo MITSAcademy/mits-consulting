@@ -26,8 +26,9 @@ import { todayISO } from '@/lib/utils';
 import { EmptyState } from '@/components/EmptyState';
 import {
   ClipboardList, Plus, Calendar as CalendarIcon, CheckCircle2, Phone, Play, Square,
-  Clock, MessageSquare, AlertCircle, Video, Search,
+  Clock, MessageSquare, AlertCircle, Video, Search, MessageCircle, Send,
 } from 'lucide-react';
+import { formatPhone, waLink } from '@/lib/utils';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 
 const MEETING_MODE_ICONS: Record<string, string> = {
@@ -634,14 +635,15 @@ function AMHostGroup({ hostName, rows, onChanged }: { hostName: string; rows: an
         <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: 'var(--bg-input)', borderBottom: '1px solid var(--brand-border)' }}>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '14%' }}>Client</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '11%' }}>Trainer</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '14%' }}>Skills</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '7%' }}>Tool</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '13%' }}>Client</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '10%' }}>Trainer</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '12%' }}>Skills</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '5%' }}>Tool</th>
               <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '6%' }}>Time IST</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '16%' }}>Session happened</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '20%' }}>Comments</th>
-              <th className="text-right px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '12%' }}>Schedule</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '14%' }}>Session happened</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '18%' }}>Comments</th>
+              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '5%' }}>Wk#</th>
+              <th className="text-right px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '17%' }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -660,9 +662,12 @@ function AMSheetRow({ t, isLast, onChanged }: { t: any; isLast: boolean; onChang
   const showToast = useUI((s) => s.showToast);
   const modeIcon = MEETING_MODE_ICONS[t.meetingMode] || '💻';
   const skills = t.trainer?.skills || '—';
+  const [editingComment, setEditingComment] = useState(false);
+  const [commentVal, setCommentVal] = useState(t.lastSessionComment || '');
+  const [showFeedback, setShowFeedback] = useState(false);
 
-  const updateStatus = useMutation({
-    mutationFn: (val: string) => api.patch(`/regular-trainings/trainings/${t.id}`, { lastSessionStatus: val || null }),
+  const updateField = useMutation({
+    mutationFn: (data: Record<string, any>) => api.patch(`/regular-trainings/trainings/${t.id}`, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); onChanged(); },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
@@ -672,48 +677,160 @@ function AMSheetRow({ t, isLast, onChanged }: { t: any; isLast: boolean; onChang
     : t.lastSessionStatus === 'No' ? 'var(--status-red)'
     : 'var(--status-amber)';
 
+  // WhatsApp links
+  const clientWa = t.client?.whatsappGroupLink
+    ? t.client.whatsappGroupLink
+    : (t.client?.phoneCode && t.client?.phoneDigits ? waLink(t.client.phoneCode, t.client.phoneDigits) : null);
+  const trainerWa = t.trainer?.phoneCode && t.trainer?.phoneDigits
+    ? waLink(t.trainer.phoneCode, t.trainer.phoneDigits)
+    : null;
+
   return (
-    <tr style={{ borderTop: '1px solid var(--brand-borderSoft)', background: 'var(--bg-card)' }}
-        className="hover:bg-[var(--bg-input)] transition-colors">
-      <td className="px-3 py-2.5">
-        {t.client
-          ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: 'var(--brand-text)' }}>{t.client.name}</Link>
-          : <span className="font-semibold" style={{ color: 'var(--brand-text)' }}>{t.name}</span>
-        }
-      </td>
-      <td className="px-3 py-2.5" style={{ color: 'var(--brand-textSecondary)' }}>
-        {t.trainer?.name || <span className="muted">—</span>}
-      </td>
-      <td className="px-3 py-2.5" style={{ maxWidth: 0, width: '14%' }}>
-        <span className="block truncate muted text-[11px]" title={skills}>{skills}</span>
-      </td>
-      <td className="px-3 py-2.5 text-[13px]" title={t.meetingMode || 'Zoom'}>
-        {modeIcon}
-      </td>
-      <td className="px-3 py-2.5 mono font-semibold text-[12px]" style={{ color: 'var(--accent-gold)' }}>
-        {t.defaultTimeIst || <span className="muted text-[10px]">—</span>}
-      </td>
-      <td className="px-3 py-2.5">
-        <select
-          className="text-[11px] rounded px-1.5 py-0.5 font-medium cursor-pointer"
-          style={{ background: 'transparent', color: statusColor, border: 'none', outline: 'none', minWidth: 120 }}
-          value={t.lastSessionStatus || ''}
-          onChange={(e) => updateStatus.mutate(e.target.value)}
-        >
-          {SESSION_STATUS_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </td>
-      <td className="px-3 py-2.5 text-[11px]" style={{ color: 'var(--brand-textSecondary)', maxWidth: 0, width: '20%' }}>
-        <span className="block truncate" title={t.lastSessionComment || ''}>
-          {t.lastSessionComment || <span className="muted">—</span>}
-        </span>
-      </td>
-      <td className="px-3 py-2.5 text-right">
-        <AMScheduleButton training={t} onSent={onChanged} />
-      </td>
-    </tr>
+    <>
+      <tr style={{ borderTop: '1px solid var(--brand-borderSoft)', background: 'var(--bg-card)' }}
+          className="hover:bg-[var(--bg-input)] transition-colors">
+        {/* Client */}
+        <td className="px-3 py-2.5">
+          {t.client
+            ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: 'var(--brand-text)' }}>{t.client.name}</Link>
+            : <span className="font-semibold" style={{ color: 'var(--brand-text)' }}>{t.name}</span>
+          }
+        </td>
+        {/* Trainer */}
+        <td className="px-3 py-2.5" style={{ color: 'var(--brand-textSecondary)' }}>
+          {t.trainer?.name || <span className="muted">—</span>}
+        </td>
+        {/* Skills */}
+        <td className="px-3 py-2.5" style={{ maxWidth: 0, width: '12%' }}>
+          <span className="block truncate muted text-[11px]" title={skills}>{skills}</span>
+        </td>
+        {/* Tool */}
+        <td className="px-3 py-2.5 text-[13px]" title={t.meetingMode || 'Zoom'}>{modeIcon}</td>
+        {/* Time IST */}
+        <td className="px-3 py-2.5 mono font-semibold text-[12px]" style={{ color: 'var(--accent-gold)' }}>
+          {t.defaultTimeIst || <span className="muted text-[10px]">—</span>}
+        </td>
+        {/* Session status */}
+        <td className="px-3 py-2.5">
+          <select
+            className="text-[11px] rounded px-1.5 py-0.5 font-medium cursor-pointer"
+            style={{ background: 'transparent', color: statusColor, border: 'none', outline: 'none', minWidth: 120 }}
+            value={t.lastSessionStatus || ''}
+            onChange={(e) => updateField.mutate({ lastSessionStatus: e.target.value || null })}
+          >
+            {SESSION_STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </td>
+        {/* Comments — inline editable */}
+        <td className="px-3 py-2.5 text-[11px]" style={{ maxWidth: 0, width: '18%' }}>
+          {editingComment ? (
+            <div className="flex gap-1 items-center">
+              <input
+                autoFocus
+                className="flex-1 text-[11px] rounded px-1.5 py-0.5"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none', minWidth: 0 }}
+                value={commentVal}
+                onChange={(e) => setCommentVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { updateField.mutate({ lastSessionComment: commentVal || null }); setEditingComment(false); }
+                  if (e.key === 'Escape') { setCommentVal(t.lastSessionComment || ''); setEditingComment(false); }
+                }}
+              />
+              <button onClick={() => { updateField.mutate({ lastSessionComment: commentVal || null }); setEditingComment(false); }}
+                style={{ color: 'var(--status-green)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>✓</button>
+            </div>
+          ) : (
+            <span
+              className="block truncate cursor-pointer hover:underline"
+              style={{ color: commentVal ? 'var(--brand-textSecondary)' : 'var(--brand-textMuted)' }}
+              title={commentVal || 'Click to add comment'}
+              onClick={() => setEditingComment(true)}
+            >
+              {commentVal || <span className="muted text-[10px]">+ comment</span>}
+            </span>
+          )}
+        </td>
+        {/* Weekly session count */}
+        <td className="px-3 py-2.5 text-center">
+          <input
+            type="number"
+            min={0} max={31}
+            className="text-[11px] rounded text-center font-semibold"
+            style={{ background: 'transparent', border: 'none', outline: 'none', width: 28, color: 'var(--accent-gold)' }}
+            value={t.weeklySessionCount ?? ''}
+            placeholder="—"
+            onChange={(e) => updateField.mutate({ weeklySessionCount: e.target.value ? Number(e.target.value) : null })}
+          />
+        </td>
+        {/* Actions */}
+        <td className="px-3 py-2.5 text-right">
+          <div className="flex items-center justify-end gap-1">
+            {/* WhatsApp group */}
+            {clientWa && (
+              <a href={clientWa} target="_blank" rel="noreferrer"
+                title="WhatsApp group / client"
+                className="inline-flex items-center justify-center rounded p-1 hover-lift"
+                style={{ background: 'rgba(37,211,102,0.12)', color: '#25d366' }}>
+                <MessageCircle size={13} />
+              </a>
+            )}
+            {/* WhatsApp trainer */}
+            {trainerWa && (
+              <a href={trainerWa} target="_blank" rel="noreferrer"
+                title="WhatsApp trainer"
+                className="inline-flex items-center justify-center rounded p-1 hover-lift"
+                style={{ background: 'rgba(37,211,102,0.08)', color: '#25d366', opacity: 0.8 }}>
+                <Send size={12} />
+              </a>
+            )}
+            {/* Feedback toggle */}
+            <button
+              title="Log feedback"
+              onClick={() => setShowFeedback((v) => !v)}
+              className="inline-flex items-center justify-center rounded p-1 hover-lift"
+              style={{ background: showFeedback ? 'rgba(99,179,237,0.15)' : 'var(--bg-input)', color: 'var(--status-blue)', border: 'none', cursor: 'pointer' }}>
+              <MessageSquare size={12} />
+            </button>
+            {/* Schedule */}
+            <AMScheduleButton training={t} onSent={onChanged} />
+          </div>
+        </td>
+      </tr>
+      {/* Expandable feedback row */}
+      {showFeedback && (
+        <tr style={{ background: 'rgba(99,179,237,0.04)', borderTop: '1px solid var(--brand-borderSoft)' }}>
+          <td colSpan={9} className="px-4 py-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: 'var(--status-blue)' }}>Client feedback</div>
+                <textarea
+                  rows={2}
+                  className="w-full text-[11px] rounded-lg px-2 py-1.5 resize-none"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none' }}
+                  placeholder="How did the client respond? Any issues?"
+                  defaultValue={t.lastClientFeedback || ''}
+                  onBlur={(e) => { if (e.target.value !== (t.lastClientFeedback || '')) updateField.mutate({ lastClientFeedback: e.target.value || null }); }}
+                />
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: 'var(--status-green)' }}>Trainer feedback</div>
+                <textarea
+                  rows={2}
+                  className="w-full text-[11px] rounded-lg px-2 py-1.5 resize-none"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none' }}
+                  placeholder="Trainer performance, punctuality, content quality…"
+                  defaultValue={t.lastTrainerFeedback || ''}
+                  onBlur={(e) => { if (e.target.value !== (t.lastTrainerFeedback || '')) updateField.mutate({ lastTrainerFeedback: e.target.value || null }); }}
+                />
+              </div>
+            </div>
+            <div className="text-[10px] muted mt-1.5">Changes save automatically on blur (click outside the box).</div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 

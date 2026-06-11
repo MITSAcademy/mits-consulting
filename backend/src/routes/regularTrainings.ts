@@ -50,10 +50,12 @@ regularTrainingsRouter.get('/trainings', async (req: AuthedRequest, res) => {
       id: true, name: true, status: true,
       recordingAccountEmail: true, recordingAccountLabel: true, recordingFolderUrl: true,
       scheduleNotes: true, defaultTimeIst: true, meetingMode: true,
-      lastSessionStatus: true, lastSessionComment: true, notes: true,
+      lastSessionStatus: true, lastSessionComment: true,
+      lastClientFeedback: true, lastTrainerFeedback: true,
+      lastSessionDate: true, weeklySessionCount: true, notes: true,
       hostedByDefault: { select: { id: true, name: true } },
-      client:          { select: { id: true, name: true } },
-      trainer:         { select: { id: true, name: true } },
+      client:          { select: { id: true, name: true, whatsappGroupLink: true, phoneCode: true, phoneDigits: true } },
+      trainer:         { select: { id: true, name: true, skills: true, phoneCode: true, phoneDigits: true } },
       updatedAt: true, createdAt: true,
       _count: { select: { sessions: true } },
     },
@@ -116,7 +118,7 @@ regularTrainingsRouter.patch('/trainings/:id', async (req: AuthedRequest, res) =
   if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const b = req.body || {};
   const data: any = {};
-  for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'defaultTimeIst', 'meetingMode', 'lastSessionStatus', 'lastSessionComment', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId']) {
+  for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'defaultTimeIst', 'meetingMode', 'lastSessionStatus', 'lastSessionComment', 'lastClientFeedback', 'lastTrainerFeedback', 'lastSessionDate', 'weeklySessionCount', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId']) {
     if (k in b) data[k] = b[k] === '' ? null : b[k];
   }
   const updated = await prisma.regularTraining.update({ where: { id: req.params.id }, data });
@@ -148,10 +150,12 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
     where: { status: 'active' },
     select: {
       id: true, name: true, scheduleNotes: true, defaultTimeIst: true,
-      meetingMode: true, lastSessionStatus: true, lastSessionComment: true, notes: true,
+      meetingMode: true, lastSessionStatus: true, lastSessionComment: true,
+      lastClientFeedback: true, lastTrainerFeedback: true,
+      lastSessionDate: true, weeklySessionCount: true, notes: true,
       hostedByDefault: { select: { id: true, name: true } },
-      client:  { select: { id: true, name: true } },
-      trainer: { select: { id: true, name: true, skills: true } },
+      client:  { select: { id: true, name: true, whatsappGroupLink: true, phoneCode: true, phoneDigits: true } },
+      trainer: { select: { id: true, name: true, skills: true, phoneCode: true, phoneDigits: true } },
       sessions: {
         where: { status: { in: ['scheduled', 'in_progress'] }, scheduledFor: { gte: now } },
         select: { id: true, scheduledFor: true, meetingLink: true, notes: true, status: true },
