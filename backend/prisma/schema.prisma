@@ -734,8 +734,9 @@ model Demo {
   scheduledTimeIst String?
   actualDate       String?
   actualTimeIst    String?
-  outcome          String?    // Positive | Neutral | Negative
-  feedback         String?
+  outcome          String?    // Positive | Neutral | Negative (overall demo quality)
+  trainerOutcome   String?    // Selected | Shortlisted | Rejected | PendingClientFeedback (per-trainer selection status)
+  feedback         String?    // client feedback about this specific trainer
   nextSteps        String?
   status           DemoStatus @default(Scheduled)
   conductedById    String?

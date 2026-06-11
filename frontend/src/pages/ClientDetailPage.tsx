@@ -1761,6 +1761,22 @@ function DemoDoneModal({ client, onClose }: any) {
     demoEvidenceUrl: client.demoEvidenceUrl || '',
     demoEvidenceKind: client.demoEvidenceKind || '',
   });
+
+  // Fetch all demos for this client to get per-trainer rows (Scheduled status)
+  const { data: allDemos } = useQuery({
+    queryKey: ['client-demos', client.id],
+    queryFn: () => api.get(`/clients/${client.id}/demos`).then((r) => r.data),
+  });
+  // Demos that were scheduled for this round (not yet marked Done)
+  const pendingDemos: any[] = (allDemos || []).filter((d: any) => d.status === 'Scheduled' && d.trainer);
+  // Per-trainer state: trainerOutcome + feedback
+  const [trainerFeedbacks, setTrainerFeedbacks] = useState<Record<string, { trainerOutcome: string; feedback: string }>>({});
+  function setTF(demoId: string, patch: Partial<{ trainerOutcome: string; feedback: string }>) {
+    setTrainerFeedbacks((prev) => {
+      const existing = prev[demoId] || { trainerOutcome: '', feedback: '' };
+      return { ...prev, [demoId]: { ...existing, ...patch } };
+    });
+  }
   const [uploading, setUploading] = useState(false);
   async function pickEvidence(file: File, kind: 'Audio' | 'Screenshot') {
     setUploading(true);
@@ -1780,9 +1796,21 @@ function DemoDoneModal({ client, onClose }: any) {
   }
   const save = useMutation({
     mutationFn: async () => {
-      // 1. workflow PATCH (actuals + feedback) — Anjali/Taran allowed
+      // 1. workflow PATCH (actuals + overall feedback) — Anjali/Taran allowed
       await api.patch(`/clients/${client.id}`, f);
-      // 2. stage → DemoDone (skipped if already there)
+      // 2. Per-trainer demo row updates (non-fatal)
+      for (const demo of pendingDemos) {
+        const tf = trainerFeedbacks[demo.id];
+        if (tf && (tf.trainerOutcome || tf.feedback)) {
+          try {
+            await api.patch(`/clients/${client.id}/demos/${demo.id}`, {
+              trainerOutcome: tf.trainerOutcome || null,
+              feedback: tf.feedback || null,
+            });
+          } catch { /* non-fatal */ }
+        }
+      }
+      // 3. stage → DemoDone (skipped if already there)
       if (client.lifecycle !== 'DemoDone') {
         await api.post(`/clients/${client.id}/stage`, { lifecycle: 'DemoDone' });
       }
@@ -1790,6 +1818,7 @@ function DemoDoneModal({ client, onClose }: any) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['clients'] });
+      qc.invalidateQueries({ queryKey: ['client-demos', client.id] });
       qc.invalidateQueries({ queryKey: ['nav-badges'] });
       showToast('Demo marked done → moved to sale closing queue');
       onClose();
@@ -1841,6 +1870,61 @@ function DemoDoneModal({ client, onClose }: any) {
         </div>
         {/* Evidence upload — show when the demo didn't go well. Auto-notifies
             the proposing recruiter (Aman/Kanchan) on save. */}
+        {/* ── Per-trainer outcome (shown when multiple trainers demoed) ── */}
+        {pendingDemos.length > 0 && (
+          <div className="mt-1">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.10em] mb-2" style={{ color: 'var(--brand-textSecondary)' }}>
+              Trainer-level feedback ({pendingDemos.length} trainer{pendingDemos.length > 1 ? 's' : ''})
+            </div>
+            <div className="space-y-3">
+              {pendingDemos.map((demo: any) => {
+                const tf = trainerFeedbacks[demo.id] || { trainerOutcome: '', feedback: '' };
+                const outcomeColor =
+                  tf.trainerOutcome === 'Selected'    ? 'var(--status-green)'  :
+                  tf.trainerOutcome === 'Shortlisted' ? 'var(--status-amber)'  :
+                  tf.trainerOutcome === 'Rejected'    ? 'var(--status-red)'    :
+                  'var(--brand-textMuted)';
+                return (
+                  <div key={demo.id} className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-semibold text-[12px]" style={{ color: 'var(--brand-text)' }}>
+                        {demo.trainer?.name || 'Trainer'}
+                      </span>
+                      {demo.trainer?.skills && (
+                        <span className="text-[10px] muted truncate" style={{ maxWidth: 200 }}>{demo.trainer.skills.split(',').slice(0,3).join(', ')}</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="form-row mb-0">
+                        <Label>Client's decision</Label>
+                        <Select
+                          value={tf.trainerOutcome}
+                          onChange={(e) => setTF(demo.id, { trainerOutcome: e.target.value })}
+                          style={{ color: outcomeColor, fontWeight: tf.trainerOutcome ? 600 : undefined }}
+                        >
+                          <option value="">— pending —</option>
+                          <option value="Selected">Selected ✓</option>
+                          <option value="Shortlisted">Shortlisted (considering)</option>
+                          <option value="Rejected">Rejected ✗</option>
+                          <option value="PendingClientFeedback">Pending client feedback</option>
+                        </Select>
+                      </div>
+                      <div className="form-row mb-0">
+                        <Label>Comments for this trainer</Label>
+                        <Input
+                          value={tf.feedback}
+                          onChange={(e) => setTF(demo.id, { feedback: e.target.value })}
+                          placeholder="Client's specific remarks…"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {(f.demoOutcome === 'Negative' || f.demoOutcome === 'Neutral') && (
           <div className="form-row">
             <Label>

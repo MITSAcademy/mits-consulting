@@ -31,7 +31,7 @@ const include = {
   // Active sourcing request — used to show the assigned recruiter on kanban cards
   sourcingRequests: { select: { id: true, sentTo: { select: { id: true, name: true } } }, where: { status: { in: [SourcingStatus.Open, SourcingStatus.Proposed] } }, orderBy: { createdAt: 'desc' as const }, take: 1 },
   // Done demos with trainer + feedback — shown on recruiter pipeline cards
-  demos: { select: { id: true, status: true, outcome: true, actualDate: true, actualTimeIst: true, feedback: true, nextSteps: true, trainer: { select: { id: true, name: true, skills: true } } }, where: { status: DemoStatus.Done }, orderBy: { actualDate: 'desc' as const } },
+  demos: { select: { id: true, status: true, outcome: true, trainerOutcome: true, actualDate: true, actualTimeIst: true, feedback: true, nextSteps: true, trainer: { select: { id: true, name: true, skills: true } } }, where: { status: DemoStatus.Done }, orderBy: { actualDate: 'desc' as const } },
 };
 
 // PII redaction rules:
@@ -1226,6 +1226,24 @@ clientsRouter.get('/:id/demos', async (req, res) => {
     orderBy: [{ scheduledDate: 'desc' }, { createdAt: 'desc' }],
   });
   res.json(demos);
+});
+
+// Update per-trainer outcome + feedback on an existing Demo row.
+// Called by Anjali/Taran from the Demo done modal to record each trainer's result.
+clientsRouter.patch('/:id/demos/:demoId', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'demo_lead', 'demo_intake'];
+  if (!allowed.includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  const demo = await prisma.demo.findUnique({ where: { id: req.params.demoId } });
+  if (!demo || demo.clientId !== req.params.id) return res.status(404).json({ error: 'Demo not found' });
+  const b = req.body || {};
+  const data: any = {};
+  for (const k of ['outcome', 'trainerOutcome', 'feedback', 'nextSteps', 'actualDate', 'actualTimeIst']) {
+    if (k in b) data[k] = b[k] === '' ? null : b[k];
+  }
+  const updated = await prisma.demo.update({ where: { id: req.params.demoId }, data });
+  res.json(updated);
 });
 
 // Backfill a past demo that happened OUTSIDE the portal (e.g. before the team

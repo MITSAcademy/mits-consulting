@@ -64,7 +64,19 @@ function DemoFeedbackPanel({ demos }: { demos: any[] }) {
                 <div className="flex items-center gap-1.5 flex-wrap mb-1">
                   <CheckCircle2 size={11} style={{ color: 'var(--status-green)', flexShrink: 0 }} />
                   <span className="font-semibold" style={{ color: 'var(--brand-text)' }}>{d.trainer?.name || 'Unknown trainer'}</span>
-                  {d.outcome && (
+                  {d.trainerOutcome && (() => {
+                    const tc =
+                      d.trainerOutcome === 'Selected'    ? 'var(--status-green)'  :
+                      d.trainerOutcome === 'Shortlisted' ? 'var(--status-amber)'  :
+                      d.trainerOutcome === 'Rejected'    ? 'var(--status-red)'    :
+                      'var(--brand-textMuted)';
+                    return (
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase" style={{ background: tc + '22', color: tc }}>
+                        {d.trainerOutcome === 'PendingClientFeedback' ? 'Pending' : d.trainerOutcome}
+                      </span>
+                    );
+                  })()}
+                  {!d.trainerOutcome && d.outcome && (
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase" style={{ background: outcomeColor + '22', color: outcomeColor }}>
                       {d.outcome}
                     </span>
@@ -111,11 +123,14 @@ export function DemoIntakePage() {
   });
 
   const all = (data || []) as any[];
-  // For recruiters "mine" means clients where sentToId matches — fall back to intakeOwnerId for Team 2
+  // Pipeline stages Team 2 handles — "Mine" for demo_intake shows all clients currently
+  // in any pipeline stage (not just intakeOwnerId === user.id, since Anjali/Taran share the queue)
+  const PIPELINE_STAGES_TEAM2 = ['Lead','IntakeSent','IntakeReceived','InternalSearch','WithRecruiters',
+    'VerificationPending','TrainerMatched','DemoScheduled','DemoDone','FeedbackPending'];
   const filtered = mineOnly
     ? isRecruiter
-      ? all // recruiters see all WithRecruiters regardless — they don't have intakeOwnerId
-      : all.filter((c: any) => c.intakeOwnerId === user.id)
+      ? all // recruiters see all WithRecruiters regardless
+      : all.filter((c: any) => PIPELINE_STAGES_TEAM2.includes(c.lifecycle))
     : all;
 
   const searchLower = search.trim().toLowerCase();

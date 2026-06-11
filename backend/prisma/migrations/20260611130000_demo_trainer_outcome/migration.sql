@@ -1,0 +1,1 @@
+ALTER TABLE "Demo" ADD COLUMN IF NOT EXISTS "trainerOutcome" TEXT;
