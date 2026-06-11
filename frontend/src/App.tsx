@@ -57,6 +57,8 @@ const MyCalendarPage = lazy(() => import('@/pages/MyCalendarPage').then((m) => (
 const HoldClientsPage = lazy(() => import('@/pages/HoldClientsPage').then((m) => ({ default: m.HoldClientsPage })));
 const FeedbackPendingPage = lazy(() => import('@/pages/FeedbackPendingPage').then((m) => ({ default: m.FeedbackPendingPage })));
 const RoshniFollowUpsPage = lazy(() => import('@/pages/RoshniFollowUpsPage').then((m) => ({ default: m.RoshniFollowUpsPage })));
+const SessionsDashboardPage = lazy(() => import('@/pages/SessionsDashboardPage'));
+const IssueTrackerPage = lazy(() => import('@/pages/IssueTrackerPage'));
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const user = useAuth((s) => s.user);
@@ -140,6 +142,8 @@ export default function App() {
           <Route path="/hold" element={<HoldClientsPage />} />
           <Route path="/roshni/follow-ups" element={<RoshniFollowUpsPage />} />
           <Route path="/feedback-pending" element={<FeedbackPendingPage />} />
+          <Route path="/sessions" element={<SessionsDashboardPage />} />
+          <Route path="/issues" element={<IssueTrackerPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

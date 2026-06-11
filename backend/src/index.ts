@@ -37,6 +37,7 @@ import { callLogsRouter } from './routes/callLogs';
 import { demoTeamReportRouter } from './routes/demoTeamReport';
 import { featuresRouter } from './routes/features';
 import { regularTrainingsRouter } from './routes/regularTrainings';
+import { issueTrackerRouter } from './routes/issueTracker';
 import { briefingRouter } from './routes/briefing';
 import { seedRouter } from './routes/seed';
 
@@ -93,6 +94,7 @@ app.use('/api/call-logs', callLogsRouter);
 app.use('/api/reports/demo-team', demoTeamReportRouter);
 app.use('/api/features', featuresRouter);
 app.use('/api/regular-trainings', regularTrainingsRouter);
+app.use('/api/issue-tracker', issueTrackerRouter);
 app.use('/api/briefing', briefingRouter);
 app.use('/api/seed', seedRouter);
 

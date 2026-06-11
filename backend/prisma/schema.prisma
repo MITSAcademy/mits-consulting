@@ -180,6 +180,7 @@ model User {
   hostedRegularTrainings RegularTraining[]  @relation("RegularTrainingHost")
   tempHostedTrainings    RegularTraining[]  @relation("RegularTrainingTempHost")
   hostedTrainingSessions TrainingSession[]  @relation("TrainingSessionHost")
+  closedIssues           IssueTracker[]     @relation("IssueClosedBy")
 }
 
 // -------- NOTIFICATIONS --------
@@ -267,6 +268,7 @@ model Trainer {
   outboundMessages OutboundMessage[]
   regularTrainings RegularTraining[]
   demos            Demo[]
+  issueTrackers    IssueTracker[]
 
   @@index([phoneDigits])  // auto-add dedup lookup
   @@index([name])         // search + dedup fallback
@@ -425,6 +427,7 @@ model Client {
   demos            Demo[]
   callLogs         CallLog[]
   regularTrainings RegularTraining[] @relation("RegularTrainingClient")
+  issueTrackers    IssueTracker[]
 
   @@index([lifecycle])                                    // every kanban/queue filters by stage
   @@index([nextRenewalDue])                               // RenewalsPage + Roshni queue
@@ -668,10 +671,41 @@ model TrainingSession {
   recordingUrl             String?                         // session-specific recording (if separate from folder)
   feedback                 String?
   notes                    String?
+  delayReason              String?
+  timezone                 String?
+  sessionType              String?
+  checklist                Json?
+  trainerFeedbackJson      Json?
+  clientFeedbackJson       Json?
   createdAt                DateTime        @default(now())
 
   @@index([regularTrainingId, scheduledFor])
   @@index([hostedById, status, scheduledFor])
+}
+
+// -------- ISSUE TRACKER --------
+model IssueTracker {
+  id               String    @id @default(cuid())
+  date             String
+  coordinatorId    String?
+  coordinatorName  String?
+  clientId         String?
+  client           Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  trainerId        String?
+  trainer          Trainer?  @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  title            String
+  description      String?
+  status           String    @default("Open")
+  resolutionNotes  String?
+  closedById       String?
+  closedBy         User?     @relation("IssueClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closedAt         DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([status])
+  @@index([coordinatorId])
+  @@index([date])
 }
 
 // -------- CALL LOG --------

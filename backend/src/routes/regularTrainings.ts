@@ -114,6 +114,8 @@ regularTrainingsRouter.get('/trainings/:id', async (req: AuthedRequest, res) => 
           id: true, scheduledFor: true, status: true,
           actualStartAt: true, actualEndAt: true, durationMinutes: true,
           recordingUrl: true, feedback: true, notes: true,
+          delayReason: true, timezone: true, sessionType: true,
+          checklist: true, trainerFeedbackJson: true, clientFeedbackJson: true,
           hostedBy: { select: { id: true, name: true } },
         },
         orderBy: { scheduledFor: 'desc' },
@@ -312,7 +314,13 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
       trainer: { select: { id: true, name: true, skills: true, phoneCode: true, phoneDigits: true } },
       sessions: {
         where: { status: { in: ['scheduled', 'in_progress'] }, scheduledFor: { gte: now } },
-        select: { id: true, scheduledFor: true, meetingLink: true, notes: true, status: true },
+        select: {
+          id: true, scheduledFor: true, meetingLink: true, notes: true, status: true,
+          actualStartAt: true, actualEndAt: true, durationMinutes: true,
+          timezone: true, sessionType: true, checklist: true,
+          trainerFeedbackJson: true, clientFeedbackJson: true, delayReason: true,
+          hostedBy: { select: { id: true, name: true } },
+        },
         orderBy: { scheduledFor: 'asc' },
         take: 1,
       },
@@ -339,18 +347,29 @@ regularTrainingsRouter.get('/sessions', async (req: AuthedRequest, res) => {
     if (dateFrom) where.scheduledFor.gte = new Date(dateFrom);
     if (dateTo)   where.scheduledFor.lte = new Date(dateTo);
   }
-  const sessions = await prisma.trainingSession.findMany({
+  const raw = await prisma.trainingSession.findMany({
     where,
     select: {
       id: true, scheduledFor: true, status: true,
       actualStartAt: true, actualEndAt: true, durationMinutes: true,
-      recordingUrl: true, feedback: true, notes: true,
+      meetingLink: true, recordingUrl: true, feedback: true, notes: true,
+      delayReason: true, timezone: true, sessionType: true,
+      checklist: true, trainerFeedbackJson: true, clientFeedbackJson: true,
       hostedBy: { select: { id: true, name: true } },
-      regularTraining: { select: { id: true, name: true, recordingFolderUrl: true } },
+      regularTraining: {
+        select: {
+          id: true, name: true, recordingFolderUrl: true,
+          client:          { select: { id: true, name: true } },
+          trainer:         { select: { id: true, name: true } },
+          hostedByDefault: { select: { id: true, name: true } },
+        },
+      },
     },
     orderBy: { scheduledFor: 'asc' },
-    take: 200,
+    take: 500,
   });
+  // Rename regularTraining → training for frontend consistency
+  const sessions = raw.map(({ regularTraining, ...s }) => ({ ...s, training: regularTraining }));
   res.json(sessions);
 });
 
@@ -363,16 +382,35 @@ regularTrainingsRouter.post('/trainings/:id/sessions', async (req: AuthedRequest
   if (!b.scheduledFor) return res.status(400).json({ error: 'scheduledFor required' });
   const dt = new Date(b.scheduledFor);
   if (isNaN(dt.getTime())) return res.status(400).json({ error: 'scheduledFor invalid' });
+  const resolvedHostId = b.hostedById || t.hostedByDefaultId || req.user!.id;
   const created = await prisma.trainingSession.create({
     data: {
       regularTrainingId: t.id,
       scheduledFor: dt,
-      hostedById: b.hostedById || t.hostedByDefaultId || req.user!.id,
+      hostedById: resolvedHostId,
       status: 'scheduled',
       notes: b.notes || null,
     },
   });
   await audit(req.user!.id, req.user!.name, 'TRAINING_SESSION_SCHEDULED', `${t.name} · ${dt.toISOString().slice(0, 16)}`);
+
+  // Notify the host if someone else is scheduling this session for them
+  if (resolvedHostId !== req.user!.id) {
+    const training = await prisma.regularTraining.findUnique({
+      where: { id: t.id },
+      select: { client: { select: { name: true } } },
+    });
+    const clientName = training?.client?.name || null;
+    await notify({
+      userId: resolvedHostId,
+      kind: 'new_session_allocated',
+      title: `${t.name} · ${dt.toISOString().slice(0, 16)}`,
+      body: clientName ? `Client: ${clientName}` : undefined,
+      link: '/sessions',
+      email: true,
+    });
+  }
+
   res.status(201).json(created);
 });
 
@@ -531,7 +569,7 @@ regularTrainingsRouter.patch('/sessions/:id', async (req: AuthedRequest, res) =>
   }
   const b = req.body || {};
   const data: any = {};
-  for (const k of ['feedback', 'recordingUrl', 'notes', 'status']) {
+  for (const k of ['feedback', 'recordingUrl', 'notes', 'status', 'delayReason', 'timezone', 'sessionType', 'checklist', 'trainerFeedbackJson', 'clientFeedbackJson', 'meetingLink', 'scheduledFor', 'durationMinutes']) {
     if (k in b) data[k] = b[k] === '' ? null : b[k];
   }
   const updated = await prisma.trainingSession.update({ where: { id: req.params.id }, data });
