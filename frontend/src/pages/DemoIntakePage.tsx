@@ -24,6 +24,7 @@ const TEAM2_STAGES = [
   { key: 'DemoScheduled',      label: 'Demo scheduled',     readOnly: false },
   { key: 'DemoDone',           label: 'Demo done',          readOnly: false },
   { key: 'FeedbackPending',    label: 'Feedback (Samita)',  readOnly: false },
+  { key: 'Active',             label: 'Active',             readOnly: true  },
 ];
 
 // Aman/Kanchan see the full pipeline but can only open cards in their own stages
@@ -137,7 +138,7 @@ export function DemoIntakePage() {
   // "Mine" for demo_intake = clients where I am the intakeOwner
   // "All Team 2" = all pipeline clients
   const PIPELINE_STAGES_TEAM2 = ['Lead','IntakeSent','IntakeReceived','InternalSearch','WithRecruiters',
-    'VerificationPending','TrainerMatched','DemoScheduled','DemoDone','FeedbackPending'];
+    'VerificationPending','TrainerMatched','DemoScheduled','DemoDone','FeedbackPending','Active'];
   const filtered = mineOnly
     ? isRecruiter
       ? all
