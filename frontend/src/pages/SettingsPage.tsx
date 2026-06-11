@@ -219,7 +219,7 @@ export function SettingsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
 
-  const isFounder = user?.role === 'founder';
+  const isFounder = user?.role === 'founder' || user?.role === 'manager';
 
   const { data: flags } = useQuery({
     queryKey: ['flags'],
@@ -262,6 +262,18 @@ export function SettingsPage() {
 
         {isFounder && (
           <>
+            {/* ── Data ops ── */}
+            <div className="card mb-4">
+              <div className="card-h">Data operations</div>
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Seed Kashish / Muskan sessions</div>
+                  <div className="text-[11px] muted mt-0.5">Populates RegularTraining rows from the reference sheet. Safe to re-run — existing rows are updated, not duplicated.</div>
+                </div>
+                <SeedRegularTrainingsButton />
+              </div>
+            </div>
+
             <div className="callout">
               Phase-1 launch. Mitali, Bhavneet, Kashish, Muskan, Areena, Ashok and Malika are disabled until you flip{' '}
               <strong>Phase 2 enabled</strong> on. Their data is preserved; their roles just can't sign in yet.
@@ -308,7 +320,7 @@ export function SettingsPage() {
               ))}
             </div>
 
-            <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ marginTop: 16 }}>
               <Button
                 size="sm"
                 onClick={() => {
@@ -317,7 +329,6 @@ export function SettingsPage() {
               >
                 Reset flags to defaults
               </Button>
-              <SeedRegularTrainingsButton />
             </div>
           </>
         )}
