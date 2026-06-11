@@ -719,7 +719,10 @@ model CallLog {
   byId        String
   by          User     @relation(fields: [byId], references: [id], onDelete: Cascade)
   kind        String   @default("checkin")  // checkin | feedback | leverage | escalation
+  activityType        String?   // training | session
   outcome     String?  // answered | no_pickup | rescheduled | completed | escalated
+  sessionTookPlace    Boolean?  // did the session/training happen on scheduled date?
+  cancellationReason  String?   // mandatory when sessionTookPlace = false
   durationMinutes Int? // computed from start/end if both set, or set manually
   notes       String?
 

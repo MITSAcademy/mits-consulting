@@ -153,8 +153,12 @@ callLogsRouter.post('/:id/missed', async (req: AuthedRequest, res) => {
 
 callLogsRouter.post('/', async (req: AuthedRequest, res) => {
   if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
-  const { clientId, kind, outcome, durationMinutes, notes } = req.body || {};
+  const { clientId, kind, activityType, outcome, sessionTookPlace, cancellationReason, durationMinutes, notes } = req.body || {};
   if (!clientId) return res.status(400).json({ error: 'clientId required' });
+  // If session didn't take place, cancellationReason is required
+  if (sessionTookPlace === false && !cancellationReason) {
+    return res.status(400).json({ error: 'cancellationReason required when session did not take place' });
+  }
   const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
   if (!client) return res.status(404).json({ error: 'Client not found' });
   const log = await prisma.callLog.create({
@@ -162,11 +166,14 @@ callLogsRouter.post('/', async (req: AuthedRequest, res) => {
       clientId,
       byId: req.user!.id,
       kind: typeof kind === 'string' ? kind : 'checkin',
+      activityType: typeof activityType === 'string' ? activityType : null,
       outcome: typeof outcome === 'string' ? outcome : null,
-      durationMinutes: typeof durationMinutes === 'number' ? durationMinutes : null,
+      sessionTookPlace: typeof sessionTookPlace === 'boolean' ? sessionTookPlace : null,
+      cancellationReason: typeof cancellationReason === 'string' ? cancellationReason.slice(0, 1000) : null,
+      durationMinutes: typeof durationMinutes === 'number' ? Math.round(durationMinutes) : null,
       notes: typeof notes === 'string' ? notes.slice(0, 1000) : null,
     },
   });
-  await audit(req.user!.id, req.user!.name, 'CALL_LOG', `${client.name} · ${kind || 'checkin'}${outcome ? ' · ' + outcome : ''}`);
+  await audit(req.user!.id, req.user!.name, 'CALL_LOG', `${client.name} · ${activityType || kind || 'checkin'}${outcome ? ' · ' + outcome : ''}`);
   res.status(201).json(log);
 });
