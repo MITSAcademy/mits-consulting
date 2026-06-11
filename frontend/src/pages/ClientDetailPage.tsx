@@ -2090,7 +2090,7 @@ function MoveBackwardsModal({ client, onClose }: any) {
         }
       }
       // 2. Transition the stage — this is the part the user actually cares about.
-      await api.post(`/clients/${client.id}/stage`, { lifecycle: target, reason });
+      await api.post(`/clients/${client.id}/stage`, { lifecycle: target, reason, sendInvite: false });
       return { feedbackErrors };
     },
     onSuccess: (result) => {
