@@ -54,7 +54,7 @@ export function TrainerDetailPage() {
     <>
       <Topbar
         title={`${t.name}${t.seqId ? ` · ${fmtTrainerId(t.seqId)}` : ''}`}
-        subtitle={`${t.skills || '—'}`}
+        subtitle={t.experienceYears ? `${t.experienceYears}y experience` : undefined}
         actions={
           edit ? (
             <>
@@ -145,18 +145,39 @@ export function TrainerDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <InfoCell label="Email" value={t.email} />
-                <InfoCell label="Phone" value={<span className="mono">{formatPhone(t.phoneCode, t.phoneDigits) || '—'}</span>} />
-                <InfoCell label="Rate" value={<><span className="mono">₹{t.defaultRateInr}</span> <span className="muted text-[11px]">{t.rateModel}</span></>} />
-                <InfoCell label="Experience" value={t.experienceYears ? `${t.experienceYears}y` : undefined} />
-                <InfoCell label="Payment" value={[t.paymentMethod, t.upiId || t.bankAccount].filter(Boolean).join(' · ') || undefined} />
-                <InfoCell label="Recruiter" value={t.recruitedBy?.name} />
-                <div className="col-span-2">
-                  <InfoCell label="Availability (IST)" value={(() => {
-                    const slots = readAvailabilitySlots(t);
-                    return slots.length ? formatAvailabilitySlots(slots) : undefined;
-                  })()} />
+              <div className="space-y-3">
+                {/* Skills — primary field, shown prominently as pills */}
+                <div className="rounded-lg p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+                  <div className="text-[10px] uppercase tracking-[0.10em] font-bold muted mb-2">Skills</div>
+                  {t.skills ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {t.skills.split(/[,|]+/).map((s: string) => s.trim()).filter(Boolean).map((skill: string) => (
+                        <span
+                          key={skill}
+                          className="inline-block px-2 py-0.5 rounded text-[12px] font-medium"
+                          style={{ background: 'color-mix(in srgb, var(--brand-accent) 12%, transparent)', color: 'var(--brand-accent)', border: '1px solid color-mix(in srgb, var(--brand-accent) 25%, transparent)' }}
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="muted text-[13px]">—</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <InfoCell label="Email" value={t.email} />
+                  <InfoCell label="Phone" value={<span className="mono">{formatPhone(t.phoneCode, t.phoneDigits) || '—'}</span>} />
+                  <InfoCell label="Rate" value={<><span className="mono">₹{t.defaultRateInr}</span> <span className="muted text-[11px]">{t.rateModel}</span></>} />
+                  <InfoCell label="Experience" value={t.experienceYears ? `${t.experienceYears}y` : undefined} />
+                  <InfoCell label="Payment" value={[t.paymentMethod, t.upiId || t.bankAccount].filter(Boolean).join(' · ') || undefined} />
+                  <InfoCell label="Recruiter" value={t.recruitedBy?.name} />
+                  <div className="col-span-2">
+                    <InfoCell label="Availability (IST)" value={(() => {
+                      const slots = readAvailabilitySlots(t);
+                      return slots.length ? formatAvailabilitySlots(slots) : undefined;
+                    })()} />
+                  </div>
                 </div>
               </div>
             )}
