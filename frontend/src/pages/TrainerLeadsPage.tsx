@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
+import { Search } from 'lucide-react';
 
 const STAGES = ['New', 'Contacted', 'Vetting', 'Approved', 'Rejected'];
 
@@ -15,6 +16,7 @@ export function TrainerLeadsPage() {
   const showToast = useUI((s) => s.showToast);
   const { data } = useQuery({ queryKey: ['trainer-leads'], queryFn: () => api.get('/trainer-leads').then((r) => r.data) });
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const [form, setForm] = useState({ name: '', skills: '', source: '', expectedRateInr: 0, stage: 'New', notes: '' });
 
   const create = useMutation({
@@ -37,6 +39,17 @@ export function TrainerLeadsPage() {
         title="Trainer leads"
         subtitle={`${data?.length || 0}`}
         actions={
+          <>
+          <div className="relative">
+            <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 muted pointer-events-none" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name / skill…"
+              className="pl-7 pr-3 py-1.5 text-xs rounded-lg"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', width: 170, outline: 'none' }}
+            />
+          </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild><Button variant="primary">+ Add lead</Button></DialogTrigger>
             <DialogContent title="New trainer lead">
@@ -53,12 +66,14 @@ export function TrainerLeadsPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </>
         }
       />
       <Page>
         <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
           {STAGES.map((s) => {
-            const items = (data || []).filter((l: any) => l.stage === s);
+            const searchLower = search.trim().toLowerCase();
+            const items = (data || []).filter((l: any) => l.stage === s && (!searchLower || l.name?.toLowerCase().includes(searchLower) || l.skills?.toLowerCase().includes(searchLower)));
             const stageColor = s === 'Approved' ? 'var(--status-green)' : s === 'Rejected' ? 'var(--status-red)' : s === 'Vetting' ? 'var(--status-amber)' : 'var(--brand-textMuted)';
             return (
               <div key={s} className="card min-h-[200px]" style={{ borderTop: `2px solid ${stageColor}` }}>

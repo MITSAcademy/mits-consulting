@@ -26,7 +26,7 @@ import { todayISO } from '@/lib/utils';
 import { EmptyState } from '@/components/EmptyState';
 import {
   ClipboardList, Plus, Calendar as CalendarIcon, CheckCircle2, Phone, Play, Square,
-  Clock, MessageSquare, AlertCircle, Video,
+  Clock, MessageSquare, AlertCircle, Video, Search,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 
@@ -137,15 +137,24 @@ export function MySessionsPage() {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  const [search, setSearch] = useState('');
+  const searchLower = search.trim().toLowerCase();
+  const filteredSessions = searchLower
+    ? (mySessions || []).filter((t: any) =>
+        t.client?.name?.toLowerCase().includes(searchLower) ||
+        t.trainer?.name?.toLowerCase().includes(searchLower) ||
+        t.trainer?.skills?.toLowerCase().includes(searchLower))
+    : (mySessions || []);
+
   // Group sessions by host (AM) for the sheet view
-  const sessionsByHost = (mySessions || []).reduce((acc: Record<string, any[]>, t: any): Record<string, any[]> => {
+  const sessionsByHost = filteredSessions.reduce((acc: Record<string, any[]>, t: any): Record<string, any[]> => {
     const hostName = t.hostedByDefault?.name || 'Unassigned';
     if (!acc[hostName]) acc[hostName] = [];
     acc[hostName].push(t);
     return acc;
   }, {} as Record<string, any[]>);
   const hostGroups = Object.entries(sessionsByHost).sort(([a], [b]) => a.localeCompare(b)) as [string, any[]][];
-  const sessionCount = (mySessions || []).length;
+  const sessionCount = filteredSessions.length;
 
   return (
     <>
@@ -156,6 +165,18 @@ export function MySessionsPage() {
           : `${inProgress.length} live · ${scheduledToday.length} today · ${overdueCalls.length} overdue`}
         actions={
           <>
+            {isAM && (
+              <div className="relative">
+                <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 muted pointer-events-none" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search client / trainer…"
+                  className="pl-7 pr-3 py-1.5 text-xs rounded-lg"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', width: 190, outline: 'none' }}
+                />
+              </div>
+            )}
             <ScheduleCallButton onCreated={() => qc.invalidateQueries({ queryKey: ['call-logs'] })} />
             {!isAM && <LogSessionButton onCreated={() => qc.invalidateQueries({ queryKey: ['session-logs'] })} />}
           </>

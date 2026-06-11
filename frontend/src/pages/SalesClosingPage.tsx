@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Link } from 'react-router-dom';
 import { Pill } from '@/components/ui/pill';
 import { useAuth } from '@/store/auth';
 import { EmptyState } from '@/components/EmptyState';
-import { LayoutGrid } from 'lucide-react';
+import { LayoutGrid, Search } from 'lucide-react';
 
 const STAGE_ORDER = ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon', 'Active'];
 const BOARD_STAGES = ['SaleClosing', 'SaleWon', 'Active'];
@@ -172,14 +173,17 @@ function TileBoard({ items }: { items: any[] }) {
 export function SalesClosingPage() {
   const user = useAuth((s) => s.user)!;
   const { data } = useQuery({ queryKey: ['clients'], queryFn: () => api.get('/clients').then((r) => r.data) });
+  const [search, setSearch] = useState('');
 
   const all = (data || []) as any[];
+  const searchLower = search.trim().toLowerCase();
   const items = all
     .filter((c: any) => {
       if (!BOARD_STAGES.includes(c.lifecycle)) return false;
       if (user.role === 'sales_closer') return c.salesOwnerId === user.id;
       return true;
     })
+    .filter((c: any) => !searchLower || c.name?.toLowerCase().includes(searchLower) || c.skills?.toLowerCase().includes(searchLower))
     .sort((a: any, b: any) => STAGE_ORDER.indexOf(a.lifecycle) - STAGE_ORDER.indexOf(b.lifecycle));
 
   return (
@@ -187,6 +191,18 @@ export function SalesClosingPage() {
       <Topbar
         title="My pipeline"
         subtitle={`${items.length} client${items.length !== 1 ? 's' : ''} across closing stages`}
+        actions={
+          <div className="relative">
+            <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 muted pointer-events-none" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name…"
+              className="pl-7 pr-3 py-1.5 text-xs rounded-lg"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', width: 160, outline: 'none' }}
+            />
+          </div>
+        }
       />
       <Page>
 
