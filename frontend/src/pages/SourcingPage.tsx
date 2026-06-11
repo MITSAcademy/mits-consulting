@@ -7,7 +7,7 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useUI } from '@/store/ui';
 import { EmptyState } from '@/components/EmptyState';
 import { Briefcase } from 'lucide-react';
@@ -164,6 +164,91 @@ export function SourcingPage() {
         )}
       </Page>
     </>
+  );
+}
+
+function TrainerPicker({ trainers, value, onChange }: { trainers: any[]; value: string; onChange: (id: string) => void }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selected = trainers.find((t: any) => t.id === value);
+
+  const filtered = query.trim().length === 0 ? [] : trainers.filter((t: any) => {
+    const q = query.toLowerCase();
+    return (
+      t.name?.toLowerCase().includes(q) ||
+      t.phoneDigits?.includes(q) ||
+      t.skills?.toLowerCase().includes(q)
+    );
+  }).slice(0, 30);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  function select(id: string) {
+    onChange(id);
+    setQuery('');
+    setOpen(false);
+  }
+
+  function clear() {
+    onChange('');
+    setQuery('');
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      {selected ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, border: '1px solid var(--brand-gold)', background: 'var(--bg-input)', fontSize: 13 }}>
+          <span style={{ flex: 1 }}>
+            <strong>{selected.name}</strong>
+            {selected.phoneDigits && <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>+91 {selected.phoneDigits}</span>}
+            {selected.skills && <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>· {selected.skills.slice(0, 60)}{selected.skills.length > 60 ? '…' : ''}</span>}
+          </span>
+          <button type="button" onClick={clear} style={{ color: 'var(--text-muted)', cursor: 'pointer', background: 'none', border: 'none', fontSize: 16, lineHeight: 1 }}>×</button>
+        </div>
+      ) : (
+        <Input
+          placeholder="Search by name, phone, or skill…"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          autoComplete="off"
+        />
+      )}
+      {open && filtered.length > 0 && (
+        <div style={{ position: 'absolute', zIndex: 100, top: '100%', left: 0, right: 0, marginTop: 4, borderRadius: 8, border: '1px solid var(--brand-borderSoft)', background: 'var(--bg-card)', boxShadow: '0 8px 24px rgba(0,0,0,0.4)', maxHeight: 280, overflowY: 'auto' }}>
+          <div style={{ padding: '6px 10px 4px', fontSize: 11, color: 'var(--text-muted)', borderBottom: '1px solid var(--brand-borderSoft)' }}>
+            {filtered.length} result{filtered.length !== 1 ? 's' : ''}{filtered.length === 30 ? ' (showing top 30)' : ''}
+          </div>
+          {filtered.map((t: any) => (
+            <div
+              key={t.id}
+              onMouseDown={() => select(t.id)}
+              style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--brand-borderSoft)', fontSize: 13, lineHeight: 1.4 }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div style={{ fontWeight: 600 }}>{t.name}
+                {t.phoneDigits && <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8, fontSize: 12 }}>+91 {t.phoneDigits}</span>}
+              </div>
+              {t.skills && <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.skills}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+      {open && query.trim().length > 0 && filtered.length === 0 && (
+        <div style={{ position: 'absolute', zIndex: 100, top: '100%', left: 0, right: 0, marginTop: 4, borderRadius: 8, border: '1px solid var(--brand-borderSoft)', background: 'var(--bg-card)', padding: '10px 12px', fontSize: 13, color: 'var(--text-muted)' }}>
+          No trainer found. Fill in details below to add a new one.
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -344,10 +429,11 @@ function ProposalsCard({ req, trainers, qc, showToast, mode }: any) {
                   <div key={i} className="rounded-xl p-3 grid md:grid-cols-2 gap-2.5" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
                     <div className="form-row md:col-span-2">
                       <Label>From pool (or fill new below)</Label>
-                      <Select value={p.trainerId || ''} onChange={(e) => updateAt(i, { trainerId: e.target.value, trainerName: '', trainerSkills: '' })}>
-                        <option value="">— New trainer —</option>
-                        {trainers.map((t: any) => <option key={t.id} value={t.id}>{t.name} · {t.skills}</option>)}
-                      </Select>
+                      <TrainerPicker
+                        trainers={trainers}
+                        value={p.trainerId || ''}
+                        onChange={(id) => updateAt(i, { trainerId: id, trainerName: '', trainerSkills: '' })}
+                      />
                     </div>
                     {!p.trainerId && (
                       <>
