@@ -379,8 +379,8 @@ const STAGE_TRANSITION_PERMS: Record<string, string[]> = {
   WithRecruiters:      ['founder', 'manager', 'demo_lead', 'demo_intake'],
   VerificationPending: ['founder', 'manager', 'demo_lead', 'demo_intake', 'recruiter'],
   TrainerMatched:      ['founder', 'manager', 'demo_lead', 'demo_intake'],
-  DemoScheduled:       ['founder', 'manager', 'demo_lead', 'demo_intake'],
-  DemoDone:            ['founder', 'manager', 'demo_lead', 'demo_intake'],
+  DemoScheduled:       ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'],
+  DemoDone:            ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'],
   // FeedbackPending = Samita's queue. Anjali pushes here when demo is done; Samita acts.
   FeedbackPending:     ['founder', 'manager', 'demo_lead', 'demo_intake'],
   // SaleClosing — Samita can route here directly from positive feedback (via post-demo-feedback endpoint)
@@ -421,7 +421,7 @@ const BACK_TRANSITIONS: Record<string, string[]> = {
   DemoScheduled:       ['DemoDone', 'FeedbackPending', 'Dormant'],
   DemoDone:            ['FeedbackPending', 'SaleClosing', 'Dormant'],
   FeedbackPending:     ['SaleClosing', 'Hold', 'WithRecruiters', 'Dormant'],
-  SaleClosing:         ['SaleWon', 'Dormant'],
+  SaleClosing:         ['SaleWon', 'DemoScheduled', 'FeedbackPending', 'Dormant'],
   SaleWon:             ['Active', 'Dormant'],
   Active:              ['Hold', 'LeverageGranted', 'Dormant'],
 };
