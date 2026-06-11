@@ -17,110 +17,242 @@ interface Props {
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 
-function BackfillDemoModal({ clientId, onClose }: { clientId: string; onClose: () => void }) {
-  const qc = useQueryClient();
-  const showToast = useUI((s) => s.showToast);
-  const [f, setF] = useState({
-    trainerId: '',
-    actualDate: todayISO(),
-    actualTimeIst: '',
-    outcome: 'Positive',
-    feedback: '',
-    nextSteps: '',
-  });
-  const [trainerSearch, setTrainerSearch] = useState('');
-  // Trainer pool for the dropdown.
-  const { data: trainers } = useQuery<any[]>({
-    queryKey: ['trainers'],
-    queryFn: () => api.get('/trainers').then((r) => r.data),
-  });
-  const filteredTrainers = useMemo(() => {
-    const all = trainers || [];
-    const q = trainerSearch.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter((t: any) => {
-      const hay = `${t.name || ''} ${t.skills || ''} ${t.phoneDigits || ''} ${t.email || ''}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [trainers, trainerSearch]);
-  const selectedTrainer = (trainers || []).find((t: any) => t.id === f.trainerId);
-  const save = useMutation({
-    mutationFn: () => api.post(`/clients/${clientId}/demos/backfill`, {
-      ...f,
-      trainerId: f.trainerId || undefined,
-    }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['demos', { clientId, trainerId: undefined }] });
-      qc.invalidateQueries({ queryKey: ['client', clientId] });
-      showToast('Past demo added to history');
-      onClose();
-    },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
-  });
+interface TrainerRow {
+  _key: number;
+  trainerId: string;
+  trainerSearch: string;
+  outcome: string;
+  trainerOutcome: string;
+  feedback: string;
+  nextSteps: string;
+}
+
+let _rowKey = 0;
+function newRow(): TrainerRow {
+  return { _key: ++_rowKey, trainerId: '', trainerSearch: '', outcome: 'Positive', trainerOutcome: '', feedback: '', nextSteps: '' };
+}
+
+function TrainerFeedbackRow({
+  row,
+  trainers,
+  onChange,
+  onRemove,
+  canRemove,
+  index,
+}: {
+  row: TrainerRow;
+  trainers: any[];
+  onChange: (patch: Partial<TrainerRow>) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+  index: number;
+}) {
+  const filtered = useMemo(() => {
+    const q = row.trainerSearch.trim().toLowerCase();
+    if (!q) return trainers;
+    return trainers.filter((t: any) =>
+      `${t.name || ''} ${t.skills || ''} ${t.phoneDigits || ''}`.toLowerCase().includes(q)
+    );
+  }, [trainers, row.trainerSearch]);
+
+  const selected = trainers.find((t: any) => t.id === row.trainerId);
+
+  const outcomeColor =
+    row.trainerOutcome === 'Selected'    ? '#22c55e' :
+    row.trainerOutcome === 'Shortlisted' ? '#f59e0b' :
+    row.trainerOutcome === 'Rejected'    ? '#ef4444' :
+    'var(--brand-textMuted)';
+
   return (
-    <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        title="Add past demo"
-        description="Log a demo that happened offline or before the portal was in use. This is recorded as a history entry — it doesn't change the client's current lifecycle."
-        className="max-w-2xl"
-      >
-        <div className="grid md:grid-cols-2 gap-2.5">
-          <div className="form-row">
-            <Label>Actual date *</Label>
-            <Input type="date" value={f.actualDate} onChange={(e) => setF({ ...f, actualDate: e.target.value })} />
-          </div>
-          <div className="form-row">
-            <Label>Actual time (IST)</Label>
-            <Input type="time" value={f.actualTimeIst} onChange={(e) => setF({ ...f, actualTimeIst: e.target.value })} />
-          </div>
-        </div>
-        <div className="form-row">
-          <Label>Trainer (optional)</Label>
-          <Input
-            placeholder="Search trainer by name, skill, or phone…"
-            value={trainerSearch}
-            onChange={(e) => setTrainerSearch(e.target.value)}
-            className="mb-1.5"
-          />
-          <Select value={f.trainerId} onChange={(e) => setF({ ...f, trainerId: e.target.value })}>
-            <option value="">— pick from pool —</option>
-            {/* Keep selected trainer visible even if filtered out, so the chosen value isn't lost */}
-            {selectedTrainer && !filteredTrainers.some((t) => t.id === selectedTrainer.id) && (
-              <option key={selectedTrainer.id} value={selectedTrainer.id}>
-                {selectedTrainer.name}{selectedTrainer.skills ? ` · ${selectedTrainer.skills.slice(0, 50)}` : ''}
-              </option>
-            )}
-            {filteredTrainers.map((t: any) => (
-              <option key={t.id} value={t.id}>{t.name}{t.skills ? ` · ${t.skills.slice(0, 50)}` : ''}</option>
-            ))}
-          </Select>
-          <div className="text-[10px] muted mt-1">
-            {trainerSearch
-              ? `${filteredTrainers.length} match${filteredTrainers.length === 1 ? '' : 'es'}${filteredTrainers.length === 0 ? ' — clear search to see all' : ''}`
-              : `${(trainers || []).length} trainers in pool · type to filter`}
-            {selectedTrainer && <> · Selected: <strong>{selectedTrainer.name}</strong></>}
-          </div>
-        </div>
-        <div className="form-row">
-          <Label>Outcome</Label>
-          <Select value={f.outcome} onChange={(e) => setF({ ...f, outcome: e.target.value })}>
+    <div
+      className="rounded-xl p-3 space-y-2"
+      style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+    >
+      {/* Row header */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: 'var(--brand-textSecondary)' }}>
+          Resource {index + 1}
+          {selected && <span className="ml-1.5 normal-case font-semibold" style={{ color: 'var(--accent-gold)' }}>— {selected.name}</span>}
+        </span>
+        {canRemove && (
+          <button
+            onClick={onRemove}
+            className="text-[10px] font-semibold px-2 py-0.5 rounded"
+            style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--status-red)', border: 'none', cursor: 'pointer' }}
+          >
+            Remove
+          </button>
+        )}
+      </div>
+
+      {/* Trainer picker */}
+      <div>
+        <Label>Trainer</Label>
+        <Input
+          placeholder="Search by name, skill, or phone…"
+          value={row.trainerSearch}
+          onChange={(e) => onChange({ trainerSearch: e.target.value })}
+          className="mb-1"
+        />
+        <Select value={row.trainerId} onChange={(e) => onChange({ trainerId: e.target.value })}>
+          <option value="">— pick trainer —</option>
+          {selected && !filtered.some((t) => t.id === selected.id) && (
+            <option value={selected.id}>{selected.name}{selected.skills ? ` · ${selected.skills.slice(0, 50)}` : ''}</option>
+          )}
+          {filtered.map((t: any) => (
+            <option key={t.id} value={t.id}>{t.name}{t.skills ? ` · ${t.skills.slice(0, 50)}` : ''}</option>
+          ))}
+        </Select>
+      </div>
+
+      {/* Outcome + Client decision side-by-side */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label>Overall outcome</Label>
+          <Select value={row.outcome} onChange={(e) => onChange({ outcome: e.target.value })}>
             <option value="Positive">Positive</option>
             <option value="Neutral">Neutral</option>
             <option value="Negative">Negative</option>
           </Select>
         </div>
-        <div className="form-row">
-          <Label>Feedback / what happened</Label>
-          <Textarea rows={3} value={f.feedback} onChange={(e) => setF({ ...f, feedback: e.target.value })} placeholder="What did the client say? Any notable points?" />
+        <div>
+          <Label>Client's decision</Label>
+          <Select
+            value={row.trainerOutcome}
+            onChange={(e) => onChange({ trainerOutcome: e.target.value })}
+            style={{ color: row.trainerOutcome ? outcomeColor : undefined, fontWeight: row.trainerOutcome ? 600 : undefined }}
+          >
+            <option value="">— pending —</option>
+            <option value="Selected">Selected ✓</option>
+            <option value="Shortlisted">Shortlisted</option>
+            <option value="Rejected">Rejected ✗</option>
+            <option value="PendingClientFeedback">Pending client feedback</option>
+          </Select>
         </div>
-        <div className="form-row">
-          <Label>Next steps (optional)</Label>
-          <Textarea rows={2} value={f.nextSteps} onChange={(e) => setF({ ...f, nextSteps: e.target.value })} placeholder="Follow-ups, if any" />
+      </div>
+
+      {/* Feedback */}
+      <div>
+        <Label>Client feedback for this resource</Label>
+        <Textarea
+          rows={2}
+          value={row.feedback}
+          onChange={(e) => onChange({ feedback: e.target.value })}
+          placeholder="What did the client say about this trainer specifically?"
+        />
+      </div>
+
+      {/* Next steps */}
+      <div>
+        <Label>Next steps (optional)</Label>
+        <Input
+          value={row.nextSteps}
+          onChange={(e) => onChange({ nextSteps: e.target.value })}
+          placeholder="e.g. Client wants another demo, shortlisted for final round…"
+        />
+      </div>
+    </div>
+  );
+}
+
+function BackfillDemoModal({ clientId, onClose }: { clientId: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+
+  const [actualDate, setActualDate] = useState(todayISO());
+  const [actualTimeIst, setActualTimeIst] = useState('');
+  const [rows, setRows] = useState<TrainerRow[]>([newRow()]);
+
+  const { data: trainers = [] } = useQuery<any[]>({
+    queryKey: ['trainers'],
+    queryFn: () => api.get('/trainers').then((r) => r.data),
+  });
+
+  function patchRow(key: number, patch: Partial<TrainerRow>) {
+    setRows((prev) => prev.map((r) => r._key === key ? { ...r, ...patch } : r));
+  }
+  function removeRow(key: number) {
+    setRows((prev) => prev.filter((r) => r._key !== key));
+  }
+
+  const [saving, setSaving] = useState(false);
+  async function save() {
+    if (!actualDate) return;
+    setSaving(true);
+    try {
+      for (const row of rows) {
+        await api.post(`/clients/${clientId}/demos/backfill`, {
+          trainerId: row.trainerId || undefined,
+          actualDate,
+          actualTimeIst: actualTimeIst || undefined,
+          outcome: row.outcome,
+          trainerOutcome: row.trainerOutcome || undefined,
+          feedback: row.feedback || undefined,
+          nextSteps: row.nextSteps || undefined,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ['demos', { clientId, trainerId: undefined }] });
+      qc.invalidateQueries({ queryKey: ['client', clientId] });
+      showToast(`${rows.length} past demo${rows.length > 1 ? 's' : ''} added to history`);
+      onClose();
+    } catch (e: any) {
+      showToast(e?.response?.data?.error || 'Failed to save', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        title="Add past demo"
+        description="Log a demo session with separate feedback for each resource. Each trainer gets their own outcome and client feedback."
+        className="max-w-2xl"
+      >
+        {/* Date + time — shared across all trainers in this session */}
+        <div className="grid md:grid-cols-2 gap-2.5 mb-1">
+          <div className="form-row">
+            <Label>Actual date *</Label>
+            <Input type="date" value={actualDate} onChange={(e) => setActualDate(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <Label>Actual time (IST)</Label>
+            <Input type="time" value={actualTimeIst} onChange={(e) => setActualTimeIst(e.target.value)} />
+          </div>
         </div>
+
+        {/* Per-trainer rows */}
+        <div className="space-y-3 my-2 max-h-[50vh] overflow-y-auto pr-1">
+          {rows.map((row, idx) => (
+            <TrainerFeedbackRow
+              key={row._key}
+              row={row}
+              trainers={trainers}
+              onChange={(patch) => patchRow(row._key, patch)}
+              onRemove={() => removeRow(row._key)}
+              canRemove={rows.length > 1}
+              index={idx}
+            />
+          ))}
+        </div>
+
+        <button
+          onClick={() => setRows((prev) => [...prev, newRow()])}
+          className="w-full py-2 text-[12px] font-semibold rounded-lg transition-all"
+          style={{
+            background: 'transparent',
+            border: '1px dashed var(--brand-borderSoft)',
+            color: 'var(--accent-gold)',
+            cursor: 'pointer',
+          }}
+        >
+          + Add another resource
+        </button>
+
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!f.actualDate || save.isPending} onClick={() => save.mutate()}>
-            {save.isPending ? 'Saving…' : 'Add to history'}
+          <Button variant="primary" disabled={!actualDate || saving} onClick={save}>
+            {saving ? 'Saving…' : `Add ${rows.length} resource${rows.length > 1 ? 's' : ''} to history`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -216,13 +348,34 @@ export function DemoHistoryCard({ clientId, trainerId }: Props) {
                     <span> · conducted by {d.conductedBy.name}</span>
                   )}
                 </div>
+                {/* Per-trainer client decision badge */}
+                {d.trainerOutcome && (() => {
+                  const tc =
+                    d.trainerOutcome === 'Selected'             ? '#22c55e' :
+                    d.trainerOutcome === 'Shortlisted'          ? '#f59e0b' :
+                    d.trainerOutcome === 'Rejected'             ? '#ef4444' :
+                    d.trainerOutcome === 'PendingClientFeedback'? '#94a3b8' :
+                    '#94a3b8';
+                  const label =
+                    d.trainerOutcome === 'PendingClientFeedback' ? 'Pending feedback' : d.trainerOutcome;
+                  return (
+                    <div className="mt-1.5">
+                      <span
+                        className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase"
+                        style={{ background: tc + '22', color: tc, border: `1px solid ${tc}44` }}
+                      >
+                        {label}
+                      </span>
+                    </div>
+                  );
+                })()}
                 {d.scheduledDate && d.actualDate && d.scheduledDate !== d.actualDate && (
                   <div className="muted text-[11px] mt-0.5">
                     Was scheduled for <Calendar size={10} className="inline-block"/> {d.scheduledDate} · rescheduled to {d.actualDate}
                   </div>
                 )}
                 {d.feedback && (
-                  <div className="mt-1.5"><strong>Feedback:</strong> <span className="muted">{d.feedback}</span></div>
+                  <div className="mt-1.5"><strong>Client feedback:</strong> <span className="muted">{d.feedback}</span></div>
                 )}
                 {d.nextSteps && (
                   <div className="mt-0.5"><strong>Next steps:</strong> <span className="muted">{d.nextSteps}</span></div>

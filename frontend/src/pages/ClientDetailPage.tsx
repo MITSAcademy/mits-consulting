@@ -1794,11 +1794,11 @@ function DemoDoneModal({ client, onClose }: any) {
   });
   // Demos that were scheduled for this round (not yet marked Done)
   const pendingDemos: any[] = (allDemos || []).filter((d: any) => d.status === 'Scheduled' && d.trainer);
-  // Per-trainer state: trainerOutcome + feedback
-  const [trainerFeedbacks, setTrainerFeedbacks] = useState<Record<string, { trainerOutcome: string; feedback: string }>>({});
-  function setTF(demoId: string, patch: Partial<{ trainerOutcome: string; feedback: string }>) {
+  // Per-trainer state: trainerOutcome + feedback + nextSteps
+  const [trainerFeedbacks, setTrainerFeedbacks] = useState<Record<string, { trainerOutcome: string; feedback: string; nextSteps: string }>>({});
+  function setTF(demoId: string, patch: Partial<{ trainerOutcome: string; feedback: string; nextSteps: string }>) {
     setTrainerFeedbacks((prev) => {
-      const existing = prev[demoId] || { trainerOutcome: '', feedback: '' };
+      const existing = prev[demoId] || { trainerOutcome: '', feedback: '', nextSteps: '' };
       return { ...prev, [demoId]: { ...existing, ...patch } };
     });
   }
@@ -1826,11 +1826,12 @@ function DemoDoneModal({ client, onClose }: any) {
       // 2. Per-trainer demo row updates (non-fatal)
       for (const demo of pendingDemos) {
         const tf = trainerFeedbacks[demo.id];
-        if (tf && (tf.trainerOutcome || tf.feedback)) {
+        if (tf && (tf.trainerOutcome || tf.feedback || tf.nextSteps)) {
           try {
             await api.patch(`/clients/${client.id}/demos/${demo.id}`, {
               trainerOutcome: tf.trainerOutcome || null,
               feedback: tf.feedback || null,
+              nextSteps: tf.nextSteps || null,
             });
           } catch { /* non-fatal */ }
         }
@@ -1935,13 +1936,21 @@ function DemoDoneModal({ client, onClose }: any) {
                         </Select>
                       </div>
                       <div className="form-row mb-0">
-                        <Label>Comments for this trainer</Label>
+                        <Label>Client feedback for this trainer</Label>
                         <Input
                           value={tf.feedback}
                           onChange={(e) => setTF(demo.id, { feedback: e.target.value })}
-                          placeholder="Client's specific remarks…"
+                          placeholder="What the client said about this trainer…"
                         />
                       </div>
+                    </div>
+                    <div className="form-row mb-0 mt-2">
+                      <Label>Next steps for this trainer</Label>
+                      <Input
+                        value={tf.nextSteps}
+                        onChange={(e) => setTF(demo.id, { nextSteps: e.target.value })}
+                        placeholder="e.g. Not fit — lack of GPS experience, need another demo…"
+                      />
                     </div>
                   </div>
                 );

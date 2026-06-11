@@ -1263,7 +1263,7 @@ clientsRouter.post('/:id/demos/backfill', async (req: AuthedRequest, res) => {
   if (!allowed.includes(req.user!.role)) {
     return res.status(403).json({ error: 'Only Samita, Anjali, Taran or admin can backfill demos' });
   }
-  const { trainerId, actualDate, actualTimeIst, outcome, feedback, nextSteps } = req.body || {};
+  const { trainerId, actualDate, actualTimeIst, outcome, trainerOutcome, feedback, nextSteps } = req.body || {};
   if (!actualDate) return res.status(400).json({ error: 'actualDate required' });
   const client = await prisma.client.findUnique({
     where: { id: req.params.id },
@@ -1281,6 +1281,7 @@ clientsRouter.post('/:id/demos/backfill', async (req: AuthedRequest, res) => {
       actualDate,
       actualTimeIst: actualTimeIst || null,
       outcome: outcome || null,
+      trainerOutcome: trainerOutcome || null,
       feedback: feedback || null,
       nextSteps: nextSteps || null,
       status: 'Done',
