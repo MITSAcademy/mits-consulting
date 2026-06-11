@@ -65,8 +65,8 @@ export const BACK_OPTIONS: Record<string, string[]> = {
   DemoScheduled:       ['TrainerMatched', 'WithRecruiters', 'InternalSearch'],
   DemoDone:            ['DemoScheduled', 'WithRecruiters', 'InternalSearch'],
   FeedbackPending:     ['DemoDone', 'WithRecruiters'],
-  SaleClosing:         ['DemoScheduled', 'DemoDone', 'FeedbackPending'],
-  SaleWon:             ['SaleClosing'],
+  SaleClosing:         ['InternalSearch', 'WithRecruiters', 'DemoScheduled', 'DemoDone', 'FeedbackPending'],
+  SaleWon:             ['SaleClosing', 'InternalSearch', 'WithRecruiters'],
   Active:              ['SaleWon'],
 };
 

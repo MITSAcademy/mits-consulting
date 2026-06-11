@@ -376,7 +376,7 @@ const STAGE_TRANSITION_PERMS: Record<string, string[]> = {
   IntakeSent:          ['founder', 'manager', 'demo_lead', 'demo_intake'],
   IntakeReceived:      ['founder', 'manager', 'demo_lead', 'demo_intake'],
   InternalSearch:      ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'],
-  WithRecruiters:      ['founder', 'manager', 'demo_lead', 'demo_intake'],
+  WithRecruiters:      ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'],
   VerificationPending: ['founder', 'manager', 'demo_lead', 'demo_intake', 'recruiter'],
   TrainerMatched:      ['founder', 'manager', 'demo_lead', 'demo_intake'],
   DemoScheduled:       ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'],
@@ -421,8 +421,8 @@ const BACK_TRANSITIONS: Record<string, string[]> = {
   DemoScheduled:       ['DemoDone', 'FeedbackPending', 'Dormant'],
   DemoDone:            ['FeedbackPending', 'SaleClosing', 'Dormant'],
   FeedbackPending:     ['SaleClosing', 'Hold', 'WithRecruiters', 'Dormant'],
-  SaleClosing:         ['SaleWon', 'DemoScheduled', 'FeedbackPending', 'Dormant'],
-  SaleWon:             ['Active', 'Dormant'],
+  SaleClosing:         ['SaleWon', 'DemoScheduled', 'FeedbackPending', 'InternalSearch', 'WithRecruiters', 'Dormant'],
+  SaleWon:             ['Active', 'SaleClosing', 'InternalSearch', 'WithRecruiters', 'Dormant'],
   Active:              ['Hold', 'LeverageGranted', 'Dormant'],
 };
 
