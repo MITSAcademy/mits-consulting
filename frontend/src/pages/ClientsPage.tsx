@@ -61,8 +61,11 @@ export function ClientsPage() {
 
   const showAmt = canSeeFinancial(user.role);
   // Filter to "mine" based on the user's role and ownership field on the client.
+  const PIPELINE_STAGES = ['Lead','IntakeSent','IntakeReceived','InternalSearch','WithRecruiters','VerificationPending','TrainerMatched','DemoScheduled','DemoDone','FeedbackPending'];
   const isMine = (c: any) => {
-    if (user.role === 'demo_intake' || user.role === 'demo_lead') return c.intakeOwnerId === user.id;
+    // demo_intake works as a team — "Mine" shows all pipeline clients, not just their own
+    if (user.role === 'demo_intake') return PIPELINE_STAGES.includes(c.lifecycle);
+    if (user.role === 'demo_lead') return c.intakeOwnerId === user.id;
     if (user.role === 'recruiter') {
       // recruiter "owns" a client if they have an open/proposed sourcing request on it
       return (c.sourcingRequests || []).some((r: any) => r.sentToId === user.id);
