@@ -173,14 +173,6 @@ export function MySessionsPage() {
         t.trainer?.skills?.toLowerCase().includes(searchLower))
     : (mySessions || []);
 
-  // Group sessions by host (AM) for the sheet view
-  const sessionsByHost = filteredSessions.reduce((acc: Record<string, any[]>, t: any): Record<string, any[]> => {
-    const hostName = t.hostedByDefault?.name || 'Unassigned';
-    if (!acc[hostName]) acc[hostName] = [];
-    acc[hostName].push(t);
-    return acc;
-  }, {} as Record<string, any[]>);
-  const hostGroups = Object.entries(sessionsByHost).sort(([a], [b]) => a.localeCompare(b)) as [string, any[]][];
   const sessionCount = filteredSessions.length;
 
   return (
@@ -210,7 +202,7 @@ export function MySessionsPage() {
         }
       />
       <Page>
-        {/* ── AM / lead: sheet grouped by host ── */}
+        {/* ── AM / lead: flat sheet table matching reference spreadsheet ── */}
         {isAM && (
           <div className="mb-6">
             {mySessionsLoading ? (
@@ -222,15 +214,11 @@ export function MySessionsPage() {
                 <div className="text-[12px] muted mt-1">Sessions will appear here once Bhavneet / Mitali allocates calls to you from Regular Trainings.</div>
               </div>
             ) : (
-              <div className="space-y-6">
-                {hostGroups.map(([hostName, rows]) => (
-                  <AMHostGroup
-                    key={hostName}
-                    hostName={hostName}
-                    rows={rows}
-                    onChanged={() => qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] })}
-                  />
-                ))}
+              <div>
+                <AMSheetTable
+                  rows={filteredSessions}
+                  onChanged={() => qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] })}
+                />
               </div>
             )}
           </div>
@@ -632,7 +620,12 @@ function TaskRow({ t, onDone }: { t: any; onDone: () => void }) {
   );
 }
 
-/* ──────────────────────── AM Host Group (sheet grouped by host) ─────────── */
+/* ──────────────────────────────────────────────────────────────────────────
+ * AM Sheet — flat table matching the reference Google Sheet exactly.
+ * Columns: Clients | Trainers | Skills | Permanent | Temporary | Tool | Time
+ *          | Session Happened | Comments | Actions
+ * Row color: red bg when lastSessionComment has content, plain otherwise.
+ * ─────────────────────────────────────────────────────────────────────────*/
 
 const SESSION_STATUS_OPTIONS = [
   { value: '', label: '— not set —' },
@@ -642,42 +635,39 @@ const SESSION_STATUS_OPTIONS = [
   { value: 'Rescheduled', label: 'Rescheduled' },
 ];
 
-function AMHostGroup({ hostName, rows, onChanged }: { hostName: string; rows: any[]; onChanged: () => void }) {
-  const accentColor = hostName === 'Kashish'
-    ? 'var(--accent-gold)'
-    : hostName === 'Muskan'
-    ? 'var(--status-blue)'
-    : hostName === 'Bhavneet'
-    ? 'var(--status-green)'
-    : 'var(--brand-textSecondary)';
+const TOOL_OPTIONS = ['Zoom', 'GoToMeeting', 'Teams', 'Google Meet', 'Phone', 'Other'];
+
+function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void }) {
+  const TH = ({ children, w }: { children: React.ReactNode; w?: string }) => (
+    <th
+      className="text-left px-2 py-2 font-bold text-[10px] uppercase tracking-[0.08em] whitespace-nowrap"
+      style={{ color: '#fff', background: '#1a3a5c', borderRight: '1px solid rgba(255,255,255,0.15)', width: w }}
+    >
+      {children}
+    </th>
+  );
 
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-2">
-        <div className="text-[11px] uppercase tracking-[0.14em] font-bold flex items-center gap-2" style={{ color: accentColor }}>
-          <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: accentColor, boxShadow: `0 0 8px ${accentColor}` }} />
-          {hostName}
-        </div>
-        <span className="text-[11px] muted">{rows.length} client{rows.length !== 1 ? 's' : ''}</span>
-      </div>
-      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--brand-border)', boxShadow: 'var(--shadow-sm)' }}>
-        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }}>
+    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--brand-border)', boxShadow: 'var(--shadow-sm)' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
           <thead>
-            <tr style={{ background: 'var(--bg-input)', borderBottom: '1px solid var(--brand-border)' }}>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '13%' }}>Client</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '10%' }}>Trainer</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '12%' }}>Skills</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '5%' }}>Tool</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '6%' }}>Time IST</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '14%' }}>Session happened</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '18%' }}>Comments</th>
-              <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '5%' }}>Wk#</th>
-              <th className="text-right px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '17%' }}>Actions</th>
+            <tr>
+              <TH w="14%">Clients</TH>
+              <TH w="9%">Trainers</TH>
+              <TH w="10%">Skills</TH>
+              <TH w="7%">Permanent</TH>
+              <TH w="7%">Temporary</TH>
+              <TH w="5%">Tool</TH>
+              <TH w="5%">Time</TH>
+              <TH w="12%">Session Happened</TH>
+              <TH w="16%">Comments</TH>
+              <TH w="15%">Actions</TH>
             </tr>
           </thead>
           <tbody>
-            {rows.map((t: any, i: number) => (
-              <AMSheetRow key={t.id} t={t} isLast={i === rows.length - 1} onChanged={onChanged} />
+            {rows.map((t: any) => (
+              <AMSheetRow key={t.id} t={t} onChanged={onChanged} />
             ))}
           </tbody>
         </table>
@@ -686,13 +676,20 @@ function AMHostGroup({ hostName, rows, onChanged }: { hostName: string; rows: an
   );
 }
 
-function AMSheetRow({ t, isLast, onChanged }: { t: any; isLast: boolean; onChanged: () => void }) {
+function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const modeIcon = MEETING_MODE_ICONS[t.meetingMode] || '💻';
   const skills = t.trainer?.skills || '—';
-  const [editingComment, setEditingComment] = useState(false);
+  const permanentName = t.hostedByDefault?.name || '—';
+  const temporaryName = t.temporaryHost?.name || permanentName;
+  const hasComment = !!(t.lastSessionComment && t.lastSessionComment.trim());
+
+  const rowBg = hasComment ? 'rgba(200,30,30,0.82)' : 'var(--bg-card)';
+  const rowColor = hasComment ? '#fff' : 'var(--brand-text)';
+  const cellBorder = '1px solid rgba(255,255,255,0.10)';
+
   const [commentVal, setCommentVal] = useState(t.lastSessionComment || '');
+  const [editingComment, setEditingComment] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
 
   const updateField = useMutation({
@@ -701,12 +698,12 @@ function AMSheetRow({ t, isLast, onChanged }: { t: any; isLast: boolean; onChang
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
-  const statusColor = !t.lastSessionStatus ? 'var(--brand-textMuted)'
-    : t.lastSessionStatus === 'Yes-Proper session' ? 'var(--status-green)'
-    : t.lastSessionStatus === 'No' ? 'var(--status-red)'
-    : 'var(--status-amber)';
+  const statusColor = !t.lastSessionStatus
+    ? (hasComment ? 'rgba(255,255,255,0.7)' : 'var(--brand-textMuted)')
+    : t.lastSessionStatus === 'Yes-Proper session' ? (hasComment ? '#90ff90' : 'var(--status-green)')
+    : t.lastSessionStatus === 'No' ? (hasComment ? '#ffaaaa' : 'var(--status-red)')
+    : (hasComment ? '#ffd080' : 'var(--status-amber)');
 
-  // WhatsApp links
   const clientWa = t.client?.whatsappGroupLink
     ? t.client.whatsappGroupLink
     : (t.client?.phoneCode && t.client?.phoneDigits ? waLink(t.client.phoneCode, t.client.phoneDigits) : null);
@@ -714,36 +711,40 @@ function AMSheetRow({ t, isLast, onChanged }: { t: any; isLast: boolean; onChang
     ? waLink(t.trainer.phoneCode, t.trainer.phoneDigits)
     : null;
 
+  const cell = { color: rowColor, borderRight: cellBorder, borderBottom: cellBorder };
+
   return (
     <>
-      <tr style={{ borderTop: '1px solid var(--brand-borderSoft)', background: 'var(--bg-card)' }}
-          className="hover:bg-[var(--bg-input)] transition-colors">
-        {/* Client */}
-        <td className="px-3 py-2.5">
+      <tr style={{ background: rowBg }}>
+        <td className="px-2 py-2" style={cell}>
           {t.client
-            ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: 'var(--brand-text)' }}>{t.client.name}</Link>
-            : <span className="font-semibold" style={{ color: 'var(--brand-text)' }}>{t.name}</span>
+            ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>{t.client.name}</Link>
+            : <span className="font-semibold">{t.name}</span>
           }
         </td>
-        {/* Trainer */}
-        <td className="px-3 py-2.5" style={{ color: 'var(--brand-textSecondary)' }}>
-          {t.trainer?.name || <span className="muted">—</span>}
+        <td className="px-2 py-2" style={cell}>{t.trainer?.name || <span style={{ opacity: 0.5 }}>—</span>}</td>
+        <td className="px-2 py-2" style={{ ...cell, maxWidth: 0 }}>
+          <span className="block truncate text-[11px]" style={{ opacity: 0.85 }} title={skills}>{skills}</span>
         </td>
-        {/* Skills */}
-        <td className="px-3 py-2.5" style={{ maxWidth: 0, width: '12%' }}>
-          <span className="block truncate muted text-[11px]" title={skills}>{skills}</span>
-        </td>
-        {/* Tool */}
-        <td className="px-3 py-2.5 text-[13px]" title={t.meetingMode || 'Zoom'}>{modeIcon}</td>
-        {/* Time IST */}
-        <td className="px-3 py-2.5 mono font-semibold text-[12px]" style={{ color: 'var(--accent-gold)' }}>
-          {t.defaultTimeIst || <span className="muted text-[10px]">—</span>}
-        </td>
-        {/* Session status */}
-        <td className="px-3 py-2.5">
+        <td className="px-2 py-2 font-semibold text-[11px]" style={cell}>{permanentName}</td>
+        <td className="px-2 py-2 text-[11px]" style={cell}>{temporaryName}</td>
+        <td className="px-2 py-2 text-[11px]" style={cell}>
           <select
-            className="text-[11px] rounded px-1.5 py-0.5 font-medium cursor-pointer"
-            style={{ background: 'transparent', color: statusColor, border: 'none', outline: 'none', minWidth: 120 }}
+            className="text-[11px] cursor-pointer"
+            style={{ background: 'transparent', color: rowColor, border: 'none', outline: 'none' }}
+            value={t.meetingMode || 'Zoom'}
+            onChange={(e) => updateField.mutate({ meetingMode: e.target.value })}
+          >
+            {TOOL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </td>
+        <td className="px-2 py-2 mono font-bold text-[12px]" style={cell}>
+          {t.defaultTimeIst || <span style={{ opacity: 0.4 }}>—</span>}
+        </td>
+        <td className="px-2 py-2" style={cell}>
+          <select
+            className="text-[11px] font-medium cursor-pointer"
+            style={{ background: 'transparent', color: statusColor, border: 'none', outline: 'none' }}
             value={t.lastSessionStatus || ''}
             onChange={(e) => updateField.mutate({ lastSessionStatus: e.target.value || null })}
           >
@@ -752,14 +753,13 @@ function AMSheetRow({ t, isLast, onChanged }: { t: any; isLast: boolean; onChang
             ))}
           </select>
         </td>
-        {/* Comments — inline editable */}
-        <td className="px-3 py-2.5 text-[11px]" style={{ maxWidth: 0, width: '18%' }}>
+        <td className="px-2 py-2 text-[11px]" style={{ ...cell, maxWidth: 0 }}>
           {editingComment ? (
             <div className="flex gap-1 items-center">
               <input
                 autoFocus
                 className="flex-1 text-[11px] rounded px-1.5 py-0.5"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none', minWidth: 0 }}
+                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.4)', color: '#fff', outline: 'none', minWidth: 0 }}
                 value={commentVal}
                 onChange={(e) => setCommentVal(e.target.value)}
                 onKeyDown={(e) => {
@@ -768,94 +768,74 @@ function AMSheetRow({ t, isLast, onChanged }: { t: any; isLast: boolean; onChang
                 }}
               />
               <button onClick={() => { updateField.mutate({ lastSessionComment: commentVal || null }); setEditingComment(false); }}
-                style={{ color: 'var(--status-green)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>✓</button>
+                style={{ color: '#90ff90', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14 }}>✓</button>
             </div>
           ) : (
             <span
-              className="block truncate cursor-pointer hover:underline"
-              style={{ color: commentVal ? 'var(--brand-textSecondary)' : 'var(--brand-textMuted)' }}
+              className="block truncate cursor-pointer"
+              style={{ color: hasComment ? '#fff' : 'rgba(150,160,180,0.8)', fontStyle: commentVal ? 'normal' : 'italic' }}
               title={commentVal || 'Click to add comment'}
               onClick={() => setEditingComment(true)}
             >
-              {commentVal || <span className="muted text-[10px]">+ comment</span>}
+              {commentVal || 'Smooth'}
             </span>
           )}
         </td>
-        {/* Weekly session count */}
-        <td className="px-3 py-2.5 text-center">
-          <input
-            type="number"
-            min={0} max={31}
-            className="text-[11px] rounded text-center font-semibold"
-            style={{ background: 'transparent', border: 'none', outline: 'none', width: 28, color: 'var(--accent-gold)' }}
-            value={t.weeklySessionCount ?? ''}
-            placeholder="—"
-            onChange={(e) => updateField.mutate({ weeklySessionCount: e.target.value ? Number(e.target.value) : null })}
-          />
-        </td>
-        {/* Actions */}
-        <td className="px-3 py-2.5 text-right">
-          <div className="flex items-center justify-end gap-1">
-            {/* WhatsApp group */}
+        <td className="px-2 py-2" style={{ ...cell, borderRight: 'none' }}>
+          <div className="flex items-center gap-1 justify-end flex-wrap">
             {clientWa && (
-              <a href={clientWa} target="_blank" rel="noreferrer"
-                title="WhatsApp group / client"
-                className="inline-flex items-center justify-center rounded p-1 hover-lift"
-                style={{ background: 'rgba(37,211,102,0.12)', color: '#25d366' }}>
-                <MessageCircle size={13} />
+              <a href={clientWa} target="_blank" rel="noreferrer" title="WhatsApp client/group"
+                className="inline-flex items-center justify-center rounded p-1"
+                style={{ background: 'rgba(37,211,102,0.22)', color: '#25d366' }}>
+                <MessageCircle size={12} />
               </a>
             )}
-            {/* WhatsApp trainer */}
             {trainerWa && (
-              <a href={trainerWa} target="_blank" rel="noreferrer"
-                title="WhatsApp trainer"
-                className="inline-flex items-center justify-center rounded p-1 hover-lift"
-                style={{ background: 'rgba(37,211,102,0.08)', color: '#25d366', opacity: 0.8 }}>
-                <Send size={12} />
+              <a href={trainerWa} target="_blank" rel="noreferrer" title="WhatsApp trainer"
+                className="inline-flex items-center justify-center rounded p-1"
+                style={{ background: 'rgba(37,211,102,0.15)', color: '#25d366' }}>
+                <Send size={11} />
               </a>
             )}
-            {/* Feedback toggle */}
             <button
-              title="Log feedback"
+              title="Client & trainer feedback"
               onClick={() => setShowFeedback((v) => !v)}
-              className="inline-flex items-center justify-center rounded p-1 hover-lift"
-              style={{ background: showFeedback ? 'rgba(99,179,237,0.15)' : 'var(--bg-input)', color: 'var(--status-blue)', border: 'none', cursor: 'pointer' }}>
-              <MessageSquare size={12} />
+              className="inline-flex items-center justify-center rounded p-1"
+              style={{ background: showFeedback ? 'rgba(99,179,237,0.3)' : 'rgba(99,179,237,0.12)', color: '#63b3ed', border: 'none', cursor: 'pointer' }}>
+              <MessageSquare size={11} />
             </button>
-            {/* Schedule */}
             <AMScheduleButton training={t} onSent={onChanged} />
           </div>
         </td>
       </tr>
-      {/* Expandable feedback row */}
       {showFeedback && (
-        <tr style={{ background: 'rgba(99,179,237,0.04)', borderTop: '1px solid var(--brand-borderSoft)' }}>
-          <td colSpan={9} className="px-4 py-3">
+        <tr style={{ background: hasComment ? 'rgba(180,20,20,0.65)' : 'rgba(99,179,237,0.06)', borderBottom: cellBorder }}>
+          <td colSpan={10} className="px-4 py-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <div className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: 'var(--status-blue)' }}>Client feedback</div>
+                <div className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: '#63b3ed' }}>Client feedback</div>
                 <textarea
                   rows={2}
                   className="w-full text-[11px] rounded-lg px-2 py-1.5 resize-none"
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none' }}
+                  style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', outline: 'none' }}
                   placeholder="How did the client respond? Any issues?"
                   defaultValue={t.lastClientFeedback || ''}
                   onBlur={(e) => { if (e.target.value !== (t.lastClientFeedback || '')) updateField.mutate({ lastClientFeedback: e.target.value || null }); }}
                 />
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: 'var(--status-green)' }}>Trainer feedback</div>
+                <div className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: '#90ff90' }}>Trainer feedback</div>
                 <textarea
                   rows={2}
                   className="w-full text-[11px] rounded-lg px-2 py-1.5 resize-none"
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none' }}
+                  style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', outline: 'none' }}
                   placeholder="Trainer performance, punctuality, content quality…"
                   defaultValue={t.lastTrainerFeedback || ''}
                   onBlur={(e) => { if (e.target.value !== (t.lastTrainerFeedback || '')) updateField.mutate({ lastTrainerFeedback: e.target.value || null }); }}
                 />
               </div>
             </div>
-            <div className="text-[10px] muted mt-1.5">Changes save automatically on blur (click outside the box).</div>
+            <div className="text-[10px] mt-1.5" style={{ opacity: 0.6 }}>Auto-saves on blur.</div>
           </td>
         </tr>
       )}

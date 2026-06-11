@@ -129,7 +129,7 @@ regularTrainingsRouter.patch('/trainings/:id', async (req: AuthedRequest, res) =
   if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const b = req.body || {};
   const data: any = {};
-  for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'defaultTimeIst', 'meetingMode', 'lastSessionStatus', 'lastSessionComment', 'lastClientFeedback', 'lastTrainerFeedback', 'lastSessionDate', 'weeklySessionCount', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId']) {
+  for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'defaultTimeIst', 'meetingMode', 'lastSessionStatus', 'lastSessionComment', 'lastClientFeedback', 'lastTrainerFeedback', 'lastSessionDate', 'weeklySessionCount', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId', 'temporaryHostId']) {
     if (k in b) data[k] = b[k] === '' ? null : b[k];
   }
   // Capture old host before update to detect reassignment
@@ -307,6 +307,7 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
       lastClientFeedback: true, lastTrainerFeedback: true,
       lastSessionDate: true, weeklySessionCount: true, notes: true,
       hostedByDefault: { select: { id: true, name: true } },
+      temporaryHost:   { select: { id: true, name: true } },
       client:  { select: { id: true, name: true, whatsappGroupLink: true, phoneCode: true, phoneDigits: true } },
       trainer: { select: { id: true, name: true, skills: true, phoneCode: true, phoneDigits: true } },
       sessions: {

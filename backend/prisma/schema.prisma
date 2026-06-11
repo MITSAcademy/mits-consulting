@@ -178,6 +178,7 @@ model User {
   notifications      Notification[]
   callLogs           CallLog[]
   hostedRegularTrainings RegularTraining[]  @relation("RegularTrainingHost")
+  tempHostedTrainings    RegularTraining[]  @relation("RegularTrainingTempHost")
   hostedTrainingSessions TrainingSession[]  @relation("TrainingSessionHost")
 }
 
@@ -618,9 +619,12 @@ model RegularTraining {
   client                   Client?  @relation("RegularTrainingClient", fields: [clientId], references: [id], onDelete: SetNull)
   trainerId                String?
   trainer                  Trainer? @relation(fields: [trainerId], references: [id], onDelete: SetNull)
-  // Default host — whoever usually runs this training (Mitali, Bhavneet, Muskan, Kashish)
+  // Permanent host — the fixed AM who owns this training long-term (Kashish/Muskan)
   hostedByDefaultId        String?
   hostedByDefault          User?    @relation("RegularTrainingHost", fields: [hostedByDefaultId], references: [id], onDelete: SetNull)
+  // Temporary host — who is covering this training this week (defaults to hostedByDefaultId)
+  temporaryHostId          String?
+  temporaryHost            User?    @relation("RegularTrainingTempHost", fields: [temporaryHostId], references: [id], onDelete: SetNull)
   // Recording metadata — no password ever, just email + folder URL.
   recordingAccountEmail    String?                         // "jobstraining44@gmail.com"
   recordingAccountLabel    String?                         // "Account 1", "Trainer recording"
