@@ -234,6 +234,10 @@ trainersRouter.post('/', async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of fields) if (f in req.body) data[f] = req.body[f];
   if (!data.name) return res.status(400).json({ error: 'Name required' });
+  if (data.phoneDigits) {
+    const existing = await prisma.trainer.findFirst({ where: { phoneDigits: data.phoneDigits } });
+    if (existing) return res.status(409).json({ error: `Phone ${data.phoneDigits} already belongs to trainer "${existing.name}".` });
+  }
   if (!data.recruitedById) data.recruitedById = req.user!.id;
   const t = await prisma.trainer.create({ data, include });
   await audit(req.user!.id, req.user!.name, 'TRAINER_CREATE', t.name);
@@ -256,6 +260,10 @@ trainersRouter.patch('/:id', async (req: AuthedRequest, res) => {
   }
   const data: any = {};
   for (const f of fields) if (f in req.body) data[f] = req.body[f];
+  if (data.phoneDigits) {
+    const existing = await prisma.trainer.findFirst({ where: { phoneDigits: data.phoneDigits, NOT: { id: req.params.id } } });
+    if (existing) return res.status(409).json({ error: `Phone ${data.phoneDigits} already belongs to trainer "${existing.name}".` });
+  }
   const t = await prisma.trainer.update({ where: { id: req.params.id }, data, include });
   await audit(req.user!.id, req.user!.name, 'TRAINER_UPDATE', t.name);
   res.json(t);

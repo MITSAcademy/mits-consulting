@@ -321,6 +321,10 @@ clientsRouter.post('/', async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of allowedFields) if (f in req.body) data[f] = req.body[f];
   if (!data.name) return res.status(400).json({ error: 'Name required' });
+  if (data.phoneDigits) {
+    const existing = await prisma.client.findFirst({ where: { phoneDigits: data.phoneDigits } });
+    if (existing) return res.status(409).json({ error: `Phone ${data.phoneDigits} already belongs to client "${existing.name}".` });
+  }
   if (!data.leadOwnerId) data.leadOwnerId = req.user!.id;
   const client = await prisma.client.create({ data, include });
   await audit(req.user!.id, req.user!.name, 'CLIENT_CREATE', client.name);
@@ -335,6 +339,10 @@ clientsRouter.patch('/:id', async (req: AuthedRequest, res) => {
     return res.status(403).json({
       error: `Your role (${req.user!.role}) cannot edit: ${check.blocked!.join(', ')}. Use the "Request edit" flow instead.`,
     });
+  }
+  if (data.phoneDigits) {
+    const existing = await prisma.client.findFirst({ where: { phoneDigits: data.phoneDigits, NOT: { id: req.params.id } } });
+    if (existing) return res.status(409).json({ error: `Phone ${data.phoneDigits} already belongs to client "${existing.name}".` });
   }
   const client = await prisma.client.update({ where: { id: req.params.id }, data, include });
   await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${client.name} · ${Object.keys(data).join(',')}`);
