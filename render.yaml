@@ -25,7 +25,7 @@ services:
     autoDeploy: yes
     rootDir: backend
     # Build: install deps, generate Prisma client, apply migrations, seed base data, then compile TS → dist/
-    buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate resolve --rolled-back 20260611150000_regular_training_temp_host && npx prisma migrate deploy && npm run seed && npm run build
+    buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate deploy && npm run seed && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
