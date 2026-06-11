@@ -474,6 +474,7 @@ model Proposal {
   // Post-demo per-trainer feedback (captured by Anjali when she moves a client
   // back to recruiters). Each Pass'd trainer gets their own note + optional
   // evidence file so Aman/Kanchan know specifically what went wrong with each.
+  postDemoStatus        String?  // Selected | Shortlisted | Rejected | NotSuitable | NeedAnotherDemo | PendingClientFeedback
   postDemoNote          String?
   postDemoEvidenceUrl   String?
   postDemoEvidenceKind  String?  // 'Audio' | 'Screenshot' | 'Video'

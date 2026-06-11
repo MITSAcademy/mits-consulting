@@ -388,12 +388,12 @@ sourcingRouter.patch('/proposal/:proposalId', async (req: AuthedRequest, res) =>
   for (const f of [
     'verification', 'verificationNotes', 'notes', 'rateInr',
     'availabilitySlots',
-    'postDemoNote', 'postDemoEvidenceUrl', 'postDemoEvidenceKind',
+    'postDemoStatus', 'postDemoNote', 'postDemoEvidenceUrl', 'postDemoEvidenceKind',
   ]) {
     if (f in req.body) incoming[f] = req.body[f];
   }
   const wantsVerificationEdit = 'verification' in incoming || 'verificationNotes' in incoming;
-  const wantsPostDemoEdit = 'postDemoNote' in incoming || 'postDemoEvidenceUrl' in incoming || 'postDemoEvidenceKind' in incoming;
+  const wantsPostDemoEdit = 'postDemoStatus' in incoming || 'postDemoNote' in incoming || 'postDemoEvidenceUrl' in incoming || 'postDemoEvidenceKind' in incoming;
   const wantsRecruiterEdit = 'notes' in incoming || 'rateInr' in incoming || 'availabilitySlots' in incoming;
   if (wantsVerificationEdit && !TEAM_2.includes(ROLE)) {
     return res.status(403).json({ error: `Your role (${ROLE}) cannot change a proposal's verification status. Use the /pass endpoint or ask Anjali/Taran.` });

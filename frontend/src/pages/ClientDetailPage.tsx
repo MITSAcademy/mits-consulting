@@ -635,6 +635,29 @@ export function ClientDetailPage() {
                     {p.verificationNotes && (
                       <div className="muted text-[11px] italic mt-1">Note: {p.verificationNotes}</div>
                     )}
+                    {/* Post-demo status + feedback (visible once Anjali fills Move-back) */}
+                    {p.postDemoStatus && (() => {
+                      const sc =
+                        p.postDemoStatus === 'Selected'        ? 'var(--status-green)'  :
+                        p.postDemoStatus === 'Shortlisted'     ? 'var(--status-amber)'  :
+                        p.postDemoStatus === 'Rejected'        ? 'var(--status-red)'    :
+                        p.postDemoStatus === 'NotSuitable'     ? 'var(--status-red)'    :
+                        p.postDemoStatus === 'NeedAnotherDemo' ? 'var(--status-blue)'   :
+                        'var(--brand-textMuted)';
+                      const label =
+                        p.postDemoStatus === 'NeedAnotherDemo'      ? 'Need Another Demo'  :
+                        p.postDemoStatus === 'NotSuitable'          ? 'Not Suitable'        :
+                        p.postDemoStatus === 'PendingClientFeedback'? 'Pending Feedback'    :
+                        p.postDemoStatus;
+                      return (
+                        <div className="mt-2 rounded-lg px-2.5 py-1.5" style={{ background: sc + '14', border: `1px solid ${sc}44` }}>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: sc }}>{label}</span>
+                            {p.postDemoNote && <span className="text-[11px]" style={{ color: 'var(--brand-textSecondary)' }}>— {p.postDemoNote}</span>}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               };
@@ -2001,8 +2024,9 @@ function MoveBackwardsModal({ client, onClose }: any) {
   const passedProposals: any[] = (client.sourcingRequests || [])
     .flatMap((r: any) => (r.proposals || []))
     .filter((p: any) => p.verification === 'Pass');
-  const [feedbacks, setFeedbacks] = useState<Record<string, { note: string; url: string; kind: string }>>(
+  const [feedbacks, setFeedbacks] = useState<Record<string, { status: string; note: string; url: string; kind: string }>>(
     () => Object.fromEntries(passedProposals.map((p) => [p.id, {
+      status: p.postDemoStatus || '',
       note: p.postDemoNote || '',
       url: p.postDemoEvidenceUrl || '',
       kind: p.postDemoEvidenceKind || '',
@@ -2035,12 +2059,14 @@ function MoveBackwardsModal({ client, onClose }: any) {
       for (const p of passedProposals) {
         const fb = feedbacks[p.id];
         if (!fb) continue;
-        const hasChange = fb.note !== (p.postDemoNote || '')
+        const hasChange = fb.status !== (p.postDemoStatus || '')
+          || fb.note !== (p.postDemoNote || '')
           || fb.url !== (p.postDemoEvidenceUrl || '')
           || fb.kind !== (p.postDemoEvidenceKind || '');
         if (!hasChange) continue;
         try {
           await api.patch(`/sourcing/proposal/${p.id}`, {
+            postDemoStatus: fb.status || null,
             postDemoNote: fb.note || null,
             postDemoEvidenceUrl: fb.url || null,
             postDemoEvidenceKind: fb.kind || null,
@@ -2102,25 +2128,64 @@ function MoveBackwardsModal({ client, onClose }: any) {
 
             {passedProposals.length > 0 && (
               <div className="form-row">
-                <Label>Per-trainer feedback <span className="muted normal-case ml-1">— sent to the recruiter who proposed each trainer</span></Label>
+                <Label>Resource status &amp; feedback <span className="muted normal-case ml-1">— set status per trainer, recruiters will see this</span></Label>
                 <div className="space-y-3">
                   {passedProposals.map((p: any) => {
-                    const fb = feedbacks[p.id] || { note: '', url: '', kind: '' };
+                    const fb = feedbacks[p.id] || { status: '', note: '', url: '', kind: '' };
                     const tName = p.trainer?.name || p.trainerName || '—';
+                    const tSkills = p.trainer?.skills || '';
+                    const statusColor =
+                      fb.status === 'Selected'        ? 'var(--status-green)'  :
+                      fb.status === 'Shortlisted'     ? 'var(--status-amber)'  :
+                      fb.status === 'Rejected'        ? 'var(--status-red)'    :
+                      fb.status === 'NotSuitable'     ? 'var(--status-red)'    :
+                      fb.status === 'NeedAnotherDemo' ? 'var(--status-blue)'   :
+                      'var(--brand-textMuted)';
                     return (
-                      <div key={p.id} className="border border-brand-border rounded p-2.5 bg-bg-input">
-                        <div className="text-xs font-medium mb-1.5">
-                          {tName}
-                          <span className="muted ml-2">· proposed by {p.proposedBy?.name || '—'}</span>
+                      <div key={p.id} className="rounded-xl p-3" style={{ background: 'var(--bg-input)', border: `1px solid ${fb.status ? statusColor + '55' : 'var(--brand-borderSoft)'}`, transition: 'border-color 0.2s' }}>
+                        {/* Trainer header */}
+                        <div className="flex items-start justify-between gap-2 mb-2.5">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-[12px]" style={{ color: 'var(--brand-text)' }}>{tName}</div>
+                            {tSkills && <div className="text-[10px] muted truncate mt-0.5" title={tSkills}>{tSkills.split(',').slice(0,4).join(', ')}</div>}
+                            <div className="text-[10px] muted mt-0.5">Proposed by {p.proposedBy?.name || '—'}</div>
+                          </div>
+                          {fb.status && (
+                            <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: statusColor + '22', color: statusColor }}>
+                              {fb.status === 'NeedAnotherDemo' ? 'Need Another Demo' : fb.status === 'NotSuitable' ? 'Not Suitable' : fb.status === 'PendingClientFeedback' ? 'Pending' : fb.status}
+                            </span>
+                          )}
                         </div>
-                        <Textarea
-                          rows={2}
-                          value={fb.note}
-                          onChange={(e) => setFeedbacks({ ...feedbacks, [p.id]: { ...fb, note: e.target.value } })}
-                          placeholder="What didn't work with this trainer? (specific feedback for the recruiter)"
-                        />
+                        {/* Status dropdown — primary field */}
+                        <div className="mb-2">
+                          <div className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--brand-textMuted)' }}>Resource status *</div>
+                          <Select
+                            value={fb.status}
+                            onChange={(e) => setFeedbacks({ ...feedbacks, [p.id]: { ...fb, status: e.target.value } })}
+                            style={{ color: fb.status ? statusColor : undefined, fontWeight: fb.status ? 600 : undefined }}
+                          >
+                            <option value="">— not set —</option>
+                            <option value="Selected">Selected ✓</option>
+                            <option value="Shortlisted">Shortlisted (client considering)</option>
+                            <option value="Rejected">Rejected ✗</option>
+                            <option value="NotSuitable">Not suitable for this client</option>
+                            <option value="NeedAnotherDemo">Need another demo</option>
+                            <option value="PendingClientFeedback">Pending client feedback</option>
+                          </Select>
+                        </div>
+                        {/* Comments / feedback note */}
+                        <div className="mb-2">
+                          <div className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--brand-textMuted)' }}>Feedback / comments</div>
+                          <Textarea
+                            rows={2}
+                            value={fb.note}
+                            onChange={(e) => setFeedbacks({ ...feedbacks, [p.id]: { ...fb, note: e.target.value } })}
+                            placeholder="What didn't work? Client's specific remarks about this trainer…"
+                          />
+                        </div>
+                        {/* Evidence */}
                         {fb.url ? (
-                          <div className="flex items-center gap-2 bg-bg-page rounded p-1.5 mt-2 text-xs">
+                          <div className="flex items-center gap-2 rounded p-1.5 text-xs" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-borderSoft)' }}>
                             <Pill color={fb.kind === 'Audio' ? 'purple' : 'blue'}>{fb.kind}</Pill>
                             {fb.kind === 'Audio' ? (
                               <audio controls src={fileUrl(fb.url)} style={{ height: 26, flex: 1 }} />
@@ -2132,9 +2197,9 @@ function MoveBackwardsModal({ client, onClose }: any) {
                             </button>
                           </div>
                         ) : (
-                          <div className="flex flex-wrap gap-2 mt-2">
+                          <div className="flex flex-wrap gap-2">
                             <label className="btn btn-sm cursor-pointer text-xs">
-                              🎙 Audio
+                              🎙 Audio evidence
                               <input type="file" hidden disabled={uploadingFor === p.id}
                                 onChange={(e) => { const fl = e.target.files?.[0]; if (fl) pickEvidence(p.id, fl, 'Audio'); e.target.value = ''; }} />
                             </label>
@@ -2160,12 +2225,12 @@ function MoveBackwardsModal({ client, onClose }: any) {
             // Reason can be the top-level Reason field OR any non-blank per-trainer note —
             // both end up in the audit trail. Don't block on the top field if Samita
             // already wrote feedback per trainer below.
-            const hasPerTrainerFeedback = Object.values(feedbacks).some((fb) => fb.note.trim().length > 0);
+            const hasPerTrainerFeedback = Object.values(feedbacks).some((fb) => fb.status.length > 0 || fb.note.trim().length > 0);
             const reasonOk = reason.trim().length > 0 || hasPerTrainerFeedback;
             const blockReason = !target
               ? 'Pick a stage to move back to.'
               : !reasonOk
-                ? 'Add a Reason at the top OR write feedback for at least one trainer below.'
+                ? 'Add a Reason at the top OR set resource status / feedback for at least one trainer below.'
                 : uploadingFor
                   ? 'Waiting for the file upload to finish.'
                   : null;
@@ -2179,9 +2244,14 @@ function MoveBackwardsModal({ client, onClose }: any) {
                   if (!reason.trim() && hasPerTrainerFeedback) {
                     const built = passedProposals
                       .map((p: any) => {
-                        const note = (feedbacks[p.id]?.note || '').trim();
+                        const fb = feedbacks[p.id];
+                        const status = fb?.status || '';
+                        const note = (fb?.note || '').trim();
                         const tName = p.trainer?.name || p.trainerName || 'Trainer';
-                        return note ? `${tName}: ${note}` : '';
+                        if (status && note) return `${tName}: ${status} — ${note}`;
+                        if (status) return `${tName}: ${status}`;
+                        if (note) return `${tName}: ${note}`;
+                        return '';
                       })
                       .filter(Boolean)
                       .join(' · ');
