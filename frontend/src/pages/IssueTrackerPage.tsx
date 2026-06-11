@@ -32,7 +32,7 @@ interface IdName { id: string; name: string }
 // ── Status badge helpers ─────────────────────────────────────────────────────
 
 const STATUS_META: Record<IssueStatus, {
-  icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
+  icon: React.ComponentType<{ size?: number | string; style?: React.CSSProperties }>;
   color: string;
   pillColor: 'red' | 'amber' | 'green' | 'grey';
   label: string;

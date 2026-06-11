@@ -39,6 +39,7 @@ callLogsRouter.get('/', async (req: AuthedRequest, res) => {
     select: {
       id: true, kind: true, outcome: true, durationMinutes: true, notes: true, calledAt: true,
       status: true, scheduledFor: true, actualStartAt: true, actualEndAt: true, feedback: true,
+      activityType: true, sessionTookPlace: true, cancellationReason: true,
       client: { select: { id: true, name: true } },
       by:     { select: { id: true, name: true } },
     },
