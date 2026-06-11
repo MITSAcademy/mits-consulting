@@ -20,6 +20,7 @@ import { audit } from '../lib/audit';
 import { flagOn } from '../lib/features';
 import { buildIcsInvite } from '../lib/ical';
 import { sendEmail, safeBuildFromUser } from '../lib/mailer';
+import { notify } from '../lib/notify';
 
 export const regularTrainingsRouter = Router();
 regularTrainingsRouter.use(requireAuth);
@@ -87,6 +88,22 @@ regularTrainingsRouter.post('/trainings', async (req: AuthedRequest, res) => {
     },
   });
   await audit(req.user!.id, req.user!.name, 'REGULAR_TRAINING_CREATE', created.name);
+
+  // Notify the assigned host when someone else allocates a training to them
+  if (created.hostedByDefaultId && created.hostedByDefaultId !== req.user!.id) {
+    const clientName = b.clientId
+      ? (await prisma.client.findUnique({ where: { id: b.clientId }, select: { name: true } }))?.name
+      : null;
+    await notify({
+      userId: created.hostedByDefaultId,
+      kind: 'new_session_allocated',
+      title: `New training allocated to you: ${created.name}`,
+      body: clientName ? `Client: ${clientName}. Check My Sessions for details.` : 'Check My Sessions for details.',
+      link: '/my-sessions',
+      email: true,
+    });
+  }
+
   res.status(201).json(created);
 });
 
@@ -121,8 +138,34 @@ regularTrainingsRouter.patch('/trainings/:id', async (req: AuthedRequest, res) =
   for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'defaultTimeIst', 'meetingMode', 'lastSessionStatus', 'lastSessionComment', 'lastClientFeedback', 'lastTrainerFeedback', 'lastSessionDate', 'weeklySessionCount', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId']) {
     if (k in b) data[k] = b[k] === '' ? null : b[k];
   }
+  // Capture old host before update to detect reassignment
+  const oldTraining = data.hostedByDefaultId !== undefined
+    ? await prisma.regularTraining.findUnique({ where: { id: req.params.id }, select: { hostedByDefaultId: true, name: true, clientId: true } })
+    : null;
+
   const updated = await prisma.regularTraining.update({ where: { id: req.params.id }, data });
   await audit(req.user!.id, req.user!.name, 'REGULAR_TRAINING_UPDATE', updated.name);
+
+  // Notify newly assigned host (skip if self-assigning or no change)
+  if (
+    oldTraining &&
+    data.hostedByDefaultId &&
+    data.hostedByDefaultId !== oldTraining.hostedByDefaultId &&
+    data.hostedByDefaultId !== req.user!.id
+  ) {
+    const clientName = updated.clientId
+      ? (await prisma.client.findUnique({ where: { id: updated.clientId }, select: { name: true } }))?.name
+      : null;
+    await notify({
+      userId: data.hostedByDefaultId,
+      kind: 'new_session_allocated',
+      title: `Training allocated to you: ${updated.name}`,
+      body: clientName ? `Client: ${clientName}. Check My Sessions for details.` : 'Check My Sessions for details.',
+      link: '/my-sessions',
+      email: true,
+    });
+  }
+
   res.json(updated);
 });
 
@@ -134,6 +177,119 @@ regularTrainingsRouter.delete('/trainings/:id', async (req: AuthedRequest, res) 
   await prisma.regularTraining.update({ where: { id: req.params.id }, data: { status: 'archived' } });
   await audit(req.user!.id, req.user!.name, 'REGULAR_TRAINING_ARCHIVE', t.name);
   res.json({ ok: true });
+});
+
+// ── Weekly payment summary ─────────────────────────────────────────────────
+// GET /weekly-summary?week=2026-W23 — returns per-host session counts for the
+//   given ISO week (defaults to current week).  Used by AM payment summary UI.
+// POST /weekly-summary/submit — AM submits week for review; notifies founders.
+
+function currentISOWeek(): string {
+  const now = new Date();
+  const jan1 = new Date(now.getFullYear(), 0, 1);
+  const week = Math.ceil((((now.getTime() - jan1.getTime()) / 86400000) + jan1.getDay() + 1) / 7);
+  return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+/** Parse ISO week string (e.g. "2026-W23") to Mon–Sun bounds in UTC. */
+function isoWeekBounds(week: string): { start: Date; end: Date } | null {
+  const m = week.match(/^(\d{4})-W(\d{1,2})$/);
+  if (!m) return null;
+  const year = parseInt(m[1], 10);
+  const wk   = parseInt(m[2], 10);
+  // Jan 4 is always in week 1
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const dayOfWeek = jan4.getUTCDay() || 7; // Mon=1…Sun=7
+  const w1Monday = new Date(jan4.getTime() - (dayOfWeek - 1) * 86400000);
+  const start = new Date(w1Monday.getTime() + (wk - 1) * 7 * 86400000);
+  const end   = new Date(start.getTime() + 7 * 86400000 - 1);
+  return { start, end };
+}
+
+regularTrainingsRouter.get('/weekly-summary', async (req: AuthedRequest, res) => {
+  if (!canRead(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const week = (req.query.week as string) || currentISOWeek();
+  const bounds = isoWeekBounds(week);
+  if (!bounds) return res.status(400).json({ error: 'Invalid week format — use YYYY-Www' });
+
+  // Trainings with sessions that occurred in this week (lastSessionDate within week range)
+  const trainings = await prisma.regularTraining.findMany({
+    where: { status: 'active' },
+    select: {
+      id: true, name: true, weeklySessionCount: true, lastSessionDate: true,
+      hostedByDefault: { select: { id: true, name: true } },
+      client:  { select: { id: true, name: true } },
+      trainer: { select: { id: true, name: true } },
+      sessions: {
+        where: {
+          scheduledFor: { gte: bounds.start, lte: bounds.end },
+          status: { in: ['completed', 'in_progress'] },
+        },
+        select: { id: true, scheduledFor: true, status: true, durationMinutes: true },
+      },
+    },
+    orderBy: [{ hostedByDefault: { name: 'asc' } }, { name: 'asc' }],
+  });
+
+  // Group by host
+  const byHost: Record<string, { hostId: string; hostName: string; rows: any[] }> = {};
+  for (const t of trainings) {
+    const hostName = t.hostedByDefault?.name || 'Unassigned';
+    const hostId   = t.hostedByDefault?.id   || 'unassigned';
+    if (!byHost[hostId]) byHost[hostId] = { hostId, hostName, rows: [] };
+    byHost[hostId].rows.push({
+      trainingId: t.id,
+      trainingName: t.name,
+      clientName: t.client?.name || null,
+      trainerName: t.trainer?.name || null,
+      // count from actual completed sessions OR the AM-override field
+      sessionCount: t.sessions.length || t.weeklySessionCount || 0,
+      weeklySessionCount: t.weeklySessionCount,
+      lastSessionDate: t.lastSessionDate,
+      sessions: t.sessions,
+    });
+  }
+
+  res.json({ week, hosts: Object.values(byHost) });
+});
+
+// POST /weekly-summary/submit — mark the week as submitted, notify Mitali/Bhavneet
+regularTrainingsRouter.post('/weekly-summary/submit', async (req: AuthedRequest, res) => {
+  if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const { week, overrides } = req.body || {};
+  if (!week) return res.status(400).json({ error: 'week required (YYYY-Www)' });
+
+  // Apply any AM overrides to weeklySessionCount
+  if (Array.isArray(overrides)) {
+    for (const o of overrides) {
+      if (o.trainingId && typeof o.sessionCount === 'number') {
+        await prisma.regularTraining.update({
+          where: { id: o.trainingId },
+          data: { weeklySessionCount: o.sessionCount },
+        });
+      }
+    }
+  }
+
+  // Notify founders / Mitali (role = 'founder' or 'manager')
+  const notifyTargets = await prisma.user.findMany({
+    where: { active: true, role: { in: ['founder', 'manager'] } },
+    select: { id: true },
+  });
+  const { notifyMany } = await import('../lib/notify');
+  await notifyMany(
+    notifyTargets.map((u) => u.id),
+    {
+      kind: 'payment_summary_submitted',
+      title: `Weekly payment summary submitted for ${week}`,
+      body: `Submitted by ${req.user!.name}. Please review session counts and approve payment.`,
+      link: '/my-sessions',
+      email: true,
+    }
+  );
+
+  await audit(req.user!.id, req.user!.name, 'WEEKLY_SUMMARY_SUBMIT', week);
+  res.json({ ok: true, week });
 });
 
 // ── Account-manager session sheet ─────────────────────────────────────────

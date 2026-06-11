@@ -26,7 +26,8 @@ import { todayISO } from '@/lib/utils';
 import { EmptyState } from '@/components/EmptyState';
 import {
   ClipboardList, Plus, Calendar as CalendarIcon, CheckCircle2, Phone, Play, Square,
-  Clock, MessageSquare, AlertCircle, Video, Search, MessageCircle, Send,
+  Clock, MessageSquare, AlertCircle, Video, Search, MessageCircle, Send, CreditCard,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { formatPhone, waLink } from '@/lib/utils';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
@@ -39,6 +40,31 @@ const MEETING_MODE_ICONS: Record<string, string> = {
   Phone: '📞',
   Other: '💻',
 };
+
+function currentISOWeek(): string {
+  const now = new Date();
+  const jan1 = new Date(now.getFullYear(), 0, 1);
+  const week = Math.ceil((((now.getTime() - jan1.getTime()) / 86400000) + jan1.getDay() + 1) / 7);
+  return `${now.getFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+function prevWeek(w: string): string {
+  const m = w.match(/^(\d{4})-W(\d{1,2})$/);
+  if (!m) return w;
+  let [year, wk] = [parseInt(m[1]), parseInt(m[2])];
+  wk--;
+  if (wk < 1) { year--; wk = 52; }
+  return `${year}-W${String(wk).padStart(2, '0')}`;
+}
+
+function nextWeek(w: string): string {
+  const m = w.match(/^(\d{4})-W(\d{1,2})$/);
+  if (!m) return w;
+  let [year, wk] = [parseInt(m[1]), parseInt(m[2])];
+  wk++;
+  if (wk > 52) { year++; wk = 1; }
+  return `${year}-W${String(wk).padStart(2, '0')}`;
+}
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /* Google Calendar pre-fill — same helper as before, kept for session tasks */
@@ -253,6 +279,9 @@ export function MySessionsPage() {
             {todayTasks.map((t: any) => <TaskRow key={t.id} t={t} onDone={() => markTaskDone.mutate(t.id)} />)}
           </Section>
         )}
+
+        {/* ── Weekly payment summary (AM only) ── */}
+        {isAM && <WeeklyPaymentSummary />}
 
         <Section title={`Completed calls — last 7 days (${(recentCalls || []).length})`} tone="grey">
           {(recentCalls || []).length === 0 ? (
@@ -932,6 +961,172 @@ function AMScheduleButton({ training, onSent }: { training: any; onSent: () => v
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ──────────────────────────── Weekly Payment Summary ─────────────────── */
+
+function WeeklyPaymentSummary() {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [week, setWeek] = useState(currentISOWeek);
+  const [overrides, setOverrides] = useState<Record<string, number>>({});
+  const [submitted, setSubmitted] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['weekly-summary', week],
+    queryFn: () => api.get('/regular-trainings/weekly-summary', { params: { week } }).then((r) => r.data),
+  });
+
+  const submit = useMutation({
+    mutationFn: () => {
+      const overrideArr = Object.entries(overrides).map(([trainingId, sessionCount]) => ({ trainingId, sessionCount }));
+      return api.post('/regular-trainings/weekly-summary/submit', { week, overrides: overrideArr });
+    },
+    onSuccess: () => {
+      showToast(`Week ${week} submitted to Mitali for payment review`);
+      setSubmitted(true);
+      qc.invalidateQueries({ queryKey: ['weekly-summary', week] });
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to submit', 'error'),
+  });
+
+  const hosts: any[] = data?.hosts || [];
+  const totalSessions = hosts.flatMap((h: any) => h.rows).reduce((sum: number, r: any) => sum + (overrides[r.trainingId] ?? r.sessionCount), 0);
+  const isCurrentWeek = week === currentISOWeek();
+
+  return (
+    <div className="mb-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <CreditCard size={14} style={{ color: 'var(--accent-gold)' }} />
+          <span className="text-[11px] uppercase tracking-[0.14em] font-bold" style={{ color: 'var(--accent-gold)' }}>
+            Weekly Payment Summary
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setWeek(prevWeek(week)); setOverrides({}); setSubmitted(false); }}
+            className="p-1 rounded hover-lift"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textSecondary)', cursor: 'pointer' }}
+          >
+            <ChevronLeft size={13} />
+          </button>
+          <span className="text-[12px] font-semibold mono" style={{ color: 'var(--brand-text)' }}>{week}</span>
+          <button
+            onClick={() => { setWeek(nextWeek(week)); setOverrides({}); setSubmitted(false); }}
+            disabled={isCurrentWeek}
+            className="p-1 rounded hover-lift"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: isCurrentWeek ? 'var(--brand-borderSoft)' : 'var(--brand-textSecondary)', cursor: isCurrentWeek ? 'not-allowed' : 'pointer' }}
+          >
+            <ChevronRight size={13} />
+          </button>
+          <span className="text-[11px] muted">{totalSessions} session{totalSessions !== 1 ? 's' : ''} total</span>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="muted text-sm py-4 text-center">Loading…</div>
+      ) : hosts.length === 0 ? (
+        <div className="rounded-xl p-6 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+          <div className="text-[12px] muted">No active trainings found for this week.</div>
+        </div>
+      ) : (
+        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--brand-border)', boxShadow: 'var(--shadow-sm)' }}>
+          <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: 'var(--bg-input)', borderBottom: '1px solid var(--brand-border)' }}>
+                <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '14%' }}>Host</th>
+                <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '20%' }}>Client</th>
+                <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '18%' }}>Trainer</th>
+                <th className="text-left px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '18%' }}>Training</th>
+                <th className="text-center px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '15%' }}>Sessions this week</th>
+                <th className="text-center px-3 py-2 font-semibold text-[10px] uppercase tracking-[0.10em]" style={{ color: 'var(--brand-textMuted)', width: '15%' }}>Override count</th>
+              </tr>
+            </thead>
+            <tbody>
+              {hosts.flatMap((h: any) =>
+                h.rows.map((row: any, i: number) => {
+                  const overrideVal = overrides[row.trainingId];
+                  const displayCount = overrideVal ?? row.sessionCount;
+                  const accentColor = h.hostName === 'Kashish' ? 'var(--accent-gold)' : h.hostName === 'Muskan' ? 'var(--status-blue)' : 'var(--brand-textSecondary)';
+                  return (
+                    <tr key={row.trainingId} style={{ borderTop: '1px solid var(--brand-borderSoft)', background: 'var(--bg-card)' }}
+                        className="hover:bg-[var(--bg-input)] transition-colors">
+                      <td className="px-3 py-2 font-semibold" style={{ color: accentColor }}>
+                        {i === 0 ? h.hostName : ''}
+                      </td>
+                      <td className="px-3 py-2" style={{ color: 'var(--brand-text)' }}>{row.clientName || <span className="muted">—</span>}</td>
+                      <td className="px-3 py-2 muted">{row.trainerName || <span className="muted">—</span>}</td>
+                      <td className="px-3 py-2 muted">{row.trainingName}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold"
+                          style={{ background: displayCount > 0 ? 'rgba(74,222,128,0.12)' : 'var(--bg-input)', color: displayCount > 0 ? 'var(--status-green)' : 'var(--brand-textMuted)' }}>
+                          {row.sessions.length} logged
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <input
+                          type="number" min={0} max={31}
+                          className="text-[11px] rounded text-center font-semibold"
+                          style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--accent-gold)', outline: 'none', width: 48, padding: '2px 4px' }}
+                          value={overrideVal !== undefined ? overrideVal : (row.weeklySessionCount ?? '')}
+                          placeholder={String(row.sessions.length || 0)}
+                          onChange={(e) => setOverrides((prev) => ({ ...prev, [row.trainingId]: e.target.value ? Number(e.target.value) : 0 }))}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: 'var(--bg-input)', borderTop: '2px solid var(--brand-border)' }}>
+                <td colSpan={4} className="px-3 py-2 text-right font-semibold text-[11px]" style={{ color: 'var(--brand-textMuted)' }}>
+                  TOTAL
+                </td>
+                <td className="px-3 py-2 text-center">
+                  <span className="font-bold text-[12px]" style={{ color: 'var(--status-green)' }}>
+                    {hosts.flatMap((h: any) => h.rows).reduce((s: number, r: any) => s + r.sessions.length, 0)}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-center">
+                  <span className="font-bold text-[12px]" style={{ color: 'var(--accent-gold)' }}>
+                    {totalSessions}
+                  </span>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+
+          {/* Submit footer */}
+          <div className="flex items-center justify-between px-4 py-3"
+            style={{ background: 'var(--bg-card)', borderTop: '1px solid var(--brand-border)' }}>
+            <div className="text-[11px] muted">
+              Override column lets you correct the auto-count before submitting. Mitali gets notified on submit.
+            </div>
+            <div className="flex gap-2 items-center">
+              {submitted && (
+                <span className="text-[11px]" style={{ color: 'var(--status-green)' }}>✓ Submitted</span>
+              )}
+              <button
+                onClick={() => submit.mutate()}
+                disabled={submit.isPending || submitted}
+                className="text-[11px] font-semibold px-3 py-1.5 rounded-lg hover-lift transition-all"
+                style={{
+                  background: submitted ? 'var(--bg-input)' : 'var(--accent-gold)',
+                  color: submitted ? 'var(--brand-textMuted)' : '#1a1a00',
+                  border: 'none', cursor: submitted ? 'not-allowed' : 'pointer',
+                  opacity: submit.isPending ? 0.7 : 1,
+                }}>
+                {submit.isPending ? 'Submitting…' : submitted ? 'Already submitted' : `Submit ${week} for payment`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
