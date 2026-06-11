@@ -10,7 +10,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
-import { Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, CircleDot } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, CircleDot, Search } from 'lucide-react';
 
 // readOnly = true means cards are visible but not clickable (another team owns that stage)
 const TEAM2_STAGES = [
@@ -103,6 +103,7 @@ export function DemoIntakePage() {
   // Default to Mine for demo_intake (Anjali/Taran) and recruiter (Aman/Kanchan).
   // Samita/founder/manager default to All.
   const [mineOnly, setMineOnly] = useState(user.role === 'demo_intake' || isRecruiter);
+  const [search, setSearch] = useState('');
 
   const { data } = useQuery({
     queryKey: ['clients'],
@@ -117,8 +118,13 @@ export function DemoIntakePage() {
       : all.filter((c: any) => c.intakeOwnerId === user.id)
     : all;
 
+  const searchLower = search.trim().toLowerCase();
+  const searched = searchLower
+    ? filtered.filter((c: any) => c.name?.toLowerCase().includes(searchLower) || c.skills?.toLowerCase().includes(searchLower))
+    : filtered;
+
   const grouped: Record<string, any[]> = {};
-  STAGES.forEach((s) => (grouped[s.key] = filtered.filter((c: any) => c.lifecycle === s.key)));
+  STAGES.forEach((s) => (grouped[s.key] = searched.filter((c: any) => c.lifecycle === s.key)));
 
   const title = isRecruiter ? 'Pipeline view' : 'Demo intake';
   const subtitle = isRecruiter
@@ -132,6 +138,16 @@ export function DemoIntakePage() {
         subtitle={subtitle}
         actions={
           <>
+            <div className="relative">
+              <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 muted pointer-events-none" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name / skill…"
+                className="pl-7 pr-3 py-1.5 text-xs rounded-lg"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', width: 180, outline: 'none' }}
+              />
+            </div>
             {!isRecruiter && (
               <div className="flex gap-1.5">
                 <Button size="sm" variant={mineOnly ? 'primary' : 'default'} onClick={() => setMineOnly(true)}>Mine</Button>
