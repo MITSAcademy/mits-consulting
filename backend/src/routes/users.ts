@@ -144,7 +144,7 @@ usersRouter.post('/', requireRole('founder'), async (req: AuthedRequest, res) =>
 usersRouter.patch('/:id', requireRole('founder'), async (req: AuthedRequest, res) => {
   const { id } = req.params;
   const data: any = {};
-  for (const k of ['name', 'role', 'reportsToId', 'active']) {
+  for (const k of ['name', 'role', 'reportsToId', 'active', 'gmailAddress', 'email']) {
     if (k in req.body) data[k] = req.body[k];
   }
   if (req.body.password) data.passwordHash = await hashPassword(req.body.password);
