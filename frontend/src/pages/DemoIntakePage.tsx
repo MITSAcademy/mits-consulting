@@ -10,7 +10,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
-import { Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, CircleDot, Search } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, CircleDot, Search, Users } from 'lucide-react';
 
 // readOnly = true means cards are visible but not clickable (another team owns that stage)
 const TEAM2_STAGES = [
@@ -110,11 +110,11 @@ export function DemoIntakePage() {
   const [openNew, setOpenNew] = useState(false);
 
   const isRecruiter = user.role === 'recruiter';
+  const isDemoIntake = user.role === 'demo_intake';
   const STAGES = isRecruiter ? TEAM1_STAGES : TEAM2_STAGES;
 
   // Default to Mine for demo_intake (Anjali/Taran) and recruiter (Aman/Kanchan).
-  // Samita/founder/manager default to All.
-  const [mineOnly, setMineOnly] = useState(user.role === 'demo_intake' || isRecruiter);
+  const [mineOnly, setMineOnly] = useState(isDemoIntake || isRecruiter);
   const [search, setSearch] = useState('');
 
   const { data } = useQuery({
@@ -122,16 +122,30 @@ export function DemoIntakePage() {
     queryFn: () => api.get('/clients').then((r) => r.data),
   });
 
+  // Active groups (RegularTrainings) where Anjali/Taran are the coordinator
+  const { data: trainingsData } = useQuery({
+    queryKey: ['demo-intake-active-groups'],
+    queryFn: () => api.get('/regular-trainings/trainings', { params: { status: 'active' } }).then((r) => r.data),
+    enabled: isDemoIntake || ['founder', 'manager', 'demo_lead'].includes(user.role),
+  });
+  const allTrainings = (trainingsData || []) as any[];
+  // Mine = hosted by me; All Team 2 = all active groups
+  const myGroups = allTrainings.filter((t: any) => t.hostedByDefault?.id === user.id);
+  const activeGroups = mineOnly ? myGroups : allTrainings;
+
   const all = (data || []) as any[];
-  // Pipeline stages Team 2 handles — "Mine" for demo_intake shows all clients currently
-  // in any pipeline stage (not just intakeOwnerId === user.id, since Anjali/Taran share the queue)
+  // "Mine" for demo_intake = clients where I am the intakeOwner
+  // "All Team 2" = all pipeline clients
   const PIPELINE_STAGES_TEAM2 = ['Lead','IntakeSent','IntakeReceived','InternalSearch','WithRecruiters',
     'VerificationPending','TrainerMatched','DemoScheduled','DemoDone','FeedbackPending'];
   const filtered = mineOnly
     ? isRecruiter
-      ? all // recruiters see all WithRecruiters regardless
-      : all.filter((c: any) => PIPELINE_STAGES_TEAM2.includes(c.lifecycle))
-    : all;
+      ? all
+      : all.filter((c: any) =>
+          PIPELINE_STAGES_TEAM2.includes(c.lifecycle) &&
+          (isDemoIntake ? c.intakeOwnerId === user.id : true)
+        )
+    : all.filter((c: any) => PIPELINE_STAGES_TEAM2.includes(c.lifecycle));
 
   const searchLower = search.trim().toLowerCase();
   const searched = searchLower
@@ -144,7 +158,9 @@ export function DemoIntakePage() {
   const title = isRecruiter ? 'Pipeline view' : 'Demo intake';
   const subtitle = isRecruiter
     ? `${grouped['WithRecruiters'].length} with recruiters · ${grouped['VerificationPending'].length} verify proposal`
-    : mineOnly ? `Mine · ${filtered.length} clients` : `All Team 2 · ${filtered.length} of ${all.length}`;
+    : mineOnly
+      ? `Mine · ${filtered.length} clients · ${myGroups.length} groups`
+      : `All Team 2 · ${filtered.length} clients · ${allTrainings.length} groups`;
 
   return (
     <>
@@ -184,6 +200,66 @@ export function DemoIntakePage() {
         {isRecruiter && (
           <div className="callout">
             Your active stages: <strong>With recruiters</strong> (find & propose trainer) → <strong>Verify proposal</strong> (Anjali/Taran verify after you notify). All other stages are view-only.
+          </div>
+        )}
+
+        {/* ── Active Groups (RegularTrainings) ── */}
+        {!isRecruiter && activeGroups.length > 0 && (
+          <div className="mb-4">
+            <div
+              className="rounded-xl p-3"
+              style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}
+            >
+              <div className="flex items-center gap-2 mb-3 pb-2" style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
+                <Users size={13} style={{ color: 'var(--accent-gold)' }} />
+                <span className="text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--accent-gold)' }}>
+                  Active groups
+                </span>
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                  style={{ background: 'rgba(229,178,76,0.15)', color: 'var(--accent-gold)' }}
+                >
+                  {activeGroups.length}
+                </span>
+                <span className="text-[10px] muted ml-1">
+                  {mineOnly ? 'mine' : 'all coordinators'}
+                </span>
+              </div>
+              <div className="grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+                {activeGroups.map((t: any) => (
+                  <Link
+                    key={t.id}
+                    to={`/regular-trainings/${t.id}`}
+                    className="rounded-lg p-2.5 transition-all hover-lift block"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+                  >
+                    <div className="font-semibold text-[12px] mb-0.5" style={{ color: 'var(--brand-text)' }}>
+                      {t.client?.name || t.name}
+                    </div>
+                    <div className="text-[10px] muted truncate mb-1">{t.trainer?.name || 'No trainer'}</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {t.defaultTimeIst && (
+                        <span className="text-[10px] mono" style={{ color: 'var(--accent-gold)' }}>{t.defaultTimeIst} IST</span>
+                      )}
+                      {t.hostedByDefault && !mineOnly && (
+                        <span className="text-[10px]" style={{ color: 'var(--status-blue)' }}>{t.hostedByDefault.name}</span>
+                      )}
+                      {t.lastSessionStatus && (
+                        <span
+                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase"
+                          style={{
+                            background: t.lastSessionStatus === 'completed' ? 'rgba(74,222,128,0.12)' : 'rgba(148,163,184,0.1)',
+                            color: t.lastSessionStatus === 'completed' ? 'var(--status-green)' : 'var(--brand-textMuted)',
+                          }}
+                        >
+                          {t.lastSessionStatus}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
