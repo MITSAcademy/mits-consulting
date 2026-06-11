@@ -27,7 +27,7 @@ import { EmptyState } from '@/components/EmptyState';
 import {
   ClipboardList, Plus, Calendar as CalendarIcon, CheckCircle2, Phone, Play, Square,
   Clock, MessageSquare, AlertCircle, Video, Search, MessageCircle, Send, CreditCard,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, UserPlus,
 } from 'lucide-react';
 import { formatPhone, waLink } from '@/lib/utils';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
@@ -218,8 +218,8 @@ export function MySessionsPage() {
             ) : sessionCount === 0 ? (
               <div className="rounded-xl p-8 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
                 <Video size={28} style={{ color: 'var(--accent-gold)', margin: '0 auto 8px' }} />
-                <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>No active regular trainings yet</div>
-                <div className="text-[12px] muted mt-1">Go to Regular trainings and create one to see it here.</div>
+                <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>No sessions assigned to you yet</div>
+                <div className="text-[12px] muted mt-1">Sessions will appear here once Bhavneet / Mitali allocates calls to you from Regular Trainings.</div>
               </div>
             ) : (
               <div className="space-y-6">

@@ -300,10 +300,13 @@ regularTrainingsRouter.post('/weekly-summary/submit', async (req: AuthedRequest,
 regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
   if (!canRead(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const now = new Date();
-  // Return all active trainings for AM/lead — they manage all active clients.
-  // If the user is a specific host, also include trainings where they're set as host.
+  // account_manager sees only their own trainings (hostedByDefaultId = me).
+  // lead/founder/manager sees all — they manage across AMs.
+  const isSelf = req.user!.role === 'account_manager';
+  const where: any = { status: 'active' };
+  if (isSelf) where.hostedByDefaultId = req.user!.id;
   const trainings = await prisma.regularTraining.findMany({
-    where: { status: 'active' },
+    where,
     select: {
       id: true, name: true, scheduleNotes: true, defaultTimeIst: true,
       meetingMode: true, lastSessionStatus: true, lastSessionComment: true,

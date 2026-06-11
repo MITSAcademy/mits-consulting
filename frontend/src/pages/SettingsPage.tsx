@@ -308,7 +308,7 @@ export function SettingsPage() {
               ))}
             </div>
 
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginTop: 16, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <Button
                 size="sm"
                 onClick={() => {
@@ -317,6 +317,7 @@ export function SettingsPage() {
               >
                 Reset flags to defaults
               </Button>
+              <SeedRegularTrainingsButton />
             </div>
           </>
         )}
@@ -334,5 +335,34 @@ function InfoCell({ label, value }: { label: string; value: React.ReactNode }) {
       <div className="text-[10px] uppercase tracking-[0.10em] font-bold muted mb-1">{label}</div>
       <div className="text-[13px] font-medium" style={{ color: 'var(--brand-text)' }}>{value || '—'}</div>
     </div>
+  );
+}
+
+function SeedRegularTrainingsButton() {
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
+  const seed = useMutation({
+    mutationFn: () => api.post('/seed/regular-trainings'),
+    onSuccess: (r: any) => {
+      const d = r.data;
+      showToast(`Seed done — ${d.created} created, ${d.updated} updated, ${d.skipped} skipped`);
+      qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] });
+      qc.invalidateQueries({ queryKey: ['regular-trainings'] });
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Seed failed', 'error'),
+  });
+  return (
+    <Button
+      size="sm"
+      variant="primary"
+      disabled={seed.isPending}
+      onClick={() => {
+        if (confirm('Re-seed Kashish + Muskan regular trainings from the reference sheet? Safe to re-run — existing rows are updated, not duplicated.')) {
+          seed.mutate();
+        }
+      }}
+    >
+      {seed.isPending ? 'Seeding…' : '↺ Seed Kashish/Muskan sessions'}
+    </Button>
   );
 }
