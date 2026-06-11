@@ -66,8 +66,8 @@ export const BACK_OPTIONS: Record<string, string[]> = {
   DemoDone:            ['DemoScheduled', 'WithRecruiters', 'InternalSearch'],
   FeedbackPending:     ['DemoDone', 'WithRecruiters'],
   SaleClosing:         ['InternalSearch', 'WithRecruiters', 'DemoScheduled', 'DemoDone', 'FeedbackPending'],
-  SaleWon:             ['SaleClosing', 'InternalSearch', 'WithRecruiters'],
-  Active:              ['SaleWon'],
+  SaleWon:             ['SaleClosing', 'DemoScheduled', 'DemoDone', 'InternalSearch', 'WithRecruiters'],
+  Active:              ['SaleWon', 'DemoScheduled'],
 };
 
 export function backStagesFor(currentStage: string): string[] {

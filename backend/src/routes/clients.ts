@@ -426,7 +426,7 @@ const BACK_TRANSITIONS: Record<string, string[]> = {
   WithRecruiters:      ['InternalSearch', 'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone', 'Hold', 'Dormant'],
   VerificationPending: ['TrainerMatched', 'DemoScheduled', 'DemoDone', 'Dormant'],
   TrainerMatched:      ['DemoScheduled', 'DemoDone', 'Dormant'],
-  DemoScheduled:       ['DemoDone', 'FeedbackPending', 'Dormant'],
+  DemoScheduled:       ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon', 'Active', 'Dormant'],
   DemoDone:            ['FeedbackPending', 'SaleClosing', 'Dormant'],
   FeedbackPending:     ['SaleClosing', 'Hold', 'WithRecruiters', 'Dormant'],
   SaleClosing:         ['SaleWon', 'DemoScheduled', 'FeedbackPending', 'InternalSearch', 'WithRecruiters', 'Dormant'],
