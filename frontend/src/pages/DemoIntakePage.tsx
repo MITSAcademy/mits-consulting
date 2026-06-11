@@ -203,27 +203,16 @@ export function DemoIntakePage() {
                     </>
                   );
 
-                  return s.readOnly ? (
-                    <div
-                      key={c.id}
-                      className="block rounded-lg p-2 mb-1.5"
-                      style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--brand-borderSoft)',
-                        cursor: 'default',
-                      }}
-                      title={`Managed by ${isRecruiter ? 'Team 2 (Anjali/Taran)' : 'Team 1 (Aman/Kanchan)'} — view only`}
-                    >
-                      {cardContent}
-                    </div>
-                  ) : (
+                  // readOnly = can't move the card, but can always navigate to the client page
+                  return (
                     <Link
                       key={c.id}
                       to={`/clients/${c.id}`}
                       className="block rounded-lg p-2 mb-1.5 transition-all hover-lift"
                       style={{
-                        background: 'var(--bg-input)',
+                        background: s.readOnly ? 'var(--bg-card)' : 'var(--bg-input)',
                         border: '1px solid var(--brand-borderSoft)',
+                        opacity: s.readOnly ? 0.85 : 1,
                       }}
                     >
                       {cardContent}
