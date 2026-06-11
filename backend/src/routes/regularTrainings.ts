@@ -17,7 +17,6 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
-import { flagOn } from '../lib/features';
 import { buildIcsInvite } from '../lib/ical';
 import { sendEmail, safeBuildFromUser } from '../lib/mailer';
 import { notify } from '../lib/notify';
@@ -25,12 +24,7 @@ import { notify } from '../lib/notify';
 export const regularTrainingsRouter = Router();
 regularTrainingsRouter.use(requireAuth);
 
-// Feature-flag gate. Runs before any route handler — 404 if the flag is off
-// so the routes are completely invisible to off-flag deployments.
-regularTrainingsRouter.use((_req, res, next) => {
-  if (!flagOn('regularCalls')) return res.status(404).json({ error: 'Feature not enabled' });
-  next();
-});
+// Feature flag removed — regularCalls is always enabled.
 
 const WRITE_ROLES = ['founder', 'manager', 'lead', 'account_manager'];
 const READ_ROLES  = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'];
