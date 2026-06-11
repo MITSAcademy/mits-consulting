@@ -35,6 +35,8 @@ const INTAKE_FIELDS = [
 const canIntake = (role: string) => ['founder', 'manager', 'demo_lead', 'demo_intake'].includes(role);
 const canClose = (role: string) => ['founder', 'manager', 'sales_closer'].includes(role);
 const canActivate = (role: string) => ['founder', 'manager', 'sales_closer'].includes(role);
+// AM can manage Active/LeverageGranted clients (leverage, hold) but not the SaleWon→Active handover
+const canAMActions = (role: string) => ['founder', 'manager', 'sales_closer', 'account_manager', 'lead'].includes(role);
 // Only Samita (demo_lead) and Vaibhav (founder) may assign/reassign intake owners.
 const canAssignOwner = (role: string) => ['founder', 'demo_lead'].includes(role);
 const canRecordPayment = (role: string) => ['founder', 'demo_lead', 'manager', 'sales_closer'].includes(role);
@@ -365,14 +367,14 @@ export function ClientDetailPage() {
     actions.push(<Button key="act" variant="primary" onClick={() => stageM.mutate('Active')}><ArrowRight size={14}/> {isTraining ? 'Start training' : 'Handover · activate'}</Button>);
   }
   // Phase-2: Mitali sends her welcome message (introducing her team + feedback rhythm)
-  if (phase2 && canActivate(user.role) && (client.lifecycle === 'Active' || client.lifecycle === 'SaleWon' || client.lifecycle === 'LeverageGranted')) {
+  if (phase2 && canAMActions(user.role) && (client.lifecycle === 'Active' || client.lifecycle === 'SaleWon' || client.lifecycle === 'LeverageGranted')) {
     actions.push(
       <Button key="handover-welcome" size="sm" onClick={() => setModal('handoverWelcome')} title="Send Mitali's handover welcome (intro to team + feedback rhythm)">
         <MessageCircle size={12}/> Send handover welcome
       </Button>
     );
   }
-  if (canActivate(user.role) && (client.lifecycle === 'Active' || client.lifecycle === 'LeverageGranted')) {
+  if (canAMActions(user.role) && (client.lifecycle === 'Active' || client.lifecycle === 'LeverageGranted')) {
     actions.push(<Button key="lev" variant="amber" onClick={() => setModal('leverage')}><Clock size={14}/> Leverage</Button>);
     actions.push(<Button key="hold" variant="danger" onClick={() => setModal('hold')}><HandMetal size={14}/> Hold</Button>);
     if (!isTraining && canRecordPayment(user.role)) {
@@ -391,7 +393,7 @@ export function ClientDetailPage() {
 
   // Backward-move button — only shows if the current stage has valid back-options
   const validBack = backStagesFor(client.lifecycle);
-  if (validBack.length > 0 && client.lifecycle !== 'Dormant' && (canIntake(user.role) || canClose(user.role) || canActivate(user.role))) {
+  if (validBack.length > 0 && client.lifecycle !== 'Dormant' && (canIntake(user.role) || canClose(user.role) || canAMActions(user.role))) {
     actions.push(
       <Button key="back" size="sm" onClick={() => setModal('moveBack')} title="Move client to an earlier stage">
         <Undo2 size={14}/> Move back
@@ -403,7 +405,7 @@ export function ClientDetailPage() {
   const dormantEligible = ![
     'Dormant', 'Churned', 'Completed',
   ].includes(client.lifecycle);
-  if (dormantEligible && (canIntake(user.role) || canClose(user.role) || canActivate(user.role))) {
+  if (dormantEligible && (canIntake(user.role) || canClose(user.role) || canAMActions(user.role))) {
     actions.push(
       <Button key="dormant" size="sm" onClick={() => setModal('dormant')} title="Client stopped responding — mark dormant">
         <Moon size={14}/> Mark dormant
@@ -412,7 +414,7 @@ export function ClientDetailPage() {
   }
 
   // Resume from Dormant
-  if (client.lifecycle === 'Dormant' && (canIntake(user.role) || canClose(user.role) || canActivate(user.role))) {
+  if (client.lifecycle === 'Dormant' && (canIntake(user.role) || canClose(user.role) || canAMActions(user.role))) {
     actions.push(
       <Button key="resume" size="sm" variant="success" onClick={() => setModal('resume')}>
         <Play size={14}/> Resume client

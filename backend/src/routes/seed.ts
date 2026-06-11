@@ -88,14 +88,19 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
   if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
 
   const hosts = await prisma.user.findMany({
-    where: { name: { in: ['Kashish', 'Muskan', 'Bhavneet'] } },
+    where: { name: { in: ['Kashish', 'Muskan', 'Bhavneet', 'Kashish Gupta', 'Muskan Maini'] } },
     select: { id: true, name: true },
   });
   const hostMap: Record<string, string> = {};
-  for (const h of hosts) hostMap[h.name] = h.id;
+  for (const h of hosts) {
+    // Map by first name so seed rows using 'Kashish' always resolve
+    const firstName = h.name.split(' ')[0];
+    hostMap[h.name] = h.id;
+    if (!hostMap[firstName]) hostMap[firstName] = h.id;
+  }
 
   if (!hostMap['Kashish'] || !hostMap['Muskan']) {
-    return res.status(400).json({ error: 'Kashish or Muskan user not found in DB' });
+    return res.status(400).json({ error: 'Kashish or Muskan user not found in DB — ensure users exist with those names' });
   }
 
   const log: string[] = [];

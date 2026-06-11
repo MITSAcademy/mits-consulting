@@ -387,7 +387,7 @@ const STAGE_TRANSITION_PERMS: Record<string, string[]> = {
   SaleClosing:         ['founder', 'manager', 'sales_closer', 'demo_lead'],
   SaleWon:             ['founder', 'manager', 'sales_closer'],
   Active:              ['founder', 'manager', 'sales_closer'],
-  LeverageGranted:     ['founder', 'manager'],
+  LeverageGranted:     ['founder', 'manager', 'account_manager', 'lead'],
   // Hold = client said "need time to decide" post-demo. Roshni gets 3-day reminder.
   Hold:                ['founder', 'manager', 'demo_lead', 'sales_closer'],
   // Dormant — any owner involved with the client can mark them silent
