@@ -251,9 +251,8 @@ function Row({ c }: { c: FollowUpItem }) {
         <div className="flex items-center gap-2 flex-wrap">
           <Link to={`/clients/${c.id}`} className="font-semibold text-sm hover:underline">{c.name}</Link>
           <Pill color={subColor}>{subLabel}</Pill>
-          <span className="text-[11px] muted">· {c.lifecycle}</span>
+          {c.phoneDigits && <span className="text-[11px] mono muted">+{(c.phoneCode || '91').replace(/\D/g,'')} {c.phoneDigits}</span>}
           {c.cycleAmount ? <span className="text-[11px] muted">· {c.currency || 'USD'} {c.cycleAmount}</span> : null}
-          {c.salesOwner && <span className="text-[11px] muted">· {c.salesOwner.name}</span>}
         </div>
         <div className="text-xs muted mt-1">
           {c.roshniNextCallOn && (

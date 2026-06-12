@@ -144,12 +144,16 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
       const demoIntakePending = cl.filter((c) => ['Lead', 'IntakeSent'].includes(c.lifecycle)).length;
       const demosToday = cl.filter((c) => c.lifecycle === 'DemoScheduled' && c.demoDate && c.demoDate <= weekOut).length;
       const feedbackPending = cl.filter((c) => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle)).length;
-      const salesClosingActive = cl.filter((c) =>
-        ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon'].includes(c.lifecycle)
-        && c.lifecycle !== 'Active'
-        && c.saleClosingSubStatus !== 'DP'
-        && (!isSalesCloser || c.salesOwnerId === user?.id),
-      ).length;
+      const salesClosingActive = isSalesCloser
+        ? cl.filter((c) =>
+            ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
+            && c.saleClosingSubStatus !== 'DP'
+            && c.salesOwnerId === user?.id,
+          ).length
+        : cl.filter((c) =>
+            ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon'].includes(c.lifecycle)
+            && c.lifecycle !== 'Active',
+          ).length;
       const followUpsDue = cl.filter((c) =>
         ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
         && (c.saleClosingSubStatus === 'RP' || c.saleClosingSubStatus === 'CP' || c.saleClosingSubStatus === 'C')
