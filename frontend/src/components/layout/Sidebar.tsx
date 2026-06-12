@@ -154,11 +154,18 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
             ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon'].includes(c.lifecycle)
             && c.lifecycle !== 'Active',
           ).length;
-      const followUpsDue = cl.filter((c) =>
-        ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
-        && (c.saleClosingSubStatus === 'RP' || c.saleClosingSubStatus === 'CP' || c.saleClosingSubStatus === 'C')
-        && c.roshniNextCallOn && c.roshniNextCallOn <= today,
-      ).length;
+      // For sales_closer: count all RP clients (= exactly what My follow-ups page shows)
+      const followUpsDue = isSalesCloser
+        ? cl.filter((c) =>
+            ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
+            && (!c.saleClosingSubStatus || c.saleClosingSubStatus === 'RP')
+            && c.salesOwnerId === user?.id,
+          ).length
+        : cl.filter((c) =>
+            ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
+            && (c.saleClosingSubStatus === 'RP' || c.saleClosingSubStatus === 'CP' || c.saleClosingSubStatus === 'C')
+            && c.roshniNextCallOn && c.roshniNextCallOn <= today,
+          ).length;
       const renewalsDue = cl.filter((c) =>
         ['Active', 'LeverageGranted'].includes(c.lifecycle)
         && c.nextRenewalDue && c.nextRenewalDue <= weekOut,
