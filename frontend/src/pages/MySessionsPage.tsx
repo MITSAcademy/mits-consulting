@@ -164,6 +164,7 @@ export function MySessionsPage() {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  const [tab, setTab] = useState<'trainings' | 'sessions' | 'activities'>('trainings');
   const [search, setSearch] = useState('');
   const searchLower = search.trim().toLowerCase();
   const filteredSessions = searchLower
@@ -202,121 +203,143 @@ export function MySessionsPage() {
         }
       />
       <Page>
-        {/* ── AM / lead: flat sheet table matching reference spreadsheet ── */}
-        {isAM && (
-          <div className="mb-6">
-            {mySessionsLoading ? (
-              <div className="muted text-sm py-8 text-center">Loading…</div>
-            ) : sessionCount === 0 ? (
-              <div className="rounded-xl p-8 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
-                <Video size={28} style={{ color: 'var(--accent-gold)', margin: '0 auto 8px' }} />
-                <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>No sessions assigned to you yet</div>
-                <div className="text-[12px] muted mt-1">Sessions will appear here once Bhavneet / Mitali allocates calls to you from Regular Trainings.</div>
+        {/* ── Tabs ── */}
+        <div className="flex gap-1 mb-5 p-1 rounded-xl" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', width: 'fit-content' }}>
+          {([
+            { key: 'trainings', label: 'Trainings', count: isAM ? sessionCount : null },
+            { key: 'sessions',  label: 'Sessions',  count: inProgress.length + scheduledToday.length + overdueCalls.length },
+            { key: 'activities', label: 'Activities', count: (recentCalls || []).length + (recentLogs || []).length },
+          ] as const).map(({ key, label, count }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className="px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all"
+              style={tab === key
+                ? { background: 'var(--brand-accent)', color: '#fff', border: 'none', cursor: 'pointer' }
+                : { background: 'transparent', color: 'var(--brand-textMuted)', border: 'none', cursor: 'pointer' }}
+            >
+              {label}{count != null && count > 0 ? <span className="ml-1.5 text-[11px] opacity-75">({count})</span> : null}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Tab: Trainings ── */}
+        {tab === 'trainings' && (
+          <>
+            {isAM ? (
+              <div className="mb-6">
+                {mySessionsLoading ? (
+                  <div className="muted text-sm py-8 text-center">Loading…</div>
+                ) : sessionCount === 0 ? (
+                  <div className="rounded-xl p-8 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+                    <Video size={28} style={{ color: 'var(--accent-gold)', margin: '0 auto 8px' }} />
+                    <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>No sessions assigned to you yet</div>
+                    <div className="text-[12px] muted mt-1">Sessions will appear here once Bhavneet / Mitali allocates calls to you from Regular Trainings.</div>
+                  </div>
+                ) : (
+                  <AMSheetTable
+                    rows={filteredSessions}
+                    onChanged={() => qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] })}
+                  />
+                )}
               </div>
             ) : (
-              <div>
-                <AMSheetTable
-                  rows={filteredSessions}
-                  onChanged={() => qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] })}
-                />
-              </div>
+              <div className="muted text-sm py-8 text-center">Training sheet is only available for coordinators.</div>
             )}
-          </div>
+            {isAM && <WeeklyPaymentSummary />}
+          </>
         )}
 
-        {/* ── Calls section (live + overdue + today + upcoming) ── */}
-        {inProgress.length > 0 && (
-          <Section title={`Live calls (${inProgress.length})`} tone="green">
-            {inProgress.map((c) => <CallRow key={c.id} c={c} />)}
-          </Section>
-        )}
-
-        {overdueCalls.length > 0 && (
-          <Section title={`Overdue calls (${overdueCalls.length})`} tone="red">
-            {overdueCalls.map((c) => <CallRow key={c.id} c={c} />)}
-          </Section>
-        )}
-
-        {!isAM || scheduledToday.length > 0 || inProgress.length > 0 ? (
-          <Section title={`Calls today (${scheduledToday.length})`} tone="amber">
-            {scheduledToday.length === 0 ? (
-              <div className="muted text-[12px] py-2">No calls scheduled for today. Use + Schedule call to plan one.</div>
-            ) : (
-              scheduledToday
-                .sort((a, b) => (a.scheduledFor || '').localeCompare(b.scheduledFor || ''))
-                .map((c) => <CallRow key={c.id} c={c} />)
+        {/* ── Tab: Sessions ── */}
+        {tab === 'sessions' && (
+          <>
+            {inProgress.length > 0 && (
+              <Section title={`Live calls (${inProgress.length})`} tone="green">
+                {inProgress.map((c) => <CallRow key={c.id} c={c} />)}
+              </Section>
             )}
-          </Section>
-        ) : null}
-
-        {upcomingCalls.length > 0 && (
-          <Section title={`Upcoming calls (${upcomingCalls.length})`} tone="grey">
-            {upcomingCalls.slice(0, 10).map((c) => <CallRow key={c.id} c={c} />)}
-          </Section>
+            {overdueCalls.length > 0 && (
+              <Section title={`Overdue calls (${overdueCalls.length})`} tone="red">
+                {overdueCalls.map((c) => <CallRow key={c.id} c={c} />)}
+              </Section>
+            )}
+            <Section title={`Calls today (${scheduledToday.length})`} tone="amber">
+              {scheduledToday.length === 0 ? (
+                <div className="muted text-[12px] py-2">No calls scheduled for today. Use + Schedule call to plan one.</div>
+              ) : (
+                scheduledToday
+                  .sort((a, b) => (a.scheduledFor || '').localeCompare(b.scheduledFor || ''))
+                  .map((c) => <CallRow key={c.id} c={c} />)
+              )}
+            </Section>
+            {upcomingCalls.length > 0 && (
+              <Section title={`Upcoming calls (${upcomingCalls.length})`} tone="grey">
+                {upcomingCalls.slice(0, 10).map((c) => <CallRow key={c.id} c={c} />)}
+              </Section>
+            )}
+            {!isAM && overdueTasks.length > 0 && (
+              <Section title={`Overdue session tasks (${overdueTasks.length})`} tone="red">
+                {overdueTasks.map((t: any) => <TaskRow key={t.id} t={t} onDone={() => markTaskDone.mutate(t.id)} />)}
+              </Section>
+            )}
+            {!isAM && todayTasks.length > 0 && (
+              <Section title={`Session tasks today (${todayTasks.length})`} tone="amber">
+                {todayTasks.map((t: any) => <TaskRow key={t.id} t={t} onDone={() => markTaskDone.mutate(t.id)} />)}
+              </Section>
+            )}
+          </>
         )}
 
-        {/* ── Session tasks — hidden for AM/lead (replaced by the sheet above) ── */}
-        {!isAM && overdueTasks.length > 0 && (
-          <Section title={`Overdue session tasks (${overdueTasks.length})`} tone="red">
-            {overdueTasks.map((t: any) => <TaskRow key={t.id} t={t} onDone={() => markTaskDone.mutate(t.id)} />)}
-          </Section>
+        {/* ── Tab: Activities ── */}
+        {tab === 'activities' && (
+          <>
+            <Section title={`Completed calls — last 7 days (${(recentCalls || []).length})`} tone="grey">
+              {(recentCalls || []).length === 0 ? (
+                <div className="muted text-[12px] py-2">No calls completed yet.</div>
+              ) : (
+                <div className="table-card">
+                  <table>
+                    <thead><tr><th>When</th><th>Client</th><th>Kind</th><th>Duration</th><th>Outcome</th><th>Feedback</th></tr></thead>
+                    <tbody>
+                      {(recentCalls || []).slice(0, 20).map((c) => (
+                        <tr key={c.id}>
+                          <td className="mono text-[11.5px]">{dateLabel(c.actualEndAt || c.scheduledFor)} {timeLabel(c.actualEndAt || c.scheduledFor)}</td>
+                          <td><Link to={`/clients/${c.client.id}`} className="font-medium hover:underline">{c.client.name}</Link></td>
+                          <td><Pill color={c.kind === 'feedback' ? 'blue' : c.kind === 'leverage' ? 'purple' : c.kind === 'escalation' ? 'red' : 'grey'}>{c.kind}</Pill></td>
+                          <td className="mono">{c.durationMinutes ? `${c.durationMinutes}m` : <span className="muted">—</span>}</td>
+                          <td>{c.outcome || <span className="muted">—</span>}</td>
+                          <td className="text-[11px]">{(c.feedback || c.notes || '—').slice(0, 60)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Section>
+            <Section title={`Hosted sessions — last 7 days (${(recentLogs || []).length})`} tone="grey">
+              {(recentLogs || []).length === 0 ? (
+                <div className="muted text-[12px] py-2">No sessions logged yet this week.</div>
+              ) : (
+                <div className="table-card">
+                  <table>
+                    <thead><tr><th>Date</th><th>Client</th><th>Trainer</th><th>Hours</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {(recentLogs || []).slice(0, 20).map((l: any) => (
+                        <tr key={l.id}>
+                          <td className="mono">{l.date}</td>
+                          <td>{l.client?.name || '—'}</td>
+                          <td>{l.trainer?.name || '—'}</td>
+                          <td className="mono">{l.hours}h</td>
+                          <td><Pill color={l.status === 'Paid' ? 'green' : l.status === 'PaymentApproved' ? 'blue' : 'grey'}>{l.status}</Pill></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Section>
+          </>
         )}
-
-        {!isAM && todayTasks.length > 0 && (
-          <Section title={`Session tasks today (${todayTasks.length})`} tone="amber">
-            {todayTasks.map((t: any) => <TaskRow key={t.id} t={t} onDone={() => markTaskDone.mutate(t.id)} />)}
-          </Section>
-        )}
-
-        {/* ── Weekly payment summary (AM only) ── */}
-        {isAM && <WeeklyPaymentSummary />}
-
-        <Section title={`Completed calls — last 7 days (${(recentCalls || []).length})`} tone="grey">
-          {(recentCalls || []).length === 0 ? (
-            <div className="muted text-[12px] py-2">No calls completed yet. Punch in on a scheduled call to start the timer.</div>
-          ) : (
-            <div className="table-card">
-              <table>
-                <thead><tr><th>When</th><th>Client</th><th>Kind</th><th>Duration</th><th>Outcome</th><th>Feedback</th></tr></thead>
-                <tbody>
-                  {(recentCalls || []).slice(0, 20).map((c) => (
-                    <tr key={c.id}>
-                      <td className="mono text-[11.5px]">{dateLabel(c.actualEndAt || c.scheduledFor)} {timeLabel(c.actualEndAt || c.scheduledFor)}</td>
-                      <td><Link to={`/clients/${c.client.id}`} className="font-medium hover:underline">{c.client.name}</Link></td>
-                      <td><Pill color={c.kind === 'feedback' ? 'blue' : c.kind === 'leverage' ? 'purple' : c.kind === 'escalation' ? 'red' : 'grey'}>{c.kind}</Pill></td>
-                      <td className="mono">{c.durationMinutes ? `${c.durationMinutes}m` : <span className="muted">—</span>}</td>
-                      <td>{c.outcome || <span className="muted">—</span>}</td>
-                      <td className="text-[11px]">{(c.feedback || c.notes || '—').slice(0, 60)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Section>
-
-        <Section title={`Hosted sessions — last 7 days (${(recentLogs || []).length})`} tone="grey">
-          {(recentLogs || []).length === 0 ? (
-            <div className="muted text-[12px] py-2">No sessions logged yet this week.</div>
-          ) : (
-            <div className="table-card">
-              <table>
-                <thead><tr><th>Date</th><th>Client</th><th>Trainer</th><th>Hours</th><th>Status</th></tr></thead>
-                <tbody>
-                  {(recentLogs || []).slice(0, 20).map((l: any) => (
-                    <tr key={l.id}>
-                      <td className="mono">{l.date}</td>
-                      <td>{l.client?.name || '—'}</td>
-                      <td>{l.trainer?.name || '—'}</td>
-                      <td className="mono">{l.hours}h</td>
-                      <td><Pill color={l.status === 'Paid' ? 'green' : l.status === 'PaymentApproved' ? 'blue' : 'grey'}>{l.status}</Pill></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Section>
       </Page>
     </>
   );
@@ -633,6 +656,10 @@ const SESSION_STATUS_OPTIONS = [
   { value: 'No', label: 'No' },
   { value: 'Partial', label: 'Partial' },
   { value: 'Rescheduled', label: 'Rescheduled' },
+  { value: 'Awaiting confirmation', label: 'Awaiting client confirmation' },
+  { value: 'Client confirming date', label: 'Client will confirm next date' },
+  { value: 'Scheduled future', label: 'Scheduled for future date' },
+  { value: 'Client unavailable', label: 'Client unavailable (temporary)' },
 ];
 
 const TOOL_OPTIONS = ['Zoom', 'GoToMeeting', 'Teams', 'Google Meet', 'Phone', 'Other'];
