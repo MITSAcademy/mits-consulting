@@ -79,8 +79,8 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
       where.name = { contains: s, mode: 'insensitive' };
     }
   }
-  // account_manager (Kashish / Muskan / Bhavneet lead) only see their own Active clients
-  if (req.user!.role === 'account_manager' || req.user!.role === 'lead') {
+  // account_manager (Kashish / Muskan) only see their own Active clients
+  if (req.user!.role === 'account_manager') {
     if (!lifecycle) where.lifecycle = { in: ['Active', 'LeverageGranted'] };
     where.hostOwnerId = req.user!.id;
   }
