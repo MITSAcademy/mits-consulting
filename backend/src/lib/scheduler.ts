@@ -13,6 +13,7 @@
 
 import cron from 'node-cron';
 import { sendTeam2Briefing, sendTeam1Briefing, sendSamitaBriefing, sendRoshniBriefing } from './dailyBriefing';
+import { runIssueEscalation } from './issueEscalation';
 
 function safe(label: string, fn: () => Promise<void>) {
   fn().catch((e) => console.error(`[scheduler] ${label} failed:`, e));
@@ -52,6 +53,11 @@ export function initScheduler() {
     timezone: 'Asia/Kolkata',
   });
   cron.schedule('0 20 * * *', () => safe('roshni-evening', () => sendRoshniBriefing('evening')), {
+    timezone: 'Asia/Kolkata',
+  });
+
+  // Issue escalation — runs every hour
+  cron.schedule('0 * * * *', () => safe('issue-escalation', () => runIssueEscalation()), {
     timezone: 'Asia/Kolkata',
   });
 

@@ -7,7 +7,7 @@
  *   • Upcoming + live sessions with start/end + feedback flow
  *   • "Schedule session" + "Edit training" + "Archive" actions
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -47,6 +47,61 @@ interface TrainingDetail {
   trainer: { id: string; name: string } | null;
   sessions: Session[];
   createdAt: string; updatedAt: string;
+}
+
+/* ─── Inline duration editor (click-to-edit on past sessions) ───────── */
+function InlineDuration({ session }: { session: Session }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(session.durationMinutes?.toString() || '');
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) inputRef.current?.select(); }, [editing]);
+
+  const save = useMutation({
+    mutationFn: (minutes: number) => api.patch(`/regular-trainings/sessions/${session.id}`, { durationMinutes: minutes }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['regular-training'] }); showToast('Duration updated'); setEditing(false); },
+    onError: (e: any) => { showToast(e?.response?.data?.error || 'Failed', 'error'); setEditing(false); },
+  });
+
+  if (!editing) {
+    return (
+      <button
+        className="mono text-[12px] hover:underline cursor-pointer"
+        style={{ color: session.durationMinutes ? 'inherit' : 'var(--brand-textMuted)' }}
+        title="Click to edit duration"
+        onClick={() => { setVal(session.durationMinutes?.toString() || ''); setEditing(true); }}
+      >
+        {session.durationMinutes ? `${session.durationMinutes}m` : '—'}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <input
+        ref={inputRef}
+        type="number"
+        min={1}
+        className="mono text-[12px] w-16 rounded px-1 py-0.5 border"
+        style={{ background: 'var(--bg-input)', borderColor: 'var(--brand-border)', color: 'inherit' }}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { const n = parseInt(val); if (n > 0) save.mutate(n); else setEditing(false); }
+          if (e.key === 'Escape') setEditing(false);
+        }}
+      />
+      <span className="text-[11px] muted">m</span>
+      <button
+        className="text-[11px] font-medium"
+        style={{ color: 'var(--accent-gold)' }}
+        onClick={() => { const n = parseInt(val); if (n > 0) save.mutate(n); else setEditing(false); }}
+      >✓</button>
+      <button className="text-[11px] muted" onClick={() => setEditing(false)}>✕</button>
+    </div>
+  );
 }
 
 export function RegularTrainingDetailPage() {
@@ -150,7 +205,7 @@ export function RegularTrainingDetailPage() {
                   <tr key={s.id}>
                     <td className="mono text-[11.5px]">{new Date(s.scheduledFor).toLocaleString()}</td>
                     <td>{s.hostedBy?.name || <span className="muted">—</span>}</td>
-                    <td className="mono">{s.durationMinutes ? `${s.durationMinutes}m` : <span className="muted">—</span>}</td>
+                    <td><InlineDuration session={s} /></td>
                     <td>
                       {s.recordingUrl ? (
                         <a href={s.recordingUrl} target="_blank" rel="noreferrer" className="text-[11px] hover:underline" style={{ color: 'var(--accent-gold)' }}>
@@ -307,6 +362,7 @@ function ScheduleSessionButton({ trainingId, defaultHostId }: { trainingId: stri
   const showToast = useUI((s) => s.showToast);
   const [form, setForm] = useState({ date: todayISO(), time: '19:00', notes: '' });
   const [hostId, setHostId] = useState(defaultHostId || '');
+  const [meetingLinkId, setMeetingLinkId] = useState('');
 
   const { data: users } = useQuery({
     queryKey: ['users'],
@@ -314,13 +370,21 @@ function ScheduleSessionButton({ trainingId, defaultHostId }: { trainingId: stri
     enabled: open,
   });
 
+  const { data: meetingLinks } = useQuery({
+    queryKey: ['meeting-links'],
+    queryFn: () => api.get('/meeting-links').then((r) => r.data),
+    enabled: open,
+  });
+
   const create = useMutation({
     mutationFn: () => {
       const isoLocal = `${form.date}T${form.time}:00+05:30`;
+      const selectedLink = (meetingLinks || []).find((l: any) => l.id === meetingLinkId);
       return api.post(`/regular-trainings/trainings/${trainingId}/sessions`, {
         scheduledFor: new Date(isoLocal).toISOString(),
         hostedById: hostId || undefined,
         notes: form.notes || null,
+        meetingLink: selectedLink?.url || null,
       });
     },
     onSuccess: () => {
@@ -328,6 +392,7 @@ function ScheduleSessionButton({ trainingId, defaultHostId }: { trainingId: stri
       showToast('Session scheduled');
       setOpen(false);
       setForm({ date: todayISO(), time: '19:00', notes: '' });
+      setMeetingLinkId('');
     },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
@@ -355,6 +420,15 @@ function ScheduleSessionButton({ trainingId, defaultHostId }: { trainingId: stri
             {(users || [])
               .filter((u: any) => ['manager', 'lead', 'account_manager', 'founder'].includes(u.role))
               .map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </Select>
+        </div>
+        <div className="form-row">
+          <Label>Meeting link</Label>
+          <Select value={meetingLinkId} onChange={(e) => setMeetingLinkId(e.target.value)}>
+            <option value="">— none / paste manually below —</option>
+            {(meetingLinks || []).map((l: any) => (
+              <option key={l.id} value={l.id}>{l.label} ({l.platform})</option>
+            ))}
           </Select>
         </div>
         <div className="form-row">
@@ -386,7 +460,13 @@ function EditTrainingButton({ training }: { training: TrainingDetail }) {
     scheduleNotes:         training.scheduleNotes         || '',
     notes:                 training.notes                 || '',
     hostedByDefaultId:     training.hostedByDefault?.id   || '',
+    trainerId:             training.trainer?.id            || '',
+    trainerReplacementReason: '',
   });
+
+  const originalTrainerId = training.trainer?.id || '';
+  const trainerChanged = form.trainerId !== originalTrainerId && originalTrainerId !== '';
+  const needsReason = trainerChanged && !form.trainerReplacementReason.trim();
 
   const { data: users } = useQuery({
     queryKey: ['users'],
@@ -394,8 +474,19 @@ function EditTrainingButton({ training }: { training: TrainingDetail }) {
     enabled: open,
   });
 
+  const { data: trainers } = useQuery({
+    queryKey: ['trainers'],
+    queryFn: () => api.get('/trainers').then((r) => r.data),
+    enabled: open,
+  });
+
   const save = useMutation({
-    mutationFn: () => api.patch(`/regular-trainings/trainings/${training.id}`, form),
+    mutationFn: () => {
+      const payload: any = { ...form };
+      if (!trainerChanged) { delete payload.trainerReplacementReason; }
+      if (!payload.trainerId) payload.trainerId = null;
+      return api.patch(`/regular-trainings/trainings/${training.id}`, payload);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['regular-training', training.id] }); qc.invalidateQueries({ queryKey: ['regular-trainings'] }); showToast('Saved'); setOpen(false); },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
@@ -429,6 +520,26 @@ function EditTrainingButton({ training }: { training: TrainingDetail }) {
             </Select>
           </div>
         </div>
+        <div className="form-row">
+          <Label>Trainer</Label>
+          <Select value={form.trainerId} onChange={(e) => setForm({ ...form, trainerId: e.target.value, trainerReplacementReason: '' })}>
+            <option value="">— none —</option>
+            {(trainers || []).map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </Select>
+        </div>
+        {trainerChanged && (
+          <div className="form-row">
+            <Label>Reason for trainer change *</Label>
+            <Textarea
+              rows={2}
+              placeholder="Why is the trainer being changed? (required)"
+              value={form.trainerReplacementReason}
+              onChange={(e) => setForm({ ...form, trainerReplacementReason: e.target.value })}
+              style={{ borderColor: needsReason ? 'var(--status-amber)' : undefined }}
+            />
+            {needsReason && <p className="text-[11px] mt-1" style={{ color: 'var(--status-amber)' }}>Reason is required when changing the trainer.</p>}
+          </div>
+        )}
         <div className="grid md:grid-cols-2 gap-2">
           <div className="form-row">
             <Label>Recording account email</Label>
@@ -453,7 +564,7 @@ function EditTrainingButton({ training }: { training: TrainingDetail }) {
         </div>
         <DialogFooter>
           <Button onClick={() => setOpen(false)}>Cancel</Button>
-          <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>
+          <Button variant="primary" disabled={save.isPending || needsReason} onClick={() => save.mutate()}>
             {save.isPending ? 'Saving…' : 'Save'}
           </Button>
         </DialogFooter>

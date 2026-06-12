@@ -173,6 +173,7 @@ model User {
   dailyReports       DailyReport[]
   editRequests       EditRequest[]    @relation("EditRequestBy")
   editReviewed       EditRequest[]    @relation("EditReviewedBy")
+  meetingLinks       MeetingLink[]    @relation("MeetingLinkOwner")
   outboundMessages   OutboundMessage[]
   demosConducted     Demo[]
   notifications      Notification[]
@@ -645,6 +646,7 @@ model RegularTraining {
   completedSessionCount    Int      @default(0)            // total completed sessions — auto-incremented on session end
   ownerTeam                String   @default("demo_team")  // demo_team | coordinator_team — auto-switches at 4 completed sessions
   demoEscalationRequested  Boolean  @default(false)        // coordinator flagged a trainer issue needing Demo Team intervention
+  trainerReplacementReason String?                         // reason recorded when trainer is changed
   status                   String   @default("active")     // active | paused | archived
   notes                    String?
   createdAt                DateTime @default(now())
@@ -703,12 +705,17 @@ model IssueTracker {
   closedById       String?
   closedBy         User?     @relation("IssueClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
   closedAt         DateTime?
+  // Escalation matrix: Bhavneet (L1) → Mitali (L2) → Vaibhav (L3)
+  escalationLevel  Int       @default(0)  // 0=unescalated, 1=Bhavneet, 2=Mitali, 3=Vaibhav
+  escalatedAt      DateTime?             // when last escalation happened
+  escalationLog    String?               // JSON array of {level, at, reason}
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
   @@index([status])
   @@index([coordinatorId])
   @@index([date])
+  @@index([escalationLevel])
 }
 
 // -------- CALL LOG --------
@@ -887,6 +894,17 @@ model EmailTemplate {
   subject   String?
   body      String
   variables String[]
+}
+
+// -------- MEETING LINK REPOSITORY --------
+model MeetingLink {
+  id        String   @id @default(cuid())
+  label     String                           // e.g. "Muskan Zoom Room"
+  platform  String                           // Zoom | Google Meet | Teams | Webex | Other
+  url       String
+  ownerId   String?
+  owner     User?    @relation("MeetingLinkOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
 }
 
 // -------- LEAD SOURCES --------

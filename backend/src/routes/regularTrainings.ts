@@ -131,8 +131,15 @@ regularTrainingsRouter.patch('/trainings/:id', async (req: AuthedRequest, res) =
   if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const b = req.body || {};
   const data: any = {};
-  for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'defaultTimeIst', 'meetingMode', 'lastSessionStatus', 'lastSessionComment', 'lastClientFeedback', 'lastTrainerFeedback', 'lastSessionDate', 'weeklySessionCount', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId', 'temporaryHostId']) {
+  for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'defaultTimeIst', 'meetingMode', 'lastSessionStatus', 'lastSessionComment', 'lastClientFeedback', 'lastTrainerFeedback', 'lastSessionDate', 'weeklySessionCount', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId', 'temporaryHostId', 'trainerReplacementReason']) {
     if (k in b) data[k] = b[k] === '' ? null : b[k];
+  }
+  // Require reason when changing trainer
+  if ('trainerId' in b) {
+    const existing = await prisma.regularTraining.findUnique({ where: { id: req.params.id }, select: { trainerId: true } });
+    if (existing && existing.trainerId && existing.trainerId !== b.trainerId && !b.trainerReplacementReason) {
+      return res.status(400).json({ error: 'Please provide a reason for changing the trainer.' });
+    }
   }
   // Capture old host before update to detect reassignment
   const oldTraining = data.hostedByDefaultId !== undefined

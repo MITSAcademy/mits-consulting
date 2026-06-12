@@ -11,7 +11,7 @@ import {
   MessageCircle, Building, ClipboardList, Wallet, Archive, CheckSquare, Clock, Receipt,
   Notebook, ChartLine, Upload, Inbox, Edit, UsersRound, Mail, Tag, LockKeyhole,
   Building2, History, Settings, LogOut, Moon, Calendar, ChevronsLeft, ChevronsRight,
-  TableProperties, CalendarDays, AlertTriangle,
+  TableProperties, CalendarDays, AlertTriangle, Link,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -59,6 +59,7 @@ const NAV: NavItem[] = [
   { section: 'work', page: '/sessions', label: 'Sessions', icon: CalendarDays, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'] },
   { section: 'work', page: '/issues', label: 'Issues', icon: AlertTriangle, roles: ['founder', 'manager', 'lead', 'account_manager'] },
   { section: 'clients', page: '/regular-trainings', label: 'Regular trainings', icon: Video, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
+  { section: 'clients', page: '/meeting-links', label: 'Meeting links', icon: Link, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
   { section: 'trainerOps', page: '/session-logs', label: 'Session logs', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager', 'accounts', 'payment_processor'] },
   { section: 'trainerOps', page: '/trainer-pay-sheet', label: 'Payment sheet', icon: TableProperties, roles: ['founder', 'manager', 'account_manager', 'accounts', 'payment_processor'] },
   { section: 'trainerOps', page: '/trainer-pay', label: 'Trainer payouts', icon: Wallet, roles: ['founder', 'manager', 'accounts', 'payment_processor'] },

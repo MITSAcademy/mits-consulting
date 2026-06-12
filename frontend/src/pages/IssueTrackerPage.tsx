@@ -10,7 +10,7 @@ import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { todayISO } from '@/lib/utils';
 import { useState, useMemo } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, XCircle, ChevronsUp, ChevronUp, Minus } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,9 +23,28 @@ interface Issue {
   status: IssueStatus;
   description?: string;
   resolutionNotes?: string;
+  escalationLevel: number;
+  escalatedAt?: string | null;
+  escalationLog?: string | null;
   coordinator?: { id: string; name: string };
   client?: { id: string; name: string } | null;
   trainer?: { id: string; name: string } | null;
+}
+
+const ESCALATION_LABELS: Record<number, string> = { 0: 'None', 1: 'Bhavneet', 2: 'Mitali', 3: 'Vaibhav' };
+function EscalationBadge({ level }: { level: number }) {
+  if (!level) return null;
+  const color = level === 3 ? 'var(--status-red)' : level === 2 ? 'var(--status-amber)' : 'var(--accent-gold)';
+  const Icon = level === 3 ? ChevronsUp : level === 2 ? ChevronUp : Minus;
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ml-1"
+      style={{ background: `color-mix(in srgb, ${color} 15%, transparent)`, color, border: `1px solid color-mix(in srgb, ${color} 25%, transparent)` }}
+      title={`L${level} — ${ESCALATION_LABELS[level]}`}
+    >
+      <Icon size={9} /> L{level}
+    </span>
+  );
 }
 
 interface IdName { id: string; name: string }
@@ -227,6 +246,32 @@ function UpdateIssueModal({ issue }: { issue: Issue }) {
               onChange={(e) => setF({ ...f, resolutionNotes: e.target.value })}
             />
           </div>
+
+          {/* Escalation history */}
+          {issue.escalationLevel > 0 && (
+            <div
+              className="rounded-xl px-3 py-2.5 text-[12px]"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+            >
+              <div className="muted mb-1.5 text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1">
+                <ChevronsUp size={10} /> Escalation history
+              </div>
+              {(issue.escalationLog ? JSON.parse(issue.escalationLog) : []).map((entry: any, i: number) => (
+                <div key={i} className="flex items-start gap-2 text-[11px] mb-1">
+                  <span
+                    className="px-1 py-0.5 rounded text-[10px] font-bold shrink-0"
+                    style={{ background: 'var(--accent-gold-soft)', color: 'var(--accent-gold)' }}
+                  >
+                    L{entry.level}
+                  </span>
+                  <span style={{ color: 'var(--brand-textSecondary)' }}>
+                    {entry.reason}
+                    <span className="muted ml-1">· {new Date(entry.at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Show existing description read-only if present */}
           {issue.description && (
@@ -431,7 +476,10 @@ export default function IssueTrackerPage() {
                     <td className="text-[13px]">{issue.client?.name    || <span className="muted">—</span>}</td>
                     <td className="text-[13px]">{issue.trainer?.name   || <span className="muted">—</span>}</td>
                     <td>
-                      <div className="text-[13px] font-medium">{issue.title}</div>
+                      <div className="text-[13px] font-medium">
+                        {issue.title}
+                        <EscalationBadge level={issue.escalationLevel || 0} />
+                      </div>
                       {issue.description && (
                         <div className="muted text-[11px] mt-0.5 max-w-xs truncate">{issue.description}</div>
                       )}
