@@ -477,8 +477,12 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
   if (organiserEmail && !recipients.find((r) => r.email === organiserEmail)) {
     recipients.push({ name: organiser?.name || 'Organiser', email: organiserEmail });
   }
-  // Samita CC on all invites
-  const samitaEmail = 'samita@mitssolution.com';
+  // Always CC these stakeholders on every session invite
+  const fixedCc = [
+    'samita@mitssolution.com',
+    'mitagg@mitssolution.com',       // Mitali
+    'bhavneet.kaur@mitssolution.com', // Bhavneet
+  ];
 
   const fromUser = organiser ? safeBuildFromUser(organiser) : undefined;
 
@@ -496,7 +500,7 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
       method: 'REQUEST',
     });
     try {
-      const cc = [samitaEmail].filter((a) => a !== recipient.email && a !== organiserEmail);
+      const cc = fixedCc.filter((a) => a !== recipient.email && a !== organiserEmail);
       await sendEmail({
         to: recipient.email,
         subject: `📅 ${summary} · ${istLabel} IST`,
