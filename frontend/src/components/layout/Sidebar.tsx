@@ -51,7 +51,7 @@ const NAV: NavItem[] = [
   { section: 'clients', page: '/trainers', label: 'My trainers', icon: UserCog, roles: ['account_manager', 'lead'] },
   { section: 'clients', page: '/renewals', label: 'Renewals', icon: RefreshCw, roles: ['founder', 'manager'] },
   { section: 'clients', page: '/dormant', label: 'Dormant clients', icon: Moon, roles: ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'] },
-  { section: 'clients', page: '/hold', label: 'Post-demo · on hold', icon: Clock, roles: ['founder', 'manager', 'demo_lead', 'sales_closer'] },
+  { section: 'clients', page: '/hold', label: 'CP / C · Follow-ups', icon: Clock, roles: ['founder', 'manager', 'demo_lead', 'sales_closer'] },
   { section: 'clients', page: '/feedback', label: 'Feedback', icon: MessageCircle, roles: ['founder', 'manager', 'lead'] },
   { section: 'partners', page: '/partners', label: 'Partners', icon: Building, roles: ['founder', 'manager', 'sales_closer', 'accounts'] },
 
@@ -134,8 +134,13 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
       ]);
       const cl = (clients || []) as any[];
       const isSalesCloser = user?.role === 'sales_closer';
-      const dormantOverdue = cl.filter((c) => c.lifecycle === 'Dormant' && c.dormantCheckBackOn && c.dormantCheckBackOn <= today && (!isSalesCloser || c.salesOwnerId === user?.id)).length;
-      const holdDue = cl.filter((c) => c.lifecycle === 'Hold' && c.holdCheckBackOn && c.holdCheckBackOn <= today && (!isSalesCloser || c.salesOwnerId === user?.id)).length;
+      // For sales_closer: dormant = DP clients, hold = CP+C clients
+      const dormantOverdue = isSalesCloser
+        ? cl.filter((c) => c.lifecycle === 'SaleClosing' && c.saleClosingSubStatus === 'DP' && c.salesOwnerId === user?.id).length
+        : cl.filter((c) => c.lifecycle === 'Dormant' && c.dormantCheckBackOn && c.dormantCheckBackOn <= today).length;
+      const holdDue = isSalesCloser
+        ? cl.filter((c) => c.lifecycle === 'SaleClosing' && ['CP', 'C'].includes(c.saleClosingSubStatus) && c.salesOwnerId === user?.id).length
+        : cl.filter((c) => c.lifecycle === 'Hold' && c.holdCheckBackOn && c.holdCheckBackOn <= today).length;
       const demoIntakePending = cl.filter((c) => ['Lead', 'IntakeSent'].includes(c.lifecycle)).length;
       const demosToday = cl.filter((c) => c.lifecycle === 'DemoScheduled' && c.demoDate && c.demoDate <= weekOut).length;
       const feedbackPending = cl.filter((c) => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle)).length;

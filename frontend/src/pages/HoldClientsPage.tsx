@@ -10,10 +10,6 @@ import { HandMetal, MessageCircle, Play, Wallet } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { EmptyState } from '@/components/EmptyState';
 
-/**
- * Hold clients = post-demo, client said "need time to decide".
- * Each has a 3-day check-back date for Roshni to follow up.
- */
 export function HoldClientsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
@@ -26,8 +22,12 @@ export function HoldClientsPage() {
     queryFn: () => api.get('/clients').then((r) => r.data),
   });
 
+  // For sales_closer: CP + C clients in SaleClosing (called/engaged, following up)
+  // For other roles: standard Hold lifecycle (post-demo "need time")
   const onHold = ((clients || []) as any[]).filter((c) =>
-    c.lifecycle === 'Hold' && (!isSalesCloser || c.salesOwnerId === user.id)
+    isSalesCloser
+      ? c.lifecycle === 'SaleClosing' && ['CP', 'C'].includes(c.saleClosingSubStatus) && c.salesOwnerId === user.id
+      : c.lifecycle === 'Hold'
   );
 
   const overdue:  any[] = [];
@@ -120,21 +120,24 @@ export function HoldClientsPage() {
   return (
     <>
       <Topbar
-        title={isSalesCloser ? 'Post-demo · on hold' : 'Hold · post-demo follow-ups'}
-        subtitle={`${onHold.length} on hold${overdue.length ? ` · ${overdue.length} overdue` : ''}${dueToday.length ? ` · ${dueToday.length} due today` : ''}`}
+        title={isSalesCloser ? 'CP / C · Follow-ups' : 'Hold · post-demo follow-ups'}
+        subtitle={isSalesCloser
+          ? `${onHold.length} client${onHold.length === 1 ? '' : 's'}${overdue.length ? ` · ${overdue.length} overdue` : ''}${dueToday.length ? ` · ${dueToday.length} due today` : ''}`
+          : `${onHold.length} on hold${overdue.length ? ` · ${overdue.length} overdue` : ''}${dueToday.length ? ` · ${dueToday.length} due today` : ''}`}
       />
       <Page>
         <div className="callout">
-          Clients who said <strong>"need time"</strong> after their demo. Default 3-day check-back is set when Samita records "Need time" feedback.
-          Reach out on the check-back date — if ready, move to <em>Sale closing</em>; if silent, mark <em>Dormant</em>.
+          {isSalesCloser
+            ? <><strong>CP</strong> = called, went silent — follow up in 3 days and move to <strong>C</strong>. <strong>C</strong> = letter sent — follow up daily until payment or drop to <strong>DP</strong>.</>
+            : <>Clients who said <strong>"need time"</strong> after their demo. Reach out on the check-back date — if ready, move to <em>Sale closing</em>; if silent, mark <em>Dormant</em>.</>}
         </div>
 
         {onHold.length === 0 && (
           <EmptyState
             icon={HandMetal}
             tone="green"
-            title="Nothing on hold"
-            description="All post-demo clients have a decision — either they're moving forward or marked Churned."
+            title={isSalesCloser ? 'No CP / C clients' : 'Nothing on hold'}
+            description={isSalesCloser ? 'No clients in CP or C stage right now.' : 'All post-demo clients have a decision — either they\'re moving forward or marked Churned.'}
           />
         )}
 

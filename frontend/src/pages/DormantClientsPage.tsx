@@ -16,6 +16,7 @@ export function DormantClientsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user)!;
+  const isSalesCloser = user.role === 'sales_closer';
   const today = todayISO();
   const [q, setQ] = useState('');
 
@@ -24,8 +25,12 @@ export function DormantClientsPage() {
     queryFn: () => api.get('/clients').then((r) => r.data),
   });
 
+  // For sales_closer: DP (dropped) clients in SaleClosing pipeline
+  // For other roles: standard Dormant lifecycle
   const allDormant = ((clients || []) as any[]).filter((c) =>
-    c.lifecycle === 'Dormant' && (user.role !== 'sales_closer' || c.salesOwnerId === user.id)
+    user.role === 'sales_closer'
+      ? c.lifecycle === 'SaleClosing' && c.saleClosingSubStatus === 'DP' && c.salesOwnerId === user.id
+      : c.lifecycle === 'Dormant'
   );
   const qLower = q.trim().toLowerCase();
   const dormant = qLower
@@ -128,7 +133,7 @@ export function DormantClientsPage() {
   return (
     <>
       <Topbar
-        title="Dormant clients"
+        title={isSalesCloser ? 'DP · Dropped clients' : 'Dormant clients'}
         subtitle={`${dormant.length} of ${allDormant.length}${overdue.length ? ` · ${overdue.length} overdue check-back` : ''}`}
         actions={
           <Input
@@ -141,7 +146,9 @@ export function DormantClientsPage() {
       />
       <Page>
         <div className="callout">
-          Clients who stopped responding. Different from <em>Hold</em> (will resume) and <em>Churned</em> (lost).
+          {isSalesCloser
+            ? <><strong>DP</strong> = dropped — client stopped responding. They moved to DP from C/CP. If they come back, reopen to RP from their profile.</>
+            : <>Clients who stopped responding. Different from <em>Hold</em> (will resume) and <em>Churned</em> (lost).</>}
           Each has a <strong>check-back date</strong> — reach out then to revive or move to Churned.
         </div>
 
