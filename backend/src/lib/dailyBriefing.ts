@@ -550,3 +550,100 @@ export async function sendSamitaBriefing(shift: 'morning' | 'evening') {
 
   console.log(`[briefing] Samita ${shift} → ${toEmail} — ${totalItems} items`);
 }
+
+// ── Roshni briefing (sales_closer) — her pipeline: SaleClosing + Hold + Dormant due ──
+
+export async function sendRoshniBriefing(shift: 'morning' | 'evening') {
+  if (!await acquireBriefingLock('roshni', shift)) return;
+  const today = todayIST();
+
+  const roshni = await prisma.user.findUnique({
+    where: { id: 'u-roshni' },
+    select: { id: true, name: true, gmailAddress: true, sendAsAddress: true, email: true },
+  });
+  const toEmail = roshni?.sendAsAddress || roshni?.gmailAddress || roshni?.email;
+  if (!toEmail) { console.log('[briefing] Roshni has no email configured — skipping'); return; }
+
+  // CC Vaibhav
+  const vaibhav = await prisma.user.findUnique({
+    where: { id: 'u-vaibhav' },
+    select: { gmailAddress: true, sendAsAddress: true, email: true },
+  });
+  const ccAddresses = [vaibhav?.sendAsAddress || vaibhav?.gmailAddress || vaibhav?.email].filter(Boolean) as string[];
+
+  const dateLabel = new Date(today).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  // SaleClosing clients owned by Roshni
+  const saleClosing = await prisma.client.findMany({
+    where: { lifecycle: 'SaleClosing', salesOwnerId: roshni!.id },
+    select: { id: true, name: true, lifecycle: true, saleClosingSubStatus: true, stageEnteredAt: true },
+    orderBy: { stageEnteredAt: 'asc' },
+  });
+  // SaleWon — waiting for payment
+  const saleWon = await prisma.client.findMany({
+    where: { lifecycle: 'SaleWon', salesOwnerId: roshni!.id },
+    select: { id: true, name: true, lifecycle: true, stageEnteredAt: true },
+    orderBy: { stageEnteredAt: 'asc' },
+  });
+  // On Hold (post-demo) — overdue or due today
+  const holdDue = await prisma.client.findMany({
+    where: { lifecycle: 'Hold', salesOwnerId: roshni!.id, holdCheckBackOn: { lte: today } },
+    select: { id: true, name: true, holdCheckBackOn: true, holdReason: true, stageEnteredAt: true },
+    orderBy: { holdCheckBackOn: 'asc' },
+  });
+  // Dormant — check-back overdue
+  const dormantDue = await prisma.client.findMany({
+    where: { lifecycle: 'Dormant', salesOwnerId: roshni!.id, dormantCheckBackOn: { lte: today } },
+    select: { id: true, name: true, dormantCheckBackOn: true, dormantReason: true, stageEnteredAt: true },
+    orderBy: { dormantCheckBackOn: 'asc' },
+  });
+
+  const rpClients = saleClosing.filter(c => !c.saleClosingSubStatus || c.saleClosingSubStatus === 'RP');
+  const cpClients = saleClosing.filter(c => c.saleClosingSubStatus === 'CP');
+  const cClients  = saleClosing.filter(c => c.saleClosingSubStatus === 'C');
+
+  const sectionDefs = [
+    { items: rpClients,   label: 'RP · Call them now',      color: '#1A6CDF', action: 'CALL NOW' },
+    { items: cpClients,   label: 'CP · Follow up',          color: '#D97706', action: 'FOLLOW UP' },
+    { items: cClients,    label: 'C · Close / JBT',         color: '#22c55e', action: 'CLOSE' },
+    { items: saleWon,     label: 'Sale Won · Collect payment', color: '#7c3aed', action: 'COLLECT' },
+    { items: holdDue,     label: 'On Hold · Check back now', color: '#f59e0b', action: 'CHECK BACK' },
+    { items: dormantDue,  label: 'Dormant · Re-engage',     color: '#64748b', action: 'RE-ENGAGE' },
+  ];
+
+  const sections: string[] = [];
+  for (const s of sectionDefs) {
+    if (!s.items.length) continue;
+    sections.push(sectionHtml(s.label, s.color,
+      s.items.map(c => itemRow(c.name, (c as any).saleClosingSubStatus || (c as any).holdReason || (c as any).dormantReason, (c as any).stageEnteredAt, s.action)),
+      s.items.length,
+    ));
+  }
+
+  const totalItems = saleClosing.length + saleWon.length + holdDue.length + dormantDue.length;
+  const subject = totalItems > 0
+    ? `[MITS] ${shift === 'morning' ? '🌅' : '🌙'} ${totalItems} pending · Roshni · ${today}`
+    : `[MITS] ${shift === 'morning' ? '🌅' : '🌙'} All clear · ${today}`;
+
+  const summaryChips = summaryBar(sectionDefs.map(s => ({ label: s.label, count: s.items.length, color: s.color })));
+
+  const html = emailWrapper(
+    'Roshni',
+    shift,
+    dateLabel,
+    totalItems,
+    summaryChips,
+    sections.join(''),
+    'No pending items — great work closing!',
+  );
+
+  await sendEmail({
+    to: toEmail,
+    subject,
+    body: `Sales briefing for Roshni — ${totalItems} items need attention. View in HTML-capable email client.`,
+    htmlBody: html,
+    cc: ccAddresses.filter(e => e !== toEmail),
+  });
+
+  console.log(`[briefing] Roshni ${shift} → ${toEmail} — ${totalItems} items`);
+}

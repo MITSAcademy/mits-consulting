@@ -24,7 +24,9 @@ export function DormantClientsPage() {
     queryFn: () => api.get('/clients').then((r) => r.data),
   });
 
-  const allDormant = ((clients || []) as any[]).filter((c) => c.lifecycle === 'Dormant');
+  const allDormant = ((clients || []) as any[]).filter((c) =>
+    c.lifecycle === 'Dormant' && (user.role !== 'sales_closer' || c.salesOwnerId === user.id)
+  );
   const qLower = q.trim().toLowerCase();
   const dormant = qLower
     ? allDormant.filter((c) => {

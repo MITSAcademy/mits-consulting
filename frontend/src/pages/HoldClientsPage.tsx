@@ -18,6 +18,7 @@ export function HoldClientsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user)!;
+  const isSalesCloser = user.role === 'sales_closer';
   const today = todayISO();
 
   const { data: clients } = useQuery({
@@ -25,7 +26,9 @@ export function HoldClientsPage() {
     queryFn: () => api.get('/clients').then((r) => r.data),
   });
 
-  const onHold = ((clients || []) as any[]).filter((c) => c.lifecycle === 'Hold');
+  const onHold = ((clients || []) as any[]).filter((c) =>
+    c.lifecycle === 'Hold' && (!isSalesCloser || c.salesOwnerId === user.id)
+  );
 
   const overdue:  any[] = [];
   const dueToday: any[] = [];
@@ -102,9 +105,11 @@ export function HoldClientsPage() {
             <Button size="sm" variant="success" onClick={() => sendToSale.mutate(c.id)}>
               <Wallet size={12}/> Client ready · close
             </Button>
-            <Button size="sm" onClick={() => markDormant.mutate(c.id)}>
-              <Play size={12}/> Mark dormant
-            </Button>
+            {!isSalesCloser && (
+              <Button size="sm" onClick={() => markDormant.mutate(c.id)}>
+                <Play size={12}/> Mark dormant
+              </Button>
+            )}
             <Link to={`/clients/${c.id}`} className="btn btn-sm">Open</Link>
           </div>
         </div>
@@ -115,7 +120,7 @@ export function HoldClientsPage() {
   return (
     <>
       <Topbar
-        title="Hold · post-demo follow-ups"
+        title={isSalesCloser ? 'Post-demo · on hold' : 'Hold · post-demo follow-ups'}
         subtitle={`${onHold.length} on hold${overdue.length ? ` · ${overdue.length} overdue` : ''}${dueToday.length ? ` · ${dueToday.length} due today` : ''}`}
       />
       <Page>

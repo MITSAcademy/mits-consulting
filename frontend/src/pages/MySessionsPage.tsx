@@ -706,6 +706,7 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
 function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const rowUser = useAuth((s) => s.user)!
   const skills = t.trainer?.skills || '—';
   const permanentName = t.hostedByDefault?.name || '—';
   const temporaryName = t.temporaryHost?.name || permanentName;
@@ -847,7 +848,7 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
               style={{ background: showFeedback ? 'rgba(99,179,237,0.3)' : 'rgba(99,179,237,0.12)', color: '#63b3ed', border: 'none', cursor: 'pointer' }}>
               <MessageSquare size={11} />
             </button>
-            {t.ownerTeam === 'demo_team' && (
+            {t.ownerTeam === 'demo_team' && rowUser.role !== 'sales_closer' && (
               <button
                 title={t.demoEscalationRequested ? 'Clear Demo Team escalation' : 'Flag for Demo Team intervention (trainer issue)'}
                 onClick={() => api.post(`/regular-trainings/trainings/${t.id}/escalate`).then(() => { onChanged(); qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); })}
