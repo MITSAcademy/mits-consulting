@@ -133,8 +133,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
         api.get('/clients').then((r) => r.data),
       ]);
       const cl = (clients || []) as any[];
-      const dormantOverdue = cl.filter((c) => c.lifecycle === 'Dormant' && c.dormantCheckBackOn && c.dormantCheckBackOn <= today).length;
-      const holdDue = cl.filter((c) => c.lifecycle === 'Hold' && c.holdCheckBackOn && c.holdCheckBackOn <= today).length;
+      const isSalesCloser = user?.role === 'sales_closer';
+      const dormantOverdue = cl.filter((c) => c.lifecycle === 'Dormant' && c.dormantCheckBackOn && c.dormantCheckBackOn <= today && (!isSalesCloser || c.salesOwnerId === user?.id)).length;
+      const holdDue = cl.filter((c) => c.lifecycle === 'Hold' && c.holdCheckBackOn && c.holdCheckBackOn <= today && (!isSalesCloser || c.salesOwnerId === user?.id)).length;
       const demoIntakePending = cl.filter((c) => ['Lead', 'IntakeSent'].includes(c.lifecycle)).length;
       const demosToday = cl.filter((c) => c.lifecycle === 'DemoScheduled' && c.demoDate && c.demoDate <= weekOut).length;
       const feedbackPending = cl.filter((c) => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle)).length;

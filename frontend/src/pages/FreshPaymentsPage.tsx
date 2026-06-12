@@ -29,8 +29,10 @@ export function FreshPaymentsPage() {
   const { data: banks } = useQuery({ queryKey: ['banks'], queryFn: () => api.get('/banks').then((r) => r.data) });
 
   const filteredPayments = useMemo(() => {
-    const list = (payments || []) as any[];
-    if (isSalesCloser) return list; // Roshni sees everything she recorded (all payments)
+    const list = [...((payments || []) as any[])].sort((a, b) =>
+      (b.paymentDate || '').localeCompare(a.paymentDate || '')
+    );
+    if (isSalesCloser) return list;
     if (!mineOnly) return list;
     return list.filter((p: any) => p.receivedBy?.id === user.id);
   }, [payments, mineOnly, isSalesCloser, user]);
