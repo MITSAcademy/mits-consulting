@@ -7,26 +7,39 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 
+// Roles that send emails and must have an app password configured
+const EMAIL_ROLES = ['founder', 'manager', 'demo_lead', 'demo_intake', 'account_manager', 'lead', 'sales_closer'];
+
 /**
- * Pops up automatically the first time an API call returns
- * code === 'MISSING_APP_PASSWORD' (see api.ts interceptor). Lets the signed-in
- * user paste their Gmail App Password without leaving the page so the email
- * they were trying to send can be retried immediately.
+ * Pops up automatically when:
+ *  1. An API call returns code === 'MISSING_APP_PASSWORD' (reactive), OR
+ *  2. On first load, the user's role requires email and no app password is set (proactive).
  *
- * Mounted once at AppLayout level — invisible until the global event fires.
+ * Mounted once at AppLayout level.
  */
 export function SetupAppPasswordModal() {
   const user = useAuth((s) => s.user);
   const showToast = useUI((s) => s.showToast);
   const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   const [gmail, setGmail] = useState('');
   const [appPassword, setAppPassword] = useState('');
 
+  // Reactive: fired by API interceptor when a send fails
   useEffect(() => {
     const handler = () => setOpen(true);
     window.addEventListener('mits:missing-app-password', handler);
     return () => window.removeEventListener('mits:missing-app-password', handler);
   }, []);
+
+  // Proactive: check on login whether app password is already set
+  useEffect(() => {
+    if (!user || dismissed) return;
+    if (!EMAIL_ROLES.includes((user as any).role)) return;
+    api.get('/users/me/smtp').then((r) => {
+      if (!r.data.hasPassword) setOpen(true);
+    }).catch(() => {}); // non-fatal — don't block the app
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (open && user && !gmail) {
@@ -41,8 +54,9 @@ export function SetupAppPasswordModal() {
       appPassword: appPassword.replace(/\s+/g, ''),
     }),
     onSuccess: () => {
-      showToast('App Password saved — try the send again');
+      showToast('App Password saved ✓ — email is now enabled for your account');
       setOpen(false);
+      setDismissed(true);
       setAppPassword('');
     },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Save failed', 'error'),
@@ -56,8 +70,8 @@ export function SetupAppPasswordModal() {
   return (
     <Dialog open onOpenChange={(v) => !v && setOpen(false)}>
       <DialogContent
-        title="Set up your Gmail App Password"
-        description="The system needs your own App Password to send email from your account. We will NOT send emails from anyone else's account."
+        title="⚠ Gmail App Password required"
+        description="Email features (demo invites, session invites, receipts) won't work until you connect your Gmail. Takes 2 minutes — set it up now so nothing breaks."
         className="max-w-lg"
       >
         <div className="text-xs muted mb-3">
@@ -91,7 +105,7 @@ export function SetupAppPasswordModal() {
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={() => { setOpen(false); setDismissed(true); }}>Remind me later</Button>
           <Button
             variant="primary"
             disabled={save.isPending}
