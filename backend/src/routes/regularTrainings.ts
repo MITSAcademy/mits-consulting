@@ -165,6 +165,26 @@ regularTrainingsRouter.patch('/trainings/:id', async (req: AuthedRequest, res) =
   res.json(updated);
 });
 
+// Toggle Demo Team escalation flag — only available while ownerTeam is still demo_team
+regularTrainingsRouter.post('/trainings/:id/escalate', async (req: AuthedRequest, res) => {
+  if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const training = await prisma.regularTraining.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, name: true, ownerTeam: true, demoEscalationRequested: true },
+  });
+  if (!training) return res.status(404).json({ error: 'Not found' });
+  if (training.ownerTeam !== 'demo_team') {
+    return res.status(400).json({ error: 'Client already transferred to coordinator team — escalation not needed.' });
+  }
+  const flag = !training.demoEscalationRequested;
+  const updated = await prisma.regularTraining.update({
+    where: { id: req.params.id },
+    data: { demoEscalationRequested: flag },
+  });
+  await audit(req.user!.id, req.user!.name, flag ? 'DEMO_ESCALATION_REQUESTED' : 'DEMO_ESCALATION_CLEARED', training.name);
+  res.json(updated);
+});
+
 regularTrainingsRouter.delete('/trainings/:id', async (req: AuthedRequest, res) => {
   if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const t = await prisma.regularTraining.findUnique({ where: { id: req.params.id }, select: { name: true } });
@@ -308,6 +328,7 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
       meetingMode: true, lastSessionStatus: true, lastSessionComment: true,
       lastClientFeedback: true, lastTrainerFeedback: true,
       lastSessionDate: true, weeklySessionCount: true, notes: true,
+      completedSessionCount: true, ownerTeam: true, demoEscalationRequested: true,
       hostedByDefault: { select: { id: true, name: true } },
       temporaryHost:   { select: { id: true, name: true } },
       client:  { select: { id: true, name: true, whatsappGroupLink: true, phoneCode: true, phoneDigits: true } },
@@ -559,6 +580,22 @@ regularTrainingsRouter.post('/sessions/:id/end', async (req: AuthedRequest, res)
       ...(typeof b.notes === 'string'        ? { notes:        b.notes.slice(0, 2000) } : {}),
     },
   });
+
+  // Increment completedSessionCount on the parent training; auto-transfer to coordinator_team at 4
+  const training = await prisma.regularTraining.update({
+    where: { id: updated.regularTrainingId },
+    data: {
+      completedSessionCount: { increment: 1 },
+    },
+    select: { completedSessionCount: true, ownerTeam: true },
+  });
+  if (training.completedSessionCount >= 4 && training.ownerTeam === 'demo_team') {
+    await prisma.regularTraining.update({
+      where: { id: updated.regularTrainingId },
+      data: { ownerTeam: 'coordinator_team', demoEscalationRequested: false },
+    });
+  }
+
   await audit(req.user!.id, req.user!.name, 'TRAINING_SESSION_ENDED', `${s.regularTraining.name} · ${duration ? duration + 'min' : 'no timer'}`);
   res.json(updated);
 });

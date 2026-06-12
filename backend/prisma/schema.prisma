@@ -642,6 +642,9 @@ model RegularTraining {
   lastTrainerFeedback      String?                         // feedback from trainer after session
   lastSessionDate          String?                         // ISO date of last session e.g. "2026-06-11"
   weeklySessionCount       Int?                            // auto-calculated sessions this week, AM can override
+  completedSessionCount    Int      @default(0)            // total completed sessions — auto-incremented on session end
+  ownerTeam                String   @default("demo_team")  // demo_team | coordinator_team — auto-switches at 4 completed sessions
+  demoEscalationRequested  Boolean  @default(false)        // coordinator flagged a trainer issue needing Demo Team intervention
   status                   String   @default("active")     // active | paused | archived
   notes                    String?
   createdAt                DateTime @default(now())

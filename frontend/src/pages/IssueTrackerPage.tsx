@@ -7,6 +7,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Pill } from '@/components/ui/pill';
 import { EmptyState } from '@/components/EmptyState';
 import { useUI } from '@/store/ui';
+import { useAuth } from '@/store/auth';
 import { todayISO } from '@/lib/utils';
 import { useState, useMemo } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, XCircle } from 'lucide-react';
@@ -63,21 +64,23 @@ function StatusBadge({ status }: { status: IssueStatus }) {
 
 // ── New Issue form ───────────────────────────────────────────────────────────
 
-function NewIssueModal({ clients, trainers }: { clients: IdName[]; trainers: IdName[] }) {
+function NewIssueModal({ clients, trainers, users }: { clients: IdName[]; trainers: IdName[]; users: IdName[] }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const me = useAuth((s) => s.user)!;
   const [open, setOpen] = useState(false);
-  const blank = { title: '', date: todayISO(), clientId: '', trainerId: '', description: '', status: 'Open' as IssueStatus };
+  const blank = { title: '', date: todayISO(), clientId: '', trainerId: '', coordinatorId: me.id, description: '', status: 'Open' as IssueStatus };
   const [f, setF] = useState(blank);
 
   const create = useMutation({
     mutationFn: () => api.post('/issue-tracker', {
-      title:       f.title,
-      date:        f.date,
-      clientId:    f.clientId  || undefined,
-      trainerId:   f.trainerId || undefined,
-      description: f.description || undefined,
-      status:      f.status,
+      title:         f.title,
+      date:          f.date,
+      clientId:      f.clientId      || undefined,
+      trainerId:     f.trainerId     || undefined,
+      coordinatorId: f.coordinatorId || undefined,
+      description:   f.description   || undefined,
+      status:        f.status,
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['issue-tracker'] });
@@ -129,6 +132,13 @@ function NewIssueModal({ clients, trainers }: { clients: IdName[]; trainers: IdN
                 {trainers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Select>
             </div>
+          </div>
+          <div className="form-row">
+            <Label>Coordinator *</Label>
+            <Select value={f.coordinatorId} onChange={(e) => setF({ ...f, coordinatorId: e.target.value })}>
+              <option value="">— Select coordinator —</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </Select>
           </div>
           <div className="form-row">
             <Label>Description</Label>
@@ -283,6 +293,14 @@ export default function IssueTrackerPage() {
       ),
   });
 
+  const { data: users } = useQuery<IdName[]>({
+    queryKey: ['users', 'id-name'],
+    queryFn: () =>
+      api.get('/users').then((r) =>
+        (r.data as any[]).map((u) => ({ id: u.id, name: u.name }))
+      ),
+  });
+
   const filtered = useMemo(() => {
     let rows = issues || [];
     if (statusFilter !== 'All') rows = rows.filter((i) => i.status === statusFilter);
@@ -300,7 +318,7 @@ export default function IssueTrackerPage() {
         title="Issues & Escalation Tracker"
         subtitle={`${openCount} open · ${inProgressCount} in progress`}
         actions={
-          <NewIssueModal clients={clients || []} trainers={trainers || []} />
+          <NewIssueModal clients={clients || []} trainers={trainers || []} users={users || []} />
         }
       />
       <Page>

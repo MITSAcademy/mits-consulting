@@ -721,6 +721,22 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
             ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>{t.client.name}</Link>
             : <span className="font-semibold">{t.name}</span>
           }
+          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+            <span
+              className="inline-block px-1.5 py-0 rounded text-[10px] font-semibold"
+              style={t.ownerTeam === 'coordinator_team'
+                ? { background: 'rgba(99,179,237,0.2)', color: '#63b3ed' }
+                : { background: 'rgba(251,191,36,0.2)', color: '#fbbf24' }}
+            >
+              {t.ownerTeam === 'coordinator_team' ? 'Coordinator' : 'Demo Team'}
+            </span>
+            <span className="text-[10px]" style={{ opacity: 0.6 }}>{t.completedSessionCount ?? 0}/4</span>
+            {t.demoEscalationRequested && (
+              <span className="inline-block px-1.5 py-0 rounded text-[10px] font-bold" style={{ background: 'rgba(239,68,68,0.25)', color: '#f87171' }}>
+                ⚠ Escalated
+              </span>
+            )}
+          </div>
         </td>
         <td className="px-2 py-2" style={cell}>{t.trainer?.name || <span style={{ opacity: 0.5 }}>—</span>}</td>
         <td className="px-2 py-2" style={{ ...cell, maxWidth: 0 }}>
@@ -804,6 +820,17 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
               style={{ background: showFeedback ? 'rgba(99,179,237,0.3)' : 'rgba(99,179,237,0.12)', color: '#63b3ed', border: 'none', cursor: 'pointer' }}>
               <MessageSquare size={11} />
             </button>
+            {t.ownerTeam === 'demo_team' && (
+              <button
+                title={t.demoEscalationRequested ? 'Clear Demo Team escalation' : 'Flag for Demo Team intervention (trainer issue)'}
+                onClick={() => api.post(`/regular-trainings/trainings/${t.id}/escalate`).then(() => { onChanged(); qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); })}
+                className="inline-flex items-center justify-center rounded p-1 text-[10px] font-bold"
+                style={t.demoEscalationRequested
+                  ? { background: 'rgba(239,68,68,0.3)', color: '#f87171', border: 'none', cursor: 'pointer' }
+                  : { background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: 'none', cursor: 'pointer' }}>
+                ⚠
+              </button>
+            )}
             <AMScheduleButton training={t} onSent={onChanged} />
           </div>
         </td>
