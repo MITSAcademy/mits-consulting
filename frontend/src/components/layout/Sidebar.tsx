@@ -146,7 +146,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
       const feedbackPending = cl.filter((c) => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle)).length;
       const salesClosingActive = cl.filter((c) =>
         ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon'].includes(c.lifecycle)
-        && c.lifecycle !== 'Active',
+        && c.lifecycle !== 'Active'
+        && c.saleClosingSubStatus !== 'DP', // exclude dropped clients from pipeline count
       ).length;
       const followUpsDue = cl.filter((c) =>
         ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
