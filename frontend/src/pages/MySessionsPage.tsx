@@ -911,6 +911,16 @@ function AMScheduleButton({ training, onSent }: { training: any; onSent: () => v
   const [duration, setDuration] = useState('60');
   const [meetingLink, setMeetingLink] = useState('');
   const [notes, setNotes] = useState('');
+  const [trainerOverrideId, setTrainerOverrideId] = useState('');
+
+  const { data: allTrainers } = useQuery({
+    queryKey: ['trainers', 'for-invite'],
+    queryFn: () => api.get('/trainers').then((r) =>
+      (r.data as any[]).map((t: any) => ({ id: t.id, name: t.name, email: t.email || '' }))
+    ),
+    enabled: open,
+    staleTime: 300_000,
+  });
 
   const nextSession = training.sessions?.[0];
   const fmtSession = (iso: string) => new Date(iso).toLocaleString('en-IN', {
@@ -925,6 +935,7 @@ function AMScheduleButton({ training, onSent }: { training: any; onSent: () => v
         durationMinutes: Number(duration),
         meetingLink: meetingLink || null,
         notes: notes || null,
+        trainerOverrideId: trainerOverrideId || undefined,
       });
     },
     onSuccess: (r) => {
@@ -940,7 +951,7 @@ function AMScheduleButton({ training, onSent }: { training: any; onSent: () => v
   });
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) setTime(training.defaultTimeIst || '08:00'); }}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) { setTime(training.defaultTimeIst || '08:00'); setTrainerOverrideId(''); } }}>
       <DialogTrigger asChild>
         <Button size="sm" variant="primary">
           <CalendarIcon size={11}/> Schedule
@@ -948,7 +959,7 @@ function AMScheduleButton({ training, onSent }: { training: any; onSent: () => v
       </DialogTrigger>
       <DialogContent
         title={`Schedule · ${training.client?.name || training.name}`}
-        description={`${training.trainer?.name || 'No trainer'} · ${training.meetingMode || 'Zoom'} · Sends .ics invite to trainer + client`}
+        description={`${training.meetingMode || 'Zoom'} · Sends .ics invite to trainer + client`}
       >
         {nextSession && (
           <div className="rounded-lg px-3 py-2 mb-1 text-[11px]" style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.25)', color: 'var(--status-green)' }}>
@@ -978,6 +989,32 @@ function AMScheduleButton({ training, onSent }: { training: any; onSent: () => v
             <Label>Meeting link <span className="muted normal-case">(optional)</span></Label>
             <Input value={meetingLink} onChange={(e) => setMeetingLink(e.target.value)} placeholder="https://zoom.us/…" />
           </div>
+        </div>
+        <div className="form-row mt-1">
+          <Label>Trainer for invite</Label>
+          <Select
+            value={trainerOverrideId || training.trainer?.id || ''}
+            onChange={(e) => setTrainerOverrideId(e.target.value === (training.trainer?.id || '') ? '' : e.target.value)}
+          >
+            {training.trainer && (
+              <option value={training.trainer.id}>
+                {training.trainer.name} (default){training.trainer.email ? ` · ${training.trainer.email}` : ''}
+              </option>
+            )}
+            {!training.trainer && <option value="">— no trainer linked —</option>}
+            {(allTrainers || [])
+              .filter((t: any) => t.id !== training.trainer?.id)
+              .map((t: any) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}{t.email ? ` · ${t.email}` : ' · no email'}
+                </option>
+              ))}
+          </Select>
+          {trainerOverrideId && trainerOverrideId !== training.trainer?.id && (
+            <p className="text-[11px] mt-0.5" style={{ color: 'var(--status-amber)' }}>
+              Invite will go to the selected trainer, not the one linked to this training.
+            </p>
+          )}
         </div>
         <div className="form-row mt-1">
           <Label>Notes <span className="muted normal-case">(optional)</span></Label>

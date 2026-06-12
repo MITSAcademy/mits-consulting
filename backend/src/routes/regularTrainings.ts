@@ -482,13 +482,23 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
 
   const startISO = dt.toISOString();
   const uid = `training-${session.id}`;
+  // Trainer override: if caller specified a different trainer for this session's invite
+  let trainerForInvite = training.trainer;
+  if (b.trainerOverrideId && b.trainerOverrideId !== training.trainer?.id) {
+    const overrideTrainer = await prisma.trainer.findUnique({
+      where: { id: b.trainerOverrideId },
+      select: { id: true, name: true, email: true },
+    });
+    if (overrideTrainer) trainerForInvite = overrideTrainer as typeof training.trainer;
+  }
+
   const summary = `${training.name} · Session`;
   const location = b.meetingLink || b.location || 'Online (link will be shared)';
   const istLabel = dt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
   const description = [
     `Training: ${training.name}`,
     training.client  ? `Client:  ${training.client.name}`  : null,
-    training.trainer ? `Trainer: ${training.trainer.name}` : null,
+    trainerForInvite ? `Trainer: ${trainerForInvite.name}` : null,
     `Date/time: ${istLabel} IST`,
     `Duration: ${durationMinutes} min`,
     b.notes ? `\nNotes: ${b.notes}` : null,
@@ -499,7 +509,7 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
 
   // Recipients: trainer email, client email, organiser email
   const recipients: Array<{ name: string; email: string }> = [];
-  if (training.trainer?.email) recipients.push({ name: training.trainer.name, email: training.trainer.email });
+  if (trainerForInvite?.email) recipients.push({ name: trainerForInvite.name, email: trainerForInvite.email });
   if (training.client?.email)  recipients.push({ name: training.client.name,  email: training.client.email });
   // Always include the organiser (so it lands on their calendar)
   if (organiserEmail && !recipients.find((r) => r.email === organiserEmail)) {
