@@ -163,10 +163,10 @@ clientsRouter.get('/roshni/follow-ups', async (req: AuthedRequest, res) => {
     where: {
       ...ownerFilter,
       lifecycle: { in: ['SaleClosing', 'SaleWon'] },
-      // Active queue: null (triage), RP, CP, C
-      // DP / win outcomes are terminal — removed from queue
+      // My follow-ups = RP only (triage/null treated as RP).
+      // CP and C have their own page (CP/C · Follow-ups). DP is the Dropped page.
       OR: [
-        { saleClosingSubStatus: { in: ['RP', 'CP', 'C'] } },
+        { saleClosingSubStatus: 'RP' },
         { saleClosingSubStatus: null },
       ],
     },

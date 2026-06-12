@@ -6,6 +6,7 @@ import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { Clock, Phone, MessageCircle, Check, RefreshCw } from 'lucide-react';
 import { useUI } from '@/store/ui';
+import { useAuth } from '@/store/auth';
 import { EmptyState } from '@/components/EmptyState';
 
 interface RenewalItem {
@@ -60,6 +61,8 @@ interface FollowUpsResponse {
 }
 
 export function RoshniFollowUpsPage() {
+  const currentUser = useAuth((s: any) => s.user);
+  const isSalesCloser = currentUser?.role === 'sales_closer';
   const { data } = useQuery<FollowUpsResponse>({
     queryKey: ['roshni-follow-ups'],
     queryFn: () => api.get('/clients/roshni/follow-ups').then((r) => r.data),
@@ -120,8 +123,8 @@ export function RoshniFollowUpsPage() {
           </Section>
         )}
 
-        {/* Renewal watchlist — Active/LeverageGranted clients with renewal in next 14d */}
-        {renewalItems.length > 0 && (
+        {/* Renewal watchlist — only for founder/manager, not sales_closer */}
+        {renewalItems.length > 0 && !isSalesCloser && (
           <div className="mt-5">
             <div className="text-xs uppercase tracking-wider muted mb-2 flex items-center gap-2">
               <RefreshCw size={12}/> Renewals approaching · {renewalItems.length}
