@@ -46,9 +46,14 @@ export function FreshPaymentsPage() {
   // Client picker: Roshni only sees her assigned clients
   const filteredClients = useMemo(() => {
     const list = (clients || []) as any[];
-    const mine = isSalesCloser ? list.filter((c: any) => c.salesOwnerId === user.id) : list;
-    // Exclude dummy/test clients
-    return mine.filter((c: any) => !c.name?.startsWith('dummy_') && c.name !== 'vb');
+    const mine = isSalesCloser
+      ? list.filter((c: any) =>
+          c.salesOwnerId === user.id &&
+          ['SaleClosing', 'SaleWon', 'Active', 'LeverageGranted'].includes(c.lifecycle) &&
+          !c.name?.startsWith('dummy_') && c.name !== 'vb'
+        )
+      : list.filter((c: any) => !c.name?.startsWith('dummy_') && c.name !== 'vb');
+    return mine;
   }, [clients, isSalesCloser, user]);
 
   const [open, setOpen] = useState(false);
