@@ -2026,9 +2026,9 @@ function HoldModal({ client, onClose }: any) {
 function MoveBackwardsModal({ client, onClose }: any) {
   const qc = useQueryClient(); const showToast = useUI((s) => s.showToast);
   const me = useAuth((s) => s.user)!;
-  // demo_intake (Roshni) can only route back to recruiter stages
+  // sales_closer (Roshni) can only route back to recruiter stages
   const allOptions = backStagesFor(client.lifecycle);
-  const options = me.role === 'demo_intake'
+  const options = me.role === 'sales_closer'
     ? allOptions.filter((s) => ['InternalSearch', 'WithRecruiters'].includes(s))
     : allOptions;
   const [target, setTarget] = useState(options[0] || '');

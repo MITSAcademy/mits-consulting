@@ -383,15 +383,15 @@ const STAGE_TRANSITION_PERMS: Record<string, string[]> = {
   Lead:                ['founder', 'manager', 'demo_lead', 'demo_intake'],
   IntakeSent:          ['founder', 'manager', 'demo_lead', 'demo_intake'],
   IntakeReceived:      ['founder', 'manager', 'demo_lead', 'demo_intake'],
-  // demo_intake (Roshni) can only route clients back to recruiter stages — not forward.
+  // sales_closer (Roshni) can only route clients to recruiter stages — not into demo pipeline.
   InternalSearch:      ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'],
   WithRecruiters:      ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'],
-  VerificationPending: ['founder', 'manager', 'demo_lead', 'recruiter'],
-  TrainerMatched:      ['founder', 'manager', 'demo_lead'],
-  DemoScheduled:       ['founder', 'manager', 'demo_lead', 'sales_closer'],
-  DemoDone:            ['founder', 'manager', 'demo_lead', 'sales_closer'],
+  VerificationPending: ['founder', 'manager', 'demo_lead', 'demo_intake', 'recruiter'],
+  TrainerMatched:      ['founder', 'manager', 'demo_lead', 'demo_intake'],
+  DemoScheduled:       ['founder', 'manager', 'demo_lead', 'demo_intake'],
+  DemoDone:            ['founder', 'manager', 'demo_lead', 'demo_intake'],
   // FeedbackPending = Samita's queue. Anjali pushes here when demo is done; Samita acts.
-  FeedbackPending:     ['founder', 'manager', 'demo_lead'],
+  FeedbackPending:     ['founder', 'manager', 'demo_lead', 'demo_intake'],
   // SaleClosing — Samita can route here directly from positive feedback (via post-demo-feedback endpoint)
   SaleClosing:         ['founder', 'manager', 'sales_closer', 'demo_lead'],
   SaleWon:             ['founder', 'manager', 'sales_closer'],
