@@ -383,7 +383,7 @@ export function ClientDetailPage() {
       actions.push(<Button key="cmpl" variant="success" onClick={() => stageM.mutate('Completed')}><Check size={14}/> Mark completed</Button>);
     }
   }
-  if (canActivate(user.role)) {
+  if (canActivate(user.role) && user.role !== 'sales_closer') {
     actions.push(
       <Button key="flag" size="sm" onClick={() => flagM.mutate(!client.paymentPendingVaibhav)}>
         {client.paymentPendingVaibhav ? 'Unflag Vaibhav' : 'Flag for Vaibhav'}
@@ -405,7 +405,7 @@ export function ClientDetailPage() {
   const dormantEligible = ![
     'Dormant', 'Churned', 'Completed',
   ].includes(client.lifecycle);
-  if (dormantEligible && (canIntake(user.role) || canClose(user.role) || canAMActions(user.role))) {
+  if (dormantEligible && user.role !== 'sales_closer' && (canIntake(user.role) || canClose(user.role) || canAMActions(user.role))) {
     actions.push(
       <Button key="dormant" size="sm" onClick={() => setModal('dormant')} title="Client stopped responding — mark dormant">
         <Moon size={14}/> Mark dormant
