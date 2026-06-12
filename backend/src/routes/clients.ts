@@ -422,9 +422,9 @@ const BACK_TRANSITIONS: Record<string, string[]> = {
   Lead:                ['IntakeSent', 'Dormant'],
   IntakeSent:          ['IntakeReceived', 'Dormant'],
   IntakeReceived:      ['InternalSearch', 'WithRecruiters', 'VerificationPending', 'Dormant'],
-  InternalSearch:      ['WithRecruiters', 'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone', 'SaleClosing', 'SaleWon', 'Dormant'],
+  InternalSearch:      ['WithRecruiters', 'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon', 'Dormant'],
   // DemoDone → WithRecruiters is the bad-feedback re-loop (Samita reassigns back to Anjali's recruiters)
-  WithRecruiters:      ['InternalSearch', 'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone', 'Hold', 'Dormant'],
+  WithRecruiters:      ['InternalSearch', 'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon', 'Hold', 'Dormant'],
   VerificationPending: ['TrainerMatched', 'DemoScheduled', 'DemoDone', 'Dormant'],
   TrainerMatched:      ['DemoScheduled', 'DemoDone', 'Dormant'],
   DemoScheduled:       ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon', 'Active', 'Dormant'],
