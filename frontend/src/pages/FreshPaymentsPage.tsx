@@ -45,9 +45,10 @@ export function FreshPaymentsPage() {
 
   // Client picker: Roshni only sees her assigned clients
   const filteredClients = useMemo(() => {
-    const list = clients || [];
-    if (!isSalesCloser) return list;
-    return list.filter((c: any) => c.salesOwnerId === user.id);
+    const list = (clients || []) as any[];
+    const mine = isSalesCloser ? list.filter((c: any) => c.salesOwnerId === user.id) : list;
+    // Exclude dummy/test clients
+    return mine.filter((c: any) => !c.name?.startsWith('dummy_') && c.name !== 'vb');
   }, [clients, isSalesCloser, user]);
 
   const [open, setOpen] = useState(false);
@@ -94,10 +95,13 @@ export function FreshPaymentsPage() {
                     setF({ ...f, clientId: e.target.value, currency: c?.currency || 'USD', amount: c?.cycleAmount || 0, bankAccountId: c?.bankAccountId || '' });
                   }}>
                     <option value="">— Select —</option>
-                    {filteredClients.map((c: any) => <option key={c.id} value={c.id}>{c.name}{c.cycleAmount ? ` · ${c.currency} ${c.cycleAmount}` : ''}{c.saleClosingSubStatus ? ` · ${c.saleClosingSubStatus}` : ''}</option>)}
+                    {filteredClients.map((c: any) => {
+                      const phone = c.phoneDigits ? `+${(c.phoneCode || '91').replace(/\D/g,'')} ${c.phoneDigits}` : '';
+                      return <option key={c.id} value={c.id}>{c.name}{phone ? ` · ${phone}` : ''}</option>;
+                    })}
                   </Select>
                   {isSalesCloser && (
-                    <div className="text-[10px] muted mt-1">Showing only your assigned clients ({filteredClients.length}). Names include amount + status to disambiguate.</div>
+                    <div className="text-[10px] muted mt-1">Showing your assigned clients ({filteredClients.length}) · name + phone number.</div>
                   )}
                 </div>
                 <div className="form-row"><Label>Kind</Label><Select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}><option>Fresh</option><option>Renewal</option><option>Other</option></Select></div>
