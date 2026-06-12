@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, AuthedRequest } from '../lib/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 
 export const templatesRouter = Router();
@@ -11,7 +11,7 @@ templatesRouter.get('/', async (_req, res) => {
   res.json(t);
 });
 
-templatesRouter.post('/', async (req: AuthedRequest, res) => {
+templatesRouter.post('/', requireRole('founder', 'demo_lead'), async (req: AuthedRequest, res) => {
   const { id, kind, stage, name, subject, body, variables } = req.body;
   if (!id || !name || !body) return res.status(400).json({ error: 'id, name, body required' });
   const t = await prisma.emailTemplate.create({
@@ -21,7 +21,7 @@ templatesRouter.post('/', async (req: AuthedRequest, res) => {
   res.status(201).json(t);
 });
 
-templatesRouter.patch('/:id', async (req: AuthedRequest, res) => {
+templatesRouter.patch('/:id', requireRole('founder', 'demo_lead'), async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of ['kind', 'stage', 'name', 'subject', 'body', 'variables']) {
     if (f in req.body) data[f] = req.body[f];
@@ -30,7 +30,7 @@ templatesRouter.patch('/:id', async (req: AuthedRequest, res) => {
   res.json(t);
 });
 
-templatesRouter.delete('/:id', async (req: AuthedRequest, res) => {
+templatesRouter.delete('/:id', requireRole('founder'), async (req: AuthedRequest, res) => {
   await prisma.emailTemplate.delete({ where: { id: req.params.id } });
   res.json({ ok: true });
 });

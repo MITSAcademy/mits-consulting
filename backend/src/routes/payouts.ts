@@ -12,8 +12,9 @@ payoutsRouter.get('/', async (_req, res) => {
 });
 
 payoutsRouter.post('/', async (req: AuthedRequest, res) => {
-  if (!['founder', 'payment_processor', 'manager', 'accounts'].includes(req.user!.role)) {
-    return res.status(403).json({ error: 'Forbidden' });
+  // Bhavneet (lead) creates batches from payment sheet; payment_processor + founder also allowed
+  if (!['founder', 'lead', 'payment_processor', 'accounts'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Forbidden — only Bhavneet (lead), payment processor, or founder can create payout batches' });
   }
   const { weekStart, sessionIds } = req.body;
   if (!weekStart || !Array.isArray(sessionIds) || sessionIds.length === 0) {
@@ -45,7 +46,8 @@ payoutsRouter.post('/', async (req: AuthedRequest, res) => {
 });
 
 payoutsRouter.post('/:id/approve', async (req: AuthedRequest, res) => {
-  if (!['founder', 'demo_lead'].includes(req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
+  // Mitali (manager) approves Bhavneet's batches; founder as override
+  if (!['founder', 'manager'].includes(req.user!.role)) return res.status(403).json({ error: 'Forbidden — only Mitali (manager) or founder can approve payout batches' });
   // Guard: only Pending → Approved. updateMany with where:status returns
   // count: 0 if the batch is already Approved/Paid/Cancelled, which we 409.
   const updated = await prisma.payoutBatch.updateMany({

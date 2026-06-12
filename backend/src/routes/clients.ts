@@ -79,10 +79,21 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
       where.name = { contains: s, mode: 'insensitive' };
     }
   }
-  // account_manager (Kashish / Muskan) only see their own Active clients
+  // account_manager (Kashish / Muskan) — own Active clients only
   if (req.user!.role === 'account_manager') {
     if (!lifecycle) where.lifecycle = { in: ['Active', 'LeverageGranted'] };
     where.hostOwnerId = req.user!.id;
+  }
+  // lead (Bhavneet) — all clients owned by his direct reports (Kashish, Muskan) or himself
+  // Active + LeverageGranted only; does not see sales pipeline or dormant/hold
+  if (req.user!.role === 'lead') {
+    if (!lifecycle) where.lifecycle = { in: ['Active', 'LeverageGranted'] };
+    where.hostOwnerId = { in: ['u-bhavneet', 'u-kashish', 'u-muskan'] };
+  }
+  // manager (Mitali) — clients owned by her whole team + herself; no global access
+  if (req.user!.role === 'manager') {
+    if (!lifecycle) where.lifecycle = { in: ['Active', 'LeverageGranted'] };
+    where.hostOwnerId = { in: ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'] };
   }
   const clients = await prisma.client.findMany({ where, include, orderBy: { createdAt: 'desc' } });
   res.json(clients.map((c) => redactClient(c, req.user!)));

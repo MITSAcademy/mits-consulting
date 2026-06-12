@@ -60,6 +60,7 @@ const RoshniFollowUpsPage = lazy(() => import('@/pages/RoshniFollowUpsPage').the
 const SessionsDashboardPage = lazy(() => import('@/pages/SessionsDashboardPage'));
 const IssueTrackerPage = lazy(() => import('@/pages/IssueTrackerPage'));
 const MeetingLinksPage = lazy(() => import('@/pages/MeetingLinksPage'));
+const CoordinatorDashboardPage = lazy(() => import('@/pages/CoordinatorDashboardPage'));
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const user = useAuth((s) => s.user);
@@ -117,6 +118,7 @@ export default function App() {
           <Route path="/regular-trainings" element={<RegularTrainingsPage />} />
           <Route path="/regular-trainings/:id" element={<RegularTrainingDetailPage />} />
           <Route path="/meeting-links" element={<MeetingLinksPage />} />
+          <Route path="/coordinator-dashboard" element={<CoordinatorDashboardPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/renewals" element={<RenewalsPage />} />
           <Route path="/dormant" element={<DormantClientsPage />} />

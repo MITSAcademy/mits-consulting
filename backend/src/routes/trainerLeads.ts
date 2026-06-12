@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, AuthedRequest } from '../lib/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 
 export const trainerLeadsRouter = Router();
@@ -8,12 +8,14 @@ trainerLeadsRouter.use(requireAuth);
 
 const include = { recruiter: { select: { id: true, name: true } } };
 
-trainerLeadsRouter.get('/', async (_req, res) => {
+const TRAINER_LEAD_ROLES = ['founder', 'manager', 'recruiter'];
+
+trainerLeadsRouter.get('/', requireRole(...TRAINER_LEAD_ROLES), async (_req, res) => {
   const leads = await prisma.trainerLead.findMany({ include, orderBy: { createdAt: 'desc' } });
   res.json(leads);
 });
 
-trainerLeadsRouter.post('/', async (req: AuthedRequest, res) => {
+trainerLeadsRouter.post('/', requireRole(...TRAINER_LEAD_ROLES), async (req: AuthedRequest, res) => {
   const { name, skills, source, expectedRateInr, stage, notes, recruiterId } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   const lead = await prisma.trainerLead.create({
@@ -28,7 +30,7 @@ trainerLeadsRouter.post('/', async (req: AuthedRequest, res) => {
   res.status(201).json(lead);
 });
 
-trainerLeadsRouter.patch('/:id', async (req: AuthedRequest, res) => {
+trainerLeadsRouter.patch('/:id', requireRole(...TRAINER_LEAD_ROLES), async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of ['name', 'skills', 'source', 'expectedRateInr', 'stage', 'notes', 'recruiterId']) {
     if (f in req.body) data[f] = req.body[f];
@@ -38,7 +40,7 @@ trainerLeadsRouter.patch('/:id', async (req: AuthedRequest, res) => {
   res.json(lead);
 });
 
-trainerLeadsRouter.delete('/:id', async (req: AuthedRequest, res) => {
+trainerLeadsRouter.delete('/:id', requireRole('founder', 'recruiter'), async (req: AuthedRequest, res) => {
   await prisma.trainerLead.delete({ where: { id: req.params.id } });
   res.json({ ok: true });
 });

@@ -435,6 +435,8 @@ model Client {
   @@index([saleClosingSubStatus, roshniNextCallOn])       // Roshni follow-ups bucketing
   @@index([salesOwnerId])                                 // owner-scoped queries
   @@index([intakeOwnerId])
+  @@index([hostOwnerId])                                  // coordinator dashboard + team-scoped client lists
+  @@index([hostOwnerId, lifecycle])                       // combined filter: coordinator's active clients
 }
 
 // -------- SOURCING REQUESTS --------

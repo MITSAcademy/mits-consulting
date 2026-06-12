@@ -24,64 +24,92 @@ interface NavItem {
   feature?: 'regularCalls';
 }
 
+// Role notes:
+//   founder    — unrestricted
+//   demo_lead  — Samita: demo ops only
+//   demo_intake — Anjali/Taran: intake + demos
+//   recruiter  — trainer sourcing only
+//   sales_closer — Roshni: sales pipeline
+//   accounts   — Areena/Ashok: payments/payouts
+//   payment_processor — Malika: trainer pay sheet
+//   account_manager — Muskan/Kashish: own Active clients + trainer ops
+//   lead       — Bhavneet: team clients (own+Kashish+Muskan), L1 escalation, sessions, session logs
+//   manager    — Mitali: team clients (own+Bhavneet+Kashish+Muskan), payment follow-up, sessions, reports
 const NAV: NavItem[] = [
-  { section: 'overview', page: '/', label: 'Home', icon: Home, roles: ['founder', 'manager', 'demo_lead'] },
-  { section: 'overview', page: '/money-flow', label: 'Money flow', icon: ArrowRightLeft, roles: ['founder', 'manager', 'accounts'] },
-  { section: 'overview', page: '/vaibhav-queue', label: 'Vaibhav queue', icon: AlertCircle, roles: ['founder', 'manager', 'accounts'] },
-  { section: 'overview', page: '/pipeline', label: 'Pipeline overview', icon: Target, roles: ['founder', 'manager', 'demo_lead'] },
+  // ── Overview (founder + Samita demo ops) ──────────────────────────────
+  { section: 'overview', page: '/', label: 'Home', icon: Home, roles: ['founder', 'demo_lead'] },
+  { section: 'overview', page: '/money-flow', label: 'Money flow', icon: ArrowRightLeft, roles: ['founder', 'accounts'] },
+  { section: 'overview', page: '/vaibhav-queue', label: 'Vaibhav queue', icon: AlertCircle, roles: ['founder', 'accounts'] },
+  { section: 'overview', page: '/pipeline', label: 'Pipeline overview', icon: Target, roles: ['founder', 'demo_lead'] },
   { section: 'overview', page: '/reports/demo-team', label: 'Demo team report', icon: ChartLine, roles: ['founder', 'demo_lead'] },
 
-  { section: 'intake', page: '/demo-intake', label: 'Demo intake', icon: MessageSquare, roles: ['founder', 'manager', 'demo_lead', 'demo_intake'] },
-  { section: 'intake', page: '/verifications', label: 'Verifications', icon: ShieldCheck, roles: ['founder', 'manager', 'demo_lead', 'demo_intake'] },
-  { section: 'intake', page: '/demos', label: 'Demo schedule', icon: Video, roles: ['founder', 'manager', 'demo_lead', 'demo_intake'] },
-  { section: 'intake', page: '/feedback-pending', label: 'Feedback queue (Samita)', icon: MessageCircle, roles: ['founder', 'manager', 'demo_lead'] },
+  // ── Demo intake (Samita + intake team) ────────────────────────────────
+  { section: 'intake', page: '/demo-intake', label: 'Demo intake', icon: MessageSquare, roles: ['founder', 'demo_lead', 'demo_intake'] },
+  { section: 'intake', page: '/verifications', label: 'Verifications', icon: ShieldCheck, roles: ['founder', 'demo_lead', 'demo_intake'] },
+  { section: 'intake', page: '/demos', label: 'Demo schedule', icon: Video, roles: ['founder', 'demo_lead', 'demo_intake'] },
+  { section: 'intake', page: '/feedback-pending', label: 'Feedback queue (Samita)', icon: MessageCircle, roles: ['founder', 'demo_lead'] },
 
+  // ── Recruiter / trainer sourcing ──────────────────────────────────────
   { section: 'recruit', page: '/demo-intake', label: 'Pipeline view', icon: LayoutGrid, roles: ['recruiter'] },
-  { section: 'recruit', page: '/sourcing', label: 'Sourcing requests', icon: Briefcase, roles: ['founder', 'manager', 'recruiter'] },
+  { section: 'recruit', page: '/sourcing', label: 'Sourcing requests', icon: Briefcase, roles: ['founder', 'recruiter'] },
   { section: 'recruit', page: '/trainer-leads', label: 'Trainer leads (admin)', icon: UserSearch, roles: ['founder'] },
+  // All trainers visible to those who work with them
   { section: 'recruit', page: '/trainers', label: 'Trainer pool', icon: UserCog, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'payment_processor'] },
 
-  { section: 'sales', page: '/sales-closing', label: 'My pipeline', icon: LayoutGrid, roles: ['founder', 'manager', 'sales_closer'] },
-  { section: 'sales', page: '/roshni/follow-ups', label: 'My follow-ups', icon: Clock, roles: ['founder', 'manager', 'sales_closer'] },
-  { section: 'sales', page: '/fresh-payments', label: 'Fresh payments', icon: DollarSign, roles: ['founder', 'manager', 'sales_closer', 'accounts'] },
+  // ── Sales pipeline (Roshni + founder) ────────────────────────────────
+  { section: 'sales', page: '/sales-closing', label: 'My pipeline', icon: LayoutGrid, roles: ['founder', 'sales_closer'] },
+  { section: 'sales', page: '/roshni/follow-ups', label: 'My follow-ups', icon: Clock, roles: ['founder', 'sales_closer'] },
+  { section: 'sales', page: '/fresh-payments', label: 'Fresh payments', icon: DollarSign, roles: ['founder', 'sales_closer', 'accounts'] },
 
-  { section: 'clients', page: '/follow-up-payments', label: 'Payment follow-up', icon: Receipt, roles: ['founder', 'manager', 'accounts'] },
-  { section: 'clients', page: '/calendar', label: 'Work calendar', icon: LayoutGrid, roles: ['founder', 'manager', 'lead', 'staff'] },
+  // ── Client success (team-scoped for manager/lead/AM) ─────────────────
+  // Payment follow-up: Mitali's primary job + Bhavneet oversight + accounts
+  { section: 'clients', page: '/follow-up-payments', label: 'Payment follow-up', icon: Receipt, roles: ['founder', 'manager', 'lead', 'accounts'] },
+  { section: 'clients', page: '/calendar', label: 'Work calendar', icon: LayoutGrid, roles: ['founder', 'lead', 'staff'] },
+  // Clients: scoped by backend per role (AM=own, lead=team, manager=team)
   { section: 'clients', page: '/clients', label: 'Clients', icon: Users, roles: ['founder', 'manager', 'lead', 'accounts', 'demo_lead', 'demo_intake', 'account_manager'] },
   { section: 'clients', page: '/trainers', label: 'My trainers', icon: UserCog, roles: ['account_manager', 'lead'] },
-  { section: 'clients', page: '/renewals', label: 'Renewals', icon: RefreshCw, roles: ['founder', 'manager'] },
-  { section: 'clients', page: '/dormant', label: 'Dormant clients', icon: Moon, roles: ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer'] },
-  { section: 'clients', page: '/hold', label: 'CP / C · Follow-ups', icon: Clock, roles: ['founder', 'manager', 'demo_lead', 'sales_closer'] },
+  { section: 'clients', page: '/renewals', label: 'Renewals', icon: RefreshCw, roles: ['founder'] },
+  { section: 'clients', page: '/dormant', label: 'Dormant clients', icon: Moon, roles: ['founder', 'demo_lead', 'demo_intake', 'sales_closer'] },
+  { section: 'clients', page: '/hold', label: 'CP / C · Follow-ups', icon: Clock, roles: ['founder', 'demo_lead', 'sales_closer'] },
   { section: 'clients', page: '/feedback', label: 'Feedback', icon: MessageCircle, roles: ['founder', 'manager', 'lead'] },
-  { section: 'partners', page: '/partners', label: 'Partners', icon: Building, roles: ['founder', 'manager', 'sales_closer', 'accounts'] },
+  { section: 'partners', page: '/partners', label: 'Partners', icon: Building, roles: ['founder', 'accounts'] },
 
+  // ── Coordinator work (Mitali + Bhavneet + AMs) ───────────────────────
+  { section: 'work', page: '/coordinator-dashboard', label: 'Team dashboard', icon: UsersRound, roles: ['founder', 'manager', 'lead'] },
   { section: 'work', page: '/my-sessions', label: 'My sessions', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager'] },
   { section: 'work', page: '/sessions', label: 'Sessions', icon: CalendarDays, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'] },
   { section: 'work', page: '/issues', label: 'Issues', icon: AlertTriangle, roles: ['founder', 'manager', 'lead', 'account_manager'] },
   { section: 'clients', page: '/regular-trainings', label: 'Regular trainings', icon: Video, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
   { section: 'clients', page: '/meeting-links', label: 'Meeting links', icon: Link, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
+
+  // ── Trainer ops: session logs (Bhavneet manages), payment sheet (Bhavneet exclusive) ──
   { section: 'trainerOps', page: '/session-logs', label: 'Session logs', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'accounts', 'payment_processor'] },
-  { section: 'trainerOps', page: '/trainer-pay-sheet', label: 'Payment sheet', icon: TableProperties, roles: ['founder', 'manager', 'lead', 'accounts', 'payment_processor'] },
-  { section: 'trainerOps', page: '/trainer-pay', label: 'Trainer payouts', icon: Wallet, roles: ['founder', 'manager', 'accounts', 'payment_processor'] },
-  { section: 'trainerOps', page: '/payout-batches', label: 'Payout batches', icon: Archive, roles: ['founder', 'manager', 'accounts', 'payment_processor', 'demo_lead'] },
+  // Payment sheet: Bhavneet (lead) is the primary owner per Muskan's request; Mitali oversight; founder
+  { section: 'trainerOps', page: '/trainer-pay-sheet', label: 'Payment sheet', icon: TableProperties, roles: ['founder', 'manager', 'lead', 'payment_processor'] },
+  { section: 'trainerOps', page: '/trainer-pay', label: 'Trainer payouts', icon: Wallet, roles: ['founder', 'accounts', 'payment_processor'] },
+  // Payout batches: Bhavneet creates, Mitali approves, accounts/payment_processor process
+  { section: 'trainerOps', page: '/payout-batches', label: 'Payout batches', icon: Archive, roles: ['founder', 'manager', 'lead', 'accounts', 'payment_processor'] },
 
-  { section: 'work', page: '/tasks', label: 'My tasks', icon: CheckSquare, roles: ['founder', 'manager', 'lead', 'staff', 'accounts', 'sales_closer', 'demo_lead', 'demo_intake', 'recruiter', 'payment_processor'] },
-  { section: 'work', page: '/leverage', label: 'Leverage', icon: Clock, roles: ['founder', 'manager'] },
-  { section: 'work', page: '/accounts-queue', label: 'Accounts queue', icon: Receipt, roles: ['founder', 'manager', 'accounts'] },
-  { section: 'work', page: '/daily-report', label: 'Daily report', icon: Notebook, roles: ['founder', 'manager', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'lead', 'staff'] },
-  { section: 'work', page: '/my-calendar', label: 'My calendar', icon: Calendar, roles: ['founder', 'manager', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'lead', 'staff', 'account_manager'] },
+  // ── My work (universal) ───────────────────────────────────────────────
+  { section: 'work', page: '/tasks', label: 'My tasks', icon: CheckSquare, roles: ['founder', 'manager', 'lead', 'staff', 'accounts', 'sales_closer', 'demo_lead', 'demo_intake', 'recruiter', 'payment_processor', 'account_manager'] },
+  { section: 'work', page: '/leverage', label: 'Leverage', icon: Clock, roles: ['founder'] },
+  { section: 'work', page: '/accounts-queue', label: 'Accounts queue', icon: Receipt, roles: ['founder', 'accounts'] },
+  { section: 'work', page: '/daily-report', label: 'Daily report', icon: Notebook, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
+  { section: 'work', page: '/my-calendar', label: 'My calendar', icon: Calendar, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
 
+  // ── Admin (Vaibhav + team leads for visibility) ───────────────────────
   { section: 'admin', page: '/reports-dashboard', label: 'Reports dashboard', icon: ChartLine, roles: ['founder', 'demo_lead', 'manager', 'lead'] },
-  { section: 'admin', page: '/bulk-upload', label: 'Bulk upload', icon: Upload, roles: ['founder', 'demo_lead', 'manager'] },
-  { section: 'admin', page: '/raw-leads', label: 'Raw leads inbox', icon: Inbox, roles: ['founder', 'demo_lead', 'manager', 'demo_intake'] },
-  { section: 'admin', page: '/edit-requests', label: 'Edit requests', icon: Edit, roles: ['founder', 'demo_lead', 'manager'] },
+  { section: 'admin', page: '/bulk-upload', label: 'Bulk upload', icon: Upload, roles: ['founder', 'demo_lead'] },
+  { section: 'admin', page: '/raw-leads', label: 'Raw leads inbox', icon: Inbox, roles: ['founder', 'demo_lead', 'demo_intake'] },
+  { section: 'admin', page: '/edit-requests', label: 'Edit requests', icon: Edit, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/team', label: 'Team', icon: UsersRound, roles: ['founder'] },
-  { section: 'admin', page: '/templates', label: 'Email templates', icon: Mail, roles: ['founder', 'demo_lead', 'manager'] },
+  { section: 'admin', page: '/templates', label: 'Email templates', icon: Mail, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/sources', label: 'Lead sources', icon: Tag, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/permissions', label: 'Edit permissions', icon: LockKeyhole, roles: ['founder'] },
   { section: 'admin', page: '/banks', label: 'Bank accounts', icon: Building2, roles: ['founder', 'accounts'] },
+  // Audit log: founder + Mitali + Bhavneet for team accountability
   { section: 'admin', page: '/audit', label: 'Audit log', icon: History, roles: ['founder', 'manager', 'lead'] },
-  { section: 'admin', page: '/settings', label: 'Settings', icon: Settings, roles: ['founder', 'manager', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'lead', 'staff', 'account_manager'] },
+  { section: 'admin', page: '/settings', label: 'Settings', icon: Settings, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
 ];
 
 const SECTIONS: Record<string, string> = {

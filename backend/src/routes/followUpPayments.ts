@@ -18,17 +18,27 @@ import { audit } from '../lib/audit';
 export const followUpPaymentsRouter = Router();
 followUpPaymentsRouter.use(requireAuth);
 
-const ALLOWED = ['founder', 'manager', 'accounts'];
+const ALLOWED = ['founder', 'manager', 'lead', 'accounts'];
+
+// Team scoping: manager/lead see only their team's clients in follow-up list
+const TEAM_SCOPE: Record<string, string[]> = {
+  manager: ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'],
+  lead:    ['u-bhavneet', 'u-kashish', 'u-muskan'],
+};
 
 followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
   if (!ALLOWED.includes(req.user!.role)) {
     return res.status(403).json({ error: 'Not allowed' });
   }
 
+  const teamFilter = TEAM_SCOPE[req.user!.role]
+    ? { hostOwnerId: { in: TEAM_SCOPE[req.user!.role] } }
+    : {};
+
   // Lifecycles that need recurring collection: client is live + delivering.
   // (Active, LeverageGranted, SaleWon — the post-handover states.)
   const clients = await prisma.client.findMany({
-    where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] } },
+    where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] }, ...teamFilter },
     select: {
       id: true, name: true,
       currency: true, cycleAmount: true,

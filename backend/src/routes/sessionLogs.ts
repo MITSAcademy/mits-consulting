@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, AuthedRequest } from '../lib/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
+
+const SESSION_LOG_READ  = ['founder', 'manager', 'lead', 'accounts', 'payment_processor'];
+const SESSION_LOG_WRITE = ['founder', 'manager', 'lead', 'payment_processor'];
 import { audit } from '../lib/audit';
 
 export const sessionLogsRouter = Router();
@@ -11,7 +14,7 @@ const include = {
   client: { select: { id: true, name: true } },
 };
 
-sessionLogsRouter.get('/', async (req, res) => {
+sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req, res) => {
   const { status, trainerId, from, to, weekStart } = req.query as any;
   const where: any = {};
   if (status) where.status = status;
@@ -26,7 +29,7 @@ sessionLogsRouter.get('/', async (req, res) => {
   res.json(logs);
 });
 
-sessionLogsRouter.post('/', async (req: AuthedRequest, res) => {
+sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const { trainerId, clientId, date, hours, rateSnapshot, rateModel, notes, amountInr: amountOverride, feedback } = req.body;
   if (!trainerId || !date || !hours) return res.status(400).json({ error: 'trainerId, date, hours required' });
   const defaultAmount = rateModel === 'hourly' ? Math.round(hours * rateSnapshot) : rateSnapshot;
@@ -46,7 +49,7 @@ sessionLogsRouter.post('/', async (req: AuthedRequest, res) => {
   res.status(201).json(log);
 });
 
-sessionLogsRouter.patch('/:id', async (req: AuthedRequest, res) => {
+sessionLogsRouter.patch('/:id', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of ['status', 'hours', 'rateSnapshot', 'amountInr', 'notes']) {
     if (f in req.body) data[f] = req.body[f];
@@ -55,7 +58,7 @@ sessionLogsRouter.patch('/:id', async (req: AuthedRequest, res) => {
   res.json(log);
 });
 
-sessionLogsRouter.post('/bulk-status', async (req: AuthedRequest, res) => {
+sessionLogsRouter.post('/bulk-status', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const { ids, status } = req.body;
   if (!Array.isArray(ids) || !status) return res.status(400).json({ error: 'ids + status required' });
   await prisma.sessionLog.updateMany({ where: { id: { in: ids } }, data: { status } });

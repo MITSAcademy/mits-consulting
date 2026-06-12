@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { initScheduler } from './lib/scheduler';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -39,6 +40,7 @@ import { featuresRouter } from './routes/features';
 import { regularTrainingsRouter } from './routes/regularTrainings';
 import { issueTrackerRouter } from './routes/issueTracker';
 import { meetingLinksRouter } from './routes/meetingLinks';
+import { coordinatorDashboardRouter } from './routes/coordinatorDashboard';
 import { briefingRouter } from './routes/briefing';
 import { seedRouter } from './routes/seed';
 
@@ -54,6 +56,30 @@ app.use(
 );
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
+
+// Rate limiting — prevent brute force + abuse
+// Auth endpoints: tight limit (5 req/min per IP)
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again in a minute.' },
+  skip: () => process.env.NODE_ENV !== 'production',
+});
+
+// General API: 300 req/min per IP (generous for active usage, blocks scraping)
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests.' },
+  skip: () => process.env.NODE_ENV !== 'production',
+});
+
+app.use('/api/auth', authLimiter);
+app.use('/api', apiLimiter);
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
@@ -97,6 +123,7 @@ app.use('/api/features', featuresRouter);
 app.use('/api/regular-trainings', regularTrainingsRouter);
 app.use('/api/issue-tracker', issueTrackerRouter);
 app.use('/api/meeting-links', meetingLinksRouter);
+app.use('/api/coordinator-dashboard', coordinatorDashboardRouter);
 app.use('/api/briefing', briefingRouter);
 app.use('/api/seed', seedRouter);
 

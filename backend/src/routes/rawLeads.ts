@@ -1,17 +1,19 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, AuthedRequest } from '../lib/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
+
+const RAW_LEAD_ROLES = ['founder', 'demo_lead', 'demo_intake'];
 import { audit } from '../lib/audit';
 
 export const rawLeadsRouter = Router();
 rawLeadsRouter.use(requireAuth);
 
-rawLeadsRouter.get('/', async (_req, res) => {
+rawLeadsRouter.get('/', requireRole(...RAW_LEAD_ROLES), async (_req, res) => {
   const l = await prisma.rawLead.findMany({ orderBy: { createdAt: 'desc' } });
   res.json(l);
 });
 
-rawLeadsRouter.post('/', async (req: AuthedRequest, res) => {
+rawLeadsRouter.post('/', requireRole(...RAW_LEAD_ROLES), async (req: AuthedRequest, res) => {
   const { raw, cleanedName, cleanedPhone, cleanedSkill } = req.body;
   if (!raw) return res.status(400).json({ error: 'raw required' });
   const r = await prisma.rawLead.create({
@@ -20,7 +22,7 @@ rawLeadsRouter.post('/', async (req: AuthedRequest, res) => {
   res.status(201).json(r);
 });
 
-rawLeadsRouter.post('/bulk', async (req: AuthedRequest, res) => {
+rawLeadsRouter.post('/bulk', requireRole(...RAW_LEAD_ROLES), async (req: AuthedRequest, res) => {
   const { lines } = req.body; // array of raw strings
   if (!Array.isArray(lines)) return res.status(400).json({ error: 'lines required' });
   const created = await prisma.$transaction(
@@ -30,7 +32,7 @@ rawLeadsRouter.post('/bulk', async (req: AuthedRequest, res) => {
   res.status(201).json({ count: created.length });
 });
 
-rawLeadsRouter.patch('/:id', async (req: AuthedRequest, res) => {
+rawLeadsRouter.patch('/:id', requireRole(...RAW_LEAD_ROLES), async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of ['status', 'cleanedName', 'cleanedPhone', 'cleanedSkill']) {
     if (f in req.body) data[f] = req.body[f];
@@ -39,7 +41,7 @@ rawLeadsRouter.patch('/:id', async (req: AuthedRequest, res) => {
   res.json(r);
 });
 
-rawLeadsRouter.post('/:id/promote', async (req: AuthedRequest, res) => {
+rawLeadsRouter.post('/:id/promote', requireRole(...RAW_LEAD_ROLES), async (req: AuthedRequest, res) => {
   // Promote to a Client (Lead stage)
   const r = await prisma.rawLead.findUnique({ where: { id: req.params.id } });
   if (!r) return res.status(404).json({ error: 'Not found' });
@@ -59,7 +61,7 @@ rawLeadsRouter.post('/:id/promote', async (req: AuthedRequest, res) => {
   res.json({ client });
 });
 
-rawLeadsRouter.delete('/:id', async (req: AuthedRequest, res) => {
+rawLeadsRouter.delete('/:id', requireRole('founder', 'demo_lead'), async (req: AuthedRequest, res) => {
   await prisma.rawLead.delete({ where: { id: req.params.id } });
   res.json({ ok: true });
 });

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth } from '../lib/auth';
+import { requireAuth, requireRole } from '../lib/auth';
 
 export const metricsRouter = Router();
 metricsRouter.use(requireAuth);
@@ -78,7 +78,7 @@ metricsRouter.get('/home', async (_req, res) => {
   });
 });
 
-metricsRouter.get('/pipeline', async (_req, res) => {
+metricsRouter.get('/pipeline', requireRole('founder', 'manager', 'lead', 'demo_lead', 'sales_closer'), async (_req, res) => {
   const LIFECYCLE = [
     'Lead', 'IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters',
     'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone',
@@ -93,7 +93,7 @@ metricsRouter.get('/pipeline', async (_req, res) => {
   res.json(grouped);
 });
 
-metricsRouter.get('/money-flow', async (_req, res) => {
+metricsRouter.get('/money-flow', requireRole('founder', 'manager', 'accounts'), async (_req, res) => {
   const today = todayISO();
   const monthStart = today.slice(0, 8) + '01';
   const banks = await prisma.bankAccount.findMany();
