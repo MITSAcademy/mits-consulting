@@ -461,7 +461,8 @@ const BACK_TRANSITIONS: Record<string, string[]> = {
   FeedbackPending:     ['SaleClosing', 'Hold', 'WithRecruiters', 'Dormant'],
   SaleClosing:         ['SaleWon', 'DemoScheduled', 'FeedbackPending', 'InternalSearch', 'WithRecruiters', 'Dormant'],
   SaleWon:             ['Active', 'SaleClosing', 'InternalSearch', 'WithRecruiters', 'Dormant'],
-  Active:              ['Hold', 'LeverageGranted', 'Dormant'],
+  Active:              ['Hold', 'LeverageGranted', 'WithRecruiters', 'Dormant'],
+  LeverageGranted:     ['Active', 'WithRecruiters', 'Dormant'],
 };
 
 function isForward(from: string, to: string): boolean {

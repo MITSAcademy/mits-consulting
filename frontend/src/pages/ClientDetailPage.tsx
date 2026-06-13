@@ -412,11 +412,15 @@ export function ClientDetailPage() {
   }
 
   // Backward-move button — recruiter/sales roles only (Mitali/Bhavneet/AMs don't move clients backwards)
-  const canMoveBack = (role: string) => ['founder', 'demo_lead', 'demo_intake', 'sales_closer', 'recruiter'].includes(role);
-  const validBack = backStagesFor(client.lifecycle);
+  const canMoveBack = (role: string) => ['founder', 'manager', 'demo_lead', 'demo_intake', 'sales_closer', 'recruiter'].includes(role);
+  // Manager can only move back to WithRecruiters (hand back to internal recruiter)
+  const managerBackStages = ['WithRecruiters'];
+  const validBack = user.role === 'manager'
+    ? backStagesFor(client.lifecycle).filter(s => managerBackStages.includes(s))
+    : backStagesFor(client.lifecycle);
   if (validBack.length > 0 && client.lifecycle !== 'Dormant' && canMoveBack(user.role)) {
     actions.push(
-      <Button key="back" size="sm" onClick={() => setModal('moveBack')} title="Move client to an earlier stage">
+      <Button key="back" size="sm" onClick={() => setModal('moveBack')} title="Move client back to internal recruiter">
         <Undo2 size={14}/> Move back
       </Button>
     );
@@ -2103,8 +2107,8 @@ function MoveBackwardsModal({ client, onClose }: any) {
   const me = useAuth((s) => s.user)!;
   // sales_closer (Roshni) can only route back to recruiter stages
   const allOptions = backStagesFor(client.lifecycle);
-  const options = me.role === 'sales_closer'
-    ? allOptions.filter((s) => ['InternalSearch', 'WithRecruiters'].includes(s))
+  const options = me.role === 'sales_closer' || me.role === 'manager'
+    ? allOptions.filter((s) => ['WithRecruiters'].includes(s))
     : allOptions;
   const [target, setTarget] = useState(options[0] || '');
   const [reason, setReason] = useState('');
