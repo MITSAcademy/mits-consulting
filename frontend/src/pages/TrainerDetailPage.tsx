@@ -13,6 +13,7 @@ import { useUI } from '@/store/ui';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
+import { CommentSection } from '@/components/CommentSection';
 import { Mail, MessageCircle, ArrowLeft } from 'lucide-react';
 
 export function TrainerDetailPage() {
@@ -227,6 +228,7 @@ export function TrainerDetailPage() {
         </div>
 
         <div className="mt-3 space-y-3">
+          <CommentSection trainerId={t.id} />
           <DemoHistoryCard trainerId={t.id} />
           <MessagesHistoryCard trainerId={t.id} />
         </div>

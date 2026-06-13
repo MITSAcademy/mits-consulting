@@ -171,6 +171,7 @@ model User {
   paymentsReceived   Payment[]
   auditLog           AuditLog[]
   dailyReports       DailyReport[]
+  comments           Comment[]
   editRequests       EditRequest[]    @relation("EditRequestBy")
   editReviewed       EditRequest[]    @relation("EditReviewedBy")
   meetingLinks       MeetingLink[]    @relation("MeetingLinkOwner")
@@ -263,6 +264,7 @@ model Trainer {
   createdAt           DateTime @default(now())
 
   clients        Client[]
+  comments       Comment[]
   proposals      Proposal[]
   sessionLogs    SessionLog[]
   tasks          Task[]
@@ -414,9 +416,18 @@ model Client {
   followupNoteAt             String?  // ISO date of last note update
   lastFeedbackTakenAt        String?  // ISO date — Mitali bumps this when feedback is logged
   lastLeverageAskedAt        String?  // ISO date — when she asked for testimonial/referral
+  // Payment date tracking for Mitali's follow-up sheet.
+  // payDate1 = last paid date, payDate2 = next due date.
+  // When a payment comes in: payDate1 ← payDate2, payDate2 ← new due date.
+  payDate1                   String?  // ISO date — last payment date (= most recent collected)
+  payDate2                   String?  // ISO date — next due date (the date Mitali is chasing)
+  // When a client can't pay, Mitali grants leverage — extends payDate2 by max 3 days.
+  leverageUntil              String?  // ISO date — latest date leverage was extended to
+  leverageNote               String?  // why leverage was granted
   notes                    String?
   createdAt                DateTime       @default(now())
 
+  comments         Comment[]
   sourcingRequests SourcingRequest[]
   payments         Payment[]
   tasks            Task[]
@@ -835,6 +846,26 @@ model AuditLog {
 model CronLock {
   key       String   @id  // unique per job+date, e.g. "briefing:team2:morning:2026-06-13"
   createdAt DateTime @default(now())
+}
+
+// -------- COMMENTS (per-client / per-trainer thread) --------
+// A shared comment log visible to any team member who has read access.
+// Replaces the free-form "comments" column on the sheet with a full history.
+model Comment {
+  id          String   @id @default(cuid())
+  clientId    String?
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  trainerId   String?
+  trainer     Trainer? @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  authorId    String?
+  author      User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName  String
+  body        String
+  pinned      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([clientId, createdAt])
+  @@index([trainerId, createdAt])
 }
 
 // -------- DAILY REPORTS --------

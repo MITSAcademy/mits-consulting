@@ -18,6 +18,7 @@ import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 import { CallHistoryCard } from '@/components/CallHistoryCard';
+import { CommentSection } from '@/components/CommentSection';
 
 const INTAKE_FIELDS = [
   { key: 'detailed_skill_set', label: 'Detailed skill set', required: true },
@@ -834,6 +835,7 @@ export function ClientDetailPage() {
               {client.notes && <Field label="Notes"><div className="whitespace-pre-wrap text-xs">{client.notes}</div></Field>}
             </div>
 
+            <CommentSection clientId={client.id} />
             <DemoHistoryCard clientId={client.id} />
             <CallHistoryCard clientId={client.id} />
             <MessagesHistoryCard clientId={client.id} />

@@ -1,94 +1,82 @@
 /**
- * Mitali's payment follow-up dashboard.
+ * Mitali's payment follow-up workspace.
  *
- * Replaces the "MITS Accounts (Managed by Mitali)" Google Sheet 1:1:
- *   Client | Payment Date 1 | Payment Date 2 | Amount | Comments | Feedback
+ * Mirrors the "MITS Accounts (Managed by Mitali)" sheet:
+ *   Client | Pay Date 1 | Pay Date 2 | Amount | Account | Comments | Actions
  *
- * Plus quick actions on each row: edit her note inline, mark feedback taken
- * today, mark leverage asked, send calendar invite, jump into client.
- *
- * Visual cues mirror her sheet — pink-highlight for "Jadhav" (family group?
- * leave it as a soft indicator), amber row for "Payment pending on Vaibhav",
- * green tick column for "done", subtle red for overdue.
+ * Key rules:
+ * - payDate1 = last collected date (reference)
+ * - payDate2 = next due date (what Mitali is chasing)
+ * - "Payment done" → payDate1 ← payDate2, enter new payDate2
+ * - Leverage = extend payDate2 by max 3 days, reason auto-logged as comment
+ * - Feedback must be taken ≤3 days before payDate2
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
-import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
 import { EmptyState } from '@/components/EmptyState';
-import { Wallet, MessageSquare, Gift, AlertTriangle, CheckCircle2, Clock, Calendar as CalendarIcon, Phone } from 'lucide-react';
-import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { Select, Textarea, Label } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Label, Textarea } from '@/components/ui/input';
+import {
+  AlertTriangle, CheckCircle2, Clock, MessageSquare,
+  ExternalLink, ChevronDown, ChevronUp, Send, Pin, Trash2, Users
+} from 'lucide-react';
+import { minFutureDate, maxTodayDate } from '@/lib/utils';
 
-/** Build a Google Calendar "create event" pre-fill URL that the user can
- *  save into their OWN calendar — no server-side OAuth dance needed. */
-function gcalLink(opts: { title: string; details?: string; date?: string; timeIst?: string; durationMinutes?: number }) {
-  const params = new URLSearchParams({ action: 'TEMPLATE', text: opts.title });
-  if (opts.details) params.set('details', opts.details);
-  if (opts.date && opts.timeIst) {
-    const [hh, mm] = opts.timeIst.split(':').map(Number);
-    const start = new Date(`${opts.date}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+05:30`);
-    const end = new Date(start.getTime() + (opts.durationMinutes || 30) * 60_000);
-    const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-    params.set('dates', `${fmt(start)}/${fmt(end)}`);
-  }
-  return `https://calendar.google.com/calendar/render?${params.toString()}`;
-}
+// ─── types ────────────────────────────────────────────────────────────────────
+
+interface LatestComment { id: string; body: string; authorName: string; createdAt: string; }
 
 interface Row {
-  id: string; name: string;
-  currency: string; cycleAmount: number;
-  engagementType: string; source: string | null;
-  followupNote: string | null; followupNoteAt: string | null;
-  lastFeedbackTakenAt: string | null; lastLeverageAskedAt: string | null;
+  id: string;
+  name: string;
+  currency: string;
+  cycleAmount: number;
+  engagementType: string;
+  payDate1: string | null;
+  payDate2: string | null;
+  daysUntilDue: number | null;
+  leverageUntil: string | null;
+  leverageNote: string | null;
+  lastFeedbackTakenAt: string | null;
+  lastLeverageAskedAt: string | null;
   paymentPendingVaibhav: boolean;
   hostOwner: string | null;
-  primaryTrainer: string | null;
-  date1: { paymentDate: string; amount: number; kind: string } | null;
-  date2: { paymentDate: string; amount: number; kind: string } | null;
-  lastPaymentDate: string | null;
-  daysSinceLast: number | null;
-  status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'unknown';
+  primaryTrainer: { id: string; name: string } | null;
+  trainingId: string | null;
+  trainingName: string | null;
+  latestComment: LatestComment | null;
+  feedbackNeeded: boolean;
+  status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'no_date';
   paymentCount: number;
 }
 
-function BriefStat({ label, value, tone }: { label: string; value: number; tone: 'red' | 'amber' | 'green' | 'grey' }) {
-  const color =
-    tone === 'red'   ? 'var(--status-red)'   :
-    tone === 'amber' ? 'var(--status-amber)' :
-    tone === 'green' ? 'var(--status-green)' :
-    'var(--brand-textMuted)';
-  const isAlert = value > 0;
-  return (
-    <div className="relative">
-      <div className="text-[10px] uppercase tracking-[0.12em] font-semibold muted mb-1">{label}</div>
-      <div
-        className="text-[26px] font-extrabold leading-none kpi-value"
-        style={{
-          color: isAlert ? color : 'var(--brand-text)',
-          letterSpacing: '-0.02em',
-          textShadow: isAlert ? `0 0 16px ${color === 'var(--status-red)' ? 'rgba(239,68,68,0.20)' : color === 'var(--status-amber)' ? 'rgba(245,158,11,0.20)' : 'none'}` : 'none',
-        }}
-      >
-        {value}
-      </div>
-    </div>
-  );
+interface Comment {
+  id: string; body: string; authorId: string | null;
+  authorName: string; pinned: boolean; createdAt: string;
 }
 
-function statusPill(s: Row['status']): { tone: 'amber' | 'red' | 'green' | 'blue' | 'grey'; label: string; Icon: any } {
-  switch (s) {
-    case 'pending_vaibhav': return { tone: 'amber', label: 'Pending on Vaibhav', Icon: AlertTriangle };
-    case 'overdue':         return { tone: 'red',   label: 'Overdue',           Icon: AlertTriangle };
-    case 'due_soon':        return { tone: 'amber', label: 'Due soon',          Icon: Clock };
-    case 'paid':            return { tone: 'green', label: 'Done',              Icon: CheckCircle2 };
-    case 'unknown':         return { tone: 'grey',  label: 'No payments yet',   Icon: Clock };
-  }
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function addDays(isoDate: string, n: number): string {
+  const d = new Date(isoDate + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '—';
+  const [, m, d] = iso.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]}`;
 }
 
 function daysAgoLabel(date: string | null): string {
@@ -96,15 +84,496 @@ function daysAgoLabel(date: string | null): string {
   const d = Math.floor((Date.now() - Date.parse(date)) / 86_400_000);
   if (d === 0) return 'today';
   if (d === 1) return 'yesterday';
-  if (d < 30) return `${d}d ago`;
-  return date;
+  return `${d}d ago`;
 }
 
-export function FollowUpPaymentsPage() {
+function timeAgo(iso: string): string {
+  const diff = Date.now() - Date.parse(iso);
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1)   return 'just now';
+  if (mins < 60)  return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)   return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+// ─── stat card ────────────────────────────────────────────────────────────────
+
+function Stat({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-widest font-semibold mb-1" style={{ color: 'var(--brand-textMuted)' }}>{label}</div>
+      <div className="text-[28px] font-extrabold leading-none" style={{ color: value > 0 ? color : 'var(--brand-text)' }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// ─── status badge ─────────────────────────────────────────────────────────────
+
+function StatusBadge({ r }: { r: Row }) {
+  if (r.status === 'overdue') return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
+      style={{ background: 'rgba(239,68,68,0.12)', color: 'var(--status-red)', border: '1px solid rgba(239,68,68,0.3)' }}>
+      <AlertTriangle size={10}/> Overdue {r.daysUntilDue !== null ? `${Math.abs(r.daysUntilDue)}d` : ''}
+    </span>
+  );
+  if (r.status === 'due_soon') return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
+      style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.3)' }}>
+      <Clock size={10}/> Due in {r.daysUntilDue}d
+    </span>
+  );
+  if (r.status === 'pending_vaibhav') return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
+      style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.3)' }}>
+      <AlertTriangle size={10}/> Pending on Vaibhav
+    </span>
+  );
+  if (r.status === 'paid') return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full"
+      style={{ background: 'rgba(34,197,94,0.10)', color: 'var(--status-green)', border: '1px solid rgba(34,197,94,0.25)' }}>
+      <CheckCircle2 size={10}/> Done
+    </span>
+  );
+  return <span className="text-[11px] muted">No date set</span>;
+}
+
+// ─── comment thread panel ─────────────────────────────────────────────────────
+
+function CommentThread({ clientId, onClose }: { clientId: string; onClose: () => void }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const [body, setBody] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const { data: comments = [], isLoading } = useQuery<Comment[]>({
+    queryKey: ['comments', { clientId }],
+    queryFn: () => api.get(`/comments?clientId=${clientId}`).then((r) => r.data),
+  });
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [comments.length]);
+
+  const post = useMutation({
+    mutationFn: () => api.post('/comments', { clientId, body: body.trim() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['comments', { clientId }] });
+      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
+      setBody('');
+      showToast('Comment added');
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const del = useMutation({
+    mutationFn: (id: string) => api.delete(`/comments/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['comments', { clientId }] }); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Cannot delete', 'error'),
+  });
+
+  const content = (
+    <div
+      className="fixed inset-0 flex items-end justify-end"
+      style={{ zIndex: 9999 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="flex flex-col"
+        style={{
+          width: 380, height: '80vh',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--brand-border)',
+          borderRadius: '16px 16px 0 0',
+          boxShadow: '0 -8px 40px rgba(0,0,0,0.4)',
+          margin: '0 24px',
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
+          <span className="font-bold text-sm">Comments</span>
+          <button onClick={onClose} className="muted text-lg leading-none hover:opacity-70">&times;</button>
+        </div>
+
+        {/* Thread */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+          {isLoading ? <div className="muted text-xs">Loading…</div> : null}
+          {!isLoading && comments.length === 0 && (
+            <div className="muted text-xs text-center mt-8">No comments yet. Be the first.</div>
+          )}
+          {comments.map((c) => (
+            <div key={c.id} className="group relative rounded-xl p-2.5" style={{
+              background: c.pinned ? 'rgba(245,158,11,0.08)' : 'var(--bg-input)',
+              border: `1px solid ${c.pinned ? 'rgba(245,158,11,0.3)' : 'var(--brand-borderSoft)'}`,
+            }}>
+              {c.pinned && <Pin size={10} className="absolute top-2 right-2" style={{ color: 'var(--accent-gold)' }}/>}
+              <div className="flex items-baseline justify-between gap-2 mb-1">
+                <span className="text-[11px] font-semibold" style={{ color: 'var(--accent-gold)' }}>{c.authorName}</span>
+                <span className="text-[10px] muted">{timeAgo(c.createdAt)}</span>
+              </div>
+              <div className="text-[12px] whitespace-pre-wrap" style={{ color: 'var(--brand-text)' }}>{c.body}</div>
+              <button
+                onClick={() => del.mutate(c.id)}
+                className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
+                title="Delete (own, within 5 min)"
+              >
+                <Trash2 size={11} style={{ color: 'var(--status-red)' }}/>
+              </button>
+            </div>
+          ))}
+          <div ref={bottomRef}/>
+        </div>
+
+        {/* Input */}
+        <div className="px-3 pb-3 pt-2" style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
+          <div className="flex gap-2">
+            <Textarea
+              rows={2}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Add a comment…"
+              className="!text-[12px] flex-1 resize-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && body.trim()) post.mutate();
+              }}
+            />
+            <Button
+              variant="primary"
+              disabled={!body.trim() || post.isPending}
+              onClick={() => post.mutate()}
+              className="self-end"
+            >
+              <Send size={13}/>
+            </Button>
+          </div>
+          <div className="text-[10px] muted mt-1">⌘↵ to post</div>
+        </div>
+      </div>
+    </div>
+  );
+  return createPortal(content, document.body);
+}
+
+// ─── "Payment done" modal ─────────────────────────────────────────────────────
+
+function AdvancePaymentModal({ r, onClose }: { r: Row; onClose: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const defaultNext = r.payDate2 ? addDays(r.payDate2, 14) : addDays(todayISO(), 14);
+  const [newDate2, setNewDate2] = useState(defaultNext);
+
+  const adv = useMutation({
+    mutationFn: () => api.post(`/follow-up-payments/${r.id}/advance-payment`, { newDate2 }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
+      showToast(`Payment done ✓ — next due ${fmtDate(newDate2)}`);
+      onClose();
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const content = (
+    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="rounded-2xl p-5 w-[340px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+        <div className="font-bold text-sm mb-1">Mark payment done — {r.name}</div>
+        <div className="muted text-[11px] mb-4">
+          Current due date: <strong>{fmtDate(r.payDate2)}</strong> → moves to Pay Date 1.<br/>
+          Set the next due date below.
+        </div>
+        <div className="form-row">
+          <Label>Next payment due date</Label>
+          <Input type="date" value={newDate2} min={todayISO()} onChange={(e) => setNewDate2(e.target.value)} />
+        </div>
+        <div className="flex gap-2 mt-4 justify-end">
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!newDate2 || adv.isPending} onClick={() => adv.mutate()}>
+            {adv.isPending ? 'Saving…' : 'Confirm done'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+  return createPortal(content, document.body);
+}
+
+// ─── leverage modal ───────────────────────────────────────────────────────────
+
+function LeverageModal({ r, onClose }: { r: Row; onClose: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const base = r.payDate2 || todayISO();
+  const maxDate = addDays(base, 3);
+  const [newDate2, setNewDate2] = useState(addDays(base, 1));
+  const [note, setNote] = useState('');
+
+  const lev = useMutation({
+    mutationFn: () => api.post(`/follow-up-payments/${r.id}/leverage`, { newDate2, note }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
+      qc.invalidateQueries({ queryKey: ['comments', { clientId: r.id }] });
+      showToast(`Leverage granted — due extended to ${fmtDate(newDate2)}`);
+      onClose();
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const content = (
+    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="rounded-2xl p-5 w-[360px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+        <div className="font-bold text-sm mb-1">Grant leverage — {r.name}</div>
+        <div className="muted text-[11px] mb-3">
+          Client can't pay yet. Extend due date by <strong>max 3 days</strong> (until {fmtDate(maxDate)}).<br/>
+          The extension is auto-logged as a comment.
+        </div>
+        {r.leverageUntil && (
+          <div className="text-[11px] mb-3 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--status-amber)' }}>
+            Already extended to {fmtDate(r.leverageUntil)}{r.leverageNote ? ` · ${r.leverageNote}` : ''}
+          </div>
+        )}
+        <div className="form-row mb-3">
+          <Label>New due date (max {fmtDate(maxDate)})</Label>
+          <Input type="date" value={newDate2} min={todayISO()} max={maxDate}
+            onChange={(e) => setNewDate2(e.target.value)} />
+        </div>
+        <div className="form-row">
+          <Label>Reason (logged as comment)</Label>
+          <Input value={note} onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. Client travelling, will pay Monday" />
+        </div>
+        <div className="flex gap-2 mt-4 justify-end">
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!newDate2 || newDate2 > maxDate || lev.isPending} onClick={() => lev.mutate()}>
+            {lev.isPending ? 'Saving…' : 'Grant leverage'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+  return createPortal(content, document.body);
+}
+
+// ─── edit pay dates modal ─────────────────────────────────────────────────────
+
+function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [date1, setDate1] = useState(r.payDate1 || '');
+  const [date2, setDate2] = useState(r.payDate2 || '');
+
+  const save = useMutation({
+    mutationFn: () => api.post(`/follow-up-payments/${r.id}/set-pay-dates`, { date1: date1 || null, date2: date2 || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
+      showToast('Dates updated');
+      onClose();
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const content = (
+    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="rounded-2xl p-5 w-[340px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+        <div className="font-bold text-sm mb-3">Edit payment dates — {r.name}</div>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="form-row">
+            <Label>Pay Date 1 (last paid)</Label>
+            <Input type="date" value={date1} max={maxTodayDate()} onChange={(e) => setDate1(e.target.value)} />
+          </div>
+          <div className="form-row">
+            <Label>Pay Date 2 (next due)</Label>
+            <Input type="date" value={date2} onChange={(e) => setDate2(e.target.value)} />
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>
+            {save.isPending ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+  return createPortal(content, document.body);
+}
+
+// ─── row ──────────────────────────────────────────────────────────────────────
+
+function PayRow({ r }: { r: Row }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [showComments, setShowComments] = useState(false);
+  const [showAdvance, setShowAdvance] = useState(false);
+  const [showLeverage, setShowLeverage] = useState(false);
+  const [showEditDates, setShowEditDates] = useState(false);
+
+  const feedbackTaken = useMutation({
+    mutationFn: () => api.post(`/follow-up-payments/${r.id}/feedback-taken`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); showToast('Feedback logged today'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const togglePending = useMutation({
+    mutationFn: () => api.post(`/follow-up-payments/${r.id}/pending-vaibhav`, { pending: !r.paymentPendingVaibhav }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); showToast('Updated'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const rowBg =
+    r.status === 'overdue'         ? 'rgba(239,68,68,0.04)' :
+    r.status === 'due_soon'        ? 'rgba(245,158,11,0.04)' :
+    r.paymentPendingVaibhav        ? 'rgba(245,158,11,0.06)' :
+    undefined;
+
+  return (
+    <>
+      <tr style={{ background: rowBg, verticalAlign: 'top' }}>
+        {/* Client */}
+        <td style={{ minWidth: 160 }}>
+          <Link to={`/clients/${r.id}`} className="font-semibold text-[13px] hover:underline flex items-center gap-1"
+            style={{ color: 'var(--brand-text)' }}>
+            {r.name}
+            <ExternalLink size={10} className="muted"/>
+          </Link>
+          <div className="text-[10px] muted mt-0.5 leading-relaxed">
+            {r.engagementType}
+            {r.hostOwner && <> · <span style={{ color: 'var(--accent-gold)' }}>{r.hostOwner}</span></>}
+          </div>
+          {/* Trainer / group links */}
+          {r.primaryTrainer && (
+            <Link to={`/trainers/${r.primaryTrainer.id}`}
+              className="inline-flex items-center gap-0.5 text-[10px] mt-0.5 hover:underline"
+              style={{ color: 'var(--brand-textSecondary)' }}>
+              <Users size={9}/> {r.primaryTrainer.name}
+            </Link>
+          )}
+          {r.trainingId && (
+            <Link to={`/regular-trainings/${r.trainingId}`}
+              className="inline-flex items-center gap-0.5 text-[10px] mt-0.5 ml-1 hover:underline"
+              style={{ color: 'var(--brand-textSecondary)' }}>
+              <ExternalLink size={9}/> Group
+            </Link>
+          )}
+        </td>
+
+        {/* Pay Date 1 — last paid */}
+        <td style={{ minWidth: 90 }}>
+          <div className="font-mono text-[12px] font-semibold">{fmtDate(r.payDate1)}</div>
+          {r.payDate1 && (
+            <div className="text-[10px] muted">{daysAgoLabel(r.payDate1)}</div>
+          )}
+        </td>
+
+        {/* Pay Date 2 — next due */}
+        <td style={{ minWidth: 100 }}>
+          <div className={`font-mono text-[12px] font-bold ${r.status === 'overdue' ? 'text-red-400' : r.status === 'due_soon' ? 'text-amber-400' : ''}`}>
+            {fmtDate(r.payDate2)}
+          </div>
+          {r.leverageUntil && r.leverageUntil === r.payDate2 && (
+            <div className="text-[10px] mt-0.5" style={{ color: 'var(--status-amber)' }}>⟳ leverage</div>
+          )}
+          <button
+            onClick={() => setShowEditDates(true)}
+            className="text-[10px] muted hover:underline mt-0.5 block"
+          >edit</button>
+        </td>
+
+        {/* Amount */}
+        <td style={{ minWidth: 80 }}>
+          <div className="font-mono text-[13px] font-semibold">{r.currency} {r.cycleAmount || 0}</div>
+          <StatusBadge r={r}/>
+        </td>
+
+        {/* Last touchpoints */}
+        <td style={{ minWidth: 110 }}>
+          <div className="text-[11px] space-y-0.5">
+            <div className={`flex items-center gap-1 ${r.feedbackNeeded ? 'font-semibold' : ''}`}
+              style={{ color: r.feedbackNeeded ? 'var(--status-amber)' : undefined }}>
+              <MessageSquare size={10} className="muted"/>
+              <span className="muted">fb:</span>
+              <span>{daysAgoLabel(r.lastFeedbackTakenAt)}</span>
+              {r.feedbackNeeded && <AlertTriangle size={10}/>}
+            </div>
+          </div>
+        </td>
+
+        {/* Comments */}
+        <td style={{ minWidth: 160 }}>
+          {r.latestComment ? (
+            <div>
+              <div className="text-[11px] leading-tight line-clamp-2" style={{ color: 'var(--brand-text)' }}>
+                {r.latestComment.body}
+              </div>
+              <div className="text-[10px] muted mt-0.5">
+                {r.latestComment.authorName} · {timeAgo(r.latestComment.createdAt)}
+              </div>
+            </div>
+          ) : (
+            <span className="muted italic text-[11px]">no comments</span>
+          )}
+          <button
+            onClick={() => setShowComments(true)}
+            className="inline-flex items-center gap-1 text-[10px] mt-1 hover:underline"
+            style={{ color: 'var(--accent-gold)' }}
+          >
+            <MessageSquare size={10}/> View thread
+          </button>
+        </td>
+
+        {/* Actions */}
+        <td style={{ minWidth: 200 }}>
+          <div className="flex flex-wrap gap-1.5">
+            {/* Payment done */}
+            <Button size="sm" variant="primary" onClick={() => setShowAdvance(true)}
+              title="Mark payment collected — rolls date forward">
+              <CheckCircle2 size={11}/> Payment done
+            </Button>
+
+            {/* Leverage */}
+            <Button size="sm"
+              style={r.leverageUntil ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
+              onClick={() => setShowLeverage(true)}
+              title="Extend due date by max 3 days">
+              ⟳ Leverage
+            </Button>
+
+            {/* Feedback */}
+            <Button size="sm"
+              style={r.feedbackNeeded ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
+              onClick={() => feedbackTaken.mutate()}
+              title="Mark feedback taken today">
+              <MessageSquare size={11}/> Feedback {r.feedbackNeeded ? '⚠' : ''}
+            </Button>
+
+            {/* Pending V */}
+            <Button size="sm"
+              style={r.paymentPendingVaibhav ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
+              onClick={() => togglePending.mutate()}
+              title="Flag this payment as pending on Vaibhav">
+              {r.paymentPendingVaibhav ? '✓ Pending V' : 'Pending V'}
+            </Button>
+          </div>
+        </td>
+      </tr>
+
+      {showComments && <CommentThread clientId={r.id} onClose={() => setShowComments(false)}/>}
+      {showAdvance  && <AdvancePaymentModal r={r} onClose={() => setShowAdvance(false)}/>}
+      {showLeverage && <LeverageModal r={r} onClose={() => setShowLeverage(false)}/>}
+      {showEditDates && <EditDatesModal r={r} onClose={() => setShowEditDates(false)}/>}
+    </>
+  );
+}
+
+// ─── main page ────────────────────────────────────────────────────────────────
+
+export function FollowUpPaymentsPage() {
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'pending_vaibhav' | 'due_soon'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'due_soon' | 'pending_vaibhav'>('all');
 
   const { data, isLoading } = useQuery<Row[]>({
     queryKey: ['follow-up-payments'],
@@ -115,56 +584,23 @@ export function FollowUpPaymentsPage() {
     let xs = data || [];
     if (search.trim()) {
       const q = search.toLowerCase();
-      xs = xs.filter((r) => r.name.toLowerCase().includes(q) || (r.followupNote || '').toLowerCase().includes(q));
+      xs = xs.filter((r) => r.name.toLowerCase().includes(q));
     }
     if (statusFilter !== 'all') xs = xs.filter((r) => r.status === statusFilter);
     return xs;
   }, [data, search, statusFilter]);
 
-  // Bucketed counts for the filter chips
   const counts = useMemo(() => {
-    const o = { all: 0, overdue: 0, pending_vaibhav: 0, due_soon: 0 };
+    const o = { all: 0, overdue: 0, due_soon: 0, pending_vaibhav: 0, feedback_needed: 0 };
     for (const r of (data || [])) {
       o.all++;
-      if (r.status === 'overdue')          o.overdue++;
-      if (r.status === 'pending_vaibhav')  o.pending_vaibhav++;
-      if (r.status === 'due_soon')         o.due_soon++;
+      if (r.status === 'overdue')         o.overdue++;
+      if (r.status === 'due_soon')        o.due_soon++;
+      if (r.status === 'pending_vaibhav') o.pending_vaibhav++;
+      if (r.feedbackNeeded)               o.feedback_needed++;
     }
     return o;
   }, [data]);
-
-  // Daily brief — what's the most actionable summary at a glance?
-  const brief = useMemo(() => {
-    const xs = data || [];
-    const today = new Date().toISOString().slice(0, 10);
-    const thirtyAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); })();
-    return {
-      neverFeedback:  xs.filter((r) => !r.lastFeedbackTakenAt).length,
-      staleFeedback:  xs.filter((r) => r.lastFeedbackTakenAt && r.lastFeedbackTakenAt < thirtyAgo).length,
-      neverLeverage:  xs.filter((r) => !r.lastLeverageAskedAt).length,
-      todayFeedback:  xs.filter((r) => r.lastFeedbackTakenAt === today).length,
-      todayLeverage:  xs.filter((r) => r.lastLeverageAskedAt === today).length,
-    };
-  }, [data]);
-
-  const feedbackTaken = useMutation({
-    mutationFn: (id: string) => api.post(`/follow-up-payments/${id}/feedback-taken`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); showToast('Feedback marked taken'); },
-    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
-  });
-
-  const leverageAsked = useMutation({
-    mutationFn: (id: string) => api.post(`/follow-up-payments/${id}/leverage-asked`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); showToast('Leverage ask logged'); },
-    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
-  });
-
-  const togglePending = useMutation({
-    mutationFn: (vars: { id: string; pending: boolean }) =>
-      api.post(`/follow-up-payments/${vars.id}/pending-vaibhav`, { pending: vars.pending }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); showToast('Updated'); },
-    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
-  });
 
   return (
     <>
@@ -173,47 +609,42 @@ export function FollowUpPaymentsPage() {
         subtitle={`${(data || []).length} active clients`}
         actions={
           <Input
-            placeholder="Search client or note…"
+            placeholder="Search client…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="max-w-[280px]"
+            className="max-w-[240px]"
           />
         }
       />
       <Page>
-        {/* Daily brief — actionable summary at the top */}
+        {/* KPI bar */}
         {(data || []).length > 0 && (
-          <div className="card-hero mb-4 grid grid-cols-2 md:grid-cols-5 gap-4">
-            <BriefStat label="Overdue" value={counts.overdue} tone="red" />
-            <BriefStat label="Pending Vaibhav" value={counts.pending_vaibhav} tone="amber" />
-            <BriefStat label="Never asked for feedback" value={brief.neverFeedback} tone="amber" />
-            <BriefStat label="Feedback >30d ago" value={brief.staleFeedback} tone="grey" />
-            <BriefStat label="Never asked for leverage" value={brief.neverLeverage} tone="amber" />
+          <div className="card-hero mb-4 grid grid-cols-2 md:grid-cols-4 gap-6">
+            <Stat label="Overdue"          value={counts.overdue}         color="var(--status-red)" />
+            <Stat label="Due soon (≤3d)"   value={counts.due_soon}        color="var(--status-amber)" />
+            <Stat label="Pending Vaibhav"  value={counts.pending_vaibhav} color="var(--status-amber)" />
+            <Stat label="Feedback needed"  value={counts.feedback_needed} color="var(--status-amber)" />
           </div>
         )}
 
         {/* Filter chips */}
         <div className="flex flex-wrap gap-2 mb-3">
           {([
-            { k: 'all',              label: 'All',                  tone: 'grey'  },
-            { k: 'overdue',          label: 'Overdue',              tone: 'red'   },
-            { k: 'pending_vaibhav',  label: 'Pending on Vaibhav',   tone: 'amber' },
-            { k: 'due_soon',         label: 'Due soon',             tone: 'amber' },
+            { k: 'all',             label: 'All',              n: counts.all },
+            { k: 'overdue',         label: 'Overdue',          n: counts.overdue },
+            { k: 'due_soon',        label: 'Due soon',         n: counts.due_soon },
+            { k: 'pending_vaibhav', label: 'Pending on Vaibhav', n: counts.pending_vaibhav },
           ] as const).map((f) => {
-            const n = counts[f.k];
             const active = statusFilter === f.k;
             return (
-              <button
-                key={f.k}
-                onClick={() => setStatusFilter(f.k as any)}
+              <button key={f.k} onClick={() => setStatusFilter(f.k as any)}
                 className={`px-3 py-1 rounded-full text-[12px] font-medium border transition-all ${active ? '' : 'opacity-70 hover:opacity-100'}`}
                 style={{
                   background: active ? 'var(--accent-goldSoft)' : 'var(--bg-card)',
-                  borderColor: active ? 'var(--accent-gold)'    : 'var(--brand-border)',
-                  color:       active ? 'var(--accent-gold)'    : 'var(--brand-textSecondary)',
-                }}
-              >
-                {f.label} <span className="ml-1 muted">· {n}</span>
+                  borderColor: active ? 'var(--accent-gold)' : 'var(--brand-border)',
+                  color: active ? 'var(--accent-gold)' : 'var(--brand-textSecondary)',
+                }}>
+                {f.label} <span className="ml-1 muted">· {f.n}</span>
               </button>
             );
           })}
@@ -222,247 +653,28 @@ export function FollowUpPaymentsPage() {
         {isLoading ? (
           <div className="muted text-sm">Loading…</div>
         ) : filtered.length === 0 ? (
-          <EmptyState
-            icon={Wallet}
-            tone={(data || []).length === 0 ? 'green' : 'grey'}
-            title={(data || []).length === 0 ? "No active clients to follow up" : `No clients in this filter`}
-            description={(data || []).length === 0 ? 'When clients move to Active or LeverageGranted they show up here for ongoing payment collection.' : 'Try a different filter or clear search.'}
-          />
+          <EmptyState icon={CheckCircle2} tone="green" title="All clear" description="No clients match this filter." />
         ) : (
-          <div className="table-card">
-            <table>
+          <div className="table-card overflow-x-auto">
+            <table style={{ minWidth: 900 }}>
               <thead>
                 <tr>
                   <th>Client</th>
-                  <th>Payment Date 1</th>
-                  <th>Payment Date 2</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th>Last touchpoints</th>
+                  <th>Pay Date 1<div className="text-[9px] font-normal muted normal-case">last paid</div></th>
+                  <th>Pay Date 2<div className="text-[9px] font-normal muted normal-case">next due</div></th>
+                  <th>Amount / Status</th>
+                  <th>Touchpoints</th>
                   <th>Comments</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((r) => <RowItem key={r.id} r={r} onPending={togglePending.mutate} onFeedback={feedbackTaken.mutate} onLeverage={leverageAsked.mutate} />)}
+                {filtered.map((r) => <PayRow key={r.id} r={r}/>)}
               </tbody>
             </table>
           </div>
         )}
       </Page>
     </>
-  );
-}
-
-function RowItem({
-  r,
-  onPending,
-  onFeedback,
-  onLeverage,
-}: {
-  r: Row;
-  onPending: (v: { id: string; pending: boolean }) => void;
-  onFeedback: (id: string) => void;
-  onLeverage: (id: string) => void;
-}) {
-  const qc = useQueryClient();
-  const showToast = useUI((s) => s.showToast);
-  const [editingNote, setEditingNote] = useState(false);
-  const [noteVal, setNoteVal] = useState(r.followupNote || '');
-
-  const saveNote = useMutation({
-    mutationFn: () => api.patch(`/follow-up-payments/${r.id}/note`, { note: noteVal }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
-      showToast('Note saved');
-      setEditingNote(false);
-    },
-    onError: (e: any) => showToast(e?.response?.data?.error || 'Save failed', 'error'),
-  });
-
-  const s = statusPill(r.status);
-  const SIcon = s.Icon;
-  const rowBg = r.paymentPendingVaibhav ? 'rgba(245,158,11,0.06)' : undefined;
-
-  return (
-    <tr style={{ background: rowBg }}>
-      <td>
-        <Link to={`/clients/${r.id}`} className="font-semibold hover:underline" style={{ color: 'var(--brand-text)' }}>
-          {r.name}
-        </Link>
-        <div className="text-[10.5px] muted mt-0.5">
-          {r.engagementType}
-          {r.primaryTrainer && <> · trainer: {r.primaryTrainer}</>}
-          {r.hostOwner && <> · host: {r.hostOwner}</>}
-        </div>
-      </td>
-      <td className="mono text-[12px]">
-        {r.date1 ? (
-          <>
-            <div>{r.date1.paymentDate}</div>
-            <div className="text-[10px] muted">{r.date1.kind} · {r.currency} {r.date1.amount}</div>
-          </>
-        ) : <span className="muted">—</span>}
-      </td>
-      <td className="mono text-[12px]">
-        {r.date2 ? (
-          <>
-            <div>{r.date2.paymentDate}</div>
-            <div className="text-[10px] muted">{r.date2.kind} · {r.currency} {r.date2.amount}</div>
-          </>
-        ) : <span className="muted">—</span>}
-      </td>
-      <td className="mono">{r.currency} {r.cycleAmount || 0}</td>
-      <td>
-        <Pill color={s.tone}>
-          <SIcon size={11} className="mr-0.5"/>
-          {s.label}
-        </Pill>
-        {r.daysSinceLast !== null && (
-          <div className="text-[10px] muted mt-0.5">last pmt {r.daysSinceLast}d ago</div>
-        )}
-      </td>
-      <td className="text-[11px]">
-        <div className="flex items-center gap-1.5">
-          <MessageSquare size={11} className="muted" />
-          <span className="muted">feedback:</span>
-          <span>{daysAgoLabel(r.lastFeedbackTakenAt)}</span>
-        </div>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          <Gift size={11} className="muted" />
-          <span className="muted">leverage:</span>
-          <span>{daysAgoLabel(r.lastLeverageAskedAt)}</span>
-        </div>
-      </td>
-      <td>
-        {editingNote ? (
-          <div className="flex flex-col gap-1">
-            <Input
-              value={noteVal}
-              onChange={(e) => setNoteVal(e.target.value)}
-              placeholder="e.g. cad · 1 hour daily · she paid rest amount"
-              className="!text-[11px] !py-1"
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') saveNote.mutate();
-                if (e.key === 'Escape') { setEditingNote(false); setNoteVal(r.followupNote || ''); }
-              }}
-            />
-            <div className="flex gap-1">
-              <Button size="sm" variant="primary" onClick={() => saveNote.mutate()} disabled={saveNote.isPending}>Save</Button>
-              <Button size="sm" onClick={() => { setEditingNote(false); setNoteVal(r.followupNote || ''); }}>Cancel</Button>
-            </div>
-          </div>
-        ) : (
-          <button onClick={() => setEditingNote(true)} className="text-left text-[11px] hover:underline">
-            {r.followupNote ? (
-              <span>{r.followupNote}</span>
-            ) : (
-              <span className="muted italic">+ add note</span>
-            )}
-            {r.followupNoteAt && <div className="text-[9px] muted mt-0.5">edited {daysAgoLabel(r.followupNoteAt)}</div>}
-          </button>
-        )}
-      </td>
-      <td>
-        <div className="flex flex-col gap-1">
-          <div className="flex gap-1">
-            <Button size="sm" onClick={() => onFeedback(r.id)} title="Mark feedback taken today">
-              <MessageSquare size={11}/> Feedback
-            </Button>
-            <Button size="sm" onClick={() => onLeverage(r.id)} title="Mark you asked for leverage / referral today">
-              <Gift size={11}/> Leverage
-            </Button>
-          </div>
-          <div className="flex gap-1">
-            <QuickLogCall clientId={r.id} clientName={r.name} />
-            <a
-              href={gcalLink({
-                title: `${r.name} · payment follow-up`,
-                details: `Cycle amount ${r.currency} ${r.cycleAmount}\nLast payment: ${r.lastPaymentDate || '—'}\nLast feedback: ${r.lastFeedbackTakenAt || '—'}\nLast leverage ask: ${r.lastLeverageAskedAt || '—'}\n${r.followupNote ? 'Note: ' + r.followupNote : ''}`,
-              })}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <Button size="sm" title="Open Google Calendar pre-filled — saves to your own calendar">
-                <CalendarIcon size={11}/> Cal
-              </Button>
-            </a>
-          </div>
-          <Button
-            size="sm"
-            variant={r.paymentPendingVaibhav ? 'amber' : 'default'}
-            onClick={() => onPending({ id: r.id, pending: !r.paymentPendingVaibhav })}
-            title={r.paymentPendingVaibhav ? 'Clear "Pending on Vaibhav"' : 'Mark payment pending on Vaibhav'}
-          >
-            {r.paymentPendingVaibhav ? '✓ Pending V' : 'Pending V'}
-          </Button>
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-/** Inline "Log a call" — opens a small modal preset with this client. */
-function QuickLogCall({ clientId, clientName }: { clientId: string; clientName: string }) {
-  const qc = useQueryClient();
-  const showToast = useUI((s) => s.showToast);
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ kind: 'checkin', outcome: '', notes: '' });
-
-  const create = useMutation({
-    mutationFn: () => api.post('/call-logs', { clientId, ...form, outcome: form.outcome || null, notes: form.notes || null }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['call-logs'] });
-      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
-      showToast('Call logged');
-      setOpen(false);
-      setForm({ kind: 'checkin', outcome: '', notes: '' });
-    },
-    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" title={`Log a call to ${clientName}`}>
-          <Phone size={11}/> Call
-        </Button>
-      </DialogTrigger>
-      <DialogContent title={`Log call · ${clientName}`} description="Quick check-in log so the call shows up in the client's history.">
-        <div className="grid md:grid-cols-2 gap-2">
-          <div className="form-row">
-            <Label>Kind</Label>
-            <Select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
-              <option value="checkin">Check-in</option>
-              <option value="feedback">Feedback</option>
-              <option value="leverage">Leverage / referral ask</option>
-              <option value="escalation">Escalation</option>
-            </Select>
-          </div>
-          <div className="form-row">
-            <Label>Outcome</Label>
-            <Select value={form.outcome} onChange={(e) => setForm({ ...form, outcome: e.target.value })}>
-              <option value="">—</option>
-              <option value="answered">Answered</option>
-              <option value="no_pickup">No pickup</option>
-              <option value="rescheduled">Rescheduled</option>
-              <option value="completed">Completed</option>
-              <option value="escalated">Escalated</option>
-            </Select>
-          </div>
-        </div>
-        <div className="form-row">
-          <Label>Notes</Label>
-          <Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="What was discussed, any follow-up needed." />
-        </div>
-        <DialogFooter>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
-          <Button variant="primary" disabled={create.isPending} onClick={() => create.mutate()}>
-            {create.isPending ? 'Saving…' : 'Log call'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
