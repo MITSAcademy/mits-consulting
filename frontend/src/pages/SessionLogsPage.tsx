@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { ClipboardList, Plus, X, Download, ThumbsUp, ThumbsDown, Minus } from 'lucide-react';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
-import { todayISO } from '@/lib/utils';
+import { todayISO, minPastDate, maxTodayDate, minFutureDate } from '@/lib/utils';
 import { useAuth } from '@/store/auth';
 import { Link } from 'react-router-dom';
 
@@ -146,7 +146,7 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
         </div>
         <div>
           <label className="label">Date *</label>
-          <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input type="date" className="input" value={date} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setDate(e.target.value)} />
         </div>
         <div>
           <label className="label">Days / sessions *</label>

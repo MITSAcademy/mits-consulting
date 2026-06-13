@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
+import { minPastDate, maxTodayDate } from '@/lib/utils';
 
 interface Props {
   /** Use one or the other */
@@ -213,7 +214,7 @@ function BackfillDemoModal({ clientId, onClose }: { clientId: string; onClose: (
         <div className="grid md:grid-cols-2 gap-2.5 mb-1">
           <div className="form-row">
             <Label>Actual date *</Label>
-            <Input type="date" value={actualDate} onChange={(e) => setActualDate(e.target.value)} />
+            <Input type="date" value={actualDate} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setActualDate(e.target.value)} />
           </div>
           <div className="form-row">
             <Label>Actual time (IST)</Label>

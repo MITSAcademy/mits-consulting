@@ -8,7 +8,7 @@ import { Pill } from '@/components/ui/pill';
 import { EmptyState } from '@/components/EmptyState';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
-import { todayISO } from '@/lib/utils';
+import { todayISO, minPastDate, maxTodayDate, minFutureDate } from '@/lib/utils';
 import { useState, useMemo } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, XCircle, ChevronsUp, ChevronUp, Minus } from 'lucide-react';
 
@@ -133,6 +133,8 @@ function NewIssueModal({ clients, trainers, users }: { clients: IdName[]; traine
             <Input
               type="date"
               value={f.date}
+              min={minPastDate()}
+              max={maxTodayDate()}
               onChange={(e) => setF({ ...f, date: e.target.value })}
             />
           </div>

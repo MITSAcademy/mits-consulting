@@ -22,7 +22,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Pill } from '@/components/ui/pill';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
-import { todayISO } from '@/lib/utils';
+import { todayISO, minPastDate, maxTodayDate } from '@/lib/utils';
 import { EmptyState } from '@/components/EmptyState';
 import {
   ClipboardList, Plus, Calendar as CalendarIcon, CheckCircle2, Phone, Play, Square,
@@ -583,7 +583,7 @@ function ScheduleCallButton({ onCreated }: { onCreated: () => void }) {
           </div>
           <div className="form-row">
             <Label>Date *</Label>
-            <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            <Input type="date" value={form.date} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           </div>
           <div className="form-row">
             <Label>Time (IST) *</Label>
@@ -969,7 +969,7 @@ function AMScheduleButton({ training, onSent }: { training: any; onSent: () => v
         <div className="grid grid-cols-2 gap-2.5">
           <div className="form-row">
             <Label>Date *</Label>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <Input type="date" value={date} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="form-row">
             <Label>Time IST * <span className="muted normal-case">(pre-filled)</span></Label>
@@ -1239,7 +1239,7 @@ function LogSessionButton({ onCreated }: { onCreated: () => void }) {
           </div>
           <div className="form-row">
             <Label>Date *</Label>
-            <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            <Input type="date" value={form.date} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           </div>
           <div className="form-row">
             <Label>Hours *</Label>

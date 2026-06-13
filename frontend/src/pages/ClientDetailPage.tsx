@@ -10,7 +10,7 @@ import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input, Textarea, Label, Select } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
-import { formatPhone, waLink, todayISO, stageLabel, backStagesFor, addDays, fmtClientId } from '@/lib/utils';
+import { formatPhone, waLink, todayISO, stageLabel, backStagesFor, addDays, fmtClientId, minPastDate, maxTodayDate, minFutureDate } from '@/lib/utils';
 import { useUI } from '@/store/ui';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/store/auth';
@@ -1653,6 +1653,8 @@ function ScheduleDemoModal({ client, onClose }: any) {
                       <Input
                         type="date"
                         value={s.date}
+                        min={minPastDate()}
+                        max={maxTodayDate()}
                         onChange={(e) => patchSlot(idx, { date: e.target.value })}
                       />
                     </div>
@@ -1728,7 +1730,7 @@ function PaymentModal({ client, kind, onClose }: any) {
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent title={`${kind} payment · ${client.name}`}>
         <div className="grid md:grid-cols-2 gap-2.5">
-          <div className="form-row"><Label>Date</Label><Input type="date" value={f.paymentDate} onChange={(e) => setF({...f, paymentDate: e.target.value})} /></div>
+          <div className="form-row"><Label>Date</Label><Input type="date" value={f.paymentDate} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setF({...f, paymentDate: e.target.value})} /></div>
           <div className="form-row"><Label>Amount</Label><Input type="number" value={f.amount} onChange={(e) => setF({...f, amount: +e.target.value})} /></div>
           <div className="form-row"><Label>Currency</Label><Select value={f.currency} onChange={(e) => setF({...f, currency: e.target.value})}><option>USD</option><option>CAD</option><option>INR</option></Select></div>
           <div className="form-row"><Label>Mode</Label><Select value={f.paymentMode} onChange={(e) => setF({...f, paymentMode: e.target.value})}><option>Bank</option><option>UPI</option><option>Zelle</option><option>Wire</option><option>Cash</option></Select></div>
@@ -1752,7 +1754,7 @@ function LeverageModal({ client, onClose }: any) {
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent title={`Leverage · ${client.name}`} description="≤ 3 days auto-approves; longer needs Vaibhav.">
         <div className="form-row"><Label>Days requested</Label><Input type="number" value={f.daysRequested} onChange={(e) => setF({...f, daysRequested: +e.target.value})} /></div>
-        <div className="form-row"><Label>New committed date</Label><Input type="date" value={f.newCommittedDate} onChange={(e) => setF({...f, newCommittedDate: e.target.value})} /></div>
+        <div className="form-row"><Label>New committed date</Label><Input type="date" value={f.newCommittedDate} min={minFutureDate()} onChange={(e) => setF({...f, newCommittedDate: e.target.value})} /></div>
         <div className="form-row"><Label>Reason</Label><Textarea value={f.reasonStated} onChange={(e) => setF({...f, reasonStated: e.target.value})} /></div>
         <DialogFooter><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={() => create.mutate()}>Submit</Button></DialogFooter>
       </DialogContent>
@@ -1879,7 +1881,7 @@ function DemoDoneModal({ client, onClose }: any) {
         <div className="grid md:grid-cols-2 gap-2.5">
           <div className="form-row">
             <Label>Actual date</Label>
-            <Input type="date" value={f.demoActualDate} onChange={(e) => setF({ ...f, demoActualDate: e.target.value })} />
+            <Input type="date" value={f.demoActualDate} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setF({ ...f, demoActualDate: e.target.value })} />
             {client.demoDate && <div className="text-[10px] muted mt-0.5">Scheduled: {client.demoDate}</div>}
           </div>
           <div className="form-row">
@@ -2339,11 +2341,11 @@ function DormantModal({ client, onClose }: any) {
         <div className="grid md:grid-cols-2 gap-2.5">
           <div className="form-row">
             <Label>Last contact / dormant since</Label>
-            <Input type="date" value={f.dormantSince} onChange={(e) => setF({ ...f, dormantSince: e.target.value })} />
+            <Input type="date" value={f.dormantSince} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setF({ ...f, dormantSince: e.target.value })} />
           </div>
           <div className="form-row">
             <Label>Check back on</Label>
-            <Input type="date" value={f.dormantCheckBackOn} onChange={(e) => setF({ ...f, dormantCheckBackOn: e.target.value })} />
+            <Input type="date" value={f.dormantCheckBackOn} min={minFutureDate()} onChange={(e) => setF({ ...f, dormantCheckBackOn: e.target.value })} />
           </div>
         </div>
         <div className="form-row">
@@ -2727,7 +2729,7 @@ function NoShowModal({ client, onClose }: any) {
           <div className="bg-bg-input rounded p-2.5">
             <div className="text-sm font-medium mb-1.5">Custom reschedule date</div>
             <div className="flex gap-2 items-end">
-              <Input type="date" value={customDate} onChange={(e) => setCustomDate(e.target.value)} className="flex-1" />
+              <Input type="date" value={customDate} min={minFutureDate()} onChange={(e) => setCustomDate(e.target.value)} className="flex-1" />
               <Button size="sm" variant="primary" disabled={!customDate || anyPending} onClick={() => pushDemo.mutate(customDate)}>
                 Push to selected date
               </Button>
@@ -3260,7 +3262,7 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
         {(target === 'CP' || target === 'C') && (
           <div className="form-row mt-3">
             <Label>Next follow-up date</Label>
-            <Input type="date" value={nextCallOn} onChange={(e) => setNextCallOn(e.target.value)} />
+            <Input type="date" value={nextCallOn} min={minFutureDate()} onChange={(e) => setNextCallOn(e.target.value)} />
             <div className="text-[10px] muted mt-1">
               {target === 'CP' ? 'Default: 3 days from today.' : 'Default: tomorrow.'}
             </div>
@@ -3279,7 +3281,7 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
             </div>
             <div className="form-row mt-2">
               <Label>Payment commitment date *</Label>
-              <Input type="date" value={employerCommitDate} onChange={(e) => setEmployerCommitDate(e.target.value)} />
+              <Input type="date" value={employerCommitDate} min={minFutureDate()} onChange={(e) => setEmployerCommitDate(e.target.value)} />
               <div className="text-[10px] muted mt-1">When will the employer settle the invoice?</div>
             </div>
           </>
@@ -3755,7 +3757,7 @@ function SendSkillMatrixModal({ client, onClose }: any) {
           </div>
           <div className="form-row">
             <Label>Demo date</Label>
-            <Input type="date" value={demoDate} onChange={(e) => setDemoDate(e.target.value)} />
+            <Input type="date" value={demoDate} min={minFutureDate()} onChange={(e) => setDemoDate(e.target.value)} />
           </div>
           <div className="form-row">
             <Label>Demo time (IST)</Label>
@@ -3789,6 +3791,7 @@ function SendSkillMatrixModal({ client, onClose }: any) {
                         <Input
                           type="date"
                           value={s.date}
+                          min={minFutureDate()}
                           onChange={(e) => setTrainerSlots((prev) => prev.map((p, idx) => idx === i ? { ...p, date: e.target.value } : p))}
                           className="!w-auto !text-xs"
                           title={`Demo date for ${s.name}`}

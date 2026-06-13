@@ -20,7 +20,7 @@ import { useUI } from '@/store/ui';
 import { useFeatures } from '@/hooks/useFeatures';
 import { EmptyState } from '@/components/EmptyState';
 import { useAuth } from '@/store/auth';
-import { todayISO } from '@/lib/utils';
+import { todayISO, minPastDate, maxTodayDate, minFutureDate } from '@/lib/utils';
 import {
   FolderOpen, ExternalLink, Calendar as CalendarIcon, Play, Square, Plus, Pencil, Archive, Video,
 } from 'lucide-react';
@@ -406,7 +406,7 @@ function ScheduleSessionButton({ trainingId, defaultHostId }: { trainingId: stri
         <div className="grid md:grid-cols-2 gap-2">
           <div className="form-row">
             <Label>Date *</Label>
-            <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+            <Input type="date" value={form.date} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           </div>
           <div className="form-row">
             <Label>Time (IST) *</Label>

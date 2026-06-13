@@ -20,6 +20,21 @@ export function addDays(iso: string, n: number) {
   return d.toISOString().slice(0, 10);
 }
 
+/** Earliest date allowed for "things that happened" — max 3 days in the past. */
+export function minPastDate() {
+  return addDays(todayISO(), -3);
+}
+
+/** Latest date allowed for "things that happened" — today (can't record future events). */
+export function maxTodayDate() {
+  return todayISO();
+}
+
+/** Earliest date allowed for "future planning" fields — tomorrow. */
+export function minFutureDate() {
+  return addDays(todayISO(), 1);
+}
+
 export const LIFECYCLE = [
   'Lead', 'IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters',
   'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone',

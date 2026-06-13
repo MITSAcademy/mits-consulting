@@ -7,7 +7,7 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { useState, useMemo } from 'react';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
-import { todayISO } from '@/lib/utils';
+import { todayISO, minPastDate, maxTodayDate, minFutureDate } from '@/lib/utils';
 import { EmptyState } from '@/components/EmptyState';
 import { Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
 import { celebrate } from '@/components/CelebrationLayer';
@@ -110,7 +110,7 @@ export function FreshPaymentsPage() {
                   )}
                 </div>
                 <div className="form-row"><Label>Kind</Label><Select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}><option>Fresh</option><option>Renewal</option><option>Other</option></Select></div>
-                <div className="form-row"><Label>Date</Label><Input type="date" value={f.paymentDate} onChange={(e) => setF({ ...f, paymentDate: e.target.value })} /></div>
+                <div className="form-row"><Label>Date</Label><Input type="date" value={f.paymentDate} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setF({ ...f, paymentDate: e.target.value })} /></div>
                 <div className="form-row"><Label>Amount</Label><Input type="number" value={f.amount} onChange={(e) => setF({ ...f, amount: +e.target.value })} /></div>
                 <div className="form-row"><Label>Currency</Label><Select value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value })}><option>USD</option><option>CAD</option><option>INR</option><option>EUR</option><option>GBP</option><option>AUD</option></Select></div>
                 <div className="form-row md:col-span-2"><Label>Bank account</Label><Select value={f.bankAccountId} onChange={(e) => setF({ ...f, bankAccountId: e.target.value })}><option value="">— Select —</option>{(banks || []).map((b: any) => <option key={b.id} value={b.id}>{b.label}</option>)}</Select></div>
