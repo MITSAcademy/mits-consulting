@@ -62,7 +62,7 @@ type ModalKind =
   | 'sendIntake' | 'recordIntake' | 'internalSearch'
   | 'scheduleDemo' | 'demoDone' | 'noShow' | 'freshPayment' | 'leverage' | 'hold' | 'renewal' | 'welcomeEmail' | 'postDemoFeedback' | 'sendSkillMatrix' | 'skipMatrix' | 'preDemoReminder'
   | 'engagementLetter' | 'handoverWelcome' | 'subStatus' | 'paymentConfirmation' | 'groupRename' | 'paymentChecklist'
-  | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume' | 'assignAm';
+  | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume' | 'assignAm' | 'feedbackEmail';
 
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -152,16 +152,15 @@ export function ClientDetailPage() {
       <Mail size={14}/> Email
     </Button>
   );
-  // Pre-demo lifecycles use the WhatsApp GROUP (intake conversation happens there).
-  // Post-demo (and any stage without a group link) falls back to a 1:1 wa.me message.
-  const preDemoForWA = ['Lead', 'IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters', 'VerificationPending', 'TrainerMatched', 'DemoScheduled'].includes(client.lifecycle);
-  const useGroupForWA = !!client.whatsappGroupLink && preDemoForWA;
+  // If client has a WhatsApp group link, always prefer opening the group (pre- and post-demo).
+  // Using a named window target prevents a second window opening when one is already open.
+  const useGroupForWA = !!client.whatsappGroupLink;
   actions.push(
     <Button
       key="wa"
       size="sm"
       onClick={() => {
-        if (useGroupForWA) window.open(client.whatsappGroupLink!, '_blank');
+        if (useGroupForWA) window.open(client.whatsappGroupLink!, 'whatsapp_window', 'noopener');
         else setModal('sendWA');
       }}
       title={useGroupForWA ? `Open WhatsApp group: ${client.whatsappGroupName || 'group'}` : 'Send WhatsApp via wa.me'}
@@ -371,7 +370,12 @@ export function ClientDetailPage() {
   if (phase2 && canAMActions(user.role) && (client.lifecycle === 'Active' || client.lifecycle === 'SaleWon' || client.lifecycle === 'LeverageGranted')) {
     actions.push(
       <Button key="handover-welcome" size="sm" onClick={() => setModal('handoverWelcome')} title="Send Mitali's handover welcome (intro to team + feedback rhythm)">
-        <MessageCircle size={12}/> Send handover welcome
+        <Mail size={12}/> Welcome email
+      </Button>
+    );
+    actions.push(
+      <Button key="feedback-email" size="sm" onClick={() => setModal('feedbackEmail')} title="Send client feedback survey email">
+        <Mail size={12}/> Feedback email
       </Button>
     );
   }
@@ -911,6 +915,7 @@ export function ClientDetailPage() {
         {modal === 'preDemoReminder' && <PreDemoReminderModal client={client} onClose={() => setModal(null)} />}
         {modal === 'engagementLetter' && <EngagementLetterModal client={client} onClose={() => setModal(null)} />}
         {modal === 'handoverWelcome' && <HandoverWelcomeModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'feedbackEmail' && <FeedbackEmailModal client={client} onClose={() => setModal(null)} />}
         {modal === 'assignAm' && <AssignAmModal client={client} onClose={() => setModal(null)} />}
       </Page>
     </>
@@ -1043,7 +1048,7 @@ function SendIntakeModal({ client, onClose }: any) {
   const copy = () => { navigator.clipboard.writeText(INTAKE_TEMPLATE); showToast('Copied — paste into the group'); };
   const copyAndOpen = () => {
     navigator.clipboard.writeText(INTAKE_TEMPLATE);
-    if (client.whatsappGroupLink) window.open(client.whatsappGroupLink, '_blank');
+    if (client.whatsappGroupLink) window.open(client.whatsappGroupLink, 'whatsapp_window', 'noopener');
     showToast('Copied & group opened — paste in WhatsApp');
   };
   const directWA = () => {
@@ -4266,22 +4271,26 @@ function HandoverWelcomeModal({ client, onClose }: any) {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
+  const hasGroup = !!client.whatsappGroupLink;
   const hasPhone = !!client.phoneDigits;
-  const canSend = toEmail || hasPhone;
+  const hasWA = hasGroup || hasPhone;
+  const canSend = toEmail || hasWA;
+  const waLabel = hasGroup ? 'WhatsApp group' : hasPhone ? 'WhatsApp direct' : '';
 
   const send = useMutation({
     mutationFn: async () => {
       const results: any = {};
       if (toEmail) results.email = await api.post(`/clients/${client.id}/handover-welcome`, { channel: 'email' }).then(r => r.data);
-      if (hasPhone) results.wa = await api.post(`/clients/${client.id}/handover-welcome`, { channel: 'whatsapp' }).then(r => r.data);
+      if (hasWA) results.wa = await api.post(`/clients/${client.id}/handover-welcome`, { channel: 'whatsapp' }).then(r => r.data);
       return results;
     },
     onSuccess: (r: any) => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['messages'] });
-      if (r.wa?.url) window.open(r.wa.url, '_blank', 'noopener');
-      const sent = [toEmail && 'Email', hasPhone && 'WhatsApp'].filter(Boolean).join(' + ');
-      showToast(`Handover welcome sent (${sent})`);
+      // Open group or wa.me link — use named target to avoid duplicate windows
+      if (r.wa?.url) window.open(r.wa.url, 'whatsapp_window', 'noopener');
+      const sent = [toEmail && 'Email', hasWA && waLabel].filter(Boolean).join(' + ');
+      showToast(`Welcome email sent (${sent})`);
       onClose();
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
@@ -4302,16 +4311,15 @@ function HandoverWelcomeModal({ client, onClose }: any) {
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent
-        title={`Handover welcome · ${client.name}`}
-        description="Mitali's introduction to her team (Bhavneet, Kashish, Muskan) + feedback rhythm + payment cadence."
+        title={`Welcome email · ${client.name}`}
+        description="Mitali's welcome to MITS team — playbook link, service agreement, team intro (Kashish / Bhavneet / Mitali)."
         className="max-w-xl"
       >
         <div className="space-y-2 text-sm">
           <div><strong>To (email):</strong> {toEmail || <span className="text-brand-amber">missing</span>}</div>
-          <div><strong>To (WhatsApp):</strong> {hasPhone ? `${client.phoneCode || ''} ${client.phoneDigits}` : <span className="text-brand-amber">missing</span>}</div>
+          <div><strong>To (WhatsApp):</strong> {hasGroup ? <span style={{ color: '#25D366' }}>Group — {client.whatsappGroupName || 'link saved'}</span> : hasPhone ? `${client.phoneCode || ''} ${client.phoneDigits}` : <span className="text-brand-amber">missing</span>}</div>
           <div className="text-xs muted bg-bg-input p-2 rounded mt-2">
-            Introduces the team, sets expectations: <em>Daily WhatsApp (Kashish/Muskan) · Weekly calls (Bhavneet) · Bi-weekly review (Mitali)</em>.
-            Includes payment cadence reminder so cycles never slip.
+            Sends: <em>"Welcome Aboard [Name] — MITS Solution"</em> with MITS Client Playbook link, team intro (Kashish, Bhavneet, Mitali roles), and service agreement note. CC'd to mc.welcome@mitssolution.com.
           </div>
         </div>
 
@@ -4327,13 +4335,52 @@ function HandoverWelcomeModal({ client, onClose }: any) {
         <DialogFooter>
           {!canSend && (
             <div className="text-xs text-brand-amber mr-auto self-center">
-              ⚠ No email or phone on file — use "Already sent" above.
+              ⚠ No email or WhatsApp on file — use "Already sent" above.
             </div>
           )}
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!canSend || anyPending} onClick={() => send.mutate()}>
             <Mail size={12}/><MessageCircle size={12}/>{' '}
-            {send.isPending ? 'Sending…' : `Send (${[toEmail && 'Email', hasPhone && 'WhatsApp'].filter(Boolean).join(' + ') || '—'})`}
+            {send.isPending ? 'Sending…' : `Send (${[toEmail && 'Email', hasWA && waLabel].filter(Boolean).join(' + ') || '—'})`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FeedbackEmailModal({ client, onClose }: any) {
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
+  const toEmail = client.email || (client.intakeData as any)?.client_email || '';
+
+  const send = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/feedback-email`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['messages'] });
+      showToast('Feedback survey email sent');
+      onClose();
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed to send feedback email', 'error'),
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        title={`Send feedback survey · ${client.name}`}
+        description="Sends the 'We value your feedback' email with the Client Survey Form link."
+        className="max-w-md"
+      >
+        <div className="space-y-2 text-sm">
+          <div><strong>To (email):</strong> {toEmail || <span className="text-brand-amber">missing — add email to client first</span>}</div>
+          <div className="text-xs muted bg-bg-input p-2 rounded mt-2">
+            Sends Mitali's branded feedback survey email asking the client to fill out the Client Survey Form. CC'd to feedback@mitssolution.com.
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!toEmail || send.isPending} onClick={() => send.mutate()}>
+            <Mail size={12}/> {send.isPending ? 'Sending…' : 'Send feedback email'}
           </Button>
         </DialogFooter>
       </DialogContent>

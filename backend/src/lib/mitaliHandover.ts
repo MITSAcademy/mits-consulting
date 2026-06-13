@@ -1,6 +1,7 @@
 /**
  * Handover welcome — sent by Mitali after Roshni hands off the client.
- * Introduces her team, explains the feedback rhythm, confirms next steps.
+ * Subject: "Welcome Aboard [Name] -- MITS Solution"
+ * Matches the email screenshot: playbook link, service agreement, team intro.
  *
  * Dual-channel: HTML email + plain text (also used for WhatsApp).
  */
@@ -8,101 +9,183 @@
 export interface HandoverVars {
   clientName: string;
   trainerName?: string;
-  senderName?: string;             // Mitali
-  senderEmail?: string;            // Mitali's gmail if configured
+  senderName?: string;
+  senderEmail?: string;
+  senderPhone?: string;
   paymentModel?: string;
   cycleEnd?: string;
+  playbookUrl?: string;
+  agreementUrl?: string;
 }
 
+const PLAYBOOK_URL = 'https://drive.google.com/file/d/1MITS_ClientPlaybook/view';
+const WEBSITE = 'https://mitssolution.com';
+const MITALI_EMAIL = 'mitagg@mitssolution.com';
+const MITALI_PHONE = '+91 97795 30773';
+const WELCOME_CC = 'mc.welcome@mitssolution.com';
+
 export const HANDOVER_SUBJECT = (clientName: string) =>
-  `Hello from your MITS Customer Success team, ${clientName}`;
+  `Welcome Aboard ${clientName} -- MITS Solution`;
 
 export function buildHandoverText(v: HandoverVars): string {
   const senderName = v.senderName || 'Mitali';
+  const playbookUrl = v.playbookUrl || PLAYBOOK_URL;
   return [
-    `Hi ${v.clientName},`,
+    `Dear ${v.clientName},`,
     ``,
-    `I'm ${senderName}, your dedicated Customer Success Manager at MITS Consulting. Now that Roshni has handed your engagement over to my team, allow me to introduce who you'll be working with day-to-day:`,
+    `We hope this email finds you well. On behalf of the entire team at MITS Solution, we are thrilled to welcome you aboard!! We appreciate your trust in us and are committed to ensuring your experience with MITS is exceptional.`,
     ``,
-    `── YOUR DEDICATED MITS TEAM ──`,
-    `Mitali     — Customer Success Manager (your escalation point)`,
-    `Bhavneet   — Operations Lead (weekly review calls)`,
-    `Kashish    — Daily session coordinator`,
-    `Muskan     — Daily session coordinator`,
-    v.trainerName ? `${v.trainerName.padEnd(11)}— Your primary trainer` : '',
+    `To help you get started and better understand our processes, services, and how we work together, we have prepared a comprehensive guide – the MITS Client Playbook. This playbook serves as a valuable resource that outlines all the essential information you need to know about our company and how we can support your goals.`,
+    `MITS Client Playbook: ${playbookUrl}`,
     ``,
-    `── HOW WE'LL STAY IN TOUCH ──`,
+    `Myself (${senderName}) would like to seize this opportunity to introduce my team, who will also be members of the group dedicated to providing you with our services.`,
     ``,
-    `• Daily WhatsApp: Kashish and Muskan will ping you each working day to share the session log and ask for a quick feedback note.`,
-    `• Twice a week: Bhavneet will call you for a 10-15 minute feedback conversation — what's working, what isn't, anything we should adjust.`,
-    `• Every two weeks: I'll personally call you for a structured review — progress against goals, satisfaction, and the next cycle plan.`,
-    `• Payments: I'll send you the payment schedule for your package and keep you reminded so we never run into surprises.${v.paymentModel ? ` (Your model: ${v.paymentModel}${v.cycleEnd ? ' · next cycle ends ' + v.cycleEnd : ''}.)` : ''}`,
+    `1) Kashish (Client Coordinator) - She will closely coordinate and schedule calls to cater to your service requirements effectively.`,
     ``,
-    `Please save my number and reach out anytime you need anything — whether that's a topic deep-dive, a rescheduling, or just a vent. We're here for it.`,
+    `2) Bhavneet (Team Leader) - Should any issues arise, Team Lead will be readily available to assist you with prompt resolutions like Resource change, Timing issues, etc, and Level 1 point of escalation. Also Bhavneet will reach you for very regular verbal feedback as well. [Escalation Response ETA ~24 hrs]`,
     ``,
-    `Looking forward to a long and successful partnership.`,
+    `3) ${senderName} (Customer Success Manager) - I will be your dedicated Customer Success Manager, overseeing and ensuring your satisfaction throughout our collaboration. I will be the Level L2 point of escalation and a further point of contact for recurring Payments. [Escalation Response ETA ~48 hrs]`,
     ``,
-    `Warm regards,`,
+    `To get the services started, you need to sign the agreement containing all the terms and conditions related to the services. Please take the time to review the document thoroughly and sign it to signify your agreement.`,
+    ``,
+    `P.S - Please find the documents links below:-`,
+    `1) Client Playbook: ${playbookUrl}`,
+    `2) Service Agreement: ${v.agreementUrl || 'you might be receiving this document from sign easy soon.'}`,
+    ``,
+    `--`,
+    `Regards,`,
     senderName,
-    `Customer Success Manager · MITS Consulting`,
-    `https://mitssolution.com`,
-  ].filter(Boolean).join('\n');
+    `mitagg@mitssolution.com`,
+    `+91 97795 30773`,
+    `mitssolution.com`,
+  ].filter(line => line !== undefined).join('\n');
 }
 
 export function buildHandoverHtml(v: HandoverVars): string {
   const senderName = v.senderName || 'Mitali';
+  const senderEmail = v.senderEmail || MITALI_EMAIL;
+  const senderPhone = v.senderPhone || MITALI_PHONE;
   const subject = HANDOVER_SUBJECT(v.clientName);
-  const memberRow = (role: string, name: string, badge?: string) =>
-    `<tr><td style="padding:6px 12px;background:#f7f7f9;border:1px solid #e4e4e7;font-weight:600;width:40%;">${esc(role)}</td><td style="padding:6px 12px;border:1px solid #e4e4e7;">${esc(name)}${badge ? ` <span style="color:#6B6F78;font-size:12px;">· ${esc(badge)}</span>` : ''}</td></tr>`;
+  const playbookUrl = v.playbookUrl || PLAYBOOK_URL;
+  const agreementNote = v.agreementUrl
+    ? `<a href="${esc(v.agreementUrl)}" target="_blank" style="color:#1A6CDF;text-decoration:underline;">Service Agreement</a>`
+    : `<span style="color:#9C27B0;">you might be receiving this document from sign easy soon.</span>`;
 
   return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>${esc(subject)}</title></head>
-<body style="margin:0;padding:0;background:#f4f4f6;font-family:'Inter','Helvetica Neue',Arial,sans-serif;color:#1A1B1E;">
+<body style="margin:0;padding:0;background:#ffffff;font-family:'Inter','Helvetica Neue',Arial,sans-serif;color:#1A1B1E;font-size:15px;line-height:1.7;">
   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background:#f4f4f6;padding:24px 0;">
     <tr><td align="center">
-      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="640" style="max-width:640px;width:100%;background:#ffffff;border-radius:8px;padding:32px 36px;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="640" style="max-width:640px;width:100%;background:#ffffff;border-radius:8px;padding:32px 36px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
         <tr><td style="font-size:15px;line-height:1.7;color:#1A1B1E;">
 
-          <p style="margin:0 0 16px;font-size:18px;font-weight:700;">Hi ${esc(v.clientName)} — welcome to the team 👋</p>
+          <p style="margin:0 0 16px;">Dear ${esc(v.clientName)},</p>
 
-          <p style="margin:0 0 14px;">
-            I'm <b>${esc(senderName)}</b>, your dedicated Customer Success Manager at <b>MITS Consulting</b>. Now that Roshni has handed your engagement over to my team, allow me to introduce who you'll be working with day-to-day.
+          <p style="margin:0 0 16px;">
+            We hope this email finds you well. On behalf of the entire team at <b>MITS Solution</b>, we are thrilled to <b>welcome you aboard</b>!! We appreciate your trust in us and are committed to ensuring your experience with MITS is exceptional.
           </p>
 
-          <h3 style="margin:22px 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:#6B6F78;">Your dedicated MITS team</h3>
-          <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-collapse:collapse;margin:0 0 16px;">
-            ${memberRow('Customer Success Manager', senderName, 'escalation point')}
-            ${memberRow('Operations Lead',          'Bhavneet',  'weekly review calls')}
-            ${memberRow('Daily Coordinator',        'Kashish')}
-            ${memberRow('Daily Coordinator',        'Muskan')}
-            ${v.trainerName ? memberRow('Primary Trainer', v.trainerName) : ''}
+          <p style="margin:0 0 16px;">
+            To help you get started and better understand <b>our processes, services</b>, and <b>how we work together</b>, we have prepared a comprehensive guide –&nbsp;the&nbsp;<a href="${esc(playbookUrl)}" target="_blank" style="color:#1A6CDF;text-decoration:underline;font-weight:600;">MITS Client Playbook</a>. This playbook serves as a <b>valuable resource</b> that outlines all the <b>essential information</b> you need to know about our company and how we can <b>support your goals</b>.
+          </p>
+
+          <p style="margin:0 0 16px;">
+            Myself (${esc(senderName)}) would like to seize this opportunity to <b>introduce my team</b>, who will also be members of the <b>group</b> dedicated to providing you with our services.
+          </p>
+
+          <p style="margin:0 0 12px;">
+            <b>1) Kashish (Client Coordinator)</b> -&nbsp; She will closely coordinate and <b>schedule calls</b> to cater to your service requirements effectively.
+          </p>
+
+          <p style="margin:0 0 12px;">
+            <b>2) <a href="mailto:bhavneet@mitssolution.com" style="color:#1A6CDF;text-decoration:underline;">Bhavneet</a> (Team Leader)</b> -&nbsp; Should any issues arise, Team Lead will be readily available to assist you with <b>prompt resolutions</b> like Resource change, Timing issues, etc, and <b>Level 1</b> point of escalation. Also Bhavneet will reach you for very regular verbal feedback as well. [Escalation Response ETA ~24 hrs]
+          </p>
+
+          <p style="margin:0 0 16px;">
+            <b>3) ${esc(senderName)} (Customer Success Manager)</b> -&nbsp; I will be your dedicated <b>Customer Success Manager</b>, overseeing and ensuring your satisfaction throughout our collaboration. I will be the <b>Level L2</b> point of escalation and a further point of contact for recurring <b>Payments</b>. [Escalation Response ETA ~48 hrs]
+          </p>
+
+          <p style="margin:0 0 16px;">
+            To get the <b>services started</b>, you need to sign the <a href="#" style="color:#1A6CDF;text-decoration:underline;">agreement</a> containing all the <b>terms and conditions</b> related to the services. Please take the time to <b>review the document</b> thoroughly and <b>sign it</b> to signify your agreement.
+          </p>
+
+          <p style="margin:0 0 6px;"><b>P.S - Please find the documents links below:-</b></p>
+          <p style="margin:0 0 4px;">1) Client Playbook:-&nbsp;<a href="${esc(playbookUrl)}" target="_blank" style="color:#1A6CDF;text-decoration:underline;font-weight:600;">MITS Client Playbook</a></p>
+          <p style="margin:0 0 20px;">2) Service Agreement:-&nbsp; ${agreementNote}</p>
+
+          <p style="margin:0 0 4px;">--<br/>Regards,</p>
+
+          <p style="margin:8px 0 4px;font-family:'Brush Script MT','Lucida Handwriting',cursive;font-size:32px;color:#1A1B1E;">${esc(senderName)} Aggarwal</p>
+
+          <!-- Signature block -->
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:12px 0 6px;">
+            <tr>
+              <td style="border-top:2px solid #1A1B1E;border-bottom:2px solid #1A1B1E;padding:10px 0;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td style="padding-right:28px;vertical-align:middle;">
+                      <div style="font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;font-size:38px;color:#1A1B1E;line-height:1;letter-spacing:-1px;">MITS</div>
+                    </td>
+                    <td style="vertical-align:middle;font-size:13px;line-height:1.7;color:#1A1B1E;">
+                      <div>✉&nbsp;<a href="mailto:${esc(senderEmail)}" style="color:#1A6CDF;text-decoration:underline;">${esc(senderEmail)}</a></div>
+                      <div>☎&nbsp;<a href="tel:${senderPhone.replace(/\s/g, '')}" style="color:#1A1B1E;text-decoration:none;">${esc(senderPhone)}</a></div>
+                      <div>🔗&nbsp;<a href="${WEBSITE}" target="_blank" style="color:#1A1B1E;text-decoration:none;font-weight:600;">mitssolution.com</a></div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
           </table>
 
-          <h3 style="margin:22px 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:0.06em;color:#6B6F78;">How we'll stay in touch</h3>
-          <ul style="margin:0 0 16px;padding-left:20px;">
-            <li style="margin:0 0 8px;"><b>Daily on WhatsApp</b> — Kashish and Muskan will ping you each working day with the session log and a quick feedback prompt.</li>
-            <li style="margin:0 0 8px;"><b>Twice a week on call</b> — Bhavneet will call you for a 10-15 minute feedback conversation: what's working, what isn't, and anything we should adjust.</li>
-            <li style="margin:0 0 8px;"><b>Every two weeks</b> — I'll personally call for a structured review: progress against your goals, satisfaction, and the next cycle plan.</li>
-            <li style="margin:0;"><b>Payments</b> — I'll share the payment schedule for your package${v.paymentModel ? ` (${esc(v.paymentModel)}${v.cycleEnd ? ` · next cycle ends ${esc(v.cycleEnd)}` : ''})` : ''} and keep you gently reminded so we never run into surprises.</li>
-          </ul>
-
-          <p style="margin:0 0 14px;">
-            Please save my number and reach out any time you need something — whether that's a topic deep-dive, rescheduling a session, or just to share thoughts. We're here for it.
+          <!-- Social icons row -->
+          <p style="margin:12px 0 6px;font-size:18px;letter-spacing:4px;">
+            <a href="https://facebook.com/mitssolution" target="_blank" style="text-decoration:none;color:#1A1B1E;">f</a>&nbsp;
+            𝕏&nbsp;
+            <a href="https://linkedin.com/company/mitssolution" target="_blank" style="text-decoration:none;color:#1A1B1E;">in</a>&nbsp;
+            📸&nbsp;▶
           </p>
 
-          <p style="margin:0 0 14px;font-weight:600;">Looking forward to a long and successful partnership.</p>
-
-          <p style="margin:18px 0 4px;">Warm regards,</p>
-          <p style="margin:0;font-weight:600;">${esc(senderName)}</p>
-          <p style="margin:0;color:#6B6F78;font-size:13px;">Customer Success Manager · MITS Consulting</p>
-          ${v.senderEmail ? `<p style="margin:6px 0 0;"><a href="mailto:${esc(v.senderEmail)}" style="color:#1A6CDF;text-decoration:underline;font-size:13px;">${esc(v.senderEmail)}</a></p>` : ''}
+          <p style="margin:8px 0 0;font-size:13px;">
+            <span style="color:#9C7B2C;">🏆</span>&nbsp;
+            <a href="${WEBSITE}" target="_blank" style="color:#9C7B2C;font-weight:700;font-style:italic;text-decoration:underline;">MITS Solution got awarded as one of the top Ed'Tech Firms in 2022</a>
+          </p>
 
         </td></tr>
       </table>
     </td></tr>
   </table>
 </body></html>`;
+}
+
+/** WhatsApp text for the handover welcome — concise version of the email. */
+export function buildHandoverWhatsAppText(v: HandoverVars): string {
+  const senderName = v.senderName || 'Mitali';
+  const playbookUrl = v.playbookUrl || PLAYBOOK_URL;
+  return [
+    `Dear ${v.clientName},`,
+    ``,
+    `Welcome aboard MITS Solution! 🎉`,
+    ``,
+    `I'm ${senderName}, your Customer Success Manager. Thrilled to have you with us!`,
+    ``,
+    `Here's your team:`,
+    `• Kashish – Client Coordinator (schedules your sessions)`,
+    `• Bhavneet – Team Leader (Level 1 escalation, ~24 hr response)`,
+    `• ${senderName} – Customer Success Manager (Level 2 escalation, payments, ~48 hr response)`,
+    v.trainerName ? `• ${v.trainerName} – Your Primary Trainer` : '',
+    ``,
+    `📖 MITS Client Playbook: ${playbookUrl}`,
+    ``,
+    `Please review and sign the service agreement — you'll receive it via SignEasy shortly.`,
+    ``,
+    `Feel free to reach out anytime. Looking forward to a great partnership! 🙏`,
+    `– ${senderName}`,
+  ].filter(Boolean).join('\n');
+}
+
+export function buildHandoverWelcomeCc(): string {
+  return WELCOME_CC;
 }
 
 function esc(s: string): string {

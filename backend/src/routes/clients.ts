@@ -14,7 +14,8 @@ import { buildSkillMatrixPdf } from '../lib/skillMatrixPdf';
 import { buildPreDemoReminderHtml, buildPreDemoReminderText, PRE_DEMO_REMINDER_SUBJECT } from '../lib/preDemoTrainerReminder';
 import { buildEngagementLetterHtml, buildEngagementLetterText, ENGAGEMENT_LETTER_SUBJECT } from '../lib/engagementLetter';
 import { buildEngagementLetterPdf } from '../lib/engagementLetterPdf';
-import { buildHandoverHtml, buildHandoverText, HANDOVER_SUBJECT } from '../lib/mitaliHandover';
+import { buildHandoverHtml, buildHandoverText, buildHandoverWhatsAppText, buildHandoverWelcomeCc, HANDOVER_SUBJECT } from '../lib/mitaliHandover';
+import { buildFeedbackEmailHtml, buildFeedbackEmailText, FEEDBACK_EMAIL_SUBJECT } from '../lib/feedbackEmail';
 
 export const clientsRouter = Router();
 clientsRouter.use(requireAuth);
@@ -1613,14 +1614,25 @@ clientsRouter.post('/:id/handover-welcome', async (req: AuthedRequest, res) => {
   const html = buildHandoverHtml(vars);
 
   if (channel === 'whatsapp') {
-    const phone = `${client.phoneCode || ''}${client.phoneDigits || ''}`.replace(/[^0-9]/g, '');
-    if (!phone) return res.status(400).json({ error: 'No phone on file for this client' });
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+    const waText = buildHandoverWhatsAppText(vars);
+    // Prefer sending to the WhatsApp group if one is set up; fall back to direct phone.
+    const groupLink = (client as any).whatsappGroupLink as string | null | undefined;
+    if (groupLink) {
+      // Group link: log message + return group URL so frontend can open it
+      await prisma.outboundMessage.create({
+        data: { kind: 'WhatsApp', toPhone: '', toName: client.name, body: waText, clientId: client.id, sentById: req.user!.id, status: 'Logged', provider: 'wa-group-link' },
+      });
+      await audit(req.user!.id, req.user!.name, 'HANDOVER_WELCOME_WA_GROUP', `${client.name} · group`);
+      return res.json({ ok: true, url: groupLink, text: waText, channel: 'group' });
+    }
+    const phone = `${(client as any).phoneCode || ''}${(client as any).phoneDigits || ''}`.replace(/[^0-9]/g, '');
+    if (!phone) return res.status(400).json({ error: 'No phone or WhatsApp group on file for this client' });
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`;
     await prisma.outboundMessage.create({
-      data: { kind: 'WhatsApp', toPhone: phone, toName: client.name, body: text, clientId: client.id, sentById: req.user!.id, status: 'Logged', provider: 'wa-link' },
+      data: { kind: 'WhatsApp', toPhone: phone, toName: client.name, body: waText, clientId: client.id, sentById: req.user!.id, status: 'Logged', provider: 'wa-link' },
     });
     await audit(req.user!.id, req.user!.name, 'HANDOVER_WELCOME_WA', `${client.name} · ${phone}`);
-    return res.json({ ok: true, url, text });
+    return res.json({ ok: true, url, text: waText, channel: 'direct' });
   }
 
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
@@ -1629,11 +1641,12 @@ clientsRouter.post('/:id/handover-welcome', async (req: AuthedRequest, res) => {
   if (me?.gmailAddress && me?.smtpAppPassword) {
     fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword), sendAsAddress: me.sendAsAddress };
   }
+  const ccEmail = buildHandoverWelcomeCc();
   const msg = await prisma.outboundMessage.create({
     data: { kind: 'Email', toEmail, subject, body: text, clientId: client.id, sentById: req.user!.id, status: 'Queued', provider: 'smtp' },
   });
   try {
-    const r = await sendEmail({ to: toEmail, subject, body: text, htmlBody: html, fromUser });
+    const r = await sendEmail({ to: toEmail, cc: ccEmail, subject, body: text, htmlBody: html, fromUser });
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Sent', providerMessageId: r.id, provider: r.provider } });
     // Mark handover as completed so the "Send handover welcome" button hides afterwards
     await prisma.client.update({ where: { id: client.id }, data: { hostOwnerId: me?.id || 'u-mitali' } }).catch(() => null);
@@ -1642,6 +1655,48 @@ clientsRouter.post('/:id/handover-welcome', async (req: AuthedRequest, res) => {
   } catch (e: any) {
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Failed', errorText: e.message || String(e) } });
     res.status(502).json({ error: 'Handover welcome send failed: ' + (e.message || String(e)), code: (e as any)?.code, messageId: msg.id });
+  }
+});
+
+// ─── Feedback email (Mitali → client) ────────────────────────────────────
+// Sends the "We value your feedback" survey email to the client.
+clientsRouter.post('/:id/feedback-email', async (req: AuthedRequest, res) => {
+  if (!['founder', 'manager'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only Mitali (manager) or founder can send the feedback email' });
+  }
+  const surveyUrl: string | undefined = req.body?.surveyUrl;
+  const client = await prisma.client.findUnique({ where: { id: req.params.id } });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const me = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
+  });
+  const toEmail = client.email || (client.intakeData as any)?.client_email || '';
+  if (!toEmail) return res.status(400).json({ error: 'No email on file for this client' });
+  const opts = {
+    clientName: client.name,
+    senderName: me?.name || 'Mitali',
+    senderEmail: me?.gmailAddress || 'mitagg@mitssolution.com',
+    surveyUrl,
+  };
+  const subject = FEEDBACK_EMAIL_SUBJECT;
+  const body = buildFeedbackEmailText(opts);
+  const html = buildFeedbackEmailHtml(opts);
+  let fromUser;
+  if (me?.gmailAddress && me?.smtpAppPassword) {
+    fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword), sendAsAddress: me.sendAsAddress };
+  }
+  const msg = await prisma.outboundMessage.create({
+    data: { kind: 'Email', toEmail, subject, body, clientId: client.id, sentById: req.user!.id, status: 'Queued', provider: 'smtp' },
+  });
+  try {
+    const r = await sendEmail({ to: toEmail, cc: 'feedback@mitssolution.com', subject, body, htmlBody: html, fromUser });
+    await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Sent', providerMessageId: r.id, provider: r.provider } });
+    await audit(req.user!.id, req.user!.name, 'FEEDBACK_EMAIL', `${client.name} · ${toEmail}`);
+    res.status(201).json({ ok: true, messageId: msg.id });
+  } catch (e: any) {
+    await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Failed', errorText: e.message || String(e) } });
+    res.status(502).json({ error: 'Feedback email failed: ' + (e.message || String(e)), messageId: msg.id });
   }
 });
 
