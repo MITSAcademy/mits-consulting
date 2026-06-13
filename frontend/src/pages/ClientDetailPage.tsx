@@ -62,7 +62,7 @@ type ModalKind =
   | 'sendIntake' | 'recordIntake' | 'internalSearch'
   | 'scheduleDemo' | 'demoDone' | 'noShow' | 'freshPayment' | 'leverage' | 'hold' | 'renewal' | 'welcomeEmail' | 'postDemoFeedback' | 'sendSkillMatrix' | 'skipMatrix' | 'preDemoReminder'
   | 'engagementLetter' | 'handoverWelcome' | 'subStatus' | 'paymentConfirmation' | 'groupRename' | 'paymentChecklist'
-  | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume';
+  | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume' | 'assignAm';
 
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -395,9 +395,13 @@ export function ClientDetailPage() {
           <Wallet size={14}/> Renewal{feedbackRequired ? ' ⚠' : ''}
         </Button>
       );
-    } else if (isTraining) {
+    } else if (isTraining && user.role === 'founder') {
       actions.push(<Button key="cmpl" variant="success" onClick={() => stageM.mutate('Completed')}><Check size={14}/> Mark completed</Button>);
     }
+  }
+  // Assign AM — Mitali (manager) can assign active clients to Bhavneet / Kashish / Muskan
+  if (user.role === 'manager' && (client.lifecycle === 'Active' || client.lifecycle === 'LeverageGranted')) {
+    actions.push(<Button key="assign-am" size="sm" onClick={() => setModal('assignAm')}><UserPlus size={12}/> Assign AM</Button>);
   }
   if (canActivate(user.role) && user.role !== 'sales_closer') {
     actions.push(
@@ -809,6 +813,13 @@ export function ClientDetailPage() {
               )}
               <Field label="Sales close (Roshni)">{client.salesOwner?.name || '—'}</Field>
               <Field label="Host (Team 5)">{client.hostOwner?.name || '—'}</Field>
+              {(client.lifecycle === 'Active' || client.lifecycle === 'LeverageGranted') && (
+                <Field label="Account manager">
+                  {client.assignedAm
+                    ? <span style={{ color: 'var(--accent-gold)' }}>{client.assignedAm.name}</span>
+                    : <span className="muted italic">Not assigned</span>}
+                </Field>
+              )}
               <Field label="Primary trainer">
                 {client.primaryTrainer ? (
                   <Link to={`/trainers/${client.primaryTrainer.id}`} className="text-brand-blue">{client.primaryTrainer.name}</Link>
@@ -896,6 +907,7 @@ export function ClientDetailPage() {
         {modal === 'preDemoReminder' && <PreDemoReminderModal client={client} onClose={() => setModal(null)} />}
         {modal === 'engagementLetter' && <EngagementLetterModal client={client} onClose={() => setModal(null)} />}
         {modal === 'handoverWelcome' && <HandoverWelcomeModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'assignAm' && <AssignAmModal client={client} onClose={() => setModal(null)} />}
       </Page>
     </>
   );
@@ -1759,6 +1771,47 @@ function LeverageModal({ client, onClose }: any) {
         <div className="form-row"><Label>New committed date</Label><Input type="date" value={f.newCommittedDate} min={minFutureDate()} onChange={(e) => setF({...f, newCommittedDate: e.target.value})} /></div>
         <div className="form-row"><Label>Reason</Label><Textarea value={f.reasonStated} onChange={(e) => setF({...f, reasonStated: e.target.value})} /></div>
         <DialogFooter><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={() => create.mutate()}>Submit</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Assign AM — Mitali picks which account manager will handle this active client
+function AssignAmModal({ client, onClose }: any) {
+  const qc = useQueryClient(); const showToast = useUI((s) => s.showToast);
+  const { data: users } = useQuery({ queryKey: ['users'], queryFn: () => api.get('/users').then(r => r.data) });
+  // Fixed Mitali's team: Bhavneet (lead), Kashish + Muskan (account_manager)
+  const candidates = (users || []).filter((u: any) => u.active && ['lead', 'account_manager'].includes(u.role));
+  const [amId, setAmId] = useState(client.assignedAmId || '');
+  const save = useMutation({
+    mutationFn: () => api.patch(`/clients/${client.id}`, { assignedAmId: amId || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      qc.invalidateQueries({ queryKey: ['clients'] });
+      showToast(amId ? 'AM assigned' : 'AM unassigned');
+      onClose();
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent title={`Assign account manager · ${client.name}`}
+        description="Pick who from your team will handle sessions, feedback and trainer liaison for this client.">
+        <div className="form-row">
+          <Label>Account manager</Label>
+          <Select value={amId} onChange={(e) => setAmId(e.target.value)}>
+            <option value="">— unassigned —</option>
+            {candidates.map((u: any) => (
+              <option key={u.id} value={u.id}>{u.name} · {u.role.replace('_', ' ')}</option>
+            ))}
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>
+            {save.isPending ? 'Saving…' : 'Assign'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

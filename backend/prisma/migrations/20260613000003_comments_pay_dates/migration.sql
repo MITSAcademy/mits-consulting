@@ -27,3 +27,9 @@ ALTER TABLE "Comment"
 -- Indexes for fast retrieval
 CREATE INDEX IF NOT EXISTS "Comment_clientId_createdAt_idx"  ON "Comment"("clientId",  "createdAt");
 CREATE INDEX IF NOT EXISTS "Comment_trainerId_createdAt_idx" ON "Comment"("trainerId", "createdAt");
+
+-- Add assignedAm FK relation on Client
+ALTER TABLE "Client"
+  ADD CONSTRAINT "Client_assignedAmId_fkey"
+  FOREIGN KEY ("assignedAmId") REFERENCES "User"("id")
+  ON DELETE SET NULL ON UPDATE CASCADE;

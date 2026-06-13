@@ -26,6 +26,7 @@ const include = {
   intakeOwner: { select: { id: true, name: true, role: true } },
   salesOwner: { select: { id: true, name: true, role: true } },
   hostOwner: { select: { id: true, name: true, role: true } },
+  assignedAm: { select: { id: true, name: true, role: true } },
   primaryTrainer: true,
   regularTrainings: { select: { id: true, scheduleNotes: true, status: true }, where: { status: 'active' }, take: 1 },
   // Active sourcing request — used to show the assigned recruiter on kanban cards
@@ -66,12 +67,15 @@ function redactClient<T extends Record<string, any>>(c: T, viewer: { id: string;
 }
 
 clientsRouter.get('/', async (req: AuthedRequest, res) => {
-  const { lifecycle, search } = req.query as any;
+  const { lifecycle, search, scope } = req.query as any;
   const where: any = {};
-  if (lifecycle) where.lifecycle = lifecycle;
+  // lifecycle supports comma-separated values: ?lifecycle=Active,LeverageGranted
+  if (lifecycle) {
+    const vals = String(lifecycle).split(',').map(s => s.trim()).filter(Boolean);
+    where.lifecycle = vals.length === 1 ? vals[0] : { in: vals };
+  }
   if (search) {
     const s = String(search);
-    // Support searching by C-NNNN or just the number
     const seqMatch = s.match(/^[Cc]-?(\d+)$/);
     if (seqMatch) {
       where.seqId = parseInt(seqMatch[1], 10);
@@ -79,21 +83,35 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
       where.name = { contains: s, mode: 'insensitive' };
     }
   }
-  // account_manager (Kashish / Muskan) — own Active clients only
+  // account_manager (Kashish / Muskan)
+  //   - default (no scope): own Active clients by hostOwnerId
+  //   - scope=team: clients assigned to them via assignedAmId (for team kanban)
   if (req.user!.role === 'account_manager') {
     if (!lifecycle) where.lifecycle = { in: ['Active', 'LeverageGranted'] };
-    where.hostOwnerId = req.user!.id;
+    if (scope === 'team') {
+      where.assignedAmId = req.user!.id;
+    } else {
+      where.hostOwnerId = req.user!.id;
+    }
   }
-  // lead (Bhavneet) — all clients owned by his direct reports (Kashish, Muskan) or himself
-  // Active + LeverageGranted only; does not see sales pipeline or dormant/hold
+  // lead (Bhavneet) — team overview: all assigned to Bhavneet/Kashish/Muskan
   if (req.user!.role === 'lead') {
     if (!lifecycle) where.lifecycle = { in: ['Active', 'LeverageGranted'] };
-    where.hostOwnerId = { in: ['u-bhavneet', 'u-kashish', 'u-muskan'] };
+    if (scope === 'team') {
+      where.assignedAmId = { in: ['u-bhavneet', 'u-kashish', 'u-muskan'] };
+    } else {
+      where.hostOwnerId = { in: ['u-bhavneet', 'u-kashish', 'u-muskan'] };
+    }
   }
-  // manager (Mitali) — clients owned by her whole team + herself; no global access
+  // manager (Mitali) — her whole team's clients (team scope or default)
   if (req.user!.role === 'manager') {
     if (!lifecycle) where.lifecycle = { in: ['Active', 'LeverageGranted'] };
-    where.hostOwnerId = { in: ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'] };
+    if (scope === 'team') {
+      // For the kanban: all active clients in her team (hostOwnerId scope — same as normal)
+      where.hostOwnerId = { in: ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'] };
+    } else {
+      where.hostOwnerId = { in: ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'] };
+    }
   }
   const clients = await prisma.client.findMany({ where, include, orderBy: { createdAt: 'desc' } });
   res.json(clients.map((c) => redactClient(c, req.user!)));

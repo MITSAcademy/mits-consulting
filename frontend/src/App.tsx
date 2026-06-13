@@ -61,6 +61,7 @@ const SessionsDashboardPage = lazy(() => import('@/pages/SessionsDashboardPage')
 const IssueTrackerPage = lazy(() => import('@/pages/IssueTrackerPage'));
 const MeetingLinksPage = lazy(() => import('@/pages/MeetingLinksPage'));
 const CoordinatorDashboardPage = lazy(() => import('@/pages/CoordinatorDashboardPage'));
+const TeamKanbanPage = lazy(() => import('@/pages/TeamKanbanPage').then((m) => ({ default: m.TeamKanbanPage })));
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const user = useAuth((s) => s.user);
@@ -119,6 +120,7 @@ export default function App() {
           <Route path="/regular-trainings/:id" element={<RegularTrainingDetailPage />} />
           <Route path="/meeting-links" element={<MeetingLinksPage />} />
           <Route path="/coordinator-dashboard" element={<CoordinatorDashboardPage />} />
+          <Route path="/team-board" element={<TeamKanbanPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/renewals" element={<RenewalsPage />} />
           <Route path="/dormant" element={<DormantClientsPage />} />

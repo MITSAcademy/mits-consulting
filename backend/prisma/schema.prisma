@@ -172,6 +172,7 @@ model User {
   auditLog           AuditLog[]
   dailyReports       DailyReport[]
   comments           Comment[]
+  assignedAmClients  Client[]     @relation("AssignedAm")
   editRequests       EditRequest[]    @relation("EditRequestBy")
   editReviewed       EditRequest[]    @relation("EditReviewedBy")
   meetingLinks       MeetingLink[]    @relation("MeetingLinkOwner")
@@ -392,8 +393,9 @@ model Client {
   // Group rename audit (handover to Mitali team)
   whatsappGroupRenamedAt     String?   // ISO date
   whatsappGroupRenamedBy     String?   // user id
-  // Assigned account manager (Mitali/Bhavneet pick post-handover)
+  // Assigned account manager (Mitali picks post-handover — Bhavneet, Kashish, or Muskan)
   assignedAmId               String?
+  assignedAm                 User?    @relation("AssignedAm", fields: [assignedAmId], references: [id], onDelete: SetNull)
   // Payment-terms checklist Roshni walks through on close call.
   // JSON array: [{ key, label, checked, note, checkedAt, checkedBy }]
   paymentChecklist           Json?
