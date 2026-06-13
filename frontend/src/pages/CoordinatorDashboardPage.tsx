@@ -7,6 +7,7 @@
  *   - Reallocation: drag a client to a different coordinator
  */
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
@@ -16,7 +17,7 @@ import { Pill } from '@/components/ui/pill';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import {
-  Users, CalendarDays, AlertTriangle, CheckSquare, RefreshCw, UserCog, ArrowRightLeft,
+  Users, CalendarDays, AlertTriangle, CheckSquare, RefreshCw, ArrowRightLeft,
 } from 'lucide-react';
 
 interface CoordClient {
@@ -76,35 +77,44 @@ function ReallocateModal({ client, team, onClose }: {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
-  if (options.length === 0) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="rounded-2xl p-5 w-80 space-y-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
-          <div className="font-semibold text-[14px]">Reallocate: {client.name}</div>
-          <p className="text-[13px] muted">No other coordinators available to move to.</p>
-          <div className="flex justify-end"><Button onClick={onClose}>Close</Button></div>
-        </div>
+  const content = options.length === 0 ? (
+    <div className="rounded-2xl p-5 w-80 space-y-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+      <div className="font-semibold text-[14px]">Reallocate: {client.name}</div>
+      <p className="text-[13px] muted">No other coordinators available to move to.</p>
+      <div className="flex justify-end"><Button onClick={onClose}>Close</Button></div>
+    </div>
+  ) : (
+    <div className="rounded-2xl p-6 w-[340px] space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)', boxShadow: '0 24px 48px rgba(0,0,0,0.5)' }}>
+      <div>
+        <div className="text-[11px] uppercase tracking-wider muted mb-1">Moving client</div>
+        <div className="font-semibold text-[15px]">{client.name}</div>
       </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="rounded-2xl p-5 w-80 space-y-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
-        <div className="font-semibold text-[14px]">Move {client.name} to:</div>
+      <div className="space-y-1.5">
+        <label className="text-[12px] muted">Assign to coordinator</label>
         <Select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
           {options.map((t) => (
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </Select>
-        <div className="flex gap-2 justify-end">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!targetId || move.isPending} onClick={() => move.mutate()}>
-            {move.isPending ? 'Moving…' : 'Move'}
-          </Button>
-        </div>
+      </div>
+      <div className="flex gap-2 justify-end pt-1">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={!targetId || move.isPending} onClick={() => move.mutate()}>
+          {move.isPending ? 'Moving…' : 'Confirm move'}
+        </Button>
       </div>
     </div>
+  );
+
+  return createPortal(
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      style={{ zIndex: 9999 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      {content}
+    </div>,
+    document.body,
   );
 }
 
