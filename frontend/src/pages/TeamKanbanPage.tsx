@@ -123,7 +123,7 @@ function AssignModal({ client, onClose }: { client: Client; onClose: () => void 
 
 // ─── client card ──────────────────────────────────────────────────────────────
 
-function ClientCard({ client, canAssign }: { client: Client; canAssign: boolean }) {
+function ClientCard({ client, canAssign, isUnassigned = false }: { client: Client; canAssign: boolean; isUnassigned?: boolean }) {
   const [assigning, setAssigning] = useState(false);
   const due = daysUntil(client.payDate2);
   const fbAge = daysAgo(client.lastFeedbackTakenAt);
@@ -149,7 +149,7 @@ function ClientCard({ client, canAssign }: { client: Client; canAssign: boolean 
             {client.name}
             <ExternalLink size={9} className="opacity-0 group-hover:opacity-60"/>
           </Link>
-          {canAssign && (
+          {canAssign && !isUnassigned && (
             <button onClick={() => setAssigning(true)}
               className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-white/10"
               title="Reassign AM">
@@ -193,6 +193,16 @@ function ClientCard({ client, canAssign }: { client: Client; canAssign: boolean 
             {client.currency} {client.cycleAmount}
           </div>
         )}
+
+        {/* Assign button — always visible on unassigned cards */}
+        {canAssign && isUnassigned && (
+          <button
+            onClick={() => setAssigning(true)}
+            className="mt-2 w-full flex items-center justify-center gap-1 rounded-lg py-1 text-[11px] font-semibold transition-colors hover:opacity-90"
+            style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--accent-gold)', border: '1px solid rgba(251,191,36,0.30)' }}>
+            <UserPlus size={11}/> Assign AM
+          </button>
+        )}
       </div>
 
       {assigning && <AssignModal client={client} onClose={() => setAssigning(false)}/>}
@@ -203,13 +213,14 @@ function ClientCard({ client, canAssign }: { client: Client; canAssign: boolean 
 // ─── column ───────────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  title, subtitle, color, clients, canAssign,
+  title, subtitle, color, clients, canAssign, isUnassigned,
 }: {
   title: string;
   subtitle: string;
   color: string;
   clients: Client[];
   canAssign: boolean;
+  isUnassigned?: boolean;
 }) {
   const overdue = clients.filter(c => {
     const d = daysUntil(c.payDate2);
@@ -254,7 +265,7 @@ function KanbanColumn({
         {clients.length === 0 ? (
           <div className="text-[11px] muted text-center py-8">No active clients</div>
         ) : (
-          clients.map(c => <ClientCard key={c.id} client={c} canAssign={canAssign}/>)
+          clients.map(c => <ClientCard key={c.id} client={c} canAssign={canAssign} isUnassigned={isUnassigned}/>)
         )}
       </div>
     </div>
@@ -362,6 +373,7 @@ export function TeamKanbanPage() {
                 color={col.color}
                 clients={col.clients}
                 canAssign={canAssign}
+                isUnassigned={col.id === 'unassigned'}
               />
             ))}
           </div>
