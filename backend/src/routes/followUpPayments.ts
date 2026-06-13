@@ -18,12 +18,11 @@ import { audit } from '../lib/audit';
 export const followUpPaymentsRouter = Router();
 followUpPaymentsRouter.use(requireAuth);
 
-const ALLOWED = ['founder', 'manager', 'lead', 'accounts'];
+const ALLOWED = ['founder', 'manager', 'accounts'];
 
-// Team scoping: manager/lead see only their team's clients in follow-up list
+// Team scoping: manager sees only her team's clients in follow-up list
 const TEAM_SCOPE: Record<string, string[]> = {
   manager: ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'],
-  lead:    ['u-bhavneet', 'u-kashish', 'u-muskan'],
 };
 
 followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {

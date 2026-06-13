@@ -32,9 +32,9 @@ interface NavItem {
 //   sales_closer — Roshni: sales pipeline
 //   accounts   — Areena/Ashok: payments/payouts
 //   payment_processor — Malika: trainer pay sheet
-//   account_manager — Muskan/Kashish: own Active clients + trainer ops
-//   lead       — Bhavneet: team clients (own+Kashish+Muskan), L1 escalation, sessions, session logs
-//   manager    — Mitali: team clients (own+Bhavneet+Kashish+Muskan), payment follow-up, sessions, reports
+//   account_manager — Muskan/Kashish: own Active clients + trainer ops + sessions + feedback
+//   lead       — Bhavneet: senior AM; own+team clients, sessions, trainer payout batches, allocates calls, L1 escalation
+//   manager    — Mitali: team oversight, client payment follow-up, team dashboard, no trainer ops
 const NAV: NavItem[] = [
   // ── Overview (founder + Samita demo ops) ──────────────────────────────
   { section: 'overview', page: '/', label: 'Home', icon: Home, roles: ['founder', 'demo_lead'] },
@@ -62,8 +62,8 @@ const NAV: NavItem[] = [
   { section: 'sales', page: '/fresh-payments', label: 'Fresh payments', icon: DollarSign, roles: ['founder', 'sales_closer', 'accounts'] },
 
   // ── Client success (team-scoped for manager/lead/AM) ─────────────────
-  // Payment follow-up: Mitali's primary job + Bhavneet oversight + accounts
-  { section: 'clients', page: '/follow-up-payments', label: 'Payment follow-up', icon: Receipt, roles: ['founder', 'manager', 'lead', 'accounts'] },
+  // Payment follow-up: Mitali's primary job + accounts (Bhavneet does not chase client payments)
+  { section: 'clients', page: '/follow-up-payments', label: 'Payment follow-up', icon: Receipt, roles: ['founder', 'manager', 'accounts'] },
   { section: 'clients', page: '/calendar', label: 'Work calendar', icon: LayoutGrid, roles: ['founder', 'lead', 'staff'] },
   // Clients: scoped by backend per role (AM=own, lead=team, manager=team)
   { section: 'clients', page: '/clients', label: 'Clients', icon: Users, roles: ['founder', 'manager', 'lead', 'accounts', 'demo_lead', 'demo_intake', 'account_manager'] },
@@ -71,7 +71,7 @@ const NAV: NavItem[] = [
   { section: 'clients', page: '/renewals', label: 'Renewals', icon: RefreshCw, roles: ['founder'] },
   { section: 'clients', page: '/dormant', label: 'Dormant clients', icon: Moon, roles: ['founder', 'demo_lead', 'demo_intake', 'sales_closer'] },
   { section: 'clients', page: '/hold', label: 'CP / C · Follow-ups', icon: Clock, roles: ['founder', 'demo_lead', 'sales_closer'] },
-  { section: 'clients', page: '/feedback', label: 'Feedback', icon: MessageCircle, roles: ['founder', 'manager', 'lead'] },
+  { section: 'clients', page: '/feedback', label: 'Feedback', icon: MessageCircle, roles: ['founder', 'manager', 'lead', 'account_manager'] },
   { section: 'partners', page: '/partners', label: 'Partners', icon: Building, roles: ['founder', 'accounts'] },
 
   // ── Coordinator work (Mitali + Bhavneet + AMs) ───────────────────────
@@ -82,12 +82,12 @@ const NAV: NavItem[] = [
   { section: 'clients', page: '/regular-trainings', label: 'Regular trainings', icon: Video, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
   { section: 'clients', page: '/meeting-links', label: 'Meeting links', icon: Link, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
 
-  // ── Trainer ops: session logs (Bhavneet manages), payment sheet (Bhavneet exclusive) ──
-  { section: 'trainerOps', page: '/session-logs', label: 'Session logs', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'accounts', 'payment_processor'] },
-  // Payment sheet: Bhavneet (lead) is the primary owner per Muskan's request; Mitali oversight; founder
-  { section: 'trainerOps', page: '/trainer-pay-sheet', label: 'Payment sheet', icon: TableProperties, roles: ['founder', 'manager', 'lead', 'payment_processor'] },
+  // ── Trainer ops: Bhavneet (lead) + AMs log sessions; Bhavneet creates payout batches; Mitali approves ──
+  { section: 'trainerOps', page: '/session-logs', label: 'Session logs', icon: ClipboardList, roles: ['founder', 'lead', 'account_manager', 'accounts', 'payment_processor'] },
+  // Payment sheet: Bhavneet validates and submits; payment_processor processes
+  { section: 'trainerOps', page: '/trainer-pay-sheet', label: 'Payment sheet', icon: TableProperties, roles: ['founder', 'lead', 'account_manager', 'payment_processor'] },
   { section: 'trainerOps', page: '/trainer-pay', label: 'Trainer payouts', icon: Wallet, roles: ['founder', 'accounts', 'payment_processor'] },
-  // Payout batches: Bhavneet creates, Mitali approves, accounts/payment_processor process
+  // Payout batches: Bhavneet creates → Mitali approves → accounts/payment_processor process
   { section: 'trainerOps', page: '/payout-batches', label: 'Payout batches', icon: Archive, roles: ['founder', 'manager', 'lead', 'accounts', 'payment_processor'] },
 
   // ── My work (universal) ───────────────────────────────────────────────
