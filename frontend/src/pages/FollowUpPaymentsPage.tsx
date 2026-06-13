@@ -26,7 +26,7 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Label, Textarea } from '@/components/ui/input';
 import {
   AlertTriangle, CheckCircle2, Clock, MessageSquare,
-  ExternalLink, ChevronDown, ChevronUp, Send, Pin, Trash2, Users
+  Send, Pin, Trash2
 } from 'lucide-react';
 import { minFutureDate, maxTodayDate } from '@/lib/utils';
 
@@ -403,7 +403,7 @@ function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
   return createPortal(content, document.body);
 }
 
-// ─── row ──────────────────────────────────────────────────────────────────────
+// ─── client card ──────────────────────────────────────────────────────────────
 
 function PayRow({ r }: { r: Row }) {
   const qc = useQueryClient();
@@ -428,84 +428,122 @@ function PayRow({ r }: { r: Row }) {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
-  const rowBg =
-    r.status === 'overdue'  ? 'rgba(239,68,68,0.04)' :
-    r.status === 'due_soon' ? 'rgba(245,158,11,0.04)' :
-    undefined;
+  const borderColor =
+    r.status === 'overdue'  ? 'var(--status-red)' :
+    r.status === 'due_soon' ? 'var(--status-amber)' :
+    'var(--brand-borderSoft)';
 
   return (
     <>
-      <tr style={{ background: rowBg, verticalAlign: 'top' }}>
-        {/* Client name + AM */}
-        <td style={{ minWidth: 150 }}>
-          <div className="font-semibold text-[13px]" style={{ color: 'var(--brand-text)' }}>{r.name}</div>
-          <div className="text-[10px] muted mt-0.5">
-            {r.engagementType}
-            {r.hostOwner && <> · <span style={{ color: 'var(--accent-gold)' }}>{r.hostOwner}</span></>}
+      <div className="rounded-xl mb-2" style={{
+        background: 'var(--bg-card)',
+        border: `1px solid ${borderColor}`,
+        overflow: 'hidden',
+      }}>
+        {/* Top row: name + status badge + nav links */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
+          <div className="flex items-center gap-3 min-w-0">
+            <Link to={`/clients/${r.id}`} className="font-bold text-[14px] hover:underline truncate" style={{ color: 'var(--brand-text)' }}>
+              {r.name}
+            </Link>
+            <span className="text-[11px] muted shrink-0">{r.engagementType}</span>
+            {r.hostOwner && <span className="text-[11px] shrink-0" style={{ color: 'var(--accent-gold)' }}>· {r.hostOwner}</span>}
           </div>
-        </td>
-
-        {/* Pay Date 1 — last paid */}
-        <td style={{ minWidth: 90 }}>
-          <div className="font-mono text-[12px] font-semibold">{fmtDate(r.payDate1)}</div>
-          {r.payDate1 && <div className="text-[10px] muted">{daysAgoLabel(r.payDate1)}</div>}
-        </td>
-
-        {/* Pay Date 2 — next due */}
-        <td style={{ minWidth: 100 }}>
-          <div className={`font-mono text-[12px] font-bold ${r.status === 'overdue' ? 'text-red-400' : r.status === 'due_soon' ? 'text-amber-400' : ''}`}>
-            {fmtDate(r.payDate2)}
+          <div className="flex items-center gap-2 shrink-0">
+            <StatusBadge r={r}/>
+            {/* Nav links */}
+            <Link to={`/clients/${r.id}`}>
+              <button className="text-[11px] px-2 py-1 rounded-lg hover:opacity-80 transition-opacity"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textSecondary)' }}>
+                Client
+              </button>
+            </Link>
+            {r.primaryTrainer && (
+              <Link to={`/trainers/${r.primaryTrainer.id}`}>
+                <button className="text-[11px] px-2 py-1 rounded-lg hover:opacity-80 transition-opacity"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textSecondary)' }}>
+                  {r.primaryTrainer.name}
+                </button>
+              </Link>
+            )}
+            {r.trainingId && (
+              <Link to={`/regular-trainings/${r.trainingId}`}>
+                <button className="text-[11px] px-2 py-1 rounded-lg hover:opacity-80 transition-opacity"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textSecondary)' }}>
+                  Group
+                </button>
+              </Link>
+            )}
           </div>
-          {r.leverageUntil && r.leverageUntil === r.payDate2 && (
-            <div className="text-[10px] mt-0.5" style={{ color: 'var(--status-amber)' }}>⟳ leverage</div>
-          )}
-          <button onClick={() => setShowEditDates(true)} className="text-[10px] muted hover:underline mt-0.5 block">edit</button>
-        </td>
+        </div>
 
-        {/* Amount / Status */}
-        <td style={{ minWidth: 80 }}>
-          <div className="font-mono text-[13px] font-semibold">{r.currency} {r.cycleAmount || 0}</div>
-          <StatusBadge r={r}/>
-        </td>
+        {/* Body: dates | amount | comment | actions */}
+        <div className="grid gap-0" style={{ gridTemplateColumns: '1fr 1fr 1fr 2fr auto' }}>
 
-        {/* Touchpoints — only show for non-manager (founder/accounts) */}
-        {!isManager && (
-          <td style={{ minWidth: 110 }}>
-            <div className={`flex items-center gap-1 text-[11px] ${r.feedbackNeeded ? 'font-semibold' : ''}`}
-              style={{ color: r.feedbackNeeded ? 'var(--status-amber)' : undefined }}>
-              <MessageSquare size={10} className="muted"/>
-              <span className="muted">fb:</span>
-              <span>{daysAgoLabel(r.lastFeedbackTakenAt)}</span>
-              {r.feedbackNeeded && <AlertTriangle size={10}/>}
+          {/* Pay Date 1 */}
+          <div className="px-4 py-3" style={{ borderRight: '1px solid var(--brand-borderSoft)' }}>
+            <div className="text-[10px] uppercase tracking-wider muted mb-1">Last paid</div>
+            <div className="font-mono text-[13px] font-semibold">{fmtDate(r.payDate1)}</div>
+            {r.payDate1 && <div className="text-[10px] muted mt-0.5">{daysAgoLabel(r.payDate1)}</div>}
+            {!r.payDate1 && <div className="text-[10px] muted mt-0.5">—</div>}
+          </div>
+
+          {/* Pay Date 2 */}
+          <div className="px-4 py-3" style={{ borderRight: '1px solid var(--brand-borderSoft)' }}>
+            <div className="text-[10px] uppercase tracking-wider muted mb-1">Next due</div>
+            <div className={`font-mono text-[13px] font-bold ${
+              r.status === 'overdue' ? 'text-red-400' :
+              r.status === 'due_soon' ? 'text-amber-400' : ''}`}>
+              {fmtDate(r.payDate2)}
             </div>
-          </td>
-        )}
+            {r.leverageUntil && r.leverageUntil === r.payDate2 && (
+              <div className="text-[10px] mt-0.5" style={{ color: 'var(--status-amber)' }}>⟳ leverage</div>
+            )}
+            <button onClick={() => setShowEditDates(true)}
+              className="text-[10px] mt-0.5 hover:underline block"
+              style={{ color: 'var(--accent-gold)' }}>
+              edit dates
+            </button>
+          </div>
 
-        {/* Comments */}
-        <td style={{ minWidth: 160 }}>
-          {r.latestComment ? (
-            <div>
-              <div className="text-[11px] leading-tight line-clamp-2" style={{ color: 'var(--brand-text)' }}>
-                {r.latestComment.body}
+          {/* Amount */}
+          <div className="px-4 py-3" style={{ borderRight: '1px solid var(--brand-borderSoft)' }}>
+            <div className="text-[10px] uppercase tracking-wider muted mb-1">Amount</div>
+            {r.cycleAmount > 0
+              ? <div className="font-mono text-[13px] font-semibold">{r.currency} {r.cycleAmount.toLocaleString()}</div>
+              : <div className="text-[12px] muted italic">not set</div>
+            }
+            {!isManager && r.feedbackNeeded && (
+              <div className="flex items-center gap-1 text-[10px] mt-1" style={{ color: 'var(--status-amber)' }}>
+                <AlertTriangle size={9}/> Feedback needed
               </div>
-              <div className="text-[10px] muted mt-0.5">
-                {r.latestComment.authorName} · {timeAgo(r.latestComment.createdAt)}
-              </div>
-            </div>
-          ) : (
-            <span className="muted italic text-[11px]">no comments</span>
-          )}
-          <button onClick={() => setShowComments(true)}
-            className="inline-flex items-center gap-1 text-[10px] mt-1 hover:underline"
-            style={{ color: 'var(--accent-gold)' }}>
-            <MessageSquare size={10}/> View thread
-          </button>
-        </td>
+            )}
+          </div>
 
-        {/* Actions */}
-        <td style={{ minWidth: 220 }}>
-          {/* Primary actions */}
-          <div className="flex flex-wrap gap-1.5 mb-2">
+          {/* Latest comment */}
+          <div className="px-4 py-3" style={{ borderRight: '1px solid var(--brand-borderSoft)' }}>
+            <div className="text-[10px] uppercase tracking-wider muted mb-1">Latest comment</div>
+            {r.latestComment ? (
+              <>
+                <div className="text-[12px] leading-snug line-clamp-2" style={{ color: 'var(--brand-text)' }}>
+                  {r.latestComment.body}
+                </div>
+                <div className="text-[10px] muted mt-0.5">
+                  {r.latestComment.authorName} · {timeAgo(r.latestComment.createdAt)}
+                </div>
+              </>
+            ) : (
+              <div className="text-[11px] muted italic">no comments</div>
+            )}
+            <button onClick={() => setShowComments(true)}
+              className="inline-flex items-center gap-1 text-[11px] mt-1.5 font-medium hover:underline"
+              style={{ color: 'var(--accent-gold)' }}>
+              <MessageSquare size={10}/> View / add
+            </button>
+          </div>
+
+          {/* Actions */}
+          <div className="px-4 py-3 flex flex-col gap-1.5 justify-center">
             <Button size="sm" variant="primary" onClick={() => setShowAdvance(true)}
               title="Mark payment collected — rolls date forward">
               <CheckCircle2 size={11}/> Payment done
@@ -516,7 +554,6 @@ function PayRow({ r }: { r: Row }) {
               title="Extend due date by max 3 days">
               ⟳ Leverage
             </Button>
-            {/* Feedback + Pending V only for founder/accounts — not manager */}
             {!isManager && (
               <>
                 <Button size="sm"
@@ -534,55 +571,14 @@ function PayRow({ r }: { r: Row }) {
               </>
             )}
           </div>
-
-          {/* Navigation links — client page, trainer profile, group training */}
-          <div className="flex flex-wrap gap-1.5">
-            <Link to={`/clients/${r.id}`}>
-              <Button size="sm" title="Go to client page">
-                <ExternalLink size={10}/> Client
-              </Button>
-            </Link>
-            {r.primaryTrainer && (
-              <Link to={`/trainers/${r.primaryTrainer.id}`}>
-                <Button size="sm" title={`Go to trainer: ${r.primaryTrainer.name}`}>
-                  <Users size={10}/> {r.primaryTrainer.name}
-                </Button>
-              </Link>
-            )}
-            {r.trainingId && (
-              <Link to={`/regular-trainings/${r.trainingId}`}>
-                <Button size="sm" title="Go to training group">
-                  <ExternalLink size={10}/> Group
-                </Button>
-              </Link>
-            )}
-          </div>
-        </td>
-      </tr>
+        </div>
+      </div>
 
       {showComments  && <CommentThread clientId={r.id} onClose={() => setShowComments(false)}/>}
       {showAdvance   && <AdvancePaymentModal r={r} onClose={() => setShowAdvance(false)}/>}
       {showLeverage  && <LeverageModal r={r} onClose={() => setShowLeverage(false)}/>}
       {showEditDates && <EditDatesModal r={r} onClose={() => setShowEditDates(false)}/>}
     </>
-  );
-}
-
-// ─── main page ────────────────────────────────────────────────────────────────
-
-function TableHeaders() {
-  const user = useAuth((s) => s.user);
-  const isManager = user?.role === 'manager';
-  return (
-    <tr>
-      <th>Client</th>
-      <th>Pay Date 1<div className="text-[9px] font-normal muted normal-case">last paid</div></th>
-      <th>Pay Date 2<div className="text-[9px] font-normal muted normal-case">next due</div></th>
-      <th>Amount / Status</th>
-      {!isManager && <th>Touchpoints</th>}
-      <th>Comments</th>
-      <th>Actions</th>
-    </tr>
   );
 }
 
@@ -670,15 +666,8 @@ export function FollowUpPaymentsPage() {
         ) : filtered.length === 0 ? (
           <EmptyState icon={CheckCircle2} tone="green" title="All clear" description="No clients match this filter." />
         ) : (
-          <div className="table-card overflow-x-auto">
-            <table style={{ minWidth: 900 }}>
-              <thead>
-                <TableHeaders/>
-              </thead>
-              <tbody>
-                {filtered.map((r) => <PayRow key={r.id} r={r}/>)}
-              </tbody>
-            </table>
+          <div className="space-y-0">
+            {filtered.map((r) => <PayRow key={r.id} r={r}/>)}
           </div>
         )}
       </Page>
