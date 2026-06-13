@@ -84,7 +84,7 @@ function AssignModal({ client, onClose }: { client: Client; onClose: () => void 
   const save = useMutation({
     mutationFn: () => api.patch(`/clients/${client.id}`, { assignedAmId: amId || null }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['team-kanban'] });
+      qc.invalidateQueries({ queryKey: ['clients', 'team-kanban'] });
       const who = TEAM_MEMBERS.find(t => t.id === amId)?.name;
       showToast(who ? `Assigned to ${who}` : 'Unassigned');
       onClose();
@@ -268,7 +268,7 @@ export function TeamKanbanPage() {
   const [search, setSearch] = useState('');
 
   const { data: allClients = [], isLoading } = useQuery<Client[]>({
-    queryKey: ['team-kanban'],
+    queryKey: ['clients', 'team-kanban'],
     queryFn: () =>
       api.get('/clients?lifecycle=Active,LeverageGranted&scope=team').then((r) => r.data),
   });

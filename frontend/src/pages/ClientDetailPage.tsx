@@ -1788,6 +1788,7 @@ function AssignAmModal({ client, onClose }: any) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       qc.invalidateQueries({ queryKey: ['clients'] });
+      qc.invalidateQueries({ queryKey: ['clients', 'team-kanban'] });
       showToast(amId ? 'AM assigned' : 'AM unassigned');
       onClose();
     },

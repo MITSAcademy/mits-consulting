@@ -20,6 +20,7 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
+import { useAuth } from '@/store/auth';
 import { EmptyState } from '@/components/EmptyState';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Label, Textarea } from '@/components/ui/input';
@@ -407,6 +408,9 @@ function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
 function PayRow({ r }: { r: Row }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const user = useAuth((s) => s.user);
+  const isManager = user?.role === 'manager';
+
   const [showComments, setShowComments] = useState(false);
   const [showAdvance, setShowAdvance] = useState(false);
   const [showLeverage, setShowLeverage] = useState(false);
@@ -425,48 +429,26 @@ function PayRow({ r }: { r: Row }) {
   });
 
   const rowBg =
-    r.status === 'overdue'         ? 'rgba(239,68,68,0.04)' :
-    r.status === 'due_soon'        ? 'rgba(245,158,11,0.04)' :
-    r.paymentPendingVaibhav        ? 'rgba(245,158,11,0.06)' :
+    r.status === 'overdue'  ? 'rgba(239,68,68,0.04)' :
+    r.status === 'due_soon' ? 'rgba(245,158,11,0.04)' :
     undefined;
 
   return (
     <>
       <tr style={{ background: rowBg, verticalAlign: 'top' }}>
-        {/* Client */}
-        <td style={{ minWidth: 160 }}>
-          <Link to={`/clients/${r.id}`} className="font-semibold text-[13px] hover:underline flex items-center gap-1"
-            style={{ color: 'var(--brand-text)' }}>
-            {r.name}
-            <ExternalLink size={10} className="muted"/>
-          </Link>
-          <div className="text-[10px] muted mt-0.5 leading-relaxed">
+        {/* Client name + AM */}
+        <td style={{ minWidth: 150 }}>
+          <div className="font-semibold text-[13px]" style={{ color: 'var(--brand-text)' }}>{r.name}</div>
+          <div className="text-[10px] muted mt-0.5">
             {r.engagementType}
             {r.hostOwner && <> · <span style={{ color: 'var(--accent-gold)' }}>{r.hostOwner}</span></>}
           </div>
-          {/* Trainer / group links */}
-          {r.primaryTrainer && (
-            <Link to={`/trainers/${r.primaryTrainer.id}`}
-              className="inline-flex items-center gap-0.5 text-[10px] mt-0.5 hover:underline"
-              style={{ color: 'var(--brand-textSecondary)' }}>
-              <Users size={9}/> {r.primaryTrainer.name}
-            </Link>
-          )}
-          {r.trainingId && (
-            <Link to={`/regular-trainings/${r.trainingId}`}
-              className="inline-flex items-center gap-0.5 text-[10px] mt-0.5 ml-1 hover:underline"
-              style={{ color: 'var(--brand-textSecondary)' }}>
-              <ExternalLink size={9}/> Group
-            </Link>
-          )}
         </td>
 
         {/* Pay Date 1 — last paid */}
         <td style={{ minWidth: 90 }}>
           <div className="font-mono text-[12px] font-semibold">{fmtDate(r.payDate1)}</div>
-          {r.payDate1 && (
-            <div className="text-[10px] muted">{daysAgoLabel(r.payDate1)}</div>
-          )}
+          {r.payDate1 && <div className="text-[10px] muted">{daysAgoLabel(r.payDate1)}</div>}
         </td>
 
         {/* Pay Date 2 — next due */}
@@ -477,30 +459,27 @@ function PayRow({ r }: { r: Row }) {
           {r.leverageUntil && r.leverageUntil === r.payDate2 && (
             <div className="text-[10px] mt-0.5" style={{ color: 'var(--status-amber)' }}>⟳ leverage</div>
           )}
-          <button
-            onClick={() => setShowEditDates(true)}
-            className="text-[10px] muted hover:underline mt-0.5 block"
-          >edit</button>
+          <button onClick={() => setShowEditDates(true)} className="text-[10px] muted hover:underline mt-0.5 block">edit</button>
         </td>
 
-        {/* Amount */}
+        {/* Amount / Status */}
         <td style={{ minWidth: 80 }}>
           <div className="font-mono text-[13px] font-semibold">{r.currency} {r.cycleAmount || 0}</div>
           <StatusBadge r={r}/>
         </td>
 
-        {/* Last touchpoints */}
-        <td style={{ minWidth: 110 }}>
-          <div className="text-[11px] space-y-0.5">
-            <div className={`flex items-center gap-1 ${r.feedbackNeeded ? 'font-semibold' : ''}`}
+        {/* Touchpoints — only show for non-manager (founder/accounts) */}
+        {!isManager && (
+          <td style={{ minWidth: 110 }}>
+            <div className={`flex items-center gap-1 text-[11px] ${r.feedbackNeeded ? 'font-semibold' : ''}`}
               style={{ color: r.feedbackNeeded ? 'var(--status-amber)' : undefined }}>
               <MessageSquare size={10} className="muted"/>
               <span className="muted">fb:</span>
               <span>{daysAgoLabel(r.lastFeedbackTakenAt)}</span>
               {r.feedbackNeeded && <AlertTriangle size={10}/>}
             </div>
-          </div>
-        </td>
+          </td>
+        )}
 
         {/* Comments */}
         <td style={{ minWidth: 160 }}>
@@ -516,60 +495,96 @@ function PayRow({ r }: { r: Row }) {
           ) : (
             <span className="muted italic text-[11px]">no comments</span>
           )}
-          <button
-            onClick={() => setShowComments(true)}
+          <button onClick={() => setShowComments(true)}
             className="inline-flex items-center gap-1 text-[10px] mt-1 hover:underline"
-            style={{ color: 'var(--accent-gold)' }}
-          >
+            style={{ color: 'var(--accent-gold)' }}>
             <MessageSquare size={10}/> View thread
           </button>
         </td>
 
         {/* Actions */}
-        <td style={{ minWidth: 200 }}>
-          <div className="flex flex-wrap gap-1.5">
-            {/* Payment done */}
+        <td style={{ minWidth: 220 }}>
+          {/* Primary actions */}
+          <div className="flex flex-wrap gap-1.5 mb-2">
             <Button size="sm" variant="primary" onClick={() => setShowAdvance(true)}
               title="Mark payment collected — rolls date forward">
               <CheckCircle2 size={11}/> Payment done
             </Button>
-
-            {/* Leverage */}
             <Button size="sm"
               style={r.leverageUntil ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
               onClick={() => setShowLeverage(true)}
               title="Extend due date by max 3 days">
               ⟳ Leverage
             </Button>
+            {/* Feedback + Pending V only for founder/accounts — not manager */}
+            {!isManager && (
+              <>
+                <Button size="sm"
+                  style={r.feedbackNeeded ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
+                  onClick={() => feedbackTaken.mutate()}
+                  title="Mark feedback taken today">
+                  <MessageSquare size={11}/> Feedback{r.feedbackNeeded ? ' ⚠' : ''}
+                </Button>
+                <Button size="sm"
+                  style={r.paymentPendingVaibhav ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
+                  onClick={() => togglePending.mutate()}
+                  title="Flag this payment as pending on Vaibhav">
+                  {r.paymentPendingVaibhav ? '✓ Pending V' : 'Pending V'}
+                </Button>
+              </>
+            )}
+          </div>
 
-            {/* Feedback */}
-            <Button size="sm"
-              style={r.feedbackNeeded ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
-              onClick={() => feedbackTaken.mutate()}
-              title="Mark feedback taken today">
-              <MessageSquare size={11}/> Feedback {r.feedbackNeeded ? '⚠' : ''}
-            </Button>
-
-            {/* Pending V */}
-            <Button size="sm"
-              style={r.paymentPendingVaibhav ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
-              onClick={() => togglePending.mutate()}
-              title="Flag this payment as pending on Vaibhav">
-              {r.paymentPendingVaibhav ? '✓ Pending V' : 'Pending V'}
-            </Button>
+          {/* Navigation links — client page, trainer profile, group training */}
+          <div className="flex flex-wrap gap-1.5">
+            <Link to={`/clients/${r.id}`}>
+              <Button size="sm" title="Go to client page">
+                <ExternalLink size={10}/> Client
+              </Button>
+            </Link>
+            {r.primaryTrainer && (
+              <Link to={`/trainers/${r.primaryTrainer.id}`}>
+                <Button size="sm" title={`Go to trainer: ${r.primaryTrainer.name}`}>
+                  <Users size={10}/> {r.primaryTrainer.name}
+                </Button>
+              </Link>
+            )}
+            {r.trainingId && (
+              <Link to={`/regular-trainings/${r.trainingId}`}>
+                <Button size="sm" title="Go to training group">
+                  <ExternalLink size={10}/> Group
+                </Button>
+              </Link>
+            )}
           </div>
         </td>
       </tr>
 
-      {showComments && <CommentThread clientId={r.id} onClose={() => setShowComments(false)}/>}
-      {showAdvance  && <AdvancePaymentModal r={r} onClose={() => setShowAdvance(false)}/>}
-      {showLeverage && <LeverageModal r={r} onClose={() => setShowLeverage(false)}/>}
+      {showComments  && <CommentThread clientId={r.id} onClose={() => setShowComments(false)}/>}
+      {showAdvance   && <AdvancePaymentModal r={r} onClose={() => setShowAdvance(false)}/>}
+      {showLeverage  && <LeverageModal r={r} onClose={() => setShowLeverage(false)}/>}
       {showEditDates && <EditDatesModal r={r} onClose={() => setShowEditDates(false)}/>}
     </>
   );
 }
 
 // ─── main page ────────────────────────────────────────────────────────────────
+
+function TableHeaders() {
+  const user = useAuth((s) => s.user);
+  const isManager = user?.role === 'manager';
+  return (
+    <tr>
+      <th>Client</th>
+      <th>Pay Date 1<div className="text-[9px] font-normal muted normal-case">last paid</div></th>
+      <th>Pay Date 2<div className="text-[9px] font-normal muted normal-case">next due</div></th>
+      <th>Amount / Status</th>
+      {!isManager && <th>Touchpoints</th>}
+      <th>Comments</th>
+      <th>Actions</th>
+    </tr>
+  );
+}
 
 export function FollowUpPaymentsPage() {
   const [search, setSearch] = useState('');
@@ -658,15 +673,7 @@ export function FollowUpPaymentsPage() {
           <div className="table-card overflow-x-auto">
             <table style={{ minWidth: 900 }}>
               <thead>
-                <tr>
-                  <th>Client</th>
-                  <th>Pay Date 1<div className="text-[9px] font-normal muted normal-case">last paid</div></th>
-                  <th>Pay Date 2<div className="text-[9px] font-normal muted normal-case">next due</div></th>
-                  <th>Amount / Status</th>
-                  <th>Touchpoints</th>
-                  <th>Comments</th>
-                  <th>Actions</th>
-                </tr>
+                <TableHeaders/>
               </thead>
               <tbody>
                 {filtered.map((r) => <PayRow key={r.id} r={r}/>)}

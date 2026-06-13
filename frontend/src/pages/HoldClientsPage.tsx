@@ -6,7 +6,7 @@ import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/store/ui';
 import { todayISO, stageLabel, waLink } from '@/lib/utils';
-import { HandMetal, MessageCircle, Play, Wallet } from 'lucide-react';
+import { HandMetal, MessageCircle, Play, Wallet, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { EmptyState } from '@/components/EmptyState';
 
@@ -15,11 +15,16 @@ export function HoldClientsPage() {
   const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user)!;
   const isSalesCloser = user.role === 'sales_closer';
+  const isManager = user.role === 'manager';
   const today = todayISO();
 
+  // For sales_closer: CP+C clients from /clients (default)
+  // For manager/lead/AM: explicitly fetch Hold lifecycle (backend default excludes it)
+  const needsExplicitHold = !isSalesCloser;
   const { data: clients } = useQuery({
-    queryKey: ['clients'],
-    queryFn: () => api.get('/clients').then((r) => r.data),
+    queryKey: ['clients', needsExplicitHold ? 'hold' : 'default'],
+    queryFn: () =>
+      api.get(needsExplicitHold ? '/clients?lifecycle=Hold' : '/clients').then((r) => r.data),
   });
 
   // For sales_closer: CP + C clients in SaleClosing (called/engaged, following up)
@@ -47,6 +52,17 @@ export function HoldClientsPage() {
       qc.invalidateQueries({ queryKey: ['clients'] });
       qc.invalidateQueries({ queryKey: ['nav-badges'] });
       showToast('Moved to Sale closing');
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const moveBackToActive = useMutation({
+    mutationFn: (vars: { id: string; resumeStage: string }) =>
+      api.post(`/clients/${vars.id}/stage`, { lifecycle: vars.resumeStage || 'Active', reason: 'Payment issue resolved — moved back from Hold' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['clients'] });
+      qc.invalidateQueries({ queryKey: ['nav-badges'] });
+      showToast('Moved back to Active');
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
@@ -102,9 +118,16 @@ export function HoldClientsPage() {
                 <MessageCircle size={12}/> WA
               </a>
             )}
-            <Button size="sm" variant="success" onClick={() => sendToSale.mutate(c.id)}>
-              <Wallet size={12}/> Client ready · close
-            </Button>
+            {isManager ? (
+              <Button size="sm" variant="success"
+                onClick={() => moveBackToActive.mutate({ id: c.id, resumeStage: c.holdResumeFromStage || 'Active' })}>
+                <ArrowRight size={12}/> Back to Active
+              </Button>
+            ) : (
+              <Button size="sm" variant="success" onClick={() => sendToSale.mutate(c.id)}>
+                <Wallet size={12}/> Client ready · close
+              </Button>
+            )}
             {!isSalesCloser && (
               <Button size="sm" onClick={() => markDormant.mutate(c.id)}>
                 <Play size={12}/> Mark dormant
@@ -120,15 +143,15 @@ export function HoldClientsPage() {
   return (
     <>
       <Topbar
-        title={isSalesCloser ? 'CP / C · Follow-ups' : 'Hold · post-demo follow-ups'}
-        subtitle={isSalesCloser
-          ? `${onHold.length} client${onHold.length === 1 ? '' : 's'}${overdue.length ? ` · ${overdue.length} overdue` : ''}${dueToday.length ? ` · ${dueToday.length} due today` : ''}`
-          : `${onHold.length} on hold${overdue.length ? ` · ${overdue.length} overdue` : ''}${dueToday.length ? ` · ${dueToday.length} due today` : ''}`}
+        title={isSalesCloser ? 'CP / C · Follow-ups' : 'On hold'}
+        subtitle={`${onHold.length} on hold${overdue.length ? ` · ${overdue.length} overdue` : ''}${dueToday.length ? ` · ${dueToday.length} due today` : ''}`}
       />
       <Page>
         <div className="callout">
           {isSalesCloser
             ? <><strong>CP</strong> = called, went silent — follow up in 3 days and move to <strong>C</strong>. <strong>C</strong> = letter sent — follow up daily until payment or drop to <strong>DP</strong>.</>
+            : isManager
+            ? <>Active clients placed on hold due to payment issues. Follow up on the check-back date — if resolved, move <strong>Back to Active</strong>; if no response, mark <strong>Dormant</strong>.</>
             : <>Clients who said <strong>"need time"</strong> after their demo. Reach out on the check-back date — if ready, move to <em>Sale closing</em>; if silent, mark <em>Dormant</em>.</>}
         </div>
 
@@ -137,7 +160,7 @@ export function HoldClientsPage() {
             icon={HandMetal}
             tone="green"
             title={isSalesCloser ? 'No CP / C clients' : 'Nothing on hold'}
-            description={isSalesCloser ? 'No clients in CP or C stage right now.' : 'All post-demo clients have a decision — either they\'re moving forward or marked Churned.'}
+            description={isSalesCloser ? 'No clients in CP or C stage right now.' : isManager ? 'All active clients are paying — nothing on hold right now.' : 'All post-demo clients have a decision — either they\'re moving forward or marked Churned.'}
           />
         )}
 
