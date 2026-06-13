@@ -98,7 +98,7 @@ const NAV: NavItem[] = [
   { section: 'work', page: '/my-calendar', label: 'My calendar', icon: Calendar, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
 
   // ── Admin (Vaibhav + team leads for visibility) ───────────────────────
-  { section: 'admin', page: '/reports-dashboard', label: 'Reports dashboard', icon: ChartLine, roles: ['founder', 'demo_lead', 'manager', 'lead'] },
+  { section: 'admin', page: '/reports-dashboard', label: 'Reports dashboard', icon: ChartLine, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/bulk-upload', label: 'Bulk upload', icon: Upload, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/raw-leads', label: 'Raw leads inbox', icon: Inbox, roles: ['founder', 'demo_lead', 'demo_intake'] },
   { section: 'admin', page: '/edit-requests', label: 'Edit requests', icon: Edit, roles: ['founder', 'demo_lead'] },
@@ -107,9 +107,8 @@ const NAV: NavItem[] = [
   { section: 'admin', page: '/sources', label: 'Lead sources', icon: Tag, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/permissions', label: 'Edit permissions', icon: LockKeyhole, roles: ['founder'] },
   { section: 'admin', page: '/banks', label: 'Bank accounts', icon: Building2, roles: ['founder', 'accounts'] },
-  // Audit log: founder + Mitali + Bhavneet for team accountability
-  { section: 'admin', page: '/audit', label: 'Audit log', icon: History, roles: ['founder', 'manager', 'lead'] },
-  { section: 'admin', page: '/settings', label: 'Settings', icon: Settings, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
+  { section: 'admin', page: '/audit', label: 'Audit log', icon: History, roles: ['founder'] },
+  { section: 'admin', page: '/settings', label: 'Settings', icon: Settings, roles: ['founder', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
 ];
 
 const SECTIONS: Record<string, string> = {

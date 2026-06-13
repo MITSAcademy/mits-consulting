@@ -5,7 +5,7 @@ import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 export const auditRouter = Router();
 auditRouter.use(requireAuth);
 
-auditRouter.get('/', requireRole('founder', 'manager', 'lead'), async (req, res) => {
+auditRouter.get('/', requireRole('founder'), async (req, res) => {
   const { limit } = req.query as any;
   const logs = await prisma.auditLog.findMany({
     orderBy: { createdAt: 'desc' },
