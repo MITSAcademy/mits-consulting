@@ -831,6 +831,12 @@ model AuditLog {
   @@index([action])            // filter by action type
 }
 
+// ── Distributed lock for cron jobs (prevents double-fire on zero-downtime deploy) ──
+model CronLock {
+  key       String   @id  // unique per job+date, e.g. "briefing:team2:morning:2026-06-13"
+  createdAt DateTime @default(now())
+}
+
 // -------- DAILY REPORTS --------
 model DailyReport {
   id        String   @id @default(cuid())

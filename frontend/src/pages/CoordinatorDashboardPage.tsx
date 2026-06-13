@@ -63,7 +63,8 @@ function ReallocateModal({ client, team, onClose }: {
 }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const [targetId, setTargetId] = useState('');
+  const options = team.filter((t) => t.id !== client.currentOwner);
+  const [targetId, setTargetId] = useState(options[0]?.id || '');
 
   const move = useMutation({
     mutationFn: () => api.patch(`/coordinator-dashboard/reallocate/${client.id}`, { newHostOwnerId: targetId }),
@@ -75,13 +76,24 @@ function ReallocateModal({ client, team, onClose }: {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  if (options.length === 0) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="rounded-2xl p-5 w-80 space-y-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+          <div className="font-semibold text-[14px]">Reallocate: {client.name}</div>
+          <p className="text-[13px] muted">No other coordinators available to move to.</p>
+          <div className="flex justify-end"><Button onClick={onClose}>Close</Button></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="rounded-2xl p-5 w-80 space-y-3" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
-        <div className="font-semibold text-[14px]">Reallocate: {client.name}</div>
+        <div className="font-semibold text-[14px]">Move {client.name} to:</div>
         <Select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-          <option value="">— Select coordinator —</option>
-          {team.filter((t) => t.id !== client.currentOwner).map((t) => (
+          {options.map((t) => (
             <option key={t.id} value={t.id}>{t.name}</option>
           ))}
         </Select>

@@ -15,24 +15,25 @@ import { sendEmail } from './mailer';
  * Dedup guard — prevents duplicate sends when Render spins up multiple
  * instances during zero-downtime deploys (both fire the same cron).
  *
- * Uses AuditLog as a distributed lock: write a BRIEFING_SENT record first
- * (upsert-like via createMany skipDuplicates), then check if it was ours.
- * If another instance beat us within the last 5 minutes, skip.
+ * Uses INSERT ... ON CONFLICT DO NOTHING on a unique (action, details) pair
+ * so the check+insert is a single atomic DB operation. Only the instance that
+ * actually inserts the row proceeds; any racing instance gets 0 rows affected
+ * and skips.
  *
  * key format: "briefing:<team>:<shift>:<YYYY-MM-DD>"
  */
 async function acquireBriefingLock(team: string, shift: string): Promise<boolean> {
   const key = `briefing:${team}:${shift}:${todayIST()}`;
-  const window = new Date(Date.now() - 5 * 60 * 1000); // 5 min ago
-  const existing = await prisma.auditLog.findFirst({
-    where: { action: 'BRIEFING_SENT', details: key, createdAt: { gte: window } },
-    select: { id: true },
+  // CronLock.key is a @id (primary key) — INSERT fails with unique violation if already exists.
+  // createMany with skipDuplicates returns count=1 if we inserted, count=0 if another instance beat us.
+  const result = await (prisma as any).cronLock.createMany({
+    data: [{ key }],
+    skipDuplicates: true,
   });
-  if (existing) {
+  if (result.count === 0) {
     console.log(`[briefing] SKIP ${key} — already sent by another instance`);
     return false;
   }
-  await prisma.auditLog.create({ data: { byName: 'system', action: 'BRIEFING_SENT', details: key } });
   return true;
 }
 

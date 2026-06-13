@@ -67,10 +67,11 @@ const NAV: NavItem[] = [
   { section: 'clients', page: '/calendar', label: 'Work calendar', icon: LayoutGrid, roles: ['founder', 'lead', 'staff'] },
   // Clients: scoped by backend per role (AM=own, lead=team, manager=team)
   { section: 'clients', page: '/clients', label: 'Clients', icon: Users, roles: ['founder', 'manager', 'lead', 'accounts', 'demo_lead', 'demo_intake', 'account_manager'] },
+  // Hold: Mitali needs to see clients on hold (leverage / missed payments) within her team
+  { section: 'clients', page: '/hold', label: 'On hold', icon: Clock, roles: ['founder', 'manager', 'demo_lead', 'sales_closer'] },
   { section: 'clients', page: '/trainers', label: 'My trainers', icon: UserCog, roles: ['account_manager', 'lead'] },
   { section: 'clients', page: '/renewals', label: 'Renewals', icon: RefreshCw, roles: ['founder'] },
   { section: 'clients', page: '/dormant', label: 'Dormant clients', icon: Moon, roles: ['founder', 'demo_lead', 'demo_intake', 'sales_closer'] },
-  { section: 'clients', page: '/hold', label: 'CP / C · Follow-ups', icon: Clock, roles: ['founder', 'demo_lead', 'sales_closer'] },
   { section: 'clients', page: '/feedback', label: 'Feedback', icon: MessageCircle, roles: ['founder', 'manager', 'lead', 'account_manager'] },
   { section: 'partners', page: '/partners', label: 'Partners', icon: Building, roles: ['founder', 'accounts'] },
 

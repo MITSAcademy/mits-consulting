@@ -577,6 +577,24 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
 
   const client = await prisma.client.update({ where: { id: req.params.id }, data, include });
 
+  // ─── Notify Mitali when a client goes Active (handover from Roshni) ──────
+  // Mitali is the team manager — she needs to know immediately so she can
+  // reach out and set up the feedback rhythm.
+  if (lifecycle === 'Active' && current.lifecycle !== 'Active') {
+    try {
+      await notify({
+        userId: 'u-mitali',
+        kind: 'ClientActivated',
+        title: `New active client: ${client.name}`,
+        body: `${req.user!.name} moved ${client.name} to Active. Reach out to introduce the team and set up the feedback rhythm.`,
+        link: `/clients/${client.id}`,
+        email: true,
+      });
+    } catch (e) {
+      console.warn('[notify-mitali-active] failed (non-fatal):', (e as any)?.message);
+    }
+  }
+
   // ─── Sourcing side-effects ────────────────────────────────────────────────
   // When a client moves OUT of the recruiter flow (Dormant / Hold / pulled-back to
   // InternalSearch / Churned / back to Lead-stages), close any active sourcing

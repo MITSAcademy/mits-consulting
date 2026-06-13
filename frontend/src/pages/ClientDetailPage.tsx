@@ -378,7 +378,22 @@ export function ClientDetailPage() {
     actions.push(<Button key="lev" variant="amber" onClick={() => setModal('leverage')}><Clock size={14}/> Leverage</Button>);
     actions.push(<Button key="hold" variant="danger" onClick={() => setModal('hold')}><HandMetal size={14}/> Hold</Button>);
     if (!isTraining && canRecordPayment(user.role)) {
-      actions.push(<Button key="ren" variant="success" onClick={() => setModal('renewal')}><Wallet size={14}/> Renewal</Button>);
+      // Feedback gate: manager/lead/account_manager must log feedback before recording renewal
+      const isTeamRole = ['manager', 'lead', 'account_manager'].includes(user.role);
+      const feedbackAge = client.lastFeedbackTakenAt
+        ? Math.floor((Date.now() - new Date(client.lastFeedbackTakenAt).getTime()) / 86400000)
+        : null;
+      const feedbackRequired = isTeamRole && (feedbackAge === null || feedbackAge > 30);
+      actions.push(
+        <Button
+          key="ren"
+          variant="success"
+          title={feedbackRequired ? `Log client feedback first (last logged: ${client.lastFeedbackTakenAt ? feedbackAge + ' days ago' : 'never'})` : undefined}
+          onClick={() => feedbackRequired ? showToast('Log client feedback before recording renewal (Feedback page → Log feedback)', 'error') : setModal('renewal')}
+        >
+          <Wallet size={14}/> Renewal{feedbackRequired ? ' ⚠' : ''}
+        </Button>
+      );
     } else if (isTraining) {
       actions.push(<Button key="cmpl" variant="success" onClick={() => stageM.mutate('Completed')}><Check size={14}/> Mark completed</Button>);
     }
@@ -391,9 +406,10 @@ export function ClientDetailPage() {
     );
   }
 
-  // Backward-move button — only shows if the current stage has valid back-options
+  // Backward-move button — recruiter/sales roles only (Mitali/Bhavneet/AMs don't move clients backwards)
+  const canMoveBack = (role: string) => ['founder', 'demo_lead', 'demo_intake', 'sales_closer', 'recruiter'].includes(role);
   const validBack = backStagesFor(client.lifecycle);
-  if (validBack.length > 0 && client.lifecycle !== 'Dormant' && (canIntake(user.role) || canClose(user.role) || canAMActions(user.role))) {
+  if (validBack.length > 0 && client.lifecycle !== 'Dormant' && canMoveBack(user.role)) {
     actions.push(
       <Button key="back" size="sm" onClick={() => setModal('moveBack')} title="Move client to an earlier stage">
         <Undo2 size={14}/> Move back
@@ -401,11 +417,10 @@ export function ClientDetailPage() {
     );
   }
 
-  // Mark Dormant — available from most active stages
-  const dormantEligible = ![
-    'Dormant', 'Churned', 'Completed',
-  ].includes(client.lifecycle);
-  if (dormantEligible && user.role !== 'sales_closer' && (canIntake(user.role) || canClose(user.role) || canAMActions(user.role))) {
+  // Mark Dormant — not available to manager/lead/account_manager
+  const canMarkDormant = (role: string) => ['founder', 'demo_lead', 'demo_intake', 'sales_closer'].includes(role);
+  const dormantEligible = !['Dormant', 'Churned', 'Completed'].includes(client.lifecycle);
+  if (dormantEligible && canMarkDormant(user.role)) {
     actions.push(
       <Button key="dormant" size="sm" onClick={() => setModal('dormant')} title="Client stopped responding — mark dormant">
         <Moon size={14}/> Mark dormant
@@ -810,7 +825,9 @@ export function ClientDetailPage() {
                   <Button size="sm" onClick={() => showToast('Request edit flow — for now ask Vaibhav/Samita/Mitali', 'error')}><MessageCircle size={12}/> request</Button>
                 )}
               </div>
-              <Field label="Source">{client.source || '—'}</Field>
+              {!['manager', 'lead', 'account_manager'].includes(user.role) && (
+                <Field label="Source">{client.source || '—'}</Field>
+              )}
               {client.partner && <Field label="Partner">{client.partner.name}</Field>}
               {showAmt && <Field label="Currency · Amount"><span className="mono">{client.currency} {client.cycleAmount || 0}</span></Field>}
               <Field label="Verification">{client.requiresVerification ? <Pill color="green">Required</Pill> : <Pill>Disabled</Pill>}</Field>
