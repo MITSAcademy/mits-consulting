@@ -357,7 +357,7 @@ clientsRouter.post('/', async (req: AuthedRequest, res) => {
   }
   if (!data.leadOwnerId) data.leadOwnerId = req.user!.id;
   const client = await prisma.client.create({ data, include });
-  await audit(req.user!.id, req.user!.name, 'CLIENT_CREATE', client.name);
+  await audit(req.user!.id, req.user!.name, 'CLIENT_CREATE', client.name, { clientId: client.id });
   res.status(201).json(client);
 });
 
@@ -375,7 +375,7 @@ clientsRouter.patch('/:id', async (req: AuthedRequest, res) => {
     if (existing) return res.status(409).json({ error: `Phone ${data.phoneDigits} already belongs to client "${existing.name}".` });
   }
   const client = await prisma.client.update({ where: { id: req.params.id }, data, include });
-  await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${client.name} · ${Object.keys(data).join(',')}`);
+  await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${client.name} · ${Object.keys(data).join(',')}`, { clientId: client.id });
 
   // If Anjali/Taran just attached demo evidence AND the outcome is not Positive,
   // ping the proposing recruiter so they can react. The notification carries the
@@ -649,6 +649,7 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
         await audit(
           req.user!.id, req.user!.name, 'SOURCING_AUTOCLOSE',
           `${client.name}: ${active.length} sourcing request(s) closed (stage → ${lifecycle})`,
+          { clientId: req.params.id },
         );
       }
     }
@@ -693,6 +694,7 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
         await audit(
           req.user!.id, req.user!.name, 'SOURCING_AUTOCREATE',
           `${client.name} → ${sentToId} (re-opened on stage move to WithRecruiters)`,
+          { clientId: req.params.id },
         );
         if (sentToId) {
           await notify({
@@ -817,6 +819,7 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
       await audit(
         req.user!.id, req.user!.name, 'STAGE_CHANGE',
         `${client.name}: DemoDone → FeedbackPending (auto, awaiting Samita feedback)`,
+        { clientId: req.params.id },
       );
       return res.json(handed);
     } catch (e) {
@@ -827,6 +830,7 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
   await audit(
     req.user!.id, req.user!.name, 'STAGE_CHANGE',
     `${client.name}: ${current.lifecycle} → ${lifecycle}${reason ? ' (' + reason + ')' : ''}`,
+    { clientId: req.params.id },
   );
   res.json(client);
 });
@@ -834,7 +838,7 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
 clientsRouter.delete('/:id', async (req: AuthedRequest, res) => {
   if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Only founder can delete clients' });
   const c = await prisma.client.delete({ where: { id: req.params.id } });
-  await audit(req.user!.id, req.user!.name, 'CLIENT_DELETE', c.name);
+  await audit(req.user!.id, req.user!.name, 'CLIENT_DELETE', c.name, { clientId: req.params.id });
   res.json({ ok: true });
 });
 
@@ -1020,6 +1024,7 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
   await audit(
     req.user!.id, req.user!.name, 'ROSHNI_SUB_STATUS',
     `${client.name}: ${subStatus || 'cleared'}${reason ? ' · ' + reason : ''}${nextCallOn ? ' · next call ' + nextCallOn : ''}`,
+    { clientId: client.id },
   );
   res.json(updated);
 });
@@ -1090,6 +1095,7 @@ clientsRouter.patch('/:id/payment-checklist', async (req: AuthedRequest, res) =>
   await audit(
     req.user!.id, req.user!.name, 'PAYMENT_CHECKLIST_UPDATE',
     `${req.params.id} · ${stamped.filter((it) => it.checked).length}/${stamped.length} checked`,
+    { clientId: req.params.id },
   );
   res.json(updated);
 });
@@ -1134,6 +1140,7 @@ clientsRouter.post('/:id/mark-contacted', async (req: AuthedRequest, res) => {
   await audit(
     req.user!.id, req.user!.name, 'ROSHNI_MARK_CONTACTED',
     `${client.name}${outcome ? ' · ' + outcome : ''}${newNextCall ? ' · next call ' + newNextCall : ''}`,
+    { clientId: client.id },
   );
   res.json(updated);
 });
@@ -1236,6 +1243,7 @@ clientsRouter.post('/:id/payment-confirmation', async (req: AuthedRequest, res) 
   await audit(
     req.user!.id, req.user!.name, 'PAYMENT_CONFIRMATION',
     `${client.name}${screenshotUrl ? ' · screenshot uploaded' : ''}${postedToGroup ? ' · posted to group' : ''}`,
+    { clientId: client.id },
   );
   res.json({ ok: true, groupMessage, isTraining });
 });
@@ -1268,6 +1276,7 @@ clientsRouter.post('/:id/group-rename', async (req: AuthedRequest, res) => {
   await audit(
     req.user!.id, req.user!.name, 'WA_GROUP_RENAME',
     `${client.name}: "${client.whatsappGroupName}" → "${newName.trim()}"`,
+    { clientId: client.id },
   );
   res.json(updated);
 });
@@ -1345,6 +1354,7 @@ clientsRouter.post('/:id/demos/backfill', async (req: AuthedRequest, res) => {
   await audit(
     req.user!.id, req.user!.name, 'DEMO_BACKFILL',
     `${client.name} · ${actualDate}${outcome ? ' · ' + outcome : ''}`,
+    { clientId: client.id },
   );
   res.status(201).json(demo);
 });
@@ -1395,7 +1405,7 @@ clientsRouter.post('/:id/engagement-letter', async (req: AuthedRequest, res) => 
     await prisma.outboundMessage.create({
       data: { kind: 'WhatsApp', toPhone: phone, toName: client.name, body: text, clientId: client.id, sentById: req.user!.id, status: 'Logged', provider: 'wa-link' },
     });
-    await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_WA', `${client.name} · ${phone}`);
+    await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_WA', `${client.name} · ${phone}`, { clientId: client.id });
     return res.json({ ok: true, url, text });
   }
 
@@ -1446,7 +1456,7 @@ clientsRouter.post('/:id/engagement-letter', async (req: AuthedRequest, res) => 
       where: { id: client.id },
       data: { engagementLetterSentAt: new Date().toISOString().slice(0, 10) },
     }).catch(() => null);
-    await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · ${toEmail}${cc ? ' · cc ' + cc : ''}${pdfAttachment ? ' · pdf attached' : ''}`);
+    await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · ${toEmail}${cc ? ' · cc ' + cc : ''}${pdfAttachment ? ' · pdf attached' : ''}`, { clientId: client.id });
     res.status(201).json({ ok: true, messageId: msg.id, pdfAttached: !!pdfAttachment });
   } catch (e: any) {
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Failed', errorText: e.message || String(e) } });
@@ -1470,7 +1480,7 @@ clientsRouter.post('/:id/mark-payment-wa-sent', async (req: AuthedRequest, res) 
     data: { paymentWaSentAt: today },
     select: { id: true, paymentWaSentAt: true },
   });
-  await audit(req.user!.id, req.user!.name, 'PAYMENT_WA_SENT', client.name);
+  await audit(req.user!.id, req.user!.name, 'PAYMENT_WA_SENT', client.name, { clientId: client.id });
   res.json(updated);
 });
 
@@ -1498,7 +1508,7 @@ clientsRouter.post('/:id/mark-engagement-letter-sent', async (req: AuthedRequest
       });
     }
   } catch { /* non-fatal */ }
-  await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · marked sent manually`);
+  await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · marked sent manually`, { clientId: client.id });
   res.json({ ok: true });
 });
 
@@ -1525,7 +1535,7 @@ clientsRouter.post('/:id/engagement-letter/upload', elUpload.single('file'), asy
     where: { id: client.id },
     data: { engagementLetterSentAt: today, engagementLetterFileB64: b64 },
   });
-  await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · uploaded signed PDF copy (stored in DB)`);
+  await audit(req.user!.id, req.user!.name, 'ENGAGEMENT_LETTER_EMAIL', `${client.name} · uploaded signed PDF copy (stored in DB)`, { clientId: client.id });
   res.json({ ok: true });
 });
 
@@ -1571,7 +1581,7 @@ clientsRouter.post('/:id/handover-to-mitali', async (req: AuthedRequest, res) =>
   const updates: any = { mitaliIntroSentAt: today };
   if (!client.hostOwnerId) updates.hostOwnerId = 'u-mitali';
   await prisma.client.update({ where: { id: client.id }, data: updates }).catch(() => null);
-  await audit(req.user!.id, req.user!.name, 'HANDOVER_TO_MITALI', `${client.name} · task ${task.id} due ${dueDate}`);
+  await audit(req.user!.id, req.user!.name, 'HANDOVER_TO_MITALI', `${client.name} · task ${task.id} due ${dueDate}`, { clientId: client.id });
   res.status(201).json({ ok: true, taskId: task.id });
 });
 
@@ -1622,7 +1632,7 @@ clientsRouter.post('/:id/handover-welcome', async (req: AuthedRequest, res) => {
       await prisma.outboundMessage.create({
         data: { kind: 'WhatsApp', toPhone: '', toName: client.name, body: waText, clientId: client.id, sentById: req.user!.id, status: 'Logged', provider: 'wa-group-link' },
       });
-      await audit(req.user!.id, req.user!.name, 'HANDOVER_WELCOME_WA_GROUP', `${client.name} · group`);
+      await audit(req.user!.id, req.user!.name, 'HANDOVER_WELCOME_WA_GROUP', `${client.name} · group`, { clientId: client.id });
       return res.json({ ok: true, url: groupLink, text: waText, channel: 'group' });
     }
     const phone = `${(client as any).phoneCode || ''}${(client as any).phoneDigits || ''}`.replace(/[^0-9]/g, '');
@@ -1631,7 +1641,7 @@ clientsRouter.post('/:id/handover-welcome', async (req: AuthedRequest, res) => {
     await prisma.outboundMessage.create({
       data: { kind: 'WhatsApp', toPhone: phone, toName: client.name, body: waText, clientId: client.id, sentById: req.user!.id, status: 'Logged', provider: 'wa-link' },
     });
-    await audit(req.user!.id, req.user!.name, 'HANDOVER_WELCOME_WA', `${client.name} · ${phone}`);
+    await audit(req.user!.id, req.user!.name, 'HANDOVER_WELCOME_WA', `${client.name} · ${phone}`, { clientId: client.id });
     return res.json({ ok: true, url, text: waText, channel: 'direct' });
   }
 
@@ -1650,7 +1660,7 @@ clientsRouter.post('/:id/handover-welcome', async (req: AuthedRequest, res) => {
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Sent', providerMessageId: r.id, provider: r.provider } });
     // Mark handover as completed so the "Send handover welcome" button hides afterwards
     await prisma.client.update({ where: { id: client.id }, data: { hostOwnerId: me?.id || 'u-mitali' } }).catch(() => null);
-    await audit(req.user!.id, req.user!.name, 'HANDOVER_WELCOME_EMAIL', `${client.name} · ${toEmail}`);
+    await audit(req.user!.id, req.user!.name, 'HANDOVER_WELCOME_EMAIL', `${client.name} · ${toEmail}`, { clientId: client.id });
     res.status(201).json({ ok: true, messageId: msg.id });
   } catch (e: any) {
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Failed', errorText: e.message || String(e) } });
@@ -1692,7 +1702,7 @@ clientsRouter.post('/:id/feedback-email', async (req: AuthedRequest, res) => {
   try {
     const r = await sendEmail({ to: toEmail, cc: 'feedback@mitssolution.com', subject, body, htmlBody: html, fromUser });
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Sent', providerMessageId: r.id, provider: r.provider } });
-    await audit(req.user!.id, req.user!.name, 'FEEDBACK_EMAIL', `${client.name} · ${toEmail}`);
+    await audit(req.user!.id, req.user!.name, 'FEEDBACK_EMAIL', `${client.name} · ${toEmail}`, { clientId: client.id });
     res.status(201).json({ ok: true, messageId: msg.id });
   } catch (e: any) {
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Failed', errorText: e.message || String(e) } });
@@ -1764,7 +1774,7 @@ clientsRouter.post('/:id/pre-demo-reminder', async (req: AuthedRequest, res) => 
         provider: 'wa-link',
       },
     });
-    await audit(req.user!.id, req.user!.name, 'PRE_DEMO_REMINDER_WA', `${trainer.name} · ${channelKind} · ${groupLink || digits}`);
+    await audit(req.user!.id, req.user!.name, 'PRE_DEMO_REMINDER_WA', `${trainer.name} · ${channelKind} · ${groupLink || digits}`, { clientId: client.id });
     return res.json({ ok: true, url, text, channel: channelKind });
   }
 
@@ -1784,7 +1794,7 @@ clientsRouter.post('/:id/pre-demo-reminder', async (req: AuthedRequest, res) => 
   try {
     const r = await sendEmail({ to: trainer.email, subject, body: text, htmlBody: html, fromUser });
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Sent', providerMessageId: r.id, provider: r.provider } });
-    await audit(req.user!.id, req.user!.name, 'PRE_DEMO_REMINDER_EMAIL', `${trainer.name} · ${trainer.email}`);
+    await audit(req.user!.id, req.user!.name, 'PRE_DEMO_REMINDER_EMAIL', `${trainer.name} · ${trainer.email}`, { clientId: client.id });
     res.status(201).json({ ok: true, messageId: msg.id });
   } catch (e: any) {
     await prisma.outboundMessage.update({ where: { id: msg.id }, data: { status: 'Failed', errorText: e.message || String(e) } });
@@ -1994,6 +2004,7 @@ clientsRouter.post('/:id/send-skill-matrix', async (req: AuthedRequest, res) => 
     await audit(
       req.user!.id, req.user!.name, 'SKILL_MATRIX_SENT',
       `${client.name} · ${candidates.length} candidate(s) · ${toEmail}${pdfAttachment ? ' · pdf attached' : ''}`,
+      { clientId: client.id },
     );
     res.status(201).json({ ok: true, messageId: msg.id, candidates: candidates.length, pdfAttached: !!pdfAttachment });
   } catch (e: any) {
@@ -2130,7 +2141,7 @@ clientsRouter.post('/:id/send-skill-matrix-whatsapp', async (req: AuthedRequest,
     where: { id: client.id },
     data: { skillMatrixSentAt: new Date().toISOString().slice(0, 10), skillMatrixSentById: req.user!.id },
   });
-  await audit(req.user!.id, req.user!.name, 'SKILL_MATRIX_SENT_WA', `${client.name} · ${digits}`);
+  await audit(req.user!.id, req.user!.name, 'SKILL_MATRIX_SENT_WA', `${client.name} · ${digits}`, { clientId: client.id });
   res.json({ ok: true, url, text });
 });
 
@@ -2157,7 +2168,7 @@ clientsRouter.post('/:id/mark-skill-matrix-sent', async (req: AuthedRequest, res
       demoTimeIst: req.body?.demoTimeIst || client.demoTimeIst || null,
     },
   });
-  await audit(req.user!.id, req.user!.name, 'SKILL_MATRIX_MARK_SENT', `${client.name} · manual`);
+  await audit(req.user!.id, req.user!.name, 'SKILL_MATRIX_MARK_SENT', `${client.name} · manual`, { clientId: client.id });
   res.json({ ok: true });
 });
 
@@ -2260,7 +2271,7 @@ clientsRouter.post('/:id/welcome-email', async (req: AuthedRequest, res) => {
       where: { id: msg.id },
       data: { status: 'Sent', providerMessageId: r.id, provider: r.provider },
     });
-    await audit(req.user!.id, req.user!.name, 'WELCOME_EMAIL_SENT', `${client.name} · ${toEmail}`);
+    await audit(req.user!.id, req.user!.name, 'WELCOME_EMAIL_SENT', `${client.name} · ${toEmail}`, { clientId: client.id });
     res.status(201).json({ ok: true, messageId: msg.id, providerMessageId: r.id });
   } catch (e: any) {
     await prisma.outboundMessage.update({
@@ -2356,6 +2367,7 @@ clientsRouter.post('/:id/post-demo-feedback', async (req: AuthedRequest, res) =>
   await audit(
     req.user!.id, req.user!.name, 'POST_DEMO_FEEDBACK',
     `${existing.name}: ${outcome}${note ? ' — ' + note : ''} → ${baseUpdate.lifecycle}`,
+    { clientId: existing.id },
   );
   res.json(updated);
 });
@@ -2530,11 +2542,13 @@ clientsRouter.post('/:id/schedule-multi-demo', async (req: AuthedRequest, res) =
     await audit(
       req.user!.id, req.user!.name, 'STAGE_CHANGE',
       `${client.name}: ${client.lifecycle} → DemoScheduled (multi-trainer · ${results.length} slot${results.length === 1 ? '' : 's'})`,
+      { clientId: client.id },
     );
   } else {
     await audit(
       req.user!.id, req.user!.name, 'DEMO_RESCHEDULED',
       `${client.name}: multi-trainer reschedule · ${results.length} slot${results.length === 1 ? '' : 's'}`,
+      { clientId: client.id },
     );
   }
 
@@ -2718,5 +2732,6 @@ async function sendDemoInvite(
   await audit(
     req.user!.id, req.user!.name, 'DEMO_INVITE_SENT',
     `${client.name} · ${date} ${time} IST${trainer ? ' · trainer ' + trainer.name : ''} · To ${sentTo.join(', ')}`,
+    { clientId: client.id },
   );
 }

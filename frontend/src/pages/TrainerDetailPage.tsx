@@ -14,6 +14,7 @@ import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageM
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 import { CommentSection } from '@/components/CommentSection';
+import { ActivityLog } from '@/components/ActivityLog';
 import { Mail, MessageCircle, ArrowLeft } from 'lucide-react';
 
 export function TrainerDetailPage() {
@@ -229,6 +230,7 @@ export function TrainerDetailPage() {
 
         <div className="mt-3 space-y-3">
           <CommentSection trainerId={t.id} />
+          <ActivityLog trainerId={t.id} />
           <DemoHistoryCard trainerId={t.id} />
           <MessagesHistoryCard trainerId={t.id} />
         </div>

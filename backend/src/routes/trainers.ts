@@ -240,7 +240,7 @@ trainersRouter.post('/', async (req: AuthedRequest, res) => {
   }
   if (!data.recruitedById) data.recruitedById = req.user!.id;
   const t = await prisma.trainer.create({ data, include });
-  await audit(req.user!.id, req.user!.name, 'TRAINER_CREATE', t.name);
+  await audit(req.user!.id, req.user!.name, 'TRAINER_CREATE', t.name, { trainerId: t.id });
   res.status(201).json(t);
 });
 
@@ -265,7 +265,7 @@ trainersRouter.patch('/:id', async (req: AuthedRequest, res) => {
     if (existing) return res.status(409).json({ error: `Phone ${data.phoneDigits} already belongs to trainer "${existing.name}".` });
   }
   const t = await prisma.trainer.update({ where: { id: req.params.id }, data, include });
-  await audit(req.user!.id, req.user!.name, 'TRAINER_UPDATE', t.name);
+  await audit(req.user!.id, req.user!.name, 'TRAINER_UPDATE', t.name, { trainerId: t.id });
   res.json(t);
 });
 

@@ -19,6 +19,7 @@ import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageM
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 import { CallHistoryCard } from '@/components/CallHistoryCard';
 import { CommentSection } from '@/components/CommentSection';
+import { ActivityLog } from '@/components/ActivityLog';
 
 const INTAKE_FIELDS = [
   { key: 'detailed_skill_set', label: 'Detailed skill set', required: true },
@@ -855,6 +856,7 @@ export function ClientDetailPage() {
             </div>
 
             <CommentSection clientId={client.id} />
+            <ActivityLog clientId={client.id} />
             <DemoHistoryCard clientId={client.id} />
             <CallHistoryCard clientId={client.id} />
             <MessagesHistoryCard clientId={client.id} />

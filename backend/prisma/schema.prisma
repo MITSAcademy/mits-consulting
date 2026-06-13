@@ -837,11 +837,15 @@ model AuditLog {
   byName    String
   action    String
   details   String?
+  clientId  String?
+  trainerId String?
   createdAt DateTime @default(now())
 
-  @@index([createdAt])         // AuditPage default sort
-  @@index([byId, createdAt])   // per-user audit drill-in
-  @@index([action])            // filter by action type
+  @@index([createdAt])                  // AuditPage default sort
+  @@index([byId, createdAt])            // per-user audit drill-in
+  @@index([action])                     // filter by action type
+  @@index([clientId, createdAt])        // per-client activity feed
+  @@index([trainerId, createdAt])       // per-trainer activity feed
 }
 
 // ── Distributed lock for cron jobs (prevents double-fire on zero-downtime deploy) ──

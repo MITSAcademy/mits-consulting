@@ -171,7 +171,7 @@ followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, r
       leverageNote: null,
     },
   });
-  await audit(req.user!.id, req.user!.name, 'PAYMENT_ADVANCED', `${c.name}: date2 ${oldDate2} → ${newDate2}`);
+  await audit(req.user!.id, req.user!.name, 'PAYMENT_ADVANCED', `${c.name}: date2 ${oldDate2} → ${newDate2}`, { clientId: c.id });
   res.json({ ok: true, payDate1: oldDate2 || todayISO(), payDate2: newDate2 });
 });
 
@@ -192,7 +192,7 @@ followUpPaymentsRouter.post('/:id/set-pay-dates', async (req: AuthedRequest, res
       ...(date2 !== undefined ? { payDate2: date2 || null } : {}),
     },
   });
-  await audit(req.user!.id, req.user!.name, 'PAY_DATES_SET', `${c.name}: ${date1 || '—'} / ${date2 || '—'}`);
+  await audit(req.user!.id, req.user!.name, 'PAY_DATES_SET', `${c.name}: ${date1 || '—'} / ${date2 || '—'}`, { clientId: c.id });
   res.json({ ok: true });
 });
 
@@ -237,7 +237,7 @@ followUpPaymentsRouter.post('/:id/leverage', async (req: AuthedRequest, res) => 
       body: `Leverage granted — next due moved to ${newDate2}${noteText ? `: ${noteText}` : ''}.`,
     },
   });
-  await audit(req.user!.id, req.user!.name, 'LEVERAGE_GRANTED', `${c.name}: payDate2 → ${newDate2}. ${noteText}`);
+  await audit(req.user!.id, req.user!.name, 'LEVERAGE_GRANTED', `${c.name}: payDate2 → ${newDate2}. ${noteText}`, { clientId: c.id });
   res.json({ ok: true, payDate2: newDate2, leverageUntil: newDate2 });
 });
 
@@ -253,7 +253,7 @@ followUpPaymentsRouter.patch('/:id/note', async (req: AuthedRequest, res) => {
     where: { id: c.id },
     data: { followupNote: note || null, followupNoteAt: todayISO() },
   });
-  await audit(req.user!.id, req.user!.name, 'FOLLOWUP_NOTE', `${c.name}: ${note.slice(0, 60)}`);
+  await audit(req.user!.id, req.user!.name, 'FOLLOWUP_NOTE', `${c.name}: ${note.slice(0, 60)}`, { clientId: c.id });
   res.json({ ok: true });
 });
 
@@ -268,7 +268,7 @@ followUpPaymentsRouter.post('/:id/feedback-taken', async (req: AuthedRequest, re
     data: { lastFeedbackTakenAt: today },
     select: { id: true, name: true },
   });
-  await audit(req.user!.id, req.user!.name, 'FEEDBACK_TAKEN', c.name);
+  await audit(req.user!.id, req.user!.name, 'FEEDBACK_TAKEN', c.name, { clientId: c.id });
   res.json({ ok: true, lastFeedbackTakenAt: today });
 });
 
@@ -283,7 +283,7 @@ followUpPaymentsRouter.post('/:id/leverage-asked', async (req: AuthedRequest, re
     data: { lastLeverageAskedAt: today },
     select: { id: true, name: true },
   });
-  await audit(req.user!.id, req.user!.name, 'LEVERAGE_ASKED', c.name);
+  await audit(req.user!.id, req.user!.name, 'LEVERAGE_ASKED', c.name, { clientId: c.id });
   res.json({ ok: true, lastLeverageAskedAt: today });
 });
 
@@ -298,6 +298,6 @@ followUpPaymentsRouter.post('/:id/pending-vaibhav', async (req: AuthedRequest, r
     data: { paymentPendingVaibhav: desired },
     select: { id: true, name: true },
   });
-  await audit(req.user!.id, req.user!.name, desired ? 'PENDING_VAIBHAV_ON' : 'PENDING_VAIBHAV_OFF', c.name);
+  await audit(req.user!.id, req.user!.name, desired ? 'PENDING_VAIBHAV_ON' : 'PENDING_VAIBHAV_OFF', c.name, { clientId: c.id });
   res.json({ ok: true, paymentPendingVaibhav: desired });
 });
