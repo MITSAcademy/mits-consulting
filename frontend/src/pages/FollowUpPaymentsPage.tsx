@@ -417,6 +417,15 @@ function PayRow({ r }: { r: Row }) {
   const [showAdvance, setShowAdvance] = useState(false);
   const [showLeverage, setShowLeverage] = useState(false);
   const [showEditDates, setShowEditDates] = useState(false);
+  const [editingAmount, setEditingAmount] = useState(false);
+  const [amountDraft, setAmountDraft] = useState('');
+  const [currencyDraft, setCurrencyDraft] = useState('');
+
+  const saveAmount = useMutation({
+    mutationFn: () => api.patch(`/follow-up-payments/${r.id}/amount`, { cycleAmount: Number(amountDraft), currency: currencyDraft }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingAmount(false); showToast('Amount saved'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
 
   const feedbackTaken = useMutation({
     mutationFn: () => api.post(`/follow-up-payments/${r.id}/feedback-taken`),
@@ -565,10 +574,43 @@ function PayRow({ r }: { r: Row }) {
           {/* Amount */}
           <div className="px-4 py-3" style={{ borderRight: '1px solid var(--brand-borderSoft)' }}>
             <div className="text-[10px] uppercase tracking-wider muted mb-1">Amount</div>
-            {r.cycleAmount > 0
-              ? <div className="font-mono text-[13px] font-semibold">{r.currency} {r.cycleAmount.toLocaleString()}</div>
-              : <div className="text-[12px] muted italic">not set</div>
-            }
+            {editingAmount ? (
+              <div className="flex items-center gap-1 mt-0.5">
+                <select
+                  value={currencyDraft}
+                  onChange={e => setCurrencyDraft(e.target.value)}
+                  className="rounded border px-1 py-0.5 text-[11px] h-7 w-16"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}>
+                  <option value="INR">INR</option>
+                  <option value="USD">USD</option>
+                  <option value="GBP">GBP</option>
+                  <option value="AED">AED</option>
+                </select>
+                <input
+                  type="number" min="0" value={amountDraft}
+                  onChange={e => setAmountDraft(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveAmount.mutate(); if (e.key === 'Escape') setEditingAmount(false); }}
+                  className="rounded border px-2 py-0.5 text-[12px] font-mono w-24 h-7"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}
+                  autoFocus
+                />
+                <button onClick={() => saveAmount.mutate()} disabled={saveAmount.isPending}
+                  className="text-[10px] px-2 py-0.5 rounded font-semibold"
+                  style={{ background: 'var(--brand-accent)', color: 'white' }}>✓</button>
+                <button onClick={() => setEditingAmount(false)}
+                  className="text-[10px] px-2 py-0.5 rounded"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textMuted)' }}>✕</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 group/amt cursor-pointer"
+                onClick={() => { setAmountDraft(String(r.cycleAmount || '')); setCurrencyDraft(r.currency || 'INR'); setEditingAmount(true); }}>
+                {r.cycleAmount > 0
+                  ? <span className="font-mono text-[13px] font-semibold">{r.currency} {r.cycleAmount.toLocaleString()}</span>
+                  : <span className="text-[12px] muted italic">not set</span>
+                }
+                <span className="text-[10px] opacity-0 group-hover/amt:opacity-100 transition-opacity" style={{ color: 'var(--accent-gold)' }}>edit</span>
+              </div>
+            )}
             {!isManager && r.feedbackNeeded && (
               <div className="flex items-center gap-1 text-[10px] mt-1" style={{ color: 'var(--status-amber)' }}>
                 <AlertTriangle size={9}/> Feedback needed

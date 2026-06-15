@@ -20,7 +20,7 @@ import { audit } from '../lib/audit';
 export const followUpPaymentsRouter = Router();
 followUpPaymentsRouter.use(requireAuth);
 
-const ALLOWED = ['founder', 'manager', 'accounts'];
+const ALLOWED = ['founder', 'manager', 'accounts', 'demo_lead'];
 
 // Team scoping: manager sees only her team's clients in follow-up list
 const TEAM_SCOPE: Record<string, string[]> = {
@@ -293,6 +293,25 @@ followUpPaymentsRouter.post('/:id/leverage-asked', async (req: AuthedRequest, re
   });
   await audit(req.user!.id, req.user!.name, 'LEVERAGE_ASKED', c.name, { clientId: c.id });
   res.json({ ok: true, lastLeverageAskedAt: today });
+});
+
+// ─────────────────────────────────────────
+// PATCH /:id/amount — update cycleAmount + currency
+// Body: { cycleAmount: number, currency?: string }
+// ─────────────────────────────────────────
+followUpPaymentsRouter.patch('/:id/amount', async (req: AuthedRequest, res) => {
+  if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const amount = Number(req.body?.cycleAmount);
+  const currency = typeof req.body?.currency === 'string' ? req.body.currency.trim().toUpperCase() : undefined;
+  if (isNaN(amount) || amount < 0) return res.status(400).json({ error: 'cycleAmount must be a non-negative number' });
+  const c = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+  if (!c) return res.status(404).json({ error: 'Client not found' });
+  await prisma.client.update({
+    where: { id: c.id },
+    data: { cycleAmount: amount, ...(currency ? { currency } : {}) },
+  });
+  await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${c.name}: cycleAmount → ${amount}${currency ? ' ' + currency : ''}`, { clientId: c.id });
+  res.json({ ok: true, cycleAmount: amount, ...(currency ? { currency } : {}) });
 });
 
 // ─────────────────────────────────────────
