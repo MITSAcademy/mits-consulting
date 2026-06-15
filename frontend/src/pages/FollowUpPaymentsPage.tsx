@@ -26,7 +26,7 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Label, Textarea } from '@/components/ui/input';
 import {
   AlertTriangle, CheckCircle2, Clock, MessageSquare,
-  Send, Pin, Trash2
+  Send, Pin, Trash2, Users
 } from 'lucide-react';
 import { minFutureDate, maxTodayDate } from '@/lib/utils';
 
@@ -49,7 +49,9 @@ interface Row {
   lastLeverageAskedAt: string | null;
   paymentPendingVaibhav: boolean;
   hostOwner: string | null;
-  primaryTrainer: { id: string; name: string } | null;
+  clientPhone: string | null;
+  clientGroupLink: string | null;
+  primaryTrainer: { id: string; name: string; phone: string | null; groupLink: string | null } | null;
   trainingId: string | null;
   trainingName: string | null;
   latestComment: LatestComment | null;
@@ -451,29 +453,83 @@ function PayRow({ r }: { r: Row }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <StatusBadge r={r}/>
-            {/* Nav links */}
+            {/* WhatsApp quick-links: 4 icon buttons */}
+            <div className="flex items-center gap-1">
+              {/* Client direct WA */}
+              {r.clientPhone ? (
+                <a href={`https://wa.me/${r.clientPhone}`} target="whatsapp_window" rel="noreferrer"
+                  title={`WhatsApp ${r.name} directly`}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg hover:opacity-80 transition-opacity"
+                  style={{ background: 'rgba(37,211,102,0.15)', border: '1px solid rgba(37,211,102,0.35)' }}>
+                  <MessageSquare size={13} style={{ color: '#25D366' }}/>
+                </a>
+              ) : (
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg opacity-25 cursor-not-allowed"
+                  title="No client phone on file"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+                  <MessageSquare size={13} className="muted"/>
+                </span>
+              )}
+
+              {/* Client WA group */}
+              {r.clientGroupLink ? (
+                <a href={r.clientGroupLink} target="whatsapp_window" rel="noreferrer"
+                  title={`Open ${r.name}'s WhatsApp group`}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg hover:opacity-80 transition-opacity"
+                  style={{ background: 'rgba(37,211,102,0.15)', border: '1px solid rgba(37,211,102,0.35)' }}>
+                  <Users size={13} style={{ color: '#25D366' }}/>
+                </a>
+              ) : (
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg opacity-25 cursor-not-allowed"
+                  title="No client WhatsApp group on file"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+                  <Users size={13} className="muted"/>
+                </span>
+              )}
+
+              {/* Separator */}
+              <div className="w-px h-4 mx-0.5" style={{ background: 'var(--brand-borderSoft)' }}/>
+
+              {/* Trainer direct WA */}
+              {r.primaryTrainer?.phone ? (
+                <a href={`https://wa.me/${r.primaryTrainer.phone}`} target="whatsapp_window" rel="noreferrer"
+                  title={`WhatsApp trainer ${r.primaryTrainer.name} directly`}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg hover:opacity-80 transition-opacity"
+                  style={{ background: 'rgba(96,165,250,0.15)', border: '1px solid rgba(96,165,250,0.35)' }}>
+                  <MessageSquare size={13} style={{ color: '#60a5fa' }}/>
+                </a>
+              ) : (
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg opacity-25 cursor-not-allowed"
+                  title={r.primaryTrainer ? 'No trainer phone on file' : 'No trainer assigned'}
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+                  <MessageSquare size={13} className="muted"/>
+                </span>
+              )}
+
+              {/* Trainer WA group */}
+              {r.primaryTrainer?.groupLink ? (
+                <a href={r.primaryTrainer.groupLink} target="whatsapp_window" rel="noreferrer"
+                  title={`Open trainer ${r.primaryTrainer.name}'s WhatsApp group`}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg hover:opacity-80 transition-opacity"
+                  style={{ background: 'rgba(96,165,250,0.15)', border: '1px solid rgba(96,165,250,0.35)' }}>
+                  <Users size={13} style={{ color: '#60a5fa' }}/>
+                </a>
+              ) : (
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg opacity-25 cursor-not-allowed"
+                  title={r.primaryTrainer ? 'No trainer WA group on file' : 'No trainer assigned'}
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+                  <Users size={13} className="muted"/>
+                </span>
+              )}
+            </div>
+
+            {/* Client page link */}
             <Link to={`/clients/${r.id}`}>
               <button className="text-[11px] px-2 py-1 rounded-lg hover:opacity-80 transition-opacity"
                 style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textSecondary)' }}>
                 Client
               </button>
             </Link>
-            {r.primaryTrainer && (
-              <Link to={`/trainers/${r.primaryTrainer.id}`}>
-                <button className="text-[11px] px-2 py-1 rounded-lg hover:opacity-80 transition-opacity"
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textSecondary)' }}>
-                  {r.primaryTrainer.name}
-                </button>
-              </Link>
-            )}
-            {r.trainingId && (
-              <Link to={`/regular-trainings/${r.trainingId}`}>
-                <button className="text-[11px] px-2 py-1 rounded-lg hover:opacity-80 transition-opacity"
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textSecondary)' }}>
-                  Group
-                </button>
-              </Link>
-            )}
           </div>
         </div>
 
