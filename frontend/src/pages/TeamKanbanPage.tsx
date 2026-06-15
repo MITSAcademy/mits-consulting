@@ -325,7 +325,7 @@ export function TeamKanbanPage() {
 
     // manager / founder: all 4 columns
     return [
-      { id: 'unassigned', title: 'Unassigned', subtitle: 'Needs an AM', color: 'var(--brand-textMuted)', clients: unassigned },
+      { id: 'unassigned', title: 'Mitali', subtitle: 'Needs an AM', color: 'var(--brand-textMuted)', clients: unassigned },
       ...TEAM_MEMBERS.map(t => ({
         id: t.id,
         title: t.name,
