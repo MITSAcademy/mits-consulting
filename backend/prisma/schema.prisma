@@ -184,6 +184,9 @@ model User {
   tempHostedTrainings    RegularTraining[]  @relation("RegularTrainingTempHost")
   hostedTrainingSessions TrainingSession[]  @relation("TrainingSessionHost")
   closedIssues           IssueTracker[]     @relation("IssueClosedBy")
+  timesheetEntries       TimesheetEntry[]   @relation("TimesheetEntries")
+  timesheetApprovals     TimesheetEntry[]   @relation("TimesheetApprovals")
+  jobCodesCreated        JobCode[]          @relation("JobCodeCreator")
 }
 
 // -------- NOTIFICATIONS --------
@@ -981,4 +984,39 @@ model EditRequest {
   reason      String?
   createdAt   DateTime          @default(now())
   reviewedAt  DateTime?
+}
+
+// -------- TIMESHEET --------
+model JobCode {
+  id          String           @id @default(cuid())
+  code        String           @unique
+  name        String
+  description String?
+  active      Boolean          @default(true)
+  createdById String?
+  createdBy   User?            @relation("JobCodeCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime         @default(now())
+  entries     TimesheetEntry[]
+}
+
+model TimesheetEntry {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation("TimesheetEntries", fields: [userId], references: [id], onDelete: Cascade)
+  date          String
+  jobCodeId     String
+  jobCode       JobCode   @relation(fields: [jobCodeId], references: [id])
+  hours         Float
+  description   String
+  status        String    @default("draft")
+  rejectionNote String?
+  approvedById  String?
+  approvedBy    User?     @relation("TimesheetApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId, date])
+  @@index([status])
+  @@index([date])
 }

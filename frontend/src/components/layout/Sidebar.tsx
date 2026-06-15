@@ -11,7 +11,7 @@ import {
   MessageCircle, Building, ClipboardList, Wallet, Archive, CheckSquare, Clock, Receipt,
   Notebook, ChartLine, Upload, Inbox, Edit, UsersRound, Mail, Tag, LockKeyhole,
   Building2, History, Settings, LogOut, Moon, Calendar, ChevronsLeft, ChevronsRight,
-  TableProperties, CalendarDays, AlertTriangle, Link,
+  TableProperties, CalendarDays, AlertTriangle, Link, BarChart2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -98,6 +98,8 @@ const NAV: NavItem[] = [
   { section: 'work', page: '/accounts-queue', label: 'Accounts queue', icon: Receipt, roles: ['founder', 'accounts'] },
   { section: 'work', page: '/daily-report', label: 'Daily report', icon: Notebook, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
   { section: 'work', page: '/my-calendar', label: 'My calendar', icon: Calendar, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
+  { section: 'team', page: '/timesheet', label: 'My timesheet', icon: ClipboardList, roles: ['manager', 'lead', 'staff', 'accounts', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'payment_processor', 'account_manager'] },
+  { section: 'team', page: '/timesheet/report', label: 'Timesheet report', icon: BarChart2, roles: ['founder', 'manager', 'demo_lead'] },
 
   // ── Admin (Vaibhav + team leads for visibility) ───────────────────────
   { section: 'admin', page: '/reports-dashboard', label: 'Reports dashboard', icon: ChartLine, roles: ['founder', 'demo_lead'] },
@@ -122,6 +124,7 @@ const SECTIONS: Record<string, string> = {
   partners: 'Partners',
   trainerOps: 'Trainer ops',
   work: 'My work',
+  team: 'Timesheet',
   admin: 'Admin',
 };
 

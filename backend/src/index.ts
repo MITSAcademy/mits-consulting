@@ -43,6 +43,7 @@ import { issueTrackerRouter } from './routes/issueTracker';
 import { meetingLinksRouter } from './routes/meetingLinks';
 import { coordinatorDashboardRouter } from './routes/coordinatorDashboard';
 import { briefingRouter } from './routes/briefing';
+import { timesheetRouter } from './routes/timesheet';
 import { seedRouter } from './routes/seed';
 
 const app = express();
@@ -127,6 +128,7 @@ app.use('/api/issue-tracker', issueTrackerRouter);
 app.use('/api/meeting-links', meetingLinksRouter);
 app.use('/api/coordinator-dashboard', coordinatorDashboardRouter);
 app.use('/api/briefing', briefingRouter);
+app.use('/api/timesheet', timesheetRouter);
 app.use('/api/seed', seedRouter);
 
 // Global error handler

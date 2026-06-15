@@ -62,6 +62,8 @@ const IssueTrackerPage = lazy(() => import('@/pages/IssueTrackerPage'));
 const MeetingLinksPage = lazy(() => import('@/pages/MeetingLinksPage'));
 const CoordinatorDashboardPage = lazy(() => import('@/pages/CoordinatorDashboardPage'));
 const TeamKanbanPage = lazy(() => import('@/pages/TeamKanbanPage').then((m) => ({ default: m.TeamKanbanPage })));
+const MyTimesheetPage = lazy(() => import('@/pages/MyTimesheetPage').then((m) => ({ default: m.MyTimesheetPage })));
+const TimesheetReportPage = lazy(() => import('@/pages/TimesheetReportPage').then((m) => ({ default: m.TimesheetReportPage })));
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const user = useAuth((s) => s.user);
@@ -150,6 +152,8 @@ export default function App() {
           <Route path="/feedback-pending" element={<FeedbackPendingPage />} />
           <Route path="/sessions" element={<SessionsDashboardPage />} />
           <Route path="/issues" element={<IssueTrackerPage />} />
+          <Route path="/timesheet" element={<MyTimesheetPage />} />
+          <Route path="/timesheet/report" element={<TimesheetReportPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
