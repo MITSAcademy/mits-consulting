@@ -587,11 +587,11 @@ function PayRow({ r }: { r: Row }) {
                   <option value="AED">AED</option>
                 </select>
                 <input
-                  type="number" min="0" value={amountDraft}
-                  onChange={e => setAmountDraft(e.target.value)}
+                  type="text" inputMode="numeric" pattern="[0-9]*" min="0" value={amountDraft}
+                  onChange={e => setAmountDraft(e.target.value.replace(/[^0-9.]/g, ''))}
                   onKeyDown={e => { if (e.key === 'Enter') saveAmount.mutate(); if (e.key === 'Escape') setEditingAmount(false); }}
-                  className="rounded border px-2 py-0.5 text-[12px] font-mono w-24 h-7"
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}
+                  className="rounded border px-2 py-0.5 text-[12px] font-mono h-7"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', width: 80 }}
                   autoFocus
                 />
                 <button onClick={() => saveAmount.mutate()} disabled={saveAmount.isPending}
