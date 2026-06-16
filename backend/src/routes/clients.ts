@@ -84,6 +84,12 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
       where.name = { contains: s, mode: 'insensitive' };
     }
   }
+  // demo_intake (Anjali / Taran) — intake pipeline only, never Active/ongoing clients
+  if (req.user!.role === 'demo_intake') {
+    const INTAKE_STAGES = ['Lead','IntakeSent','IntakeReceived','InternalSearch','WithRecruiters',
+                           'VerificationPending','TrainerMatched','DemoScheduled','DemoDone','FeedbackPending'];
+    if (!lifecycle) where.lifecycle = { in: INTAKE_STAGES };
+  }
   // account_manager (Kashish / Muskan)
   //   - default (no scope): own Active clients by hostOwnerId
   //   - scope=team: clients assigned to them via assignedAmId (for team kanban)

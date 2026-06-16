@@ -27,7 +27,7 @@ regularTrainingsRouter.use(requireAuth);
 // Feature flag removed — regularCalls is always enabled.
 
 const WRITE_ROLES = ['founder', 'manager', 'lead', 'account_manager'];
-const READ_ROLES  = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'demo_intake'];
+const READ_ROLES  = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'];
 
 function canWrite(role: string) { return WRITE_ROLES.includes(role); }
 function canRead(role: string)  { return READ_ROLES.includes(role); }
