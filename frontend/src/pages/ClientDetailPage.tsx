@@ -38,7 +38,7 @@ const canIntake = (role: string) => ['founder', 'manager', 'demo_lead', 'demo_in
 const canClose = (role: string) => ['founder', 'manager', 'sales_closer'].includes(role);
 const canActivate = (role: string) => ['founder', 'manager', 'sales_closer'].includes(role);
 // AM can manage Active/LeverageGranted clients (leverage, hold) but not the SaleWon→Active handover
-const canAMActions = (role: string) => ['founder', 'manager', 'sales_closer', 'account_manager', 'lead'].includes(role);
+const canAMActions = (role: string) => ['founder', 'manager', 'sales_closer', 'account_manager'].includes(role);
 // Only Samita (demo_lead) and Vaibhav (founder) may assign/reassign intake owners.
 const canAssignOwner = (role: string) => ['founder', 'demo_lead'].includes(role);
 const canRecordPayment = (role: string) => ['founder', 'demo_lead', 'manager', 'sales_closer'].includes(role);

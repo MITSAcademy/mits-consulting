@@ -62,14 +62,14 @@ const NAV: NavItem[] = [
   { section: 'sales', page: '/fresh-payments', label: 'Fresh payments', icon: DollarSign, roles: ['founder', 'sales_closer', 'accounts'] },
 
   // ── Client success (team-scoped for manager/lead/AM) ─────────────────
-  // Payment follow-up: Mitali's primary job + accounts (Bhavneet does not chase client payments)
-  { section: 'clients', page: '/follow-up-payments', label: 'Payment follow-up', icon: Receipt, roles: ['founder', 'manager', 'accounts', 'demo_lead'] },
+  // Payment follow-up: Mitali's primary job + accounts; Bhavneet needs it to export her team's payments
+  { section: 'clients', page: '/follow-up-payments', label: 'Payment follow-up', icon: Receipt, roles: ['founder', 'manager', 'lead', 'accounts', 'demo_lead'] },
   { section: 'clients', page: '/calendar', label: 'Work calendar', icon: LayoutGrid, roles: ['founder', 'lead', 'staff'] },
   // Clients: scoped by backend per role (AM=own, lead=team, manager=team)
   { section: 'clients', page: '/clients', label: 'Clients', icon: Users, roles: ['founder', 'manager', 'lead', 'accounts', 'demo_lead', 'demo_intake', 'account_manager'] },
   // Hold: Mitali needs to see clients on hold (leverage / missed payments) within her team
   { section: 'clients', page: '/hold', label: 'On hold', icon: Clock, roles: ['founder', 'manager', 'demo_lead', 'sales_closer'] },
-  { section: 'clients', page: '/trainers', label: 'My trainers', icon: UserCog, roles: ['account_manager', 'lead'] },
+  { section: 'clients', page: '/trainers', label: 'My trainers', icon: UserCog, roles: ['account_manager'] },
   { section: 'clients', page: '/renewals', label: 'Renewals', icon: RefreshCw, roles: ['founder'] },
   { section: 'clients', page: '/dormant', label: 'Dormant clients', icon: Moon, roles: ['founder', 'demo_lead', 'demo_intake', 'sales_closer'] },
   { section: 'clients', page: '/feedback', label: 'Feedback', icon: MessageCircle, roles: ['founder', 'manager', 'lead', 'account_manager'] },
@@ -77,8 +77,8 @@ const NAV: NavItem[] = [
 
   // ── Coordinator work (Mitali + Bhavneet + AMs) ───────────────────────
   { section: 'work', page: '/team-board', label: 'Team board', icon: UsersRound, roles: ['founder', 'manager', 'lead', 'account_manager'] },
-  { section: 'work', page: '/coordinator-dashboard', label: 'Coordinator dashboard', icon: UsersRound, roles: ['founder', 'lead'] },
-  { section: 'work', page: '/my-sessions', label: 'My sessions', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager'] },
+  { section: 'work', page: '/coordinator-dashboard', label: 'Coordinator dashboard', icon: UsersRound, roles: ['founder'] },
+  { section: 'work', page: '/my-sessions', label: 'My calls & sessions', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager'] },
   { section: 'work', page: '/sessions', label: 'Sessions', icon: CalendarDays, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'] },
   { section: 'work', page: '/issues', label: 'Issues', icon: AlertTriangle, roles: ['founder', 'manager', 'lead', 'account_manager'] },
   { section: 'clients', page: '/regular-trainings', label: 'Regular trainings', icon: Video, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
@@ -111,7 +111,7 @@ const NAV: NavItem[] = [
   { section: 'admin', page: '/sources', label: 'Lead sources', icon: Tag, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/permissions', label: 'Edit permissions', icon: LockKeyhole, roles: ['founder'] },
   { section: 'admin', page: '/banks', label: 'Bank accounts', icon: Building2, roles: ['founder', 'accounts'] },
-  { section: 'admin', page: '/audit', label: 'Activity log', icon: History, roles: ['founder', 'manager', 'lead'] },
+  { section: 'admin', page: '/audit', label: 'Activity log', icon: History, roles: ['founder', 'manager'] },
   { section: 'admin', page: '/settings', label: 'Settings', icon: Settings, roles: ['founder', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
 ];
 

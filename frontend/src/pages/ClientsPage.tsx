@@ -71,7 +71,8 @@ export function ClientsPage() {
       return (c.sourcingRequests || []).some((r: any) => r.sentToId === user.id);
     }
     if (user.role === 'sales_closer') return c.salesOwnerId === user.id;
-    if (user.role === 'lead' || user.role === 'staff') return c.hostOwnerId === user.id;
+    if (user.role === 'lead') return ['u-bhavneet', 'u-kashish', 'u-muskan'].includes(c.hostOwnerId);
+    if (user.role === 'staff') return c.hostOwnerId === user.id;
     return true;
   };
   const all = (clients || []) as any[];

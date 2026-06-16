@@ -29,9 +29,19 @@ sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req, res) =>
   res.json(logs);
 });
 
+const LEAD_TEAM_IDS = ['u-bhavneet', 'u-kashish', 'u-muskan'];
+
 sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const { trainerId, clientId, date, hours, rateSnapshot, rateModel, notes, amountInr: amountOverride, feedback } = req.body;
   if (!trainerId || !date || !hours) return res.status(400).json({ error: 'trainerId, date, hours required' });
+
+  // lead (Bhavneet) can only log sessions for clients owned by her team
+  if (req.user!.role === 'lead' && clientId) {
+    const client = await prisma.client.findUnique({ where: { id: clientId }, select: { hostOwnerId: true } });
+    if (client && client.hostOwnerId && !LEAD_TEAM_IDS.includes(client.hostOwnerId)) {
+      return res.status(403).json({ error: 'You can only log sessions for clients on your team (Bhavneet / Kashish / Muskan)' });
+    }
+  }
   const defaultAmount = rateModel === 'hourly' ? Math.round(hours * rateSnapshot) : rateSnapshot;
   const amount = (amountOverride != null && !isNaN(Number(amountOverride))) ? Math.round(Number(amountOverride)) : defaultAmount;
   const log = await prisma.sessionLog.create({

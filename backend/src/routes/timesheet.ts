@@ -31,12 +31,15 @@ timesheetRouter.get('/job-codes', async (req: AuthedRequest, res) => {
 timesheetRouter.post('/job-codes', async (req: AuthedRequest, res) => {
   const user = req.user!;
   if (!CAN_MANAGE_CODES.includes(user.role)) return res.status(403).json({ error: 'Forbidden' });
-  const { code, name, description } = req.body || {};
+  const { code, name, description, maxHoursPerDay } = req.body || {};
   if (!code || !name) return res.status(400).json({ error: 'code and name are required' });
   const existing = await prisma.jobCode.findUnique({ where: { code } });
   if (existing) return res.status(409).json({ error: 'Job code already exists' });
   const jc = await prisma.jobCode.create({
-    data: { code, name, description: description || null, createdById: user.id },
+    data: {
+      code, name, description: description || null, createdById: user.id,
+      ...(maxHoursPerDay != null ? { maxHoursPerDay: Number(maxHoursPerDay) } : {}),
+    },
   });
   res.json(jc);
 });
@@ -45,11 +48,12 @@ timesheetRouter.post('/job-codes', async (req: AuthedRequest, res) => {
 timesheetRouter.patch('/job-codes/:id', async (req: AuthedRequest, res) => {
   const user = req.user!;
   if (!CAN_MANAGE_CODES.includes(user.role)) return res.status(403).json({ error: 'Forbidden' });
-  const { name, description, active } = req.body || {};
+  const { name, description, active, maxHoursPerDay } = req.body || {};
   const data: Record<string, unknown> = {};
   if (name !== undefined) data.name = name;
   if (description !== undefined) data.description = description;
   if (active !== undefined) data.active = active;
+  if (maxHoursPerDay !== undefined) data.maxHoursPerDay = maxHoursPerDay === null ? null : Number(maxHoursPerDay);
   const jc = await prisma.jobCode.update({ where: { id: req.params.id }, data });
   res.json(jc);
 });
@@ -102,6 +106,20 @@ timesheetRouter.post('/entries', async (req: AuthedRequest, res) => {
   const h = Number(hours);
   if (!hours || h <= 0 || h > 24) return res.status(400).json({ error: 'hours must be between 0 and 24' });
   if (!description) return res.status(400).json({ error: 'description required' });
+
+  // Check maxHoursPerDay cap
+  const jobCode = await prisma.jobCode.findUnique({ where: { id: jobCodeId } });
+  if (jobCode?.maxHoursPerDay != null) {
+    const existing = await prisma.timesheetEntry.aggregate({
+      where: { userId: user.id, jobCodeId, date, status: { not: 'rejected' } },
+      _sum: { hours: true },
+    });
+    const alreadyLogged = existing._sum.hours ?? 0;
+    if (alreadyLogged + h > jobCode.maxHoursPerDay) {
+      return res.status(400).json({ error: `Exceeds max ${jobCode.maxHoursPerDay}h/day for this job code` });
+    }
+  }
+
   const entry = await prisma.timesheetEntry.create({
     data: { userId: user.id, date, jobCodeId, hours: h, description, status: 'draft' },
     include: {

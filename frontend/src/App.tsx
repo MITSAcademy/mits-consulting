@@ -73,6 +73,13 @@ function PrivateRoute({ children }: { children: JSX.Element }) {
   return children;
 }
 
+/** Redirect lead (Bhavneet) away from Coordinator dashboard — she should not access it. */
+function CoordinatorDashboardGate() {
+  const user = useAuth((s) => s.user);
+  if (user?.role === 'lead') return <Navigate to="/team-board" replace />;
+  return <CoordinatorDashboardPage />;
+}
+
 /** Send users whose role can't see the financial Home dashboard to their role-specific landing page. */
 function HomeGate() {
   const user = useAuth((s) => s.user);
@@ -121,7 +128,7 @@ export default function App() {
           <Route path="/regular-trainings" element={<RegularTrainingsPage />} />
           <Route path="/regular-trainings/:id" element={<RegularTrainingDetailPage />} />
           <Route path="/meeting-links" element={<MeetingLinksPage />} />
-          <Route path="/coordinator-dashboard" element={<CoordinatorDashboardPage />} />
+          <Route path="/coordinator-dashboard" element={<CoordinatorDashboardGate />} />
           <Route path="/team-board" element={<TeamKanbanPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/renewals" element={<RenewalsPage />} />

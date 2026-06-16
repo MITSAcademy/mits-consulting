@@ -24,13 +24,15 @@ import { sendEmail } from './mailer';
  */
 async function acquireBriefingLock(team: string, shift: string): Promise<boolean> {
   const key = `briefing:${team}:${shift}:${todayIST()}`;
-  // CronLock.key is a @id (primary key) — INSERT fails with unique violation if already exists.
-  // createMany with skipDuplicates returns count=1 if we inserted, count=0 if another instance beat us.
-  const result = await (prisma as any).cronLock.createMany({
-    data: [{ key }],
-    skipDuplicates: true,
-  });
-  if (result.count === 0) {
+  // Small jitter so two instances firing at the same second don't both hit the DB simultaneously.
+  await new Promise(r => setTimeout(r, Math.floor(Math.random() * 3000)));
+  // Raw INSERT ON CONFLICT DO NOTHING is fully atomic — returns 1 row if we won, 0 if another instance beat us.
+  const result = await prisma.$executeRaw`
+    INSERT INTO "CronLock" (key, "createdAt")
+    VALUES (${key}, NOW())
+    ON CONFLICT (key) DO NOTHING
+  `;
+  if (result === 0) {
     console.log(`[briefing] SKIP ${key} — already sent by another instance`);
     return false;
   }

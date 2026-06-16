@@ -292,7 +292,7 @@ export function TeamKanbanPage() {
 
   // Determine which columns this role sees
   const role = user?.role || '';
-  const canAssign = role === 'manager' || role === 'founder';
+  const canAssign = role === 'manager' || role === 'founder' || role === 'lead';
 
   const columns = useMemo(() => {
     const unassigned = clients.filter(c => !c.assignedAmId);

@@ -28,7 +28,7 @@ import {
   AlertTriangle, CheckCircle2, Clock, MessageSquare,
   Send, Pin, Trash2, Users
 } from 'lucide-react';
-import { minFutureDate, maxTodayDate } from '@/lib/utils';
+import { minFutureDate, maxTodayDate, minPastDate } from '@/lib/utils';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -386,7 +386,7 @@ function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="form-row">
             <Label>Pay Date 1 (last paid)</Label>
-            <Input type="date" value={date1} max={maxTodayDate()} onChange={(e) => setDate1(e.target.value)} />
+            <Input type="date" value={date1} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setDate1(e.target.value)} />
           </div>
           <div className="form-row">
             <Label>Pay Date 2 (next due)</Label>

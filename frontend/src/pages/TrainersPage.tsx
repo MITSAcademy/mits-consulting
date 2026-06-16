@@ -21,7 +21,8 @@ export function TrainersPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user)!;
-  const isAM = user.role === 'account_manager' || user.role === 'lead';
+  // lead (Bhavneet) sees all trainers like manager/founder; account_manager sees only their own clients' trainers
+  const isAM = user.role === 'account_manager';
 
   const { data } = useQuery({
     queryKey: ['trainers'],

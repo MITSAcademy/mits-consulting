@@ -8,7 +8,7 @@ auditRouter.use(requireAuth);
 // Main audit log — founder sees all; manager/lead see their team entries
 auditRouter.get('/', async (req: AuthedRequest, res) => {
   const role = req.user!.role;
-  const allowed = ['founder', 'manager', 'lead'];
+  const allowed = ['founder', 'manager'];
   if (!allowed.includes(role)) return res.status(403).json({ error: 'Not allowed' });
 
   const { clientId, trainerId, byId, action, from, to, limit } = req.query as Record<string, string>;
@@ -35,7 +35,7 @@ auditRouter.get('/', async (req: AuthedRequest, res) => {
 // Per-entity activity feed used by ClientDetailPage + TrainerDetailPage
 auditRouter.get('/entity', async (req: AuthedRequest, res) => {
   const role = req.user!.role;
-  const allowed = ['founder', 'manager', 'lead', 'account_manager'];
+  const allowed = ['founder', 'manager', 'account_manager'];
   if (!allowed.includes(role)) return res.status(403).json({ error: 'Not allowed' });
 
   const { clientId, trainerId } = req.query as Record<string, string>;

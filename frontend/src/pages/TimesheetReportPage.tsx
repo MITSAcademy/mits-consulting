@@ -43,7 +43,7 @@ export function TimesheetReportPage() {
   const [filterUserId, setFilterUserId] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [showNewCode, setShowNewCode] = useState(false);
-  const [codeForm, setCodeForm] = useState({ code: '', name: '', description: '' });
+  const [codeForm, setCodeForm] = useState({ code: '', name: '', description: '', maxHoursPerDay: '' });
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
 
@@ -86,7 +86,7 @@ export function TimesheetReportPage() {
       qc.invalidateQueries({ queryKey: ['job-codes-all'] });
       qc.invalidateQueries({ queryKey: ['job-codes'] });
       setShowNewCode(false);
-      setCodeForm({ code: '', name: '', description: '' });
+      setCodeForm({ code: '', name: '', description: '', maxHoursPerDay: '' });
     },
   });
   const patchCodeMut = useMutation({
@@ -156,9 +156,25 @@ export function TimesheetReportPage() {
                   onChange={(e) => setCodeForm((f) => ({ ...f, description: e.target.value }))}
                 />
               </div>
+              <div>
+                <div className="text-[11px] mb-1" style={{ color: 'var(--brand-textMuted)' }}>Max hrs/day (optional)</div>
+                <Input
+                  type="number"
+                  placeholder="e.g. 4"
+                  min={0.5}
+                  step={0.5}
+                  value={codeForm.maxHoursPerDay}
+                  onChange={(e) => setCodeForm((f) => ({ ...f, maxHoursPerDay: e.target.value }))}
+                  style={{ width: 110 }}
+                />
+              </div>
               <Button
                 size="sm"
-                onClick={() => createCodeMut.mutate(codeForm)}
+                onClick={() => {
+                  const payload: any = { code: codeForm.code, name: codeForm.name, description: codeForm.description };
+                  if (codeForm.maxHoursPerDay !== '') payload.maxHoursPerDay = Number(codeForm.maxHoursPerDay);
+                  createCodeMut.mutate(payload);
+                }}
                 disabled={!codeForm.code || !codeForm.name || createCodeMut.isPending}
               >
                 Create
@@ -172,6 +188,7 @@ export function TimesheetReportPage() {
               <tr style={{ borderBottom: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textMuted)' }}>
                 <th className="text-left py-1.5 font-medium text-[11px]">Code</th>
                 <th className="text-left py-1.5 font-medium text-[11px]">Name</th>
+                <th className="text-left py-1.5 font-medium text-[11px]">Max hrs/day</th>
                 <th className="text-left py-1.5 font-medium text-[11px]">Status</th>
                 <th className="text-left py-1.5 font-medium text-[11px]">Created</th>
                 <th></th>
@@ -182,6 +199,9 @@ export function TimesheetReportPage() {
                 <tr key={jc.id} style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
                   <td className="py-1.5 font-mono font-bold text-[12px]" style={{ color: 'var(--brand-accent)' }}>{jc.code}</td>
                   <td className="py-1.5">{jc.name}</td>
+                  <td className="py-1.5 text-xs" style={{ color: 'var(--brand-textMuted)' }}>
+                    {jc.maxHoursPerDay != null ? `${jc.maxHoursPerDay}h` : '—'}
+                  </td>
                   <td className="py-1.5">
                     <span
                       className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
@@ -211,7 +231,7 @@ export function TimesheetReportPage() {
               ))}
               {jobCodes.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-3 text-sm text-center" style={{ color: 'var(--brand-textMuted)' }}>
+                  <td colSpan={6} className="py-3 text-sm text-center" style={{ color: 'var(--brand-textMuted)' }}>
                     No job codes yet.
                   </td>
                 </tr>

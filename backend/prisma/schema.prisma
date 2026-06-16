@@ -992,7 +992,8 @@ model JobCode {
   code        String           @unique
   name        String
   description String?
-  active      Boolean          @default(true)
+  active          Boolean          @default(true)
+  maxHoursPerDay  Float?
   createdById String?
   createdBy   User?            @relation("JobCodeCreator", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime         @default(now())
