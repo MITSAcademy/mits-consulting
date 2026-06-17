@@ -1021,3 +1021,12 @@ model TimesheetEntry {
   @@index([status])
   @@index([date])
 }
+
+model UserFeatureFlag {
+  userId    String
+  flag      String
+  enabled   Boolean
+  updatedAt DateTime @updatedAt
+
+  @@id([userId, flag])
+}

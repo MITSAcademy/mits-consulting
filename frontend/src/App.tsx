@@ -64,6 +64,7 @@ const CoordinatorDashboardPage = lazy(() => import('@/pages/CoordinatorDashboard
 const TeamKanbanPage = lazy(() => import('@/pages/TeamKanbanPage').then((m) => ({ default: m.TeamKanbanPage })));
 const MyTimesheetPage = lazy(() => import('@/pages/MyTimesheetPage').then((m) => ({ default: m.MyTimesheetPage })));
 const TimesheetReportPage = lazy(() => import('@/pages/TimesheetReportPage').then((m) => ({ default: m.TimesheetReportPage })));
+const FeatureFlagsPage = lazy(() => import('@/pages/FeatureFlagsPage'));
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const user = useAuth((s) => s.user);
@@ -161,6 +162,7 @@ export default function App() {
           <Route path="/issues" element={<IssueTrackerPage />} />
           <Route path="/timesheet" element={<MyTimesheetPage />} />
           <Route path="/timesheet/report" element={<TimesheetReportPage />} />
+          <Route path="/feature-flags" element={<FeatureFlagsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

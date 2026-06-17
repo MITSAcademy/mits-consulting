@@ -11,7 +11,7 @@ import {
   MessageCircle, Building, ClipboardList, Wallet, Archive, CheckSquare, Clock, Receipt,
   Notebook, ChartLine, Upload, Inbox, Edit, UsersRound, Mail, Tag, LockKeyhole,
   Building2, History, Settings, LogOut, Moon, Calendar, ChevronsLeft, ChevronsRight,
-  TableProperties, CalendarDays, AlertTriangle, Link, BarChart2,
+  TableProperties, CalendarDays, AlertTriangle, Link, BarChart2, ToggleRight,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -109,6 +109,7 @@ const NAV: NavItem[] = [
   { section: 'admin', page: '/team', label: 'Team', icon: UsersRound, roles: ['founder'] },
   { section: 'admin', page: '/templates', label: 'Email templates', icon: Mail, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/sources', label: 'Lead sources', icon: Tag, roles: ['founder', 'demo_lead'] },
+  { section: 'admin', page: '/feature-flags', label: 'Feature flags', icon: ToggleRight, roles: ['founder'] },
   { section: 'admin', page: '/permissions', label: 'Edit permissions', icon: LockKeyhole, roles: ['founder'] },
   { section: 'admin', page: '/banks', label: 'Bank accounts', icon: Building2, roles: ['founder', 'accounts'] },
   { section: 'admin', page: '/audit', label: 'Activity log', icon: History, roles: ['founder', 'manager'] },

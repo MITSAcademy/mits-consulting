@@ -12,14 +12,29 @@
  *   • GET /api/features endpoint so the frontend can hide nav entries +
  *     skip rendering gated pages, no client-side detection needed.
  */
+import { prisma } from './prisma';
+
 export interface FeatureFlags {
   regularCalls: boolean;
 }
+
+export const ALL_FLAGS: (keyof FeatureFlags)[] = ['regularCalls'];
 
 export function readFlags(): FeatureFlags {
   return {
     regularCalls: process.env.FEATURES_REGULAR_CALLS === 'true',
   };
+}
+
+export async function readFlagsForUser(userId: string): Promise<FeatureFlags> {
+  const base = readFlags();
+  const overrides = await prisma.userFeatureFlag.findMany({ where: { userId } });
+  for (const row of overrides) {
+    if (ALL_FLAGS.includes(row.flag as keyof FeatureFlags)) {
+      (base as any)[row.flag] = row.enabled;
+    }
+  }
+  return base;
 }
 
 export function flagOn(name: keyof FeatureFlags): boolean {
