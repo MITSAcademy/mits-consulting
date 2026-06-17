@@ -5,7 +5,8 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/store/auth';
-import { Check, X, Plus } from 'lucide-react';
+import { useUI } from '@/store/ui';
+import { Check, X, Plus, Pencil, CheckSquare, Square } from 'lucide-react';
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -37,6 +38,7 @@ function StatusBadge({ status }: { status: string }) {
 
 export function TimesheetReportPage() {
   const user = useAuth((s) => s.user);
+  const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
   const [from, setFrom] = useState(() => addDays(todayISO(), -6));
   const [to, setTo] = useState(todayISO());
@@ -44,8 +46,12 @@ export function TimesheetReportPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [showNewCode, setShowNewCode] = useState(false);
   const [codeForm, setCodeForm] = useState({ code: '', name: '', description: '', maxHoursPerDay: '' });
+  const [editCode, setEditCode] = useState<{ id: string; code: string; name: string; description: string; maxHoursPerDay: string } | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkRejectNote, setBulkRejectNote] = useState('');
+  const [showBulkReject, setShowBulkReject] = useState(false);
 
   const { data: jobCodes = [], refetch: refetchCodes } = useQuery<any[]>({
     queryKey: ['job-codes-all'],
@@ -97,6 +103,24 @@ export function TimesheetReportPage() {
       qc.invalidateQueries({ queryKey: ['job-codes'] });
     },
   });
+  const editCodeMut = useMutation({
+    mutationFn: () => {
+      if (!editCode) throw new Error('No edit code');
+      const { id, name, description, maxHoursPerDay } = editCode;
+      return api.patch(`/timesheet/job-codes/${id}`, {
+        name,
+        description,
+        maxHoursPerDay: maxHoursPerDay ? Number(maxHoursPerDay) : null,
+      }).then((r) => r.data);
+    },
+    onSuccess: () => {
+      refetchCodes();
+      qc.invalidateQueries({ queryKey: ['job-codes-all'] });
+      qc.invalidateQueries({ queryKey: ['job-codes'] });
+      setEditCode(null);
+      showToast('Job code updated');
+    },
+  });
   const approveMut = useMutation({
     mutationFn: (id: string) => api.post(`/timesheet/entries/${id}/approve`).then((r) => r.data),
     onSuccess: () => inv(),
@@ -104,6 +128,17 @@ export function TimesheetReportPage() {
   const rejectMut = useMutation({
     mutationFn: ({ id, note }: any) => api.post(`/timesheet/entries/${id}/reject`, { note }).then((r) => r.data),
     onSuccess: () => { inv(); setRejectId(null); setRejectNote(''); },
+  });
+  const bulkMut = useMutation({
+    mutationFn: ({ action, rejectionNote }: { action: 'approve' | 'reject'; rejectionNote?: string }) =>
+      api.post('/timesheet/entries/bulk-approve', { ids: [...selectedIds], action, rejectionNote }).then((r) => r.data),
+    onSuccess: (data) => {
+      inv();
+      setSelectedIds(new Set());
+      setBulkRejectNote('');
+      setShowBulkReject(false);
+      showToast(`${data.updated} entr${data.updated === 1 ? 'y' : 'ies'} ${bulkMut.variables?.action === 'reject' ? 'rejected' : 'approved'}`);
+    },
   });
 
   const canApprove = user?.role === 'manager';
@@ -215,17 +250,32 @@ export function TimesheetReportPage() {
                   </td>
                   <td className="py-1.5 text-xs" style={{ color: 'var(--brand-textMuted)' }}>{jc.createdAt?.slice(0, 10)}</td>
                   <td className="py-1.5">
-                    <button
-                      className="text-xs px-2 py-0.5 rounded transition-colors"
-                      style={{
-                        color: jc.active ? 'var(--status-red)' : 'var(--status-green)',
-                        border: `1px solid ${jc.active ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
-                      }}
-                      onClick={() => patchCodeMut.mutate({ id: jc.id, data: { active: !jc.active } })}
-                      disabled={patchCodeMut.isPending}
-                    >
-                      {jc.active ? 'Deactivate' : 'Activate'}
-                    </button>
+                    <div className="flex gap-1.5 items-center">
+                      <button
+                        className="text-xs px-2 py-0.5 rounded transition-colors"
+                        style={{
+                          color: jc.active ? 'var(--status-red)' : 'var(--status-green)',
+                          border: `1px solid ${jc.active ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'}`,
+                        }}
+                        onClick={() => patchCodeMut.mutate({ id: jc.id, data: { active: !jc.active } })}
+                        disabled={patchCodeMut.isPending}
+                      >
+                        {jc.active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button
+                        className="text-xs px-1.5 py-0.5 rounded transition-colors flex items-center gap-1"
+                        style={{ color: 'var(--brand-textMuted)', border: '1px solid var(--brand-borderSoft)' }}
+                        onClick={() => setEditCode({
+                          id: jc.id,
+                          code: jc.code,
+                          name: jc.name,
+                          description: jc.description || '',
+                          maxHoursPerDay: jc.maxHoursPerDay != null ? String(jc.maxHoursPerDay) : '',
+                        })}
+                      >
+                        <Pencil size={11} /> Edit
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -296,6 +346,29 @@ export function TimesheetReportPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr style={{ color: 'var(--brand-textMuted)', borderBottom: '1px solid var(--brand-borderSoft)' }}>
+                        {canApprove && (
+                          <th className="py-1 pr-2 w-6">
+                            {(() => {
+                              const submittedIds = dayEntries.filter((e: any) => e.status === 'submitted').map((e: any) => e.id);
+                              const allChecked = submittedIds.length > 0 && submittedIds.every((id: string) => selectedIds.has(id));
+                              return (
+                                <button
+                                  onClick={() => {
+                                    if (allChecked) {
+                                      setSelectedIds((prev) => { const n = new Set(prev); submittedIds.forEach((id: string) => n.delete(id)); return n; });
+                                    } else {
+                                      setSelectedIds((prev) => { const n = new Set(prev); submittedIds.forEach((id: string) => n.add(id)); return n; });
+                                    }
+                                  }}
+                                  style={{ color: 'var(--brand-textMuted)' }}
+                                  disabled={submittedIds.length === 0}
+                                >
+                                  {allChecked ? <CheckSquare size={13} /> : <Square size={13} />}
+                                </button>
+                              );
+                            })()}
+                          </th>
+                        )}
                         <th className="text-left py-1 text-[11px] font-medium">Team member</th>
                         <th className="text-left py-1 text-[11px] font-medium">Job code</th>
                         <th className="text-left py-1 text-[11px] font-medium">Hours</th>
@@ -307,6 +380,22 @@ export function TimesheetReportPage() {
                     <tbody>
                       {dayEntries.map((e: any) => (
                         <tr key={e.id} style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
+                          {canApprove && (
+                            <td className="py-1.5 pr-2 w-6">
+                              {e.status === 'submitted' && (
+                                <button
+                                  onClick={() => setSelectedIds((prev) => {
+                                    const n = new Set(prev);
+                                    n.has(e.id) ? n.delete(e.id) : n.add(e.id);
+                                    return n;
+                                  })}
+                                  style={{ color: selectedIds.has(e.id) ? 'var(--brand-accent)' : 'var(--brand-textMuted)' }}
+                                >
+                                  {selectedIds.has(e.id) ? <CheckSquare size={13} /> : <Square size={13} />}
+                                </button>
+                              )}
+                            </td>
+                          )}
                           <td className="py-1.5">{e.user.name}</td>
                           <td className="py-1.5 font-mono text-[12px]" style={{ color: 'var(--brand-accent)' }}>{e.jobCode.code}</td>
                           <td className="py-1.5 font-semibold">{e.hours}h</td>
@@ -409,6 +498,122 @@ export function TimesheetReportPage() {
           </div>
         )}
       </Page>
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-40 flex items-center gap-3 px-6 py-3"
+          style={{ background: 'var(--bg-card)', borderTop: '1px solid var(--brand-border)' }}
+        >
+          <span className="text-sm font-semibold" style={{ color: 'var(--brand-textPrimary)', marginRight: 4 }}>
+            {selectedIds.size} {selectedIds.size === 1 ? 'entry' : 'entries'} selected
+          </span>
+          <Button
+            size="sm"
+            onClick={() => bulkMut.mutate({ action: 'approve' })}
+            disabled={bulkMut.isPending}
+            style={{ background: 'var(--status-green)', color: 'white', border: 'none' }}
+          >
+            Approve all
+          </Button>
+          {showBulkReject ? (
+            <div className="flex gap-1.5 items-center">
+              <Input
+                placeholder="Rejection note…"
+                value={bulkRejectNote}
+                onChange={(e) => setBulkRejectNote(e.target.value)}
+                style={{ width: 200, fontSize: 12, padding: '2px 8px' }}
+                autoFocus
+              />
+              <Button
+                size="sm"
+                onClick={() => bulkMut.mutate({ action: 'reject', rejectionNote: bulkRejectNote })}
+                disabled={!bulkRejectNote || bulkMut.isPending}
+                style={{ background: 'var(--status-red)', color: 'white', border: 'none' }}
+              >
+                <Check size={12} className="mr-1" /> Confirm
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setShowBulkReject(false); setBulkRejectNote(''); }}>
+                <X size={12} />
+              </Button>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowBulkReject(true)}
+              style={{ color: 'var(--status-red)', border: '1px solid rgba(239,68,68,0.3)' }}
+            >
+              Reject all
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => { setSelectedIds(new Set()); setShowBulkReject(false); setBulkRejectNote(''); }}
+            style={{ marginLeft: 'auto', color: 'var(--brand-textMuted)' }}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
+      {/* Edit Job Code Modal */}
+      {editCode && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.6)' }}
+          onClick={() => setEditCode(null)}
+        >
+          <div
+            className="rounded-xl p-5 w-full max-w-md flex flex-col gap-3"
+            style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-borderSoft)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-sm font-semibold" style={{ color: 'var(--brand-textPrimary)' }}>
+              Edit job code — <span className="font-mono" style={{ color: 'var(--brand-accent)' }}>{editCode.code}</span>
+            </div>
+            <div>
+              <div className="text-[11px] mb-1" style={{ color: 'var(--brand-textMuted)' }}>Name *</div>
+              <Input
+                value={editCode.name}
+                onChange={(e) => setEditCode((prev) => prev && ({ ...prev, name: e.target.value }))}
+                placeholder="Job code name"
+              />
+            </div>
+            <div>
+              <div className="text-[11px] mb-1" style={{ color: 'var(--brand-textMuted)' }}>Description (optional)</div>
+              <Input
+                value={editCode.description}
+                onChange={(e) => setEditCode((prev) => prev && ({ ...prev, description: e.target.value }))}
+                placeholder="Description"
+              />
+            </div>
+            <div>
+              <div className="text-[11px] mb-1" style={{ color: 'var(--brand-textMuted)' }}>Max hrs/day (optional)</div>
+              <Input
+                type="number"
+                min={0.5}
+                step={0.5}
+                value={editCode.maxHoursPerDay}
+                onChange={(e) => setEditCode((prev) => prev && ({ ...prev, maxHoursPerDay: e.target.value }))}
+                placeholder="e.g. 4"
+                style={{ width: 120 }}
+              />
+            </div>
+            <div className="flex gap-2 justify-end mt-1">
+              <Button size="sm" variant="ghost" onClick={() => setEditCode(null)}>Cancel</Button>
+              <Button
+                size="sm"
+                onClick={() => editCodeMut.mutate()}
+                disabled={!editCode.name || editCodeMut.isPending}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

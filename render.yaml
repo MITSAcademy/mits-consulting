@@ -28,6 +28,8 @@ services:
     buildCommand: npm install --include=dev && npx prisma generate && npx prisma migrate resolve --rolled-back 20260611170000_trainer_phone_unique || true && npx prisma migrate deploy && npm run seed && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
+    # Post-deploy: API_BASE_URL=https://mits-backend.onrender.com npm run test:smoke
+    # Full RBAC: API_BASE_URL=https://mits-backend.onrender.com npm run test:rbac
     envVars:
       # ── Database (auto-wired from the database block above) ─────────
       - key: DATABASE_URL

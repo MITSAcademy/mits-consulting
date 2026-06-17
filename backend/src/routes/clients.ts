@@ -29,7 +29,7 @@ const include = {
   hostOwner: { select: { id: true, name: true, role: true } },
   assignedAm: { select: { id: true, name: true, role: true } },
   primaryTrainer: true,
-  regularTrainings: { select: { id: true, scheduleNotes: true, status: true }, where: { status: 'active' }, take: 1 },
+  regularTrainings: { select: { id: true, scheduleNotes: true, status: true, hostedByDefault: { select: { id: true, name: true } } }, where: { status: 'active' }, take: 1 },
   // Active sourcing request — used to show the assigned recruiter on kanban cards
   sourcingRequests: { select: { id: true, sentTo: { select: { id: true, name: true } } }, where: { status: { in: [SourcingStatus.Open, SourcingStatus.Proposed] } }, orderBy: { createdAt: 'desc' as const }, take: 1 },
   // Done demos with trainer + feedback — shown on recruiter pipeline cards

@@ -45,6 +45,7 @@ import { coordinatorDashboardRouter } from './routes/coordinatorDashboard';
 import { briefingRouter } from './routes/briefing';
 import { timesheetRouter } from './routes/timesheet';
 import { seedRouter } from './routes/seed';
+import { prisma } from './lib/prisma';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -83,7 +84,14 @@ const apiLimiter = rateLimit({
 app.use('/api/auth', authLimiter);
 app.use('/api', apiLimiter);
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
+app.get('/api/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ ok: true, db: true, ts: Date.now() });
+  } catch (err: any) {
+    res.status(503).json({ ok: false, db: false, error: err?.message ?? 'DB unreachable' });
+  }
+});
 
 // Serve uploaded files (audio recordings, screenshots, skill matrices).
 // In production, replace with S3/Cloudinary + signed URLs.

@@ -21,7 +21,7 @@ timesheetRouter.get('/job-codes', async (req: AuthedRequest, res) => {
   const canManage = CAN_MANAGE_CODES.includes(user.role);
   const codes = await prisma.jobCode.findMany({
     where: canManage ? undefined : { active: true },
-    select: { id: true, code: true, name: true, description: true, active: true, createdAt: true },
+    select: { id: true, code: true, name: true, description: true, maxHoursPerDay: true, active: true, createdAt: true },
     orderBy: { code: 'asc' },
   });
   res.json(codes);
@@ -230,6 +230,29 @@ timesheetRouter.post('/entries/:id/reject', async (req: AuthedRequest, res) => {
   });
   await audit(user.id, user.name, 'TIMESHEET_REJECTED', `Entry ${req.params.id}: ${note}`);
   res.json(updated);
+});
+
+// POST /timesheet/entries/bulk-approve
+timesheetRouter.post('/entries/bulk-approve', async (req: AuthedRequest, res) => {
+  const user = req.user!;
+  if (!CAN_APPROVE.includes(user.role)) return res.status(403).json({ error: 'Forbidden' });
+  const { ids, action, rejectionNote } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids must be a non-empty array' });
+  if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'action must be approve or reject' });
+  if (action === 'reject' && !rejectionNote) return res.status(400).json({ error: 'rejectionNote is required for reject' });
+
+  const data: Record<string, unknown> =
+    action === 'approve'
+      ? { status: 'approved', approvedById: user.id, approvedAt: new Date() }
+      : { status: 'rejected', rejectionNote };
+
+  const result = await prisma.timesheetEntry.updateMany({
+    where: { id: { in: ids }, status: 'submitted' },
+    data,
+  });
+
+  await audit(user.id, user.name, `TIMESHEET_BULK_${action.toUpperCase()}`, `${result.count} entries`);
+  res.json({ updated: result.count });
 });
 
 // GET /timesheet/summary — per-user totals (CAN_VIEW_ALL only)

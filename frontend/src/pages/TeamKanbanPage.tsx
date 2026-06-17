@@ -10,13 +10,13 @@
  * Hover → reassign button (manager/founder only).
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
-import { ExternalLink, UserPlus, AlertTriangle, Clock, CheckCircle2, MessageSquare } from 'lucide-react';
+import { ExternalLink, UserPlus, AlertTriangle, Clock, CheckCircle2, MessageSquare, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, Label } from '@/components/ui/input';
 import { createPortal } from 'react-dom';
@@ -51,6 +51,7 @@ interface Client {
   assignedAmId: string | null;
   assignedAm: { id: string; name: string } | null;
   primaryTrainer: { id: string; name: string } | null;
+  regularTrainings: Array<{ id: string; status: string; hostedByDefault: { id: string; name: string } | null }>;
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -121,10 +122,99 @@ function AssignModal({ client, onClose }: { client: Client; onClose: () => void 
   return createPortal(content, document.body);
 }
 
+// ─── host chip ────────────────────────────────────────────────────────────────
+
+function initials(name: string) {
+  return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function HostChip({ training, canReassign }: { training: Client['regularTrainings'][0]; canReassign: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const reassign = useMutation({
+    mutationFn: (userId: string | null) =>
+      api.patch(`/regular-trainings/trainings/${training.id}`, { hostedByDefaultId: userId }),
+    onSuccess: (_data, userId) => {
+      qc.invalidateQueries({ queryKey: ['clients', 'team-kanban'] });
+      const who = TEAM_MEMBERS.find(t => t.id === userId)?.name;
+      showToast(who ? `Host set to ${who}` : 'Host cleared');
+      setOpen(false);
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const host = training.hostedByDefault;
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={(e) => { e.stopPropagation(); if (canReassign) setOpen(v => !v); }}
+        className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold transition-colors"
+        style={{
+          background: host ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.06)',
+          border: `1px solid ${host ? 'rgba(251,191,36,0.30)' : 'rgba(255,255,255,0.12)'}`,
+          color: host ? 'var(--accent-gold)' : 'var(--brand-textMuted)',
+          cursor: canReassign ? 'pointer' : 'default',
+        }}
+        title={host ? `Host: ${host.name}` : 'No host assigned'}
+      >
+        {host ? initials(host.name) : '—'}
+        {canReassign && <ChevronDown size={8} style={{ opacity: 0.6 }}/>}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 rounded-xl overflow-hidden z-50"
+          style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)', minWidth: 130, boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
+          onClick={e => e.stopPropagation()}>
+          <div className="text-[10px] font-semibold uppercase tracking-wide px-2.5 pt-2 pb-1" style={{ color: 'var(--brand-textMuted)' }}>Set host</div>
+          {TEAM_MEMBERS.map(m => (
+            <button
+              key={m.id}
+              disabled={reassign.isPending}
+              onClick={() => reassign.mutate(m.id)}
+              className="w-full text-left px-2.5 py-1.5 text-[11px] hover:bg-white/5 flex items-center gap-2"
+              style={{ color: host?.id === m.id ? 'var(--accent-gold)' : 'var(--brand-text)', fontWeight: host?.id === m.id ? 600 : 400 }}
+            >
+              <span className="w-4 h-4 rounded-full inline-flex items-center justify-center text-[9px] font-bold shrink-0"
+                style={{ background: m.color + '33', color: m.color }}>
+                {initials(m.name)}
+              </span>
+              {m.name}
+            </button>
+          ))}
+          {host && (
+            <button
+              disabled={reassign.isPending}
+              onClick={() => reassign.mutate(null)}
+              className="w-full text-left px-2.5 py-1.5 text-[10px] hover:bg-white/5 border-t"
+              style={{ color: 'var(--status-red)', borderColor: 'var(--brand-borderSoft)' }}
+            >
+              Clear host
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── client card ──────────────────────────────────────────────────────────────
 
-function ClientCard({ client, canAssign, isUnassigned = false }: { client: Client; canAssign: boolean; isUnassigned?: boolean }) {
+function ClientCard({ client, canAssign, canReassignHost, isUnassigned = false }: { client: Client; canAssign: boolean; canReassignHost: boolean; isUnassigned?: boolean }) {
   const [assigning, setAssigning] = useState(false);
+  const activeTraining = client.regularTrainings?.[0] ?? null;
   const due = daysUntil(client.payDate2);
   const fbAge = daysAgo(client.lastFeedbackTakenAt);
   const feedbackWarn = fbAge === null || fbAge > 30;
@@ -194,6 +284,14 @@ function ClientCard({ client, canAssign, isUnassigned = false }: { client: Clien
           </div>
         )}
 
+        {/* Host chip — only when there's an active regular training */}
+        {activeTraining && (
+          <div className="flex items-center gap-1 mt-1.5">
+            <span className="text-[10px] muted">Host</span>
+            <HostChip training={activeTraining} canReassign={canReassignHost} />
+          </div>
+        )}
+
         {/* Assign button — always visible on unassigned cards */}
         {canAssign && isUnassigned && (
           <button
@@ -213,13 +311,14 @@ function ClientCard({ client, canAssign, isUnassigned = false }: { client: Clien
 // ─── column ───────────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  title, subtitle, color, clients, canAssign, isUnassigned,
+  title, subtitle, color, clients, canAssign, canReassignHost, isUnassigned,
 }: {
   title: string;
   subtitle: string;
   color: string;
   clients: Client[];
   canAssign: boolean;
+  canReassignHost: boolean;
   isUnassigned?: boolean;
 }) {
   const overdue = clients.filter(c => {
@@ -265,7 +364,7 @@ function KanbanColumn({
         {clients.length === 0 ? (
           <div className="text-[11px] muted text-center py-8">No active clients</div>
         ) : (
-          clients.map(c => <ClientCard key={c.id} client={c} canAssign={canAssign} isUnassigned={isUnassigned}/>)
+          clients.map(c => <ClientCard key={c.id} client={c} canAssign={canAssign} canReassignHost={canReassignHost} isUnassigned={isUnassigned}/>)
         )}
       </div>
     </div>
@@ -293,6 +392,7 @@ export function TeamKanbanPage() {
   // Determine which columns this role sees
   const role = user?.role || '';
   const canAssign = role === 'manager' || role === 'founder' || role === 'lead';
+  const canReassignHost = role === 'lead';
 
   const columns = useMemo(() => {
     const unassigned = clients.filter(c => !c.assignedAmId);
@@ -373,6 +473,7 @@ export function TeamKanbanPage() {
                 color={col.color}
                 clients={col.clients}
                 canAssign={canAssign}
+                canReassignHost={canReassignHost}
                 isUnassigned={col.id === 'unassigned'}
               />
             ))}
