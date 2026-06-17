@@ -84,26 +84,33 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
       where.name = { contains: s, mode: 'insensitive' };
     }
   }
-  // demo_intake (Anjali / Taran) — intake pipeline only, never Active/ongoing clients
+  // demo_intake (Anjali / Taran) — intake pipeline only, never Active/ongoing clients.
+  // Enforced unconditionally — explicit ?lifecycle= param cannot bypass this.
   if (req.user!.role === 'demo_intake') {
     const INTAKE_STAGES = ['Lead','IntakeSent','IntakeReceived','InternalSearch','WithRecruiters',
                            'VerificationPending','TrainerMatched','DemoScheduled','DemoDone','FeedbackPending'];
-    if (!lifecycle) where.lifecycle = { in: INTAKE_STAGES };
+    // Intersect with any explicit lifecycle filter so ?lifecycle=Active is still blocked
+    if (lifecycle) {
+      const requested = String(lifecycle).split(',').map(s => s.trim()).filter(Boolean);
+      const allowed = requested.filter(s => INTAKE_STAGES.includes(s));
+      where.lifecycle = allowed.length ? { in: allowed } : { in: [] };
+    } else {
+      where.lifecycle = { in: INTAKE_STAGES };
+    }
   }
-  // account_manager (Kashish / Muskan)
-  //   - default (no scope): own Active clients by hostOwnerId
-  //   - scope=team: clients assigned to them via assignedAmId (for team kanban)
+  // account_manager (Kashish / Muskan) — always scoped to Active/LeverageGranted only.
+  // Enforced unconditionally so ?lifecycle= cannot expose Dormant/Churned etc.
   if (req.user!.role === 'account_manager') {
-    if (!lifecycle) where.lifecycle = { in: ['Active', 'LeverageGranted'] };
+    where.lifecycle = { in: ['Active', 'LeverageGranted'] };
     if (scope === 'team') {
       where.assignedAmId = req.user!.id;
     } else {
       where.hostOwnerId = req.user!.id;
     }
   }
-  // lead (Bhavneet) — team overview: all assigned to Bhavneet/Kashish/Muskan
+  // lead (Bhavneet) — always scoped to Active/LeverageGranted for her team only.
   if (req.user!.role === 'lead') {
-    if (!lifecycle) where.lifecycle = { in: ['Active', 'LeverageGranted'] };
+    where.lifecycle = { in: ['Active', 'LeverageGranted'] };
     if (scope === 'team') {
       where.assignedAmId = { in: ['u-bhavneet', 'u-kashish', 'u-muskan'] };
     } else {

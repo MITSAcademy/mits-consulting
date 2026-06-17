@@ -35,10 +35,12 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
   const { trainerId, clientId, date, hours, rateSnapshot, rateModel, notes, amountInr: amountOverride, feedback } = req.body;
   if (!trainerId || !date || !hours) return res.status(400).json({ error: 'trainerId, date, hours required' });
 
-  // lead (Bhavneet) can only log sessions for clients owned by her team
+  // lead (Bhavneet) can only log sessions for clients owned by her team.
+  // null hostOwnerId = unassigned → also blocked (not her team).
   if (req.user!.role === 'lead' && clientId) {
     const client = await prisma.client.findUnique({ where: { id: clientId }, select: { hostOwnerId: true } });
-    if (client && client.hostOwnerId && !LEAD_TEAM_IDS.includes(client.hostOwnerId)) {
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+    if (!client.hostOwnerId || !LEAD_TEAM_IDS.includes(client.hostOwnerId)) {
       return res.status(403).json({ error: 'You can only log sessions for clients on your team (Bhavneet / Kashish / Muskan)' });
     }
   }

@@ -57,6 +57,9 @@ featuresRouter.post('/matrix', requireRole('founder'), async (req, res) => {
 
 featuresRouter.delete('/matrix', requireRole('founder'), async (req, res) => {
   const { userId, flag } = req.body as { userId: string; flag: string };
+  if (!ALL_FLAGS.includes(flag as any)) {
+    return res.status(400).json({ error: `Unknown flag: ${flag}` });
+  }
   await prisma.userFeatureFlag.deleteMany({ where: { userId, flag } });
   res.json({ ok: true });
 });
