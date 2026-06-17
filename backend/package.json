@@ -16,7 +16,7 @@
     "seed:stress": "tsx src/seed/stress.ts",
     "test": "jest --testPathPattern=src/tests",
     "test:rbac": "jest rbac.stress",
-    "test:smoke": "node -e \"require('http').get(process.env.API_BASE_URL + '/api/health', r => { let d=''; r.on('data',c=>d+=c); r.on('end',()=>{ const j=JSON.parse(d); if(!j.ok||!j.db){console.error('Health check failed:',d);process.exit(1);} console.log('Health OK'); }); }).on('error',e=>{console.error(e);process.exit(1);})\""
+    "test:smoke": "node -e \"require('http').get(process.env.API_BASE_URL + '/api/health', r => { let d=''; r.on('data',c=>d+=c); r.on('end',()=>{ const j=JSON.parse(d); if(!j.ok||!j.db){console.error('Health check failed:',d);process.exit(1);} console.log('Health OK'); }); }).on('error',e=>{console.error(e);process.exit(1);})\",
     "postinstall": "prisma generate"
   },
   "jest": {
