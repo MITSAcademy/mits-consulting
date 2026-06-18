@@ -427,9 +427,9 @@ describe('lead (Bhavneet) access boundaries and permissions', () => {
     expect(res.status).toBe(200);
   });
 
-  it('GET /api/follow-up-payments — returns 200 (lead has access)', async () => {
+  it('GET /api/follow-up-payments — returns 403 (lead does not have payment access)', async () => {
     const res = await get('/api/follow-up-payments', 'lead_bhavneet');
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
   });
 
   it('POST /api/trainers — returns 403 (lead cannot add trainers)', async () => {
