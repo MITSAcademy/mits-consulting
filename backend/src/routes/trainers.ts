@@ -219,6 +219,7 @@ trainersRouter.get('/:id', async (req, res) => {
 const fields = [
   'name', 'email', 'phoneCode', 'phoneDigits', 'whatsappGroupName', 'whatsappGroupLink',
   'rateModel', 'defaultRateInr', 'paymentMethod', 'upiId', 'bankAccount',
+  'bankHolderName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankBranchName', 'bankAccountType', 'bankChequeUrl',
   'skills', 'experienceYears', 'active', 'requiresVerification', 'recruitedById',
   'availabilityWindow', 'availableFromIst', 'availableToIst',
   'availabilitySlots',
@@ -253,7 +254,8 @@ trainersRouter.patch('/:id', async (req: AuthedRequest, res) => {
   }
   // Bank / UPI / payment fields are leadership-only — recruiters can edit
   // contact info + skills + rate.
-  const FINANCE_FIELDS = ['bankAccount', 'paymentMethod', 'upiId'];
+  const FINANCE_FIELDS = ['bankAccount', 'paymentMethod', 'upiId',
+    'bankHolderName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankBranchName', 'bankAccountType', 'bankChequeUrl'];
   const touchingFinance = FINANCE_FIELDS.some((f) => f in req.body);
   if (touchingFinance && !['founder', 'manager'].includes(req.user!.role)) {
     return res.status(403).json({ error: 'Only founder / manager can change trainer bank / UPI / payment fields.' });

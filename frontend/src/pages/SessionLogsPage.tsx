@@ -78,6 +78,7 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
   });
 
   const selectedTrainer = (trainers || []).find((t: any) => t.id === trainerId);
+  const selectedClient = (clients || []).find((c: any) => c.id === clientId);
   const defaultRate = selectedTrainer?.defaultRateInr || 0;
   const total = overrideAmount && customAmount
     ? Math.round(parseFloat(customAmount) || 0)
@@ -134,15 +135,34 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
               </option>
             ))}
           </select>
+          {selectedTrainer && (selectedTrainer.phoneCode || selectedTrainer.phoneDigits) && (
+            <div className="text-[11px] muted mt-0.5">
+              Trainer: <span className="mono">{selectedTrainer.phoneCode}{selectedTrainer.phoneDigits}</span>
+            </div>
+          )}
         </div>
         <div>
           <label className="label">Client (optional)</label>
-          <select className="input" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+          <select className="input" value={clientId} onChange={(e) => {
+            const cid = e.target.value;
+            setClientId(cid);
+            if (cid) {
+              const client = (clients || []).find((c: any) => c.id === cid);
+              if (client?.primaryTrainerId && !trainerId) setTrainerId(client.primaryTrainerId);
+            }
+          }}>
             <option value="">— no specific client —</option>
             {(clients || []).map((c: any) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
+          {selectedClient && (
+            <div className="text-[11px] muted mt-0.5 flex gap-3">
+              {selectedClient.phoneCode && selectedClient.phoneDigits && (
+                <span>Client: <span className="mono">{selectedClient.phoneCode}{selectedClient.phoneDigits}</span></span>
+              )}
+            </div>
+          )}
         </div>
         <div>
           <label className="label">Date *</label>

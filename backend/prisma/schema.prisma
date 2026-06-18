@@ -249,6 +249,14 @@ model Trainer {
   paymentMethod       String?
   upiId               String?
   bankAccount         String?
+  // Structured bank details (for payment processing)
+  bankHolderName      String?
+  bankName            String?
+  bankAccountNumber   String?
+  bankIfscCode        String?
+  bankBranchName      String?
+  bankAccountType     String?  // Savings | Current
+  bankChequeUrl       String?  // uploaded cancelled cheque / passbook URL
   skills              String?
   experienceYears     Int      @default(0)
   // Availability — recruiter captures when the trainer can take sessions (IST).
@@ -276,6 +284,7 @@ model Trainer {
   regularTrainings RegularTraining[]
   demos            Demo[]
   issueTrackers    IssueTracker[]
+  feedbacks        Feedback[]
 
   @@index([phoneDigits])  // auto-add dedup lookup
   @@index([name])         // search + dedup fallback
@@ -775,13 +784,16 @@ model CallLog {
 
 // -------- FEEDBACK --------
 model Feedback {
-  id        String   @id @default(cuid())
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  weekStart String
-  rating    Int
-  notes     String?
-  createdAt DateTime @default(now())
+  id                  String   @id @default(cuid())
+  clientId            String
+  client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  weekStart           String
+  rating              Int
+  notes               String?
+  communicationStatus String?  // CallReceived | CallNotReceived | MessageSent
+  trainerId           String?
+  trainer             Trainer? @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  createdAt           DateTime @default(now())
 }
 
 // -------- DEMO HISTORY --------

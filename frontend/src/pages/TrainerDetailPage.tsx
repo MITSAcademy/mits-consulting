@@ -15,7 +15,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 import { CommentSection } from '@/components/CommentSection';
 import { ActivityLog } from '@/components/ActivityLog';
-import { Mail, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Mail, MessageCircle, ArrowLeft, ExternalLink } from 'lucide-react';
 
 export function TrainerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -180,6 +180,18 @@ export function TrainerDetailPage() {
                       return slots.length ? formatAvailabilitySlots(slots) : undefined;
                     })()} />
                   </div>
+                  {t.whatsappGroupLink && (
+                    <div className="col-span-2">
+                      <div className="rounded-lg p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+                        <div className="text-[10px] uppercase tracking-[0.10em] font-bold muted mb-1">WhatsApp Group</div>
+                        <a href={t.whatsappGroupLink} target="_blank" rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline"
+                          style={{ color: '#25D366' }}>
+                          <MessageCircle size={13}/> Open WhatsApp group <ExternalLink size={11}/>
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -204,6 +216,52 @@ export function TrainerDetailPage() {
               <div className="muted text-sm py-2">No active engagements.</div>
             )}
           </div>
+        </div>
+
+        {/* Bank Details */}
+        <div className="card mb-4">
+          <div className="card-h">
+            Bank details
+            {!edit && <Button size="sm" onClick={() => { setForm({ ...t }); setEdit(true); }} className="ml-auto">Edit</Button>}
+          </div>
+          {edit ? (
+            <div className="grid md:grid-cols-2 gap-2">
+              <div className="form-row"><Label>Name (as per bank records)</Label><Input value={form.bankHolderName || ''} onChange={(e) => setForm({ ...form, bankHolderName: e.target.value })} placeholder="Full name on bank account" /></div>
+              <div className="form-row"><Label>Bank name</Label><Input value={form.bankName || ''} onChange={(e) => setForm({ ...form, bankName: e.target.value })} placeholder="e.g. HDFC Bank" /></div>
+              <div className="form-row"><Label>Account number</Label><Input value={form.bankAccountNumber || ''} onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })} placeholder="Account number" /></div>
+              <div className="form-row"><Label>IFSC code</Label><Input value={form.bankIfscCode || ''} onChange={(e) => setForm({ ...form, bankIfscCode: e.target.value })} placeholder="e.g. HDFC0001234" /></div>
+              <div className="form-row"><Label>Branch name</Label><Input value={form.bankBranchName || ''} onChange={(e) => setForm({ ...form, bankBranchName: e.target.value })} placeholder="Branch name" /></div>
+              <div className="form-row">
+                <Label>Account type</Label>
+                <select className="rounded border px-2 py-1 text-sm bg-bg-input border-brand-border h-9 w-full"
+                  value={form.bankAccountType || ''} onChange={(e) => setForm({ ...form, bankAccountType: e.target.value })}>
+                  <option value="">— Select —</option>
+                  <option value="Savings">Savings</option>
+                  <option value="Current">Current</option>
+                </select>
+              </div>
+              <div className="form-row"><Label>UPI ID (optional)</Label><Input value={form.upiId || ''} onChange={(e) => setForm({ ...form, upiId: e.target.value })} placeholder="name@bank" /></div>
+              <div className="form-row"><Label>Cancelled cheque / passbook URL (optional)</Label><Input value={form.bankChequeUrl || ''} onChange={(e) => setForm({ ...form, bankChequeUrl: e.target.value })} placeholder="https://…" /></div>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-2">
+              <InfoCell label="Name (bank records)" value={t.bankHolderName} />
+              <InfoCell label="Bank" value={t.bankName} />
+              <InfoCell label="Account number" value={t.bankAccountNumber ? <span className="mono">{t.bankAccountNumber}</span> : undefined} />
+              <InfoCell label="IFSC" value={t.bankIfscCode ? <span className="mono">{t.bankIfscCode}</span> : undefined} />
+              <InfoCell label="Branch" value={t.bankBranchName} />
+              <InfoCell label="Account type" value={t.bankAccountType} />
+              <InfoCell label="UPI ID" value={t.upiId} />
+              {t.bankChequeUrl && (
+                <div className="col-span-2 rounded-lg p-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+                  <div className="text-[10px] uppercase tracking-[0.10em] font-bold muted mb-1">Cancelled cheque / passbook</div>
+                  <a href={t.bankChequeUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-[13px] font-medium hover:underline" style={{ color: 'var(--brand-accent)' }}>
+                    <ExternalLink size={12}/> View document
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="card mb-4">
