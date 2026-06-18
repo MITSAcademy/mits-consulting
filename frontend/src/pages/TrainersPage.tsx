@@ -12,8 +12,9 @@ import { Pill } from '@/components/ui/pill';
 import { formatPhone, waLink, readAvailabilitySlots, formatAvailabilitySlots, fmtTrainerId } from '@/lib/utils';
 import type { AvailabilitySlot } from '@/lib/utils';
 import { AvailabilitySlotsEditor } from '@/components/AvailabilitySlotsEditor';
-import { MessageCircle, ArrowUp, ArrowDown, Filter, X, UserSearch } from 'lucide-react';
+import { MessageCircle, ArrowUp, ArrowDown, Filter, X, UserSearch, Mail } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
+import { SendMessageModal } from '@/components/SendMessageModal';
 
 type SortKey = 'name' | 'rate' | 'experience' | 'recent';
 
@@ -59,6 +60,8 @@ export function TrainersPage() {
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showFilters, setShowFilters] = useState(false);
+  const [msgTrainer, setMsgTrainer] = useState<any>(null);
+  const [msgKind, setMsgKind] = useState<'Email' | 'WhatsApp'>('WhatsApp');
 
   function addSkillChip() {
     const s = skillInput.trim();
@@ -354,6 +357,7 @@ export function TrainersPage() {
                 <th>Recruiter</th>
                 <th>Channel</th>
                 <th>Status</th>
+                <th>Message</th>
                 {!isAM && <th></th>}
               </tr>
             </thead>
@@ -419,6 +423,24 @@ export function TrainersPage() {
                       )}
                     </td>
                     <td>{t.active ? <Pill color="green">Active</Pill> : <Pill color="red">Inactive</Pill>}</td>
+                    <td>
+                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                        {t.email && (
+                          <button title="Send email with template" onClick={(e) => { e.stopPropagation(); setMsgTrainer(t); setMsgKind('Email'); }}
+                            className="flex items-center justify-center w-7 h-7 rounded-lg hover:opacity-80"
+                            style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.35)' }}>
+                            <Mail size={12} style={{ color: '#818cf8' }}/>
+                          </button>
+                        )}
+                        {t.phoneDigits && (
+                          <button title="Send WhatsApp with template" onClick={(e) => { e.stopPropagation(); setMsgTrainer(t); setMsgKind('WhatsApp'); }}
+                            className="flex items-center justify-center w-7 h-7 rounded-lg hover:opacity-80"
+                            style={{ background: 'rgba(37,211,102,0.15)', border: '1px solid rgba(37,211,102,0.35)' }}>
+                            <MessageCircle size={12} style={{ color: '#25D366' }}/>
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     {!isAM && (
                     <td>
                       <Button
@@ -448,6 +470,20 @@ export function TrainersPage() {
           </div>
         )}
       </Page>
+
+      {msgTrainer && (
+        <SendMessageModal
+          recipient={{
+            name: msgTrainer.name,
+            email: msgTrainer.email || '',
+            phone: msgTrainer.phoneDigits ? `${msgTrainer.phoneCode || ''}${msgTrainer.phoneDigits}` : '',
+          }}
+          trainerId={msgTrainer.id}
+          stage="Trainer onboarding"
+          defaultKind={msgKind}
+          onClose={() => setMsgTrainer(null)}
+        />
+      )}
     </>
   );
 }
