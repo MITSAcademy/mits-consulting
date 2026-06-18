@@ -27,7 +27,7 @@ import { EmptyState } from '@/components/EmptyState';
 import {
   ClipboardList, Plus, Calendar as CalendarIcon, CheckCircle2, Phone, Play, Square,
   Clock, MessageSquare, AlertCircle, Video, Search, MessageCircle, Send, CreditCard,
-  ChevronLeft, ChevronRight, UserPlus,
+  ChevronLeft, ChevronRight, UserPlus, Download,
 } from 'lucide-react';
 import { formatPhone, waLink } from '@/lib/utils';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
@@ -167,6 +167,59 @@ export function MySessionsPage() {
   const [tab, setTab] = useState<'trainings' | 'sessions' | 'activities'>('trainings');
   const [search, setSearch] = useState('');
   const searchLower = search.trim().toLowerCase();
+
+  function exportSessionSheet() {
+    const rows: any[] = mySessions || [];
+    if (rows.length === 0) { showToast('No sessions to export', 'error'); return; }
+
+    const dateStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+    // WhatsApp-friendly text
+    const lines: string[] = [`📋 *Session Sheet — ${dateStr}*`, ''];
+    rows.forEach((t: any, i: number) => {
+      const client = t.client?.name || '—';
+      const trainer = t.trainer?.name || '—';
+      const host = t.temporaryHost?.name || t.hostedByDefault?.name || '—';
+      const time = t.scheduledTimeIST || '—';
+      const tool = t.meetingTool || '—';
+      const status = t.lastSessionStatus || '—';
+      const comment = t.lastSessionComment ? ` | 💬 ${t.lastSessionComment}` : '';
+      lines.push(`${i + 1}. *${client}* — ${trainer} | 🕐 ${time} (${tool}) | Host: ${host} | ${status}${comment}`);
+    });
+    lines.push('');
+    lines.push(`_Exported from MITS Portal_`);
+
+    const text = lines.join('\n');
+
+    // Also trigger CSV download
+    const csvLines = ['Client,Trainer,Skills,Host,Time,Tool,Session Happened,Comment'];
+    rows.forEach((t: any) => {
+      const esc = (v: string) => `"${(v || '').replace(/"/g, '""')}"`;
+      csvLines.push([
+        esc(t.client?.name),
+        esc(t.trainer?.name),
+        esc(t.trainer?.skills),
+        esc(t.temporaryHost?.name || t.hostedByDefault?.name),
+        esc(t.scheduledTimeIST),
+        esc(t.meetingTool),
+        esc(t.lastSessionStatus),
+        esc(t.lastSessionComment),
+      ].join(','));
+    });
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `session-sheet-${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    // Copy WhatsApp text to clipboard
+    navigator.clipboard.writeText(text).then(
+      () => showToast('CSV downloaded · WhatsApp text copied to clipboard'),
+      () => showToast('CSV downloaded'),
+    );
+  }
   const filteredSessions = searchLower
     ? (mySessions || []).filter((t: any) =>
         t.client?.name?.toLowerCase().includes(searchLower) ||
@@ -196,6 +249,11 @@ export function MySessionsPage() {
                   style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', width: 190, outline: 'none' }}
                 />
               </div>
+            )}
+            {isAM && (mySessions || []).length > 0 && (
+              <Button size="sm" onClick={exportSessionSheet} title="Download CSV + copy WhatsApp text">
+                <Download size={13}/> Export
+              </Button>
             )}
             <ScheduleCallButton onCreated={() => qc.invalidateQueries({ queryKey: ['call-logs'] })} />
             {!isAM && <LogSessionButton onCreated={() => qc.invalidateQueries({ queryKey: ['session-logs'] })} />}
