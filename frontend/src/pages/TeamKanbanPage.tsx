@@ -175,7 +175,7 @@ function HostChip({ training, canReassign }: { training: Client['regularTraining
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 rounded-xl overflow-hidden z-50"
+        <div className="absolute left-0 top-full mt-1 rounded-xl overflow-hidden z-50"
           style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)', minWidth: 130, boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
           onClick={e => e.stopPropagation()}>
           <div className="text-[10px] font-semibold uppercase tracking-wide px-2.5 pt-2 pb-1" style={{ color: 'var(--brand-textMuted)' }}>Set host</div>
