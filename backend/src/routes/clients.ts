@@ -111,11 +111,8 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
   // lead (Bhavneet) — always scoped to Active/LeverageGranted for her team only.
   if (req.user!.role === 'lead') {
     where.lifecycle = { in: ['Active', 'LeverageGranted'] };
-    if (scope === 'team') {
-      where.assignedAmId = { in: ['u-bhavneet', 'u-kashish', 'u-muskan'] };
-    } else {
-      where.hostOwnerId = { in: ['u-bhavneet', 'u-kashish', 'u-muskan'] };
-    }
+    // Use hostOwnerId scope so unassigned clients (assignedAmId=null) still appear on kanban
+    where.hostOwnerId = { in: ['u-bhavneet', 'u-kashish', 'u-muskan'] };
   }
   // manager (Mitali) — her whole team's clients (team scope or default)
   if (req.user!.role === 'manager') {
