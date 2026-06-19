@@ -413,14 +413,17 @@ export function TeamKanbanPage() {
     }
 
     if (role === 'lead') {
-      // Bhavneet sees her own + Kashish + Muskan
-      return TEAM_MEMBERS.map(t => ({
-        id: t.id,
-        title: t.name,
-        subtitle: t.role,
-        color: t.color,
-        clients: clients.filter(c => c.assignedAmId === t.id),
-      }));
+      // Bhavneet sees unassigned + Bhavneet + Kashish + Muskan
+      return [
+        { id: 'unassigned', title: 'Unassigned', subtitle: 'Needs an AM', color: 'var(--brand-textMuted)', clients: unassigned },
+        ...TEAM_MEMBERS.map(t => ({
+          id: t.id,
+          title: t.name,
+          subtitle: t.role,
+          color: t.color,
+          clients: clients.filter(c => c.assignedAmId === t.id),
+        })),
+      ];
     }
 
     // manager / founder: all 4 columns
