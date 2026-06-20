@@ -40,7 +40,7 @@ const TEMPLATES = [
   {
     id: 'client-wa-reminder',
     kind: 'WhatsApp',
-    stage: 'client',
+    stage: null,
     name: 'Client — Reminder (30 min)',
     subject: null,
     body: `Hi,\n\nJust a quick reminder that we will be connecting with you in 30 minutes for our planned meeting.\n\nThank you.\n— Team MITS Solution`,
@@ -48,7 +48,7 @@ const TEMPLATES = [
   {
     id: 'client-wa-next-slot',
     kind: 'WhatsApp',
-    stage: 'client',
+    stage: null,
     name: 'Client — Next Slot',
     subject: null,
     body: `Hi,\n\nYour upcoming session is confirmed for {{session_date}} at {{session_time}} IST. Please be ready to join the session at the scheduled time.\n\nThank you.\n— Team MITS Solution`,
@@ -56,7 +56,7 @@ const TEMPLATES = [
   {
     id: 'client-wa-feedback',
     kind: 'WhatsApp',
-    stage: 'client',
+    stage: null,
     name: 'Client — Feedback Request',
     subject: null,
     body: `Hi,\n\nWe hope you found today's session valuable.\n\nYour feedback is important to us. Kindly share your review here:\nhttps://share.google/Rw2Nn8fwUGBJhGYdr\n\nIf any follow-up is required, please let us know.\n\nFor escalations:\nLevel 1 – Bhavneet: +91 62833 324835\nLevel 2 – Mitali: +91 97795 30773\n\nThank you.\n— Team MITS Solution`,
@@ -64,7 +64,7 @@ const TEMPLATES = [
   {
     id: 'client-wa-session-summary',
     kind: 'WhatsApp',
-    stage: 'client',
+    stage: null,
     name: 'Client — Session Summary',
     subject: null,
     body: `Hi,\n\nHere's an overview of what we worked on in today's session:\n\n{{session_summary}}\n\nThank you.\n— Team MITS Solution`,
@@ -74,7 +74,7 @@ const TEMPLATES = [
   {
     id: 'client-email-onboarding',
     kind: 'Email',
-    stage: 'client',
+    stage: null,
     name: 'Client — Meeting Invitation',
     subject: 'Meeting Invitation and Support Information',
     body: `Greetings from MITS Solution!!\n\nDear Sir/Madam,\n\nI hope this email finds you well. We are excited to schedule your upcoming meeting.\n\nMeeting Details:\nThe meeting details will be shared in the group at the time of the call.\n\nPlease click on the meeting link at the scheduled time to join the virtual meeting. We will be using Zoom/WebEx/Google Meet for our conversation.\n\nIf you encounter any issues, please contact the respective teams:\n1. For general assistance or issues, send an email to supportl1@mitssolution.com.\n2. If you have any complaints, reach out to our customer support manager at supportl2@mitssolution.com.\n3. For payment-related enquiries or problems, you can contact our payment team at payment@mitssolution.com.\n\nRegards,\nDelivery Team\nMITS Solution`,

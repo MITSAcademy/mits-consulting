@@ -126,6 +126,27 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
       </div>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
+          <label className="label">Client (optional)</label>
+          <select className="input" value={clientId} onChange={(e) => {
+            const cid = e.target.value;
+            setClientId(cid);
+            if (cid) {
+              const client = (clients || []).find((c: any) => c.id === cid);
+              if (client?.primaryTrainerId && !trainerId) setTrainerId(client.primaryTrainerId);
+            }
+          }}>
+            <option value="">— no specific client —</option>
+            {(clients || []).map((c: any) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          {selectedClient && selectedClient.phoneCode && selectedClient.phoneDigits && (
+            <div className="text-[11px] muted mt-0.5">
+              Client: <span className="mono">{selectedClient.phoneCode}{selectedClient.phoneDigits}</span>
+            </div>
+          )}
+        </div>
+        <div>
           <label className="label">Trainer *</label>
           <select className="input" value={trainerId} onChange={(e) => { setTrainerId(e.target.value); setOverrideAmount(false); setCustomAmount(''); }}>
             <option value="">— select trainer —</option>
@@ -142,34 +163,11 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
           )}
         </div>
         <div>
-          <label className="label">Client (optional)</label>
-          <select className="input" value={clientId} onChange={(e) => {
-            const cid = e.target.value;
-            setClientId(cid);
-            if (cid) {
-              const client = (clients || []).find((c: any) => c.id === cid);
-              if (client?.primaryTrainerId && !trainerId) setTrainerId(client.primaryTrainerId);
-            }
-          }}>
-            <option value="">— no specific client —</option>
-            {(clients || []).map((c: any) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          {selectedClient && (
-            <div className="text-[11px] muted mt-0.5 flex gap-3">
-              {selectedClient.phoneCode && selectedClient.phoneDigits && (
-                <span>Client: <span className="mono">{selectedClient.phoneCode}{selectedClient.phoneDigits}</span></span>
-              )}
-            </div>
-          )}
-        </div>
-        <div>
           <label className="label">Date *</label>
           <input type="date" className="input" value={date} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setDate(e.target.value)} />
         </div>
         <div>
-          <label className="label">Days / sessions *</label>
+          <label className="label">Duration (sessions) *</label>
           <select className="input" value={days} onChange={(e) => setDays(e.target.value)}>
             {DAY_OPTIONS.map((v) => (<option key={v} value={v}>{v}</option>))}
           </select>

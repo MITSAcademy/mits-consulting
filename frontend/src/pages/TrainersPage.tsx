@@ -478,8 +478,9 @@ export function TrainersPage() {
             email: msgTrainer.email || '',
             phone: msgTrainer.phoneDigits ? `${msgTrainer.phoneCode || ''}${msgTrainer.phoneDigits}` : '',
           }}
+          whatsappGroupLink={msgTrainer.whatsappGroupLink || undefined}
           trainerId={msgTrainer.id}
-          stage="Trainer onboarding"
+          stage="trainer"
           defaultKind={msgKind}
           onClose={() => setMsgTrainer(null)}
         />

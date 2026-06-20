@@ -15,6 +15,8 @@ interface Props {
     email?: string;
     phone?: string;        // E.164-ish or +91 format
   };
+  /** when set, WA messages open the group chat instead of personal chat */
+  whatsappGroupLink?: string;
   /** to log against — either client OR trainer */
   clientId?: string;
   trainerId?: string;
@@ -25,7 +27,7 @@ interface Props {
   onClose: () => void;
 }
 
-export function SendMessageModal({ recipient, clientId, trainerId, stage, defaultKind, onClose }: Props) {
+export function SendMessageModal({ recipient, whatsappGroupLink, clientId, trainerId, stage, defaultKind, onClose }: Props) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
 
@@ -49,8 +51,10 @@ export function SendMessageModal({ recipient, clientId, trainerId, stage, defaul
   const suggestions = useMemo(() => {
     return (templates || []).filter((t: any) => {
       if (t.kind !== kind) return false;
-      if (!stage) return true;
-      return !t.stage || t.stage === stage;
+      if (!stage) return !t.stage; // no context: only show generic templates
+      if (t.stage === stage) return true; // exact match (e.g. trainer→trainer, Lead→Lead)
+      if (!t.stage && stage !== 'trainer') return true; // null-stage templates show for all client contexts
+      return false;
     });
   }, [templates, kind, stage]);
 
@@ -91,11 +95,10 @@ export function SendMessageModal({ recipient, clientId, trainerId, stage, defaul
       }),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['messages'] });
-      if (r.data.url) {
-        // Copy + open WhatsApp deep link (free path)
-        if (body) navigator.clipboard?.writeText(body).catch(() => {});
-        window.open(r.data.url, '_blank');
-      }
+      if (body) navigator.clipboard?.writeText(body).catch(() => {});
+      // Prefer group link when available; fall back to personal wa.me deep link
+      const openUrl = whatsappGroupLink || r.data.url;
+      if (openUrl) window.open(openUrl, '_blank');
       showToast('WhatsApp opened + message copied · logged in history');
       onClose();
     },
