@@ -72,8 +72,17 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
 
 sessionLogsRouter.patch('/:id', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const data: any = {};
-  for (const f of ['status', 'hours', 'rateSnapshot', 'amountInr', 'notes']) {
+  // Any authorized role can edit these operational fields
+  for (const f of ['hours', 'rateSnapshot', 'amountInr', 'notes', 'proceed', 'comments']) {
     if (f in req.body) data[f] = req.body[f];
+  }
+  // Status (Paid/NotPaid) is restricted to demo_lead (Samita) and founder
+  if ('status' in req.body) {
+    const role = req.user!.role;
+    if (role !== 'demo_lead' && role !== 'founder') {
+      return res.status(403).json({ error: 'Only Samita (demo_lead) or founder can mark payment status' });
+    }
+    data.status = req.body.status;
   }
   const log = await prisma.sessionLog.update({ where: { id: req.params.id }, data, include });
   res.json(log);

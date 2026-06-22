@@ -605,6 +605,8 @@ model SessionLog {
   task          Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
   notes         String?
   feedback      String?       // positive | neutral | negative
+  proceed       String?       // Yes | No | Hold — payment proceed flag
+  comments      String?       // remarks/issues for payment processing
   loggedById    String?       // who logged this session
   createdAt     DateTime      @default(now())
 }
