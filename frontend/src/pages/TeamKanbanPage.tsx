@@ -1,13 +1,14 @@
 /**
- * Team Kanban — Mitali's assignment board + individual AM views.
+ * Team Kanban — assignment board.
  *
- * Mitali (manager):  4 columns — Unassigned | Bhavneet | Kashish | Muskan
- * Bhavneet (lead):   3 columns — her own + Kashish + Muskan (team overview)
- * Kashish / Muskan:  1 column  — their own clients only
- * Founder:           all 4 columns
+ * Founder / Manager / Lead (Bhavneet):
+ *   5 columns — All Clients | Unassigned | Bhavneet | Kashish | Muskan
+ *
+ * Kashish / Muskan (account_manager):
+ *   1 column — their own clients only
  *
  * Each card: name, engagement type, next payment due (coloured), feedback warning.
- * Hover → reassign button (manager/founder only).
+ * Hover → reassign button (manager/founder/lead).
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo, useRef, useEffect } from 'react';
@@ -212,7 +213,7 @@ function HostChip({ training, canReassign }: { training: Client['regularTraining
 
 // ─── client card ──────────────────────────────────────────────────────────────
 
-function ClientCard({ client, canAssign, canReassignHost, isUnassigned = false }: { client: Client; canAssign: boolean; canReassignHost: boolean; isUnassigned?: boolean }) {
+function ClientCard({ client, canAssign, canReassignHost, isUnassigned = false, isAllColumn = false }: { client: Client; canAssign: boolean; canReassignHost: boolean; isUnassigned?: boolean; isAllColumn?: boolean }) {
   const [assigning, setAssigning] = useState(false);
   const activeTraining = client.regularTrainings?.[0] ?? null;
   const due = daysUntil(client.payDate2);
@@ -293,6 +294,17 @@ function ClientCard({ client, canAssign, canReassignHost, isUnassigned = false }
         )}
 
         {/* Assign button — always visible on unassigned cards */}
+        {/* In All Clients column — show assigned AM as a small tag */}
+        {isAllColumn && (
+          <div className="mt-1.5 text-[10px]" style={{ color: 'var(--brand-textMuted)' }}>
+            {client.assignedAm
+              ? <span style={{ color: TEAM_MEMBERS.find(t => t.id === client.assignedAm?.id)?.color || 'var(--accent-gold)' }}>
+                  👤 {client.assignedAm.name}
+                </span>
+              : <span style={{ color: 'var(--status-amber)' }}>⚠ Unassigned</span>}
+          </div>
+        )}
+
         {canAssign && isUnassigned && (
           <button
             onClick={() => setAssigning(true)}
@@ -311,7 +323,7 @@ function ClientCard({ client, canAssign, canReassignHost, isUnassigned = false }
 // ─── column ───────────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  title, subtitle, color, clients, canAssign, canReassignHost, isUnassigned,
+  title, subtitle, color, clients, canAssign, canReassignHost, isUnassigned, isAllColumn,
 }: {
   title: string;
   subtitle: string;
@@ -320,6 +332,7 @@ function KanbanColumn({
   canAssign: boolean;
   canReassignHost: boolean;
   isUnassigned?: boolean;
+  isAllColumn?: boolean;
 }) {
   const overdue = clients.filter(c => {
     const d = daysUntil(c.payDate2);
@@ -364,7 +377,7 @@ function KanbanColumn({
         {clients.length === 0 ? (
           <div className="text-[11px] muted text-center py-8">No active clients</div>
         ) : (
-          clients.map(c => <ClientCard key={c.id} client={c} canAssign={canAssign} canReassignHost={canReassignHost} isUnassigned={isUnassigned}/>)
+          clients.map(c => <ClientCard key={c.id} client={c} canAssign={canAssign} canReassignHost={canReassignHost} isUnassigned={isUnassigned} isAllColumn={isAllColumn}/>)
         )}
       </div>
     </div>
@@ -412,23 +425,22 @@ export function TeamKanbanPage() {
       ];
     }
 
-    if (role === 'lead') {
-      // Bhavneet sees unassigned + Bhavneet + Kashish + Muskan
-      return [
-        { id: 'unassigned', title: 'Unassigned', subtitle: 'Needs an AM', color: 'var(--brand-textMuted)', clients: unassigned },
-        ...TEAM_MEMBERS.map(t => ({
-          id: t.id,
-          title: t.name,
-          subtitle: t.role,
-          color: t.color,
-          clients: clients.filter(c => c.assignedAmId === t.id),
-        })),
-      ];
-    }
-
-    // manager / founder: all 4 columns
+    // lead / manager / founder: 5 columns — All | Unassigned | Bhavneet | Kashish | Muskan
     return [
-      { id: 'unassigned', title: 'Mitali', subtitle: 'Needs an AM', color: 'var(--brand-textMuted)', clients: unassigned },
+      {
+        id: 'all',
+        title: 'All Clients',
+        subtitle: 'Every active client',
+        color: '#94a3b8',
+        clients: clients,
+      },
+      {
+        id: 'unassigned',
+        title: 'Unassigned',
+        subtitle: 'New · needs a coordinator',
+        color: 'var(--brand-textMuted)',
+        clients: unassigned,
+      },
       ...TEAM_MEMBERS.map(t => ({
         id: t.id,
         title: t.name,
@@ -478,6 +490,7 @@ export function TeamKanbanPage() {
                 canAssign={canAssign}
                 canReassignHost={canReassignHost}
                 isUnassigned={col.id === 'unassigned'}
+                isAllColumn={col.id === 'all'}
               />
             ))}
           </div>
