@@ -35,7 +35,7 @@ auditRouter.get('/', async (req: AuthedRequest, res) => {
 // Per-entity activity feed used by ClientDetailPage + TrainerDetailPage
 auditRouter.get('/entity', async (req: AuthedRequest, res) => {
   const role = req.user!.role;
-  const allowed = ['founder', 'manager', 'account_manager'];
+  const allowed = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'demo_intake', 'sales_closer', 'recruiter', 'accounts', 'payment_processor'];
   if (!allowed.includes(role)) return res.status(403).json({ error: 'Not allowed' });
 
   const { clientId, trainerId } = req.query as Record<string, string>;
