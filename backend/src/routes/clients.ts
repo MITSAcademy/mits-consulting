@@ -57,7 +57,8 @@ function redactClient<T extends Record<string, any>>(c: T, viewer: { id: string;
       session_timing_ist: id.session_timing_ist || null,
       trainer_preference: id.trainer_preference || null,
       meeting_tool: id.meeting_tool || null,
-      // omit client_email, additional_notes
+      additional_notes: id.additional_notes || null,
+      // omit client_email only
     };
   }
   // Owner contact is also out of scope for recruiters (keep id/name/role only)
