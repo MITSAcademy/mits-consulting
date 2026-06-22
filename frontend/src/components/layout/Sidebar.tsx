@@ -88,7 +88,7 @@ const NAV: NavItem[] = [
   // ── Trainer ops: Bhavneet (lead) + AMs log sessions; Bhavneet creates payout batches; Mitali approves ──
   { section: 'trainerOps', page: '/session-logs', label: 'Session logs', icon: ClipboardList, roles: ['founder', 'lead', 'account_manager', 'accounts', 'payment_processor'] },
   // Payment sheet: Bhavneet validates and submits; payment_processor processes
-  { section: 'trainerOps', page: '/trainer-pay-sheet', label: 'Payment sheet', icon: TableProperties, roles: ['founder', 'lead', 'account_manager', 'payment_processor'] },
+  { section: 'trainerOps', page: '/trainer-pay-sheet', label: 'Payment sheet', icon: TableProperties, roles: ['founder', 'manager', 'lead', 'account_manager', 'payment_processor'] },
   { section: 'trainerOps', page: '/trainer-pay', label: 'Trainer payouts', icon: Wallet, roles: ['founder', 'accounts', 'payment_processor'] },
   // Payout batches: Bhavneet creates → Mitali approves → accounts/payment_processor process
   { section: 'trainerOps', page: '/payout-batches', label: 'Payout batches', icon: Archive, roles: ['founder', 'manager', 'lead', 'accounts', 'payment_processor'] },

@@ -50,6 +50,8 @@ interface Row {
   paymentPendingVaibhav: boolean;
   hostOwner: string | null;
   clientPhone: string | null;
+  clientEmail: string | null;
+  accountName: string | null;
   clientGroupLink: string | null;
   primaryTrainer: { id: string; name: string; phone: string | null; groupLink: string | null } | null;
   trainingId: string | null;
@@ -668,6 +670,31 @@ function PayRow({ r }: { r: Row }) {
                 </Button>
               </>
             )}
+          </div>
+        </div>
+        {/* Info strip: Phone | Email | Feedback Date | Account Name */}
+        <div className="flex items-center gap-6 px-4 py-2 flex-wrap" style={{ borderTop: '1px solid var(--brand-borderSoft)', background: 'rgba(255,255,255,0.02)' }}>
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="muted">Phone:</span>
+            {r.clientPhone
+              ? <a href={`tel:+${r.clientPhone}`} className="hover:underline font-mono" style={{ color: 'var(--brand-text)' }}>{r.clientPhone}</a>
+              : <span className="muted">—</span>}
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="muted">Email:</span>
+            {r.clientEmail
+              ? <a href={`mailto:${r.clientEmail}`} className="hover:underline" style={{ color: 'var(--brand-text)' }}>{r.clientEmail}</a>
+              : <span className="muted">—</span>}
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="muted">Feedback date:</span>
+            <span style={{ color: r.lastFeedbackTakenAt ? 'var(--brand-text)' : 'var(--brand-textMuted)' }}>
+              {r.lastFeedbackTakenAt ? fmtDate(r.lastFeedbackTakenAt) : '—'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="muted">Account:</span>
+            <span style={{ color: 'var(--brand-text)' }}>{r.accountName || '—'}</span>
           </div>
         </div>
       </div>
