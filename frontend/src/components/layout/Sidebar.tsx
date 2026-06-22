@@ -111,6 +111,7 @@ const NAV: NavItem[] = [
   { section: 'admin', page: '/sources', label: 'Lead sources', icon: Tag, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/feature-flags', label: 'Feature flags', icon: ToggleRight, roles: ['founder'] },
   { section: 'admin', page: '/permissions', label: 'Edit permissions', icon: LockKeyhole, roles: ['founder'] },
+  { section: 'admin', page: '/role-permissions', label: 'Role permissions', icon: ShieldCheck, roles: ['founder'] },
   { section: 'admin', page: '/banks', label: 'Bank accounts', icon: Building2, roles: ['founder', 'accounts'] },
   { section: 'admin', page: '/audit', label: 'Activity log', icon: History, roles: ['founder', 'manager'] },
   { section: 'admin', page: '/settings', label: 'Settings', icon: Settings, roles: ['founder', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },

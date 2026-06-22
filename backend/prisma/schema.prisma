@@ -191,6 +191,7 @@ model User {
   jobCodesCreated        JobCode[]          @relation("JobCodeCreator")
   retrospectivesRemoved  Retrospective[]    @relation("RetrospectiveRemovedBy")
   retrospectivesOwned    Retrospective[]    @relation("RetrospectiveOwner")
+  rolePermissionsUpdated RolePermission[] @relation("RolePermissionUpdatedBy")
 }
 
 // -------- NOTIFICATIONS --------
@@ -1022,6 +1023,20 @@ model MeetingLink {
 model LeadSource {
   id    String @id @default(cuid())
   name  String @unique
+}
+
+// -------- ROLE PERMISSIONS --------
+model RolePermission {
+  id        String   @id @default(cuid())
+  resource  String   // e.g. "feedback.read", "payments.read", "tasks.complete"
+  role      String   // e.g. "lead", "account_manager"
+  allowed   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+  updatedById String?
+  updatedBy   User?  @relation("RolePermissionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([resource, role])
+  @@index([resource])
 }
 
 // -------- FEATURE FLAGS --------

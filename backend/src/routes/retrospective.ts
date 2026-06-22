@@ -1,19 +1,14 @@
 import { Router } from 'express';
 import { requireAuth } from '../lib/auth';
 import { prisma } from '../lib/prisma';
+import { checkPermission } from '../lib/rolePermissions';
 
 export const retrospectiveRouter = Router();
 retrospectiveRouter.use(requireAuth);
 
-const ALLOWED = ['founder', 'manager', 'lead', 'account_manager'];
-
-function canAccess(role: string) {
-  return ALLOWED.includes(role);
-}
-
 // GET /retrospective — list all, newest first
 retrospectiveRouter.get('/', async (req: any, res) => {
-  if (!canAccess(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (!await checkPermission('sessions.retrospective', req.user.role)) return res.status(403).json({ error: 'Forbidden' });
   const rows = await prisma.retrospective.findMany({
     orderBy: { removedAt: 'desc' },
     include: {
@@ -26,7 +21,7 @@ retrospectiveRouter.get('/', async (req: any, res) => {
 
 // POST /retrospective — create entry (called on remove)
 retrospectiveRouter.post('/', async (req: any, res) => {
-  if (!canAccess(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (!await checkPermission('sessions.retrospective', req.user.role)) return res.status(403).json({ error: 'Forbidden' });
   const { sourceType, sourceId, clientName, trainerName, reason, sessionDate } = req.body;
   if (!sourceType || !clientName) return res.status(400).json({ error: 'sourceType and clientName required' });
   const entry = await prisma.retrospective.create({
@@ -45,7 +40,7 @@ retrospectiveRouter.post('/', async (req: any, res) => {
 
 // PATCH /retrospective/:id — update reason, owner, comments
 retrospectiveRouter.patch('/:id', async (req: any, res) => {
-  if (!canAccess(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+  if (!await checkPermission('sessions.retrospective', req.user.role)) return res.status(403).json({ error: 'Forbidden' });
   const { reason, ownerId, comments } = req.body;
   const entry = await prisma.retrospective.update({
     where: { id: req.params.id },

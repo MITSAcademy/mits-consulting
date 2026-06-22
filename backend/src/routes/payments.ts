@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
+import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
+import { checkPermission } from '../lib/rolePermissions';
 
 export const paymentsRouter = Router();
 paymentsRouter.use(requireAuth);
@@ -12,7 +13,8 @@ const include = {
   receivedBy: { select: { id: true, name: true } },
 };
 
-paymentsRouter.get('/', requireRole('founder', 'manager', 'demo_lead', 'sales_closer', 'accounts', 'payment_processor'), async (req, res) => {
+paymentsRouter.get('/', async (req: AuthedRequest, res) => {
+  if (!await checkPermission('payments.read', req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
   const { from, to, clientId } = req.query as any;
   const where: any = {};
   if (clientId) where.clientId = clientId;
@@ -22,9 +24,7 @@ paymentsRouter.get('/', requireRole('founder', 'manager', 'demo_lead', 'sales_cl
 });
 
 paymentsRouter.post('/', async (req: AuthedRequest, res) => {
-  if (!['founder', 'demo_lead', 'manager', 'sales_closer', 'accounts'].includes(req.user!.role)) {
-    return res.status(403).json({ error: 'Not allowed to record payments' });
-  }
+  if (!await checkPermission('payments.write', req.user!.role)) return res.status(403).json({ error: 'Not allowed to record payments' });
   const { clientId, kind, amount, currency, paymentDate, bankAccountId, paymentMode } = req.body;
   if (!clientId || !amount || !currency || !paymentDate) {
     return res.status(400).json({ error: 'clientId, amount, currency, paymentDate required' });
@@ -32,11 +32,6 @@ paymentsRouter.post('/', async (req: AuthedRequest, res) => {
   const kindToUse = kind || 'Fresh';
   const amountToUse = Number(amount);
 
-  // For Fresh payments — when one already exists we accept the new row as a
-  // top-up (biweekly cycles often record half-payment first, then the second
-  // half later). Sum into client.freshPaymentAmount so MoneyFlow + cycle math
-  // reflect the actual total received, and only flip freshPaymentReceived once
-  // the accumulated total covers cycleAmount.
   let priorFreshTotal = 0;
   let clientCycleAmount: number | null = null;
   if (kindToUse === 'Fresh') {
@@ -64,8 +59,6 @@ paymentsRouter.post('/', async (req: AuthedRequest, res) => {
 
   if (kindToUse === 'Fresh') {
     const newTotal = priorFreshTotal + amountToUse;
-    // Mark received only when accumulated Fresh payments fully cover the cycle.
-    // If cycleAmount isn't on file (rare) fall back to "any Fresh payment counts".
     const fullyReceived = clientCycleAmount ? newTotal >= clientCycleAmount : true;
     await prisma.client.update({
       where: { id: clientId },
@@ -73,7 +66,6 @@ paymentsRouter.post('/', async (req: AuthedRequest, res) => {
         freshPaymentReceived: fullyReceived,
         freshPaymentDate: paymentDate,
         freshPaymentAmount: newTotal,
-        // Only flip to SaleWon when the engagement is actually paid in full.
         ...(fullyReceived ? { lifecycle: 'SaleWon' as const } : {}),
       },
     });
