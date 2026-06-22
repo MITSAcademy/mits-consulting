@@ -19,7 +19,6 @@ import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { ExternalLink, UserPlus, AlertTriangle, Clock, CheckCircle2, MessageSquare, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, Label } from '@/components/ui/input';
 import { createPortal } from 'react-dom';
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -98,19 +97,62 @@ function AssignModal({ client, onClose }: { client: Client; onClose: () => void 
     <div className="fixed inset-0 flex items-center justify-center"
       style={{ zIndex: 9999, background: 'rgba(0,0,0,0.55)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="rounded-2xl p-5 w-[320px]"
+      <div className="rounded-2xl p-5 w-[360px]"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
-        <div className="font-bold text-sm mb-1">Assign AM — {client.name}</div>
-        <div className="muted text-[11px] mb-3">Pick who handles sessions, feedback and trainer liaison.</div>
-        <div className="form-row mb-4">
-          <Label>Account manager</Label>
-          <Select value={amId} onChange={(e) => setAmId(e.target.value)}>
-            <option value="">— Unassigned —</option>
-            {TEAM_MEMBERS.map(t => (
-              <option key={t.id} value={t.id}>{t.name} · {t.role}</option>
-            ))}
-          </Select>
+        <div className="font-bold text-sm mb-0.5">Assign coordinator</div>
+        <div className="text-xs mb-4" style={{ color: 'var(--accent-gold)' }}>{client.name}</div>
+
+        {/* Coordinator cards */}
+        <div className="flex flex-col gap-2 mb-4">
+          {/* Unassigned option */}
+          <button
+            onClick={() => setAmId('')}
+            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all"
+            style={{
+              background: amId === '' ? 'rgba(148,163,184,0.15)' : 'var(--bg-input)',
+              border: `1px solid ${amId === '' ? 'rgba(148,163,184,0.5)' : 'var(--brand-borderSoft)'}`,
+            }}
+          >
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+              style={{ background: 'rgba(148,163,184,0.15)', color: '#94a3b8' }}>—</div>
+            <div>
+              <div className="text-sm font-semibold" style={{ color: '#94a3b8' }}>Unassigned</div>
+              <div className="text-[10px]" style={{ color: 'var(--brand-textMuted)' }}>No coordinator yet</div>
+            </div>
+            {amId === '' && <div className="ml-auto w-4 h-4 rounded-full flex items-center justify-center" style={{ background: '#94a3b8' }}>
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1 4l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </div>}
+          </button>
+
+          {TEAM_MEMBERS.map(t => {
+            const selected = amId === t.id;
+            const ini = t.name.split(' ').map((p: string) => p[0]).join('').toUpperCase().slice(0, 2);
+            return (
+              <button
+                key={t.id}
+                onClick={() => setAmId(t.id)}
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all"
+                style={{
+                  background: selected ? `${t.color}18` : 'var(--bg-input)',
+                  border: `1px solid ${selected ? t.color + '60' : 'var(--brand-borderSoft)'}`,
+                }}
+              >
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ background: t.color + '25', color: t.color }}>
+                  {ini}
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: selected ? t.color : 'var(--brand-text)' }}>{t.name}</div>
+                  <div className="text-[10px]" style={{ color: 'var(--brand-textMuted)' }}>{t.role}</div>
+                </div>
+                {selected && <div className="ml-auto w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: t.color }}>
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M1 4l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </div>}
+              </button>
+            );
+          })}
         </div>
+
         <div className="flex gap-2 justify-end">
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>
