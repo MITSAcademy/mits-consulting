@@ -13,7 +13,7 @@
  *   • Schedule new call / log past call / log session — all in topbar.
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
@@ -27,7 +27,8 @@ import { EmptyState } from '@/components/EmptyState';
 import {
   ClipboardList, Plus, Calendar as CalendarIcon, CheckCircle2, Phone, Play, Square,
   Clock, MessageSquare, AlertCircle, Video, Search, MessageCircle, Send, CreditCard,
-  ChevronLeft, ChevronRight, UserPlus, Download,
+  ChevronLeft, ChevronRight, UserPlus, Download, ChevronDown, MoreVertical,
+  Pencil, Trash2, Flag, ExternalLink,
 } from 'lucide-react';
 import { formatPhone, waLink } from '@/lib/utils';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
@@ -749,7 +750,7 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
           <div className="rounded-xl overflow-hidden" style={{ border: '2px solid rgba(251,191,36,0.4)', boxShadow: '0 0 12px rgba(251,191,36,0.1)' }}>
             <div style={{ overflowX: 'auto' }}>
               <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
-                <thead><tr><TH w="14%">Clients</TH><TH w="9%">Trainers</TH><TH w="10%">Skills</TH><TH w="7%">Permanent</TH><TH w="7%">Temporary</TH><TH w="5%">Tool</TH><TH w="5%">Time</TH><TH w="12%">Session Happened</TH><TH w="16%">Comments</TH><TH w="15%">Actions</TH></tr></thead>
+                <thead><tr><TH w="16%">Clients</TH><TH w="11%">Trainers</TH><TH w="12%">Skills</TH><TH w="8%">Host</TH><TH w="5%">Tool</TH><TH w="5%">Time</TH><TH w="13%">Session Happened</TH><TH w="18%">Comments</TH><TH w="12%">Actions</TH></tr></thead>
                 <tbody>{unassigned.map((t: any) => <AMSheetRow key={t.id} t={t} onChanged={onChanged} />)}</tbody>
               </table>
             </div>
@@ -761,16 +762,15 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
           <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
             <thead>
               <tr>
-                <TH w="14%">Clients</TH>
-                <TH w="9%">Trainers</TH>
-                <TH w="10%">Skills</TH>
-                <TH w="7%">Permanent</TH>
-                <TH w="7%">Temporary</TH>
+                <TH w="16%">Clients</TH>
+                <TH w="11%">Trainers</TH>
+                <TH w="12%">Skills</TH>
+                <TH w="8%">Host</TH>
                 <TH w="5%">Tool</TH>
                 <TH w="5%">Time</TH>
-                <TH w="12%">Session Happened</TH>
-                <TH w="16%">Comments</TH>
-                <TH w="15%">Actions</TH>
+                <TH w="13%">Session Happened</TH>
+                <TH w="18%">Comments</TH>
+                <TH w="12%">Actions</TH>
               </tr>
             </thead>
             <tbody>
@@ -793,10 +793,7 @@ const AM_HOSTS = [
 function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const rowUser = useAuth((s) => s.user)!
-  const skills = t.trainer?.skills || '—';
-  const permanentName = t.hostedByDefault?.name || <span style={{ color: 'var(--status-amber)', fontStyle: 'italic' }}>Unassigned</span>;
-  const temporaryName = t.temporaryHost?.name || t.hostedByDefault?.name || '—';
+  const rowUser = useAuth((s) => s.user)!;
   const hasComment = !!(t.lastSessionComment && t.lastSessionComment.trim());
   const isUnassigned = !t.hostedByDefault;
 
@@ -804,10 +801,30 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   const rowColor = hasComment ? '#fff' : 'var(--brand-text)';
   const cellBorder = isUnassigned ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(255,255,255,0.10)';
 
+  // inline-edit state
+  const [editField, setEditField] = useState<'client' | 'trainer' | 'skills' | null>(null);
+  const [editVal, setEditVal] = useState('');
   const [commentVal, setCommentVal] = useState(t.lastSessionComment || '');
   const [editingComment, setEditingComment] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // trainers list for trainer picker
+  const { data: allTrainers } = useQuery({
+    queryKey: ['trainers', 'sheet-picker'],
+    queryFn: () => api.get('/trainers').then((r) => r.data),
+    enabled: editField === 'trainer',
+    staleTime: 300_000,
+  });
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
 
   const updateField = useMutation({
     mutationFn: (data: Record<string, any>) => api.patch(`/regular-trainings/trainings/${t.id}`, data),
@@ -830,156 +847,257 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   const clientWa = t.client?.whatsappGroupLink
     ? t.client.whatsappGroupLink
     : (t.client?.phoneCode && t.client?.phoneDigits ? waLink(t.client.phoneCode, t.client.phoneDigits) : null);
-  const trainerWa = t.trainer?.phoneCode && t.trainer?.phoneDigits
-    ? waLink(t.trainer.phoneCode, t.trainer.phoneDigits)
-    : null;
+  const trainerWa = t.trainer?.whatsappGroupLink
+    || (t.trainer?.phoneCode && t.trainer?.phoneDigits ? waLink(t.trainer.phoneCode, t.trainer.phoneDigits) : null);
 
   const cell = { color: rowColor, borderRight: cellBorder, borderBottom: cellBorder };
 
+  function startEdit(field: 'client' | 'trainer' | 'skills') {
+    setEditField(field);
+    setEditVal(field === 'client' ? (t.client?.name || t.name || '') : field === 'trainer' ? (t.trainer?.id || '') : (t.trainer?.skills || ''));
+  }
+  function cancelEdit() { setEditField(null); setEditVal(''); }
+
+  function InlineEditIcon({ field }: { field: 'client' | 'trainer' | 'skills' }) {
+    return (
+      <button onClick={() => startEdit(field)} title={`Edit ${field}`}
+        className="inline-flex ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-textMuted)', padding: 0 }}>
+        <Pencil size={10} />
+      </button>
+    );
+  }
+
   return (
     <>
-      <tr style={{ background: rowBg }}>
+      <tr style={{ background: rowBg }} className="group">
+        {/* Client */}
         <td className="px-2 py-2" style={cell}>
-          {t.client
-            ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>{t.client.name}</Link>
-            : <span className="font-semibold">{t.name}</span>
-          }
-          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-            <span
-              className="inline-block px-1.5 py-0 rounded text-[10px] font-semibold"
-              style={t.ownerTeam === 'coordinator_team'
-                ? { background: 'rgba(99,179,237,0.2)', color: '#63b3ed' }
-                : { background: 'rgba(251,191,36,0.2)', color: '#fbbf24' }}
-            >
-              {t.ownerTeam === 'coordinator_team' ? 'Coordinator' : 'Demo Team'}
-            </span>
-            <span className="text-[10px]" style={{ opacity: 0.6 }}>{t.completedSessionCount ?? 0}/4</span>
-            {t.demoEscalationRequested && (
-              <span className="inline-block px-1.5 py-0 rounded text-[10px] font-bold" style={{ background: 'rgba(239,68,68,0.25)', color: '#f87171' }}>
-                ⚠ Escalated
-              </span>
-            )}
-          </div>
+          {editField === 'client' ? (
+            <div className="flex gap-1 items-center">
+              <input autoFocus className="flex-1 text-[11px] rounded px-1.5 py-0.5 min-w-0"
+                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.4)', color: '#fff', outline: 'none' }}
+                value={editVal} onChange={(e) => setEditVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { updateField.mutate({ name: editVal }); cancelEdit(); }
+                  if (e.key === 'Escape') cancelEdit();
+                }} />
+              <button onClick={() => { updateField.mutate({ name: editVal }); cancelEdit(); }} style={{ color: '#90ff90', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✓</button>
+              <button onClick={cancelEdit} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✕</button>
+            </div>
+          ) : (
+            <div className="flex items-start gap-1">
+              <div>
+                {t.client
+                  ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>{t.client.name}</Link>
+                  : <span className="font-semibold">{t.name}</span>
+                }
+                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                  <span className="inline-block px-1.5 py-0 rounded text-[10px] font-semibold"
+                    style={t.ownerTeam === 'coordinator_team' ? { background: 'rgba(99,179,237,0.2)', color: '#63b3ed' } : { background: 'rgba(251,191,36,0.2)', color: '#fbbf24' }}>
+                    {t.ownerTeam === 'coordinator_team' ? 'Coordinator' : 'Demo Team'}
+                  </span>
+                  <span className="text-[10px]" style={{ opacity: 0.6 }}>{t.completedSessionCount ?? 0}/4</span>
+                  {t.demoEscalationRequested && <span className="inline-block px-1.5 py-0 rounded text-[10px] font-bold" style={{ background: 'rgba(239,68,68,0.25)', color: '#f87171' }}>⚠ Escalated</span>}
+                </div>
+              </div>
+              <InlineEditIcon field="client" />
+            </div>
+          )}
         </td>
-        <td className="px-2 py-2" style={cell}>{t.trainer?.name || <span style={{ opacity: 0.5 }}>—</span>}</td>
+
+        {/* Trainer */}
+        <td className="px-2 py-2" style={cell}>
+          {editField === 'trainer' ? (
+            <div className="flex gap-1 items-center">
+              <select autoFocus className="flex-1 text-[11px] rounded px-1 py-0.5"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none' }}
+                value={editVal} onChange={(e) => setEditVal(e.target.value)}>
+                <option value="">— none —</option>
+                {(allTrainers || []).map((tr: any) => <option key={tr.id} value={tr.id}>{tr.name}</option>)}
+              </select>
+              <button onClick={() => { updateField.mutate({ trainerId: editVal || null }); cancelEdit(); }} style={{ color: '#90ff90', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✓</button>
+              <button onClick={cancelEdit} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✕</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <span>{t.trainer?.name || <span style={{ opacity: 0.4 }}>—</span>}</span>
+              <InlineEditIcon field="trainer" />
+            </div>
+          )}
+        </td>
+
+        {/* Skills */}
         <td className="px-2 py-2" style={{ ...cell, maxWidth: 0 }}>
-          <span className="block truncate text-[11px]" style={{ opacity: 0.85 }} title={skills}>{skills}</span>
+          {editField === 'skills' ? (
+            <div className="flex gap-1 items-center">
+              <input autoFocus className="flex-1 text-[11px] rounded px-1.5 py-0.5 min-w-0"
+                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.4)', color: '#fff', outline: 'none' }}
+                value={editVal} onChange={(e) => setEditVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { updateField.mutate({ trainerSkillsOverride: editVal }); cancelEdit(); }
+                  if (e.key === 'Escape') cancelEdit();
+                }} />
+              <button onClick={() => { updateField.mutate({ trainerSkillsOverride: editVal }); cancelEdit(); }} style={{ color: '#90ff90', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✓</button>
+              <button onClick={cancelEdit} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✕</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <span className="block truncate text-[11px]" style={{ opacity: 0.85 }} title={t.trainer?.skills || '—'}>{t.trainer?.skills || '—'}</span>
+              <InlineEditIcon field="skills" />
+            </div>
+          )}
         </td>
-        <td className="px-2 py-2 font-semibold text-[11px]" style={cell}>{permanentName}</td>
-        <td className="px-2 py-2 text-[11px]" style={cell}>{temporaryName}</td>
+
+        {/* Host (Permanent only) */}
+        <td className="px-2 py-2 font-semibold text-[11px]" style={cell}>
+          {isUnassigned ? (
+            <span style={{ color: 'var(--status-amber)', fontStyle: 'italic' }}>Unassigned</span>
+          ) : (
+            t.hostedByDefault?.name
+          )}
+        </td>
+
+        {/* Tool */}
         <td className="px-2 py-2 text-[11px]" style={cell}>
-          <select
-            className="text-[11px] cursor-pointer"
+          <select className="text-[11px] cursor-pointer"
             style={{ background: 'transparent', color: rowColor, border: 'none', outline: 'none' }}
             value={t.meetingMode || 'Zoom'}
-            onChange={(e) => updateField.mutate({ meetingMode: e.target.value })}
-          >
+            onChange={(e) => updateField.mutate({ meetingMode: e.target.value })}>
             {TOOL_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         </td>
+
+        {/* Time */}
         <td className="px-2 py-2 mono font-bold text-[12px]" style={cell}>
           {t.defaultTimeIst || <span style={{ opacity: 0.4 }}>—</span>}
         </td>
+
+        {/* Session Happened */}
         <td className="px-2 py-2" style={cell}>
-          <select
-            className="text-[11px] font-medium cursor-pointer"
+          <select className="text-[11px] font-medium cursor-pointer"
             style={{ background: 'transparent', color: statusColor, border: 'none', outline: 'none' }}
             value={t.lastSessionStatus || ''}
-            onChange={(e) => updateField.mutate({ lastSessionStatus: e.target.value || null })}
-          >
-            {SESSION_STATUS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
+            onChange={(e) => updateField.mutate({ lastSessionStatus: e.target.value || null })}>
+            {SESSION_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </td>
+
+        {/* Comments */}
         <td className="px-2 py-2 text-[11px]" style={{ ...cell, maxWidth: 0 }}>
           {editingComment ? (
             <div className="flex gap-1 items-center">
-              <input
-                autoFocus
-                className="flex-1 text-[11px] rounded px-1.5 py-0.5"
+              <input autoFocus className="flex-1 text-[11px] rounded px-1.5 py-0.5"
                 style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.4)', color: '#fff', outline: 'none', minWidth: 0 }}
-                value={commentVal}
-                onChange={(e) => setCommentVal(e.target.value)}
+                value={commentVal} onChange={(e) => setCommentVal(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { updateField.mutate({ lastSessionComment: commentVal || null }); setEditingComment(false); }
                   if (e.key === 'Escape') { setCommentVal(t.lastSessionComment || ''); setEditingComment(false); }
-                }}
-              />
+                }} />
               <button onClick={() => { updateField.mutate({ lastSessionComment: commentVal || null }); setEditingComment(false); }}
                 style={{ color: '#90ff90', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 14 }}>✓</button>
             </div>
           ) : (
-            <span
-              className="block truncate cursor-pointer"
+            <span className="block truncate cursor-pointer"
               style={{ color: hasComment ? '#fff' : 'rgba(150,160,180,0.8)', fontStyle: commentVal ? 'normal' : 'italic' }}
               title={commentVal || 'Click to add comment'}
-              onClick={() => setEditingComment(true)}
-            >
+              onClick={() => setEditingComment(true)}>
               {commentVal || 'Smooth'}
             </span>
           )}
         </td>
+
+        {/* Actions — single dropdown */}
         <td className="px-2 py-2" style={{ ...cell, borderRight: 'none' }}>
-          <div className="flex items-center gap-1 justify-end flex-wrap">
-            {clientWa && (
-              <a href={clientWa} target="_blank" rel="noreferrer" title="WhatsApp client/group"
-                className="inline-flex items-center justify-center rounded p-1"
-                style={{ background: 'rgba(37,211,102,0.22)', color: '#25d366' }}>
-                <MessageCircle size={12} />
-              </a>
-            )}
-            {trainerWa && (
-              <a href={trainerWa} target="_blank" rel="noreferrer" title="WhatsApp trainer"
-                className="inline-flex items-center justify-center rounded p-1"
-                style={{ background: 'rgba(37,211,102,0.15)', color: '#25d366' }}>
-                <Send size={11} />
-              </a>
-            )}
-            <button
-              title="Client & trainer feedback"
-              onClick={() => setShowFeedback((v) => !v)}
-              className="inline-flex items-center justify-center rounded p-1"
-              style={{ background: showFeedback ? 'rgba(99,179,237,0.3)' : 'rgba(99,179,237,0.12)', color: '#63b3ed', border: 'none', cursor: 'pointer' }}>
-              <MessageSquare size={11} />
-            </button>
-            {t.ownerTeam === 'demo_team' && rowUser.role !== 'sales_closer' && (
-              <button
-                title={t.demoEscalationRequested ? 'Clear Demo Team escalation' : 'Flag for Demo Team intervention (trainer issue)'}
-                onClick={() => api.post(`/regular-trainings/trainings/${t.id}/escalate`).then(() => { onChanged(); qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); })}
-                className="inline-flex items-center justify-center rounded p-1 text-[10px] font-bold"
-                style={t.demoEscalationRequested
-                  ? { background: 'rgba(239,68,68,0.3)', color: '#f87171', border: 'none', cursor: 'pointer' }
-                  : { background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: 'none', cursor: 'pointer' }}>
-                ⚠
-              </button>
-            )}
+          <div className="flex items-center gap-1 justify-end">
+            {/* Unassigned quick-assign buttons */}
             {isUnassigned && AM_HOSTS.map((h) => (
-              <button
-                key={h.id}
-                title={`Assign to ${h.name}`}
+              <button key={h.id} title={`Assign to ${h.name}`}
                 onClick={() => updateField.mutate({ hostedByDefaultId: h.id })}
                 className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold"
                 style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.4)', cursor: 'pointer' }}>
                 + {h.name}
               </button>
             ))}
-            {!isUnassigned && <AMScheduleButton training={t} onSent={onChanged} />}
-            {(rowUser.role === 'lead' || rowUser.role === 'founder' || rowUser.role === 'manager') && (
-              <button
-                title="Remove client from session sheet (mark lost / completed)"
-                onClick={() => setShowRemoveConfirm(true)}
-                className="inline-flex items-center justify-center rounded p-1"
-                style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: 'none', cursor: 'pointer' }}>
-                ✕
+
+            {/* Actions dropdown */}
+            <div className="relative" ref={menuRef}>
+              <button onClick={() => setMenuOpen((v) => !v)}
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold"
+                style={{ background: menuOpen ? 'var(--brand-accent)' : 'var(--bg-input)', color: menuOpen ? '#fff' : 'var(--brand-text)', border: '1px solid var(--brand-borderSoft)', cursor: 'pointer' }}>
+                Actions <ChevronDown size={11} />
               </button>
-            )}
+              {menuOpen && (
+                <div className="absolute right-0 top-full mt-1 rounded-xl overflow-hidden z-50 min-w-[200px]"
+                  style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
+                  {/* Schedule */}
+                  <AMScheduleMenuItem training={t} onSent={() => { onChanged(); setMenuOpen(false); }} />
+
+                  {/* WhatsApp Client */}
+                  {clientWa ? (
+                    <a href={clientWa} target="_blank" rel="noreferrer"
+                      className="flex items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
+                      style={{ color: '#25d366', textDecoration: 'none' }}
+                      onClick={() => setMenuOpen(false)}>
+                      <MessageCircle size={13} /> WhatsApp Client Group
+                    </a>
+                  ) : (
+                    <div className="flex items-center gap-2.5 px-3 py-2 text-[12px]" style={{ color: 'var(--brand-textMuted)', opacity: 0.5 }}>
+                      <MessageCircle size={13} /> WA Client (no link)
+                    </div>
+                  )}
+
+                  {/* WhatsApp Trainer */}
+                  {trainerWa ? (
+                    <a href={trainerWa} target="_blank" rel="noreferrer"
+                      className="flex items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
+                      style={{ color: '#25d366', textDecoration: 'none' }}
+                      onClick={() => setMenuOpen(false)}>
+                      <Send size={13} /> WhatsApp Trainer
+                    </a>
+                  ) : (
+                    <div className="flex items-center gap-2.5 px-3 py-2 text-[12px]" style={{ color: 'var(--brand-textMuted)', opacity: 0.5 }}>
+                      <Send size={13} /> WA Trainer (no number)
+                    </div>
+                  )}
+
+                  {/* Feedback */}
+                  <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#63b3ed', textAlign: 'left' }}
+                    onClick={() => { setShowFeedback((v) => !v); setMenuOpen(false); }}>
+                    <MessageSquare size={13} /> {showFeedback ? 'Hide feedback' : 'Client & trainer feedback'}
+                  </button>
+
+                  {/* Flag Demo Team */}
+                  {t.ownerTeam === 'demo_team' && rowUser.role !== 'sales_closer' && (
+                    <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.demoEscalationRequested ? '#f87171' : '#fbbf24', textAlign: 'left' }}
+                      onClick={() => { api.post(`/regular-trainings/trainings/${t.id}/escalate`).then(() => { onChanged(); qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); }); setMenuOpen(false); }}>
+                      <Flag size={13} /> {t.demoEscalationRequested ? 'Clear Demo Team flag' : 'Flag for Demo Team'}
+                    </button>
+                  )}
+
+                  {/* Divider + Remove */}
+                  {(rowUser.role === 'lead' || rowUser.role === 'founder' || rowUser.role === 'manager') && (
+                    <>
+                      <div style={{ borderTop: '1px solid var(--brand-borderSoft)', margin: '2px 0' }} />
+                      <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[rgba(239,68,68,0.1)] transition-colors"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', textAlign: 'left' }}
+                        onClick={() => { setShowRemoveConfirm(true); setMenuOpen(false); }}>
+                        <Trash2 size={13} /> Remove from sheet
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </td>
       </tr>
+
       {showRemoveConfirm && (
         <tr style={{ background: 'rgba(239,68,68,0.08)' }}>
-          <td colSpan={10} className="px-4 py-3">
+          <td colSpan={9} className="px-4 py-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <span className="text-[12px]" style={{ color: 'var(--brand-text)' }}>
                 Remove <strong>{t.client?.name || t.name}</strong> from the session sheet? This marks them as lost / completed.
@@ -1000,31 +1118,26 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
           </td>
         </tr>
       )}
+
       {showFeedback && (
         <tr style={{ background: hasComment ? 'rgba(180,20,20,0.65)' : 'rgba(99,179,237,0.06)', borderBottom: cellBorder }}>
-          <td colSpan={10} className="px-4 py-3">
+          <td colSpan={9} className="px-4 py-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <div className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: '#63b3ed' }}>Client feedback</div>
-                <textarea
-                  rows={2}
-                  className="w-full text-[11px] rounded-lg px-2 py-1.5 resize-none"
+                <textarea rows={2} className="w-full text-[11px] rounded-lg px-2 py-1.5 resize-none"
                   style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', outline: 'none' }}
                   placeholder="How did the client respond? Any issues?"
                   defaultValue={t.lastClientFeedback || ''}
-                  onBlur={(e) => { if (e.target.value !== (t.lastClientFeedback || '')) updateField.mutate({ lastClientFeedback: e.target.value || null }); }}
-                />
+                  onBlur={(e) => { if (e.target.value !== (t.lastClientFeedback || '')) updateField.mutate({ lastClientFeedback: e.target.value || null }); }} />
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: '#90ff90' }}>Trainer feedback</div>
-                <textarea
-                  rows={2}
-                  className="w-full text-[11px] rounded-lg px-2 py-1.5 resize-none"
+                <textarea rows={2} className="w-full text-[11px] rounded-lg px-2 py-1.5 resize-none"
                   style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', outline: 'none' }}
                   placeholder="Trainer performance, punctuality, content quality…"
                   defaultValue={t.lastTrainerFeedback || ''}
-                  onBlur={(e) => { if (e.target.value !== (t.lastTrainerFeedback || '')) updateField.mutate({ lastTrainerFeedback: e.target.value || null }); }}
-                />
+                  onBlur={(e) => { if (e.target.value !== (t.lastTrainerFeedback || '')) updateField.mutate({ lastTrainerFeedback: e.target.value || null }); }} />
               </div>
             </div>
             <div className="text-[10px] mt-1.5" style={{ opacity: 0.6 }}>Auto-saves on blur.</div>
@@ -1035,8 +1148,22 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   );
 }
 
-function AMScheduleButton({ training, onSent }: { training: any; onSent: () => void }) {
+// Thin wrapper that renders the schedule form as a dropdown menu item
+function AMScheduleMenuItem({ training, onSent }: { training: any; onSent: () => void }) {
   const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
+        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-accent)', textAlign: 'left' }}
+        onClick={() => setOpen(true)}>
+        <CalendarIcon size={13} /> Schedule calendar invite
+      </button>
+      {open && <AMScheduleDialog training={training} onClose={() => setOpen(false)} onSent={() => { setOpen(false); onSent(); }} />}
+    </>
+  );
+}
+
+function AMScheduleDialog({ training, onClose, onSent }: { training: any; onClose: () => void; onSent: () => void }) {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
 
@@ -1055,7 +1182,6 @@ function AMScheduleButton({ training, onSent }: { training: any; onSent: () => v
     queryFn: () => api.get('/trainers').then((r) =>
       (r.data as any[]).map((t: any) => ({ id: t.id, name: t.name, email: t.email || '' }))
     ),
-    enabled: open,
     staleTime: 300_000,
   });
 
@@ -1082,18 +1208,12 @@ function AMScheduleButton({ training, onSent }: { training: any; onSent: () => v
       if (errs.length) showToast(`Some invites failed: ${errs[0]}`, 'error');
       qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] });
       onSent();
-      setOpen(false);
     },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to send invite', 'error'),
   });
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (v) { setTime(training.defaultTimeIst || '08:00'); setTrainerOverrideId(''); } }}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="primary">
-          <CalendarIcon size={11}/> Schedule
-        </Button>
-      </DialogTrigger>
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         title={`Schedule · ${training.client?.name || training.name}`}
         description={`${training.meetingMode || 'Zoom'} · Sends .ics invite to trainer + client`}
@@ -1163,13 +1283,25 @@ function AMScheduleButton({ training, onSent }: { training: any; onSent: () => v
           </div>
         )}
         <DialogFooter>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!date || !time || invite.isPending} onClick={() => invite.mutate()}>
             {invite.isPending ? 'Sending…' : 'Schedule & Send invite'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AMScheduleButton({ training, onSent }: { training: any; onSent: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button size="sm" variant="primary" onClick={() => setOpen(true)}>
+        <CalendarIcon size={11}/> Schedule
+      </Button>
+      {open && <AMScheduleDialog training={training} onClose={() => setOpen(false)} onSent={() => { setOpen(false); onSent(); }} />}
+    </>
   );
 }
 
