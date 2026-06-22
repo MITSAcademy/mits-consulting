@@ -315,6 +315,101 @@ regularTrainingsRouter.post('/weekly-summary/submit', async (req: AuthedRequest,
   res.json({ ok: true, week });
 });
 
+// POST /my-sessions/send-daily — compulsory daily sheet email from Bhavneet (lead)
+// Recipients: Kashish, Muskan (team) + CC Samita, Vaibhav, Mitali, Kashish, Muskan
+regularTrainingsRouter.post('/my-sessions/send-daily', async (req: AuthedRequest, res) => {
+  if (!canRead(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+
+  const { rows, dateLabel: dateStr } = req.body as { rows: any[]; dateLabel: string };
+  if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'rows required' });
+
+  // Fixed recipient list
+  const recipientIds = ['u-kashish', 'u-muskan'];
+  const ccIds = ['u-samita', 'u-vaibhav', 'u-mitali', 'u-kashish', 'u-muskan'];
+  const allIds = [...new Set([...recipientIds, ...ccIds])];
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: allIds } },
+    select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true },
+  });
+  const byId = Object.fromEntries(users.map((u) => [u.id, u]));
+
+  const toEmails = recipientIds.map((id) => byId[id]?.sendAsAddress || byId[id]?.gmailAddress || byId[id]?.email).filter(Boolean) as string[];
+  const ccEmails = ccIds.map((id) => byId[id]?.sendAsAddress || byId[id]?.gmailAddress || byId[id]?.email).filter(Boolean);
+  // deduplicate cc, exclude to
+  const ccUnique = [...new Set(ccEmails)].filter((e) => !toEmails.includes(e));
+
+  const sender = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true, gmailAccessToken: true, gmailRefreshToken: true },
+  });
+  const fromUser = sender ? safeBuildFromUser(sender) : undefined;
+
+  const label = dateStr || new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+
+  // Build HTML table
+  const tableRows = rows.map((t: any, i: number) => {
+    const client = t.client?.name || t.name || '—';
+    const trainer = t.trainer?.name || '—';
+    const host = t.temporaryHost?.name || t.hostedByDefault?.name || '—';
+    const time = t.scheduledTimeIST || t.defaultTimeIst || '—';
+    const tool = t.meetingTool || t.meetingMode || '—';
+    const status = t.lastSessionStatus || '—';
+    const comment = t.lastSessionComment || '';
+    const bg = comment ? '#fff3f3' : (i % 2 === 0 ? '#fff' : '#f9fafb');
+    return `<tr style="background:${bg}">
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-weight:600">${i + 1}. ${client}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">${trainer}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">${host}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">${time}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">${tool}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:${status === 'Yes-Proper session' ? '#16a34a' : status === 'No' ? '#dc2626' : '#92400e'}">${status}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-style:italic">${comment}</td>
+    </tr>`;
+  }).join('');
+
+  const htmlBody = `
+<div style="font-family:Arial,sans-serif;max-width:900px;margin:0 auto">
+  <h2 style="color:#1a3a5c;margin-bottom:4px">📋 Daily Session Sheet — ${label}</h2>
+  <p style="color:#6b7280;margin-top:0;font-size:13px">Sent by ${req.user!.name} from MITS Portal</p>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+    <thead>
+      <tr style="background:#1a3a5c;color:#fff">
+        <th style="padding:8px 10px;text-align:left">Client</th>
+        <th style="padding:8px 10px;text-align:left">Trainer</th>
+        <th style="padding:8px 10px;text-align:left">Host</th>
+        <th style="padding:8px 10px;text-align:left">Time</th>
+        <th style="padding:8px 10px;text-align:left">Tool</th>
+        <th style="padding:8px 10px;text-align:left">Status</th>
+        <th style="padding:8px 10px;text-align:left">Comment</th>
+      </tr>
+    </thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+  <p style="color:#9ca3af;font-size:11px;margin-top:12px">Auto-generated from MITS Portal · ${label}</p>
+</div>`;
+
+  const textBody = rows.map((t: any, i: number) =>
+    `${i + 1}. ${t.client?.name || t.name || '—'} — ${t.trainer?.name || '—'} | ${t.scheduledTimeIST || t.defaultTimeIst || '—'} (${t.meetingTool || t.meetingMode || '—'}) | Host: ${t.temporaryHost?.name || t.hostedByDefault?.name || '—'} | ${t.lastSessionStatus || '—'}${t.lastSessionComment ? ` | ${t.lastSessionComment}` : ''}`
+  ).join('\n');
+
+  try {
+    await sendEmail({
+      to: toEmails,
+      cc: ccUnique.length ? ccUnique : undefined,
+      subject: `Daily Session Sheet — ${label}`,
+      body: textBody,
+      htmlBody,
+      fromUser,
+    } as any);
+    await audit(req.user!.id, req.user!.name, 'DAILY_SHEET_SENT', `${rows.length} sessions · ${label}`);
+    res.json({ ok: true, to: toEmails, cc: ccUnique });
+  } catch (err: any) {
+    console.error('[daily-sheet] email send failed:', err?.message);
+    res.status(500).json({ error: err?.message || 'Email send failed' });
+  }
+});
+
 // ── Account-manager session sheet ─────────────────────────────────────────
 // GET /trainings/my-sessions — returns all active RegularTrainings hosted by
 // the current user, enriched with the most recent upcoming TrainingSession.

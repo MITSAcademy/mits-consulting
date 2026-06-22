@@ -164,61 +164,39 @@ export function MySessionsPage() {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
-  const [tab, setTab] = useState<'trainings' | 'sessions' | 'activities'>('trainings');
+  const [tab, setTab] = useState<'trainings' | 'sessions' | 'activities' | 'payment'>('trainings');
   const [search, setSearch] = useState('');
   const searchLower = search.trim().toLowerCase();
+  const [sendingSheet, setSendingSheet] = useState(false);
+  const [showSendConfirm, setShowSendConfirm] = useState(false);
 
-  function exportSessionSheet() {
+  async function sendDailySheet() {
     const rows: any[] = mySessions || [];
-    if (rows.length === 0) { showToast('No sessions to export', 'error'); return; }
-
+    if (rows.length === 0) { showToast('No sessions to send', 'error'); return; }
+    setSendingSheet(true);
     const dateStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-
-    // WhatsApp-friendly text
-    const lines: string[] = [`📋 *Session Sheet — ${dateStr}*`, ''];
-    rows.forEach((t: any, i: number) => {
-      const client = t.client?.name || '—';
-      const trainer = t.trainer?.name || '—';
-      const host = t.temporaryHost?.name || t.hostedByDefault?.name || '—';
-      const time = t.scheduledTimeIST || '—';
-      const tool = t.meetingTool || '—';
-      const status = t.lastSessionStatus || '—';
-      const comment = t.lastSessionComment ? ` | 💬 ${t.lastSessionComment}` : '';
-      lines.push(`${i + 1}. *${client}* — ${trainer} | 🕐 ${time} (${tool}) | Host: ${host} | ${status}${comment}`);
-    });
-    lines.push('');
-    lines.push(`_Exported from MITS Portal_`);
-
-    const text = lines.join('\n');
-
-    // Also trigger CSV download
-    const csvLines = ['Client,Trainer,Skills,Host,Time,Tool,Session Happened,Comment'];
-    rows.forEach((t: any) => {
-      const esc = (v: string) => `"${(v || '').replace(/"/g, '""')}"`;
-      csvLines.push([
-        esc(t.client?.name),
-        esc(t.trainer?.name),
-        esc(t.trainer?.skills),
-        esc(t.temporaryHost?.name || t.hostedByDefault?.name),
-        esc(t.scheduledTimeIST),
-        esc(t.meetingTool),
-        esc(t.lastSessionStatus),
-        esc(t.lastSessionComment),
-      ].join(','));
-    });
-    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `session-sheet-${today}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    // Copy WhatsApp text to clipboard
-    navigator.clipboard.writeText(text).then(
-      () => showToast('CSV downloaded · WhatsApp text copied to clipboard'),
-      () => showToast('CSV downloaded'),
-    );
+    try {
+      await api.post('/regular-trainings/my-sessions/send-daily', { rows, dateLabel: dateStr });
+      const csvLines = ['Client,Trainer,Skills,Host,Time,Tool,Session Happened,Comment'];
+      rows.forEach((t: any) => {
+        const esc = (v: string) => `"${(v || '').replace(/"/g, '""')}"`;
+        csvLines.push([
+          esc(t.client?.name), esc(t.trainer?.name), esc(t.trainer?.skills),
+          esc(t.temporaryHost?.name || t.hostedByDefault?.name),
+          esc(t.scheduledTimeIST), esc(t.meetingTool), esc(t.lastSessionStatus), esc(t.lastSessionComment),
+        ].join(','));
+      });
+      const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `session-sheet-${today}.csv`; a.click();
+      URL.revokeObjectURL(url);
+      showToast('Daily sheet emailed to team + CSV saved');
+    } catch (e: any) {
+      showToast(e?.response?.data?.error || 'Send failed', 'error');
+    } finally {
+      setSendingSheet(false);
+      setShowSendConfirm(false);
+    }
   }
   const filteredSessions = searchLower
     ? (mySessions || []).filter((t: any) =>
@@ -251,8 +229,8 @@ export function MySessionsPage() {
               </div>
             )}
             {isAM && (mySessions || []).length > 0 && (
-              <Button size="sm" onClick={exportSessionSheet} title="Download CSV + copy WhatsApp text">
-                <Download size={13}/> Export
+              <Button size="sm" variant="primary" onClick={() => setShowSendConfirm(true)} title="Send daily sheet to team (compulsory)">
+                <Send size={13}/> Send daily sheet
               </Button>
             )}
             <ScheduleCallButton onCreated={() => qc.invalidateQueries({ queryKey: ['call-logs'] })} />
@@ -267,6 +245,7 @@ export function MySessionsPage() {
             { key: 'trainings', label: 'Trainings', count: isAM ? sessionCount : null },
             { key: 'sessions',  label: 'Sessions',  count: inProgress.length + scheduledToday.length + overdueCalls.length },
             { key: 'activities', label: 'Activities', count: (recentCalls || []).length + (recentLogs || []).length },
+            ...(isAM ? [{ key: 'payment', label: 'Weekly Payment', count: null }] : []),
           ] as const).map(({ key, label, count }) => (
             <button
               key={key}
@@ -304,9 +283,11 @@ export function MySessionsPage() {
             ) : (
               <div className="muted text-sm py-8 text-center">Training sheet is only available for coordinators.</div>
             )}
-            {isAM && <WeeklyPaymentSummary />}
           </>
         )}
+
+        {/* ── Tab: Weekly Payment ── */}
+        {tab === 'payment' && isAM && <WeeklyPaymentSummary />}
 
         {/* ── Tab: Sessions ── */}
         {tab === 'sessions' && (
@@ -399,6 +380,26 @@ export function MySessionsPage() {
           </>
         )}
       </Page>
+
+      {/* ── Compulsory daily sheet send confirmation ── */}
+      {showSendConfirm && (
+        <Dialog open onOpenChange={(v) => !v && setShowSendConfirm(false)}>
+          <DialogContent title="Send daily session sheet" description="This will email today's session sheet to the team. This action is logged.">
+            <div className="rounded-lg px-4 py-3 text-[12px]" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+              <div className="font-semibold mb-1" style={{ color: 'var(--brand-text)' }}>Recipients</div>
+              <div className="muted">To: Kashish, Muskan</div>
+              <div className="muted">CC: Samita, Vaibhav, Mitali, Kashish, Muskan</div>
+              <div className="mt-2 font-semibold" style={{ color: 'var(--brand-text)' }}>{(mySessions || []).length} sessions will be included</div>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setShowSendConfirm(false)}>Cancel</Button>
+              <Button variant="primary" disabled={sendingSheet} onClick={sendDailySheet}>
+                <Send size={12}/> {sendingSheet ? 'Sending…' : 'Send now'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 }
