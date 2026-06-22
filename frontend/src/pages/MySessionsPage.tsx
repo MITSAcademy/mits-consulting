@@ -148,6 +148,12 @@ export function MySessionsPage() {
     queryFn: () => api.get('/session-logs', { params: { dateFrom: sevenAgo } }).then((r) => r.data),
   });
 
+  const { data: retrospectiveRows } = useQuery({
+    queryKey: ['retrospective'],
+    queryFn: () => api.get('/retrospective').then((r) => r.data),
+    enabled: isAM,
+  });
+
   const todayTasks = (tasks || []).filter((t: any) => t.dueDate === today && t.status !== 'Done');
   const overdueTasks = (tasks || []).filter((t: any) => t.dueDate && t.dueDate < today && t.status !== 'Done');
 
@@ -165,7 +171,7 @@ export function MySessionsPage() {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
-  const [tab, setTab] = useState<'sessions' | 'activities' | 'payment'>('sessions');
+  const [tab, setTab] = useState<'sessions' | 'activities' | 'payment' | 'retrospective'>('sessions');
   const [search, setSearch] = useState('');
   const searchLower = search.trim().toLowerCase();
   const [sendingSheet, setSendingSheet] = useState(false);
@@ -246,6 +252,7 @@ export function MySessionsPage() {
             { key: 'sessions' as const,  label: 'Sessions',  count: (isAM ? sessionCount : 0) + inProgress.length + scheduledToday.length + overdueCalls.length },
             { key: 'activities' as const, label: 'Activities', count: (recentCalls || []).length + (recentLogs || []).length },
             ...(isAM ? [{ key: 'payment' as const, label: 'Weekly Payment', count: null as null }] : []),
+            ...(isAM ? [{ key: 'retrospective' as const, label: 'Retrospective', count: null as null }] : []),
           ]).map(({ key, label, count }) => (
             <button
               key={key}
@@ -371,6 +378,11 @@ export function MySessionsPage() {
               )}
             </Section>
           </>
+        )}
+
+        {/* ── Tab: Retrospective ── */}
+        {tab === 'retrospective' && isAM && (
+          <RetrospectiveSection rows={retrospectiveRows || []} />
         )}
       </Page>
 
@@ -801,6 +813,7 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   const [editingComment, setEditingComment] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+  const [removeReason, setRemoveReason] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -826,8 +839,25 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   });
 
   const removeTraining = useMutation({
-    mutationFn: () => api.patch(`/regular-trainings/trainings/${t.id}`, { status: 'inactive' }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); onChanged(); showToast(`${t.client?.name || t.name} removed from sheet`); setShowRemoveConfirm(false); },
+    mutationFn: async () => {
+      await api.patch(`/regular-trainings/trainings/${t.id}`, { status: 'inactive' });
+      await api.post('/retrospective', {
+        sourceType: 'training',
+        sourceId: t.id,
+        clientName: t.client?.name || t.name,
+        trainerName: t.trainer?.name || null,
+        reason: removeReason || null,
+        sessionDate: new Date().toISOString().slice(0, 10),
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] });
+      qc.invalidateQueries({ queryKey: ['retrospective'] });
+      onChanged();
+      showToast(`${t.client?.name || t.name} removed — logged to Retrospective`);
+      setShowRemoveConfirm(false);
+      setRemoveReason('');
+    },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
@@ -1151,12 +1181,24 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
       {showRemoveConfirm && (
         <tr style={{ background: 'rgba(239,68,68,0.08)' }}>
           <td colSpan={9} className="px-4 py-3">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <span className="text-[12px]" style={{ color: 'var(--brand-text)' }}>
-                Remove <strong>{t.client?.name || t.name}</strong> from the session sheet? This marks them as lost / completed.
+            <div className="flex flex-col gap-2">
+              <span className="text-[12px] font-semibold" style={{ color: 'var(--brand-text)' }}>
+                Remove <strong>{t.client?.name || t.name}</strong> from the session sheet?
               </span>
+              <span className="text-[11px]" style={{ color: 'var(--brand-textMuted)' }}>
+                This will be logged to the Retrospective for tracking. Add a reason (optional but recommended):
+              </span>
+              <input
+                autoFocus
+                className="text-[11px] rounded-lg px-2.5 py-1.5"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none', maxWidth: 420 }}
+                placeholder="e.g. Client lost, completed training, billing issue…"
+                value={removeReason}
+                onChange={(e) => setRemoveReason(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') removeTraining.mutate(); if (e.key === 'Escape') { setShowRemoveConfirm(false); setRemoveReason(''); } }}
+              />
               <div className="flex gap-2">
-                <button onClick={() => setShowRemoveConfirm(false)}
+                <button onClick={() => { setShowRemoveConfirm(false); setRemoveReason(''); }}
                   className="text-[11px] px-3 py-1 rounded-lg"
                   style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textMuted)', cursor: 'pointer' }}>
                   Cancel
@@ -1164,7 +1206,7 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
                 <button onClick={() => removeTraining.mutate()} disabled={removeTraining.isPending}
                   className="text-[11px] px-3 py-1 rounded-lg font-semibold"
                   style={{ background: 'rgba(239,68,68,0.8)', color: '#fff', border: 'none', cursor: 'pointer' }}>
-                  {removeTraining.isPending ? 'Removing…' : 'Yes, remove'}
+                  {removeTraining.isPending ? 'Removing…' : 'Remove & log to Retrospective'}
                 </button>
               </div>
             </div>
@@ -1521,6 +1563,126 @@ function WeeklyPaymentSummary() {
         </div>
       )}
     </div>
+  );
+}
+
+function RetrospectiveSection({ rows }: { rows: any[] }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const { data: allUsers } = useQuery({
+    queryKey: ['users', 'minimal'],
+    queryFn: () => api.get('/users').then((r) => r.data),
+    staleTime: 300_000,
+  });
+
+  const updateRow = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => api.patch(`/retrospective/${id}`, data),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['retrospective'] }); showToast('Updated'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl p-8 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+        <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>No retrospective records yet</div>
+        <div className="text-[12px] muted mt-1">When a client is removed from the session sheet, it will appear here for tracking.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--brand-border)' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
+          <thead>
+            <tr style={{ background: 'var(--bg-tableHeader, #1e293b)' }}>
+              {['Date', 'Client', 'Trainer', 'Type', 'Reason', 'Ownership', 'Comments', 'Removed by'].map((h) => (
+                <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--brand-textMuted)', borderBottom: '1px solid var(--brand-border)' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r: any) => (
+              <RetrospectiveRow key={r.id} r={r} users={allUsers || []} onUpdate={(data) => updateRow.mutate({ id: r.id, data })} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function RetrospectiveRow({ r, users, onUpdate }: { r: any; users: any[]; onUpdate: (data: any) => void }) {
+  const [editingReason, setEditingReason] = useState(false);
+  const [editingComments, setEditingComments] = useState(false);
+  const [reasonVal, setReasonVal] = useState(r.reason || '');
+  const [commentsVal, setCommentsVal] = useState(r.comments || '');
+
+  const cellStyle = { borderBottom: '1px solid var(--brand-border)', color: 'var(--brand-text)', padding: '8px 12px', verticalAlign: 'top' as const };
+
+  return (
+    <tr style={{ background: 'var(--bg-card)' }} className="hover:brightness-105">
+      <td style={cellStyle} className="mono text-[11px] whitespace-nowrap">{r.removedAt?.slice(0, 10)}</td>
+      <td style={cellStyle} className="font-semibold">{r.clientName}</td>
+      <td style={cellStyle}>{r.trainerName || <span style={{ opacity: 0.4 }}>—</span>}</td>
+      <td style={cellStyle}>
+        <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: r.sourceType === 'training' ? 'rgba(251,191,36,0.15)' : 'rgba(99,102,241,0.2)', color: r.sourceType === 'training' ? '#fbbf24' : '#a5b4fc' }}>
+          {r.sourceType}
+        </span>
+      </td>
+      <td style={{ ...cellStyle, maxWidth: 180 }}>
+        {editingReason ? (
+          <div className="flex gap-1 items-start">
+            <textarea rows={2} autoFocus className="text-[11px] rounded px-1.5 py-1 flex-1 resize-none"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none' }}
+              value={reasonVal} onChange={(e) => setReasonVal(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setEditingReason(false); setReasonVal(r.reason || ''); } }}
+            />
+            <div className="flex flex-col gap-1">
+              <button onClick={() => { onUpdate({ reason: reasonVal }); setEditingReason(false); }} style={{ color: '#90ff90', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>✓</button>
+              <button onClick={() => { setEditingReason(false); setReasonVal(r.reason || ''); }} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>✕</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-1 group/r">
+            <span>{r.reason || <span style={{ opacity: 0.4 }}>—</span>}</span>
+            <button onClick={() => setEditingReason(true)} className="opacity-0 group-hover/r:opacity-100 transition-opacity" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-textMuted)', padding: 0, flexShrink: 0 }}><Pencil size={10}/></button>
+          </div>
+        )}
+      </td>
+      <td style={cellStyle}>
+        <select className="text-[11px] rounded px-1.5 py-1"
+          style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none' }}
+          value={r.ownerId || ''}
+          onChange={(e) => onUpdate({ ownerId: e.target.value || null })}>
+          <option value="">— Unassigned —</option>
+          {users.filter((u: any) => ['founder','manager','lead','account_manager'].includes(u.role)).map((u: any) => (
+            <option key={u.id} value={u.id}>{u.name}</option>
+          ))}
+        </select>
+      </td>
+      <td style={{ ...cellStyle, maxWidth: 200 }}>
+        {editingComments ? (
+          <div className="flex gap-1 items-start">
+            <textarea rows={2} autoFocus className="text-[11px] rounded px-1.5 py-1 flex-1 resize-none"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none' }}
+              value={commentsVal} onChange={(e) => setCommentsVal(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Escape') { setEditingComments(false); setCommentsVal(r.comments || ''); } }}
+            />
+            <div className="flex flex-col gap-1">
+              <button onClick={() => { onUpdate({ comments: commentsVal }); setEditingComments(false); }} style={{ color: '#90ff90', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>✓</button>
+              <button onClick={() => { setEditingComments(false); setCommentsVal(r.comments || ''); }} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>✕</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-1 group/c">
+            <span>{r.comments || <span style={{ opacity: 0.4 }}>—</span>}</span>
+            <button onClick={() => setEditingComments(true)} className="opacity-0 group-hover/c:opacity-100 transition-opacity" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-textMuted)', padding: 0, flexShrink: 0 }}><Pencil size={10}/></button>
+          </div>
+        )}
+      </td>
+      <td style={cellStyle} className="text-[11px]">{r.removedBy?.name || <span style={{ opacity: 0.4 }}>—</span>}</td>
+    </tr>
   );
 }
 

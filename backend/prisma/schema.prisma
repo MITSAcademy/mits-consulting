@@ -189,6 +189,8 @@ model User {
   timesheetEntries       TimesheetEntry[]   @relation("TimesheetEntries")
   timesheetApprovals     TimesheetEntry[]   @relation("TimesheetApprovals")
   jobCodesCreated        JobCode[]          @relation("JobCodeCreator")
+  retrospectivesRemoved  Retrospective[]    @relation("RetrospectiveRemovedBy")
+  retrospectivesOwned    Retrospective[]    @relation("RetrospectiveOwner")
 }
 
 // -------- NOTIFICATIONS --------
@@ -707,6 +709,32 @@ model RegularTraining {
   @@index([status])
   @@index([hostedByDefaultId])
   @@index([clientId])
+}
+
+// Retrospective: record of removed trainings / cancelled calls — never deleted, always traceable.
+model Retrospective {
+  id              String   @id @default(cuid())
+  // What was removed
+  sourceType      String                          // "training" | "call"
+  sourceId        String?                         // original RegularTraining.id or CallLog.id (kept even if source deleted)
+  clientName      String
+  trainerName     String?
+  // When + by whom
+  removedAt       DateTime @default(now())
+  removedById     String?
+  removedBy       User?    @relation("RetrospectiveRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
+  // Why
+  reason          String?
+  // Ownership assignment post-removal
+  ownerId         String?
+  owner           User?    @relation("RetrospectiveOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  // Free-form notes
+  comments        String?
+  // Date of the original training/call
+  sessionDate     String?
+
+  @@index([removedAt])
+  @@index([sourceType])
 }
 
 // One row per occurrence of a regular training — same punch-in/out + feedback

@@ -44,6 +44,7 @@ import { meetingLinksRouter } from './routes/meetingLinks';
 import { coordinatorDashboardRouter } from './routes/coordinatorDashboard';
 import { briefingRouter } from './routes/briefing';
 import { timesheetRouter } from './routes/timesheet';
+import { retrospectiveRouter } from './routes/retrospective';
 import { seedRouter } from './routes/seed';
 import { prisma } from './lib/prisma';
 
@@ -137,6 +138,7 @@ app.use('/api/meeting-links', meetingLinksRouter);
 app.use('/api/coordinator-dashboard', coordinatorDashboardRouter);
 app.use('/api/briefing', briefingRouter);
 app.use('/api/timesheet', timesheetRouter);
+app.use('/api/retrospective', retrospectiveRouter);
 app.use('/api/seed', seedRouter);
 
 // Global error handler
