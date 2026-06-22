@@ -802,7 +802,7 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   const cellBorder = isUnassigned ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(255,255,255,0.10)';
 
   // inline-edit state
-  const [editField, setEditField] = useState<'client' | 'trainer' | 'skills' | null>(null);
+  const [editField, setEditField] = useState<'client' | 'trainer' | 'skills' | 'time' | null>(null);
   const [editVal, setEditVal] = useState('');
   const [trainerReason, setTrainerReason] = useState('');
   const [commentVal, setCommentVal] = useState(t.lastSessionComment || '');
@@ -991,7 +991,33 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
 
         {/* Time */}
         <td className="px-2 py-2 mono font-bold text-[12px]" style={cell}>
-          {t.defaultTimeIst || <span style={{ opacity: 0.4 }}>—</span>}
+          {editField === 'time' ? (
+            <div className="flex gap-1 items-center">
+              <input
+                autoFocus
+                type="time"
+                className="text-[11px] rounded px-1 py-0.5"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none' }}
+                value={editVal}
+                onChange={(e) => setEditVal(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { updateField.mutate({ defaultTimeIst: editVal || null }); cancelEdit(); }
+                  if (e.key === 'Escape') cancelEdit();
+                }}
+              />
+              <button onClick={() => { updateField.mutate({ defaultTimeIst: editVal || null }); cancelEdit(); }} style={{ color: '#90ff90', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✓</button>
+              <button onClick={cancelEdit} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✕</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <span>{t.defaultTimeIst || <span style={{ opacity: 0.4 }}>—</span>}</span>
+              <button onClick={() => { setEditField('time' as any); setEditVal(t.defaultTimeIst || ''); }} title="Edit timing"
+                className="inline-flex opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-textMuted)', padding: 0 }}>
+                <Pencil size={10} />
+              </button>
+            </div>
+          )}
         </td>
 
         {/* Session Happened */}
