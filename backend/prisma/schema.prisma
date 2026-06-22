@@ -700,6 +700,9 @@ model RegularTraining {
   ownerTeam                String   @default("demo_team")  // demo_team | coordinator_team — auto-switches at 4 completed sessions
   demoEscalationRequested  Boolean  @default(false)        // coordinator flagged a trainer issue needing Demo Team intervention
   trainerReplacementReason String?                         // reason recorded when trainer is changed
+  clientMood               String?                         // "happy" | "neutral" | "at_risk"
+  trainerAttendance        String?                         // "present" | "late" | "no_show"
+  dailyNotes               String?                         // what happened today, blockers, next action
   status                   String   @default("active")     // active | paused | archived
   notes                    String?
   createdAt                DateTime @default(now())

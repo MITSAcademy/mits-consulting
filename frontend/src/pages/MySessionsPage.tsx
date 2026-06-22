@@ -754,7 +754,7 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
           <div className="rounded-xl overflow-hidden" style={{ border: '2px solid rgba(251,191,36,0.4)', boxShadow: '0 0 12px rgba(251,191,36,0.1)' }}>
             <div style={{ overflowX: 'auto' }}>
               <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
-                <thead><tr><TH w="16%">Clients</TH><TH w="11%">Trainers</TH><TH w="12%">Skills</TH><TH w="8%">Host</TH><TH w="5%">Tool</TH><TH w="6%">Time</TH><TH w="13%">Session Happened</TH><TH w="14%">Comments</TH><TH w="12%">Actions</TH></tr></thead>
+                <thead><tr><TH w="14%">Clients</TH><TH w="11%">Trainers</TH><TH w="12%">Skills</TH><TH w="8%">Host</TH><TH w="5%">Tool</TH><TH w="6%">Time</TH><TH w="13%">Session Happened</TH><TH w="5%">Mood</TH><TH w="11%">Comments</TH><TH w="12%">Actions</TH></tr></thead>
                 <tbody>{unassigned.map((t: any) => <AMSheetRow key={t.id} t={t} onChanged={onChanged} />)}</tbody>
               </table>
             </div>
@@ -766,14 +766,15 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
           <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
             <thead>
               <tr>
-                <TH w="16%">Clients</TH>
+                <TH w="14%">Clients</TH>
                 <TH w="11%">Trainers</TH>
                 <TH w="12%">Skills</TH>
                 <TH w="8%">Host</TH>
                 <TH w="5%">Tool</TH>
                 <TH w="6%">Time</TH>
                 <TH w="13%">Session Happened</TH>
-                <TH w="14%">Comments</TH>
+                <TH w="5%">Mood</TH>
+                <TH w="11%">Comments</TH>
                 <TH w="12%">Actions</TH>
               </tr>
             </thead>
@@ -911,10 +912,13 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
           ) : (
             <div className="flex items-start gap-1">
               <div>
-                {t.client
-                  ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>{t.client.name}</Link>
-                  : <span className="font-semibold">{t.name}</span>
-                }
+                <div className="flex items-center gap-1">
+                  {t.client
+                    ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>{t.client.name}</Link>
+                    : <span className="font-semibold">{t.name}</span>
+                  }
+                  {t.dailyNotes && <span title={t.dailyNotes} style={{ fontSize: 12, cursor: 'default' }}>📝</span>}
+                </div>
                 <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                   <span className="inline-block px-1.5 py-0 rounded text-[10px] font-semibold"
                     style={t.ownerTeam === 'coordinator_team' ? { background: 'rgba(99,179,237,0.2)', color: '#63b3ed' } : { background: 'rgba(251,191,36,0.2)', color: '#fbbf24' }}>
@@ -964,6 +968,15 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
             </div>
           ) : (
             <div className="flex items-center gap-1">
+              {t.trainerAttendance && (
+                <span
+                  title={t.trainerAttendance}
+                  style={{
+                    display: 'inline-block', width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                    background: t.trainerAttendance === 'present' ? 'var(--status-green)' : t.trainerAttendance === 'late' ? 'var(--status-amber)' : 'var(--status-red)',
+                  }}
+                />
+              )}
               <span>{t.trainer?.name || <span style={{ opacity: 0.4 }}>—</span>}</span>
               <InlineEditIcon field="trainer" />
             </div>
@@ -1064,6 +1077,33 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
             onChange={(e) => updateField.mutate({ lastSessionStatus: e.target.value || null })}>
             {SESSION_STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
+        </td>
+
+        {/* Mood */}
+        <td className="px-2 py-2 text-center" style={cell}>
+          {t.clientMood ? (
+            <button
+              onClick={() => {
+                const next = t.clientMood === 'happy' ? 'neutral' : t.clientMood === 'neutral' ? 'at_risk' : 'happy';
+                updateField.mutate({ clientMood: next });
+              }}
+              title="Click to cycle mood"
+              style={{
+                background: t.clientMood === 'happy' ? 'rgba(74,222,128,0.2)' : t.clientMood === 'neutral' ? 'rgba(251,191,36,0.2)' : 'rgba(239,68,68,0.2)',
+                color: t.clientMood === 'happy' ? 'var(--status-green)' : t.clientMood === 'neutral' ? 'var(--status-amber)' : 'var(--status-red)',
+                border: `1px solid ${t.clientMood === 'happy' ? 'rgba(74,222,128,0.4)' : t.clientMood === 'neutral' ? 'rgba(251,191,36,0.4)' : 'rgba(239,68,68,0.4)'}`,
+                borderRadius: 6, padding: '1px 5px', cursor: 'pointer', fontSize: 13, lineHeight: 1.5,
+              }}>
+              {t.clientMood === 'happy' ? '😊' : t.clientMood === 'neutral' ? '😐' : '🚨'}
+            </button>
+          ) : (
+            <button
+              onClick={() => updateField.mutate({ clientMood: 'happy' })}
+              title="Set mood"
+              style={{ background: 'none', border: '1px dashed rgba(255,255,255,0.2)', borderRadius: 6, padding: '1px 5px', cursor: 'pointer', color: 'rgba(150,160,180,0.5)', fontSize: 11 }}>
+              +
+            </button>
+          )}
         </td>
 
         {/* Comments */}
@@ -1180,7 +1220,7 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
 
       {showRemoveConfirm && (
         <tr style={{ background: 'rgba(239,68,68,0.08)' }}>
-          <td colSpan={9} className="px-4 py-3">
+          <td colSpan={10} className="px-4 py-3">
             <div className="flex flex-col gap-2">
               <span className="text-[12px] font-semibold" style={{ color: 'var(--brand-text)' }}>
                 Remove <strong>{t.client?.name || t.name}</strong> from the session sheet?
@@ -1216,7 +1256,7 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
 
       {showFeedback && (
         <tr style={{ background: hasComment ? 'rgba(180,20,20,0.65)' : 'rgba(99,179,237,0.06)', borderBottom: cellBorder }}>
-          <td colSpan={9} className="px-4 py-3">
+          <td colSpan={10} className="px-4 py-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <div className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: '#63b3ed' }}>Client feedback</div>
@@ -1234,6 +1274,36 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
                   defaultValue={t.lastTrainerFeedback || ''}
                   onBlur={(e) => { if (e.target.value !== (t.lastTrainerFeedback || '')) updateField.mutate({ lastTrainerFeedback: e.target.value || null }); }} />
               </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-[10px] uppercase tracking-wide font-semibold mb-1.5" style={{ color: '#fbbf24' }}>Trainer attendance:</div>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { val: 'present', label: 'Present ✓', bg: 'rgba(74,222,128,0.2)', color: 'var(--status-green)', border: 'rgba(74,222,128,0.4)' },
+                  { val: 'late',    label: 'Late ⚠',    bg: 'rgba(251,191,36,0.2)', color: 'var(--status-amber)', border: 'rgba(251,191,36,0.4)' },
+                  { val: 'no_show', label: 'No-show ✗', bg: 'rgba(239,68,68,0.2)',  color: 'var(--status-red)',   border: 'rgba(239,68,68,0.4)' },
+                ].map(({ val, label, bg, color, border }) => (
+                  <button
+                    key={val}
+                    onClick={() => updateField.mutate({ trainerAttendance: t.trainerAttendance === val ? null : val })}
+                    style={{
+                      background: t.trainerAttendance === val ? bg : 'rgba(0,0,0,0.2)',
+                      color: t.trainerAttendance === val ? color : 'rgba(200,210,220,0.7)',
+                      border: `1px solid ${t.trainerAttendance === val ? border : 'rgba(255,255,255,0.15)'}`,
+                      borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontSize: 11, fontWeight: t.trainerAttendance === val ? 700 : 400,
+                    }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-3">
+              <div className="text-[10px] uppercase tracking-wide font-semibold mb-1" style={{ color: '#a5b4fc' }}>Daily notes: <span className="normal-case font-normal opacity-70">(what happened today, blockers, next action)</span></div>
+              <textarea rows={2} className="w-full text-[11px] rounded-lg px-2 py-1.5 resize-none"
+                style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', outline: 'none' }}
+                placeholder="What happened today, any blockers, next action…"
+                defaultValue={t.dailyNotes || ''}
+                onBlur={(e) => { if (e.target.value !== (t.dailyNotes || '')) updateField.mutate({ dailyNotes: e.target.value || null }); }} />
             </div>
             <div className="text-[10px] mt-1.5" style={{ opacity: 0.6 }}>Auto-saves on blur.</div>
           </td>
