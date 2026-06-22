@@ -265,6 +265,10 @@ clientsRouter.get('/:id', async (req: AuthedRequest, res) => {
     },
   });
   if (!client) return res.status(404).json({ error: 'Not found' });
+  // lead (Bhavneet) can only access Active/LeverageGranted clients
+  if (req.user!.role === 'lead' && !['Active', 'LeverageGranted'].includes(client.lifecycle)) {
+    return res.status(403).json({ error: 'Access restricted: this client is in the demo pipeline.' });
+  }
   // Strip the large base64 blob from the default fetch — use GET /:id/engagement-letter/file to download
   const { engagementLetterFileB64: _elb64, ...clientWithoutBlob } = client as any;
   const hasEngagementLetterFile = !!_elb64;
