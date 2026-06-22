@@ -10,15 +10,24 @@ export const sessionLogsRouter = Router();
 sessionLogsRouter.use(requireAuth);
 
 const include = {
-  trainer: { select: { id: true, name: true } },
+  trainer: {
+    select: {
+      id: true, name: true, email: true,
+      phoneCode: true, phoneDigits: true,
+      bankHolderName: true, bankName: true, bankAccountNumber: true,
+      bankIfscCode: true, bankBranchName: true, bankAccountType: true,
+      upiId: true, paymentMethod: true,
+    },
+  },
   client: { select: { id: true, name: true } },
 };
 
 sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req, res) => {
-  const { status, trainerId, from, to, weekStart } = req.query as any;
+  const { status, trainerId, clientId, from, to, weekStart } = req.query as any;
   const where: any = {};
   if (status) where.status = status;
   if (trainerId) where.trainerId = trainerId;
+  if (clientId) where.clientId = clientId;
   if (from || to) where.date = { gte: from, lte: to };
   if (weekStart) {
     const end = new Date(weekStart);
