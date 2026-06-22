@@ -165,7 +165,7 @@ export function MySessionsPage() {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
-  const [tab, setTab] = useState<'trainings' | 'sessions' | 'activities' | 'payment'>('trainings');
+  const [tab, setTab] = useState<'sessions' | 'activities' | 'payment'>('sessions');
   const [search, setSearch] = useState('');
   const searchLower = search.trim().toLowerCase();
   const [sendingSheet, setSendingSheet] = useState(false);
@@ -243,8 +243,7 @@ export function MySessionsPage() {
         {/* ── Tabs ── */}
         <div className="flex gap-1 mb-5 p-1 rounded-xl" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', width: 'fit-content' }}>
           {([
-            { key: 'trainings' as const, label: 'Trainings', count: isAM ? sessionCount : null },
-            { key: 'sessions' as const,  label: 'Sessions',  count: inProgress.length + scheduledToday.length + overdueCalls.length },
+            { key: 'sessions' as const,  label: 'Sessions',  count: (isAM ? sessionCount : 0) + inProgress.length + scheduledToday.length + overdueCalls.length },
             { key: 'activities' as const, label: 'Activities', count: (recentCalls || []).length + (recentLogs || []).length },
             ...(isAM ? [{ key: 'payment' as const, label: 'Weekly Payment', count: null as null }] : []),
           ]).map(({ key, label, count }) => (
@@ -261,10 +260,14 @@ export function MySessionsPage() {
           ))}
         </div>
 
-        {/* ── Tab: Trainings ── */}
-        {tab === 'trainings' && (
+        {/* ── Tab: Weekly Payment ── */}
+        {tab === 'payment' && isAM && <WeeklyPaymentSummary />}
+
+        {/* ── Tab: Sessions (trainings sheet + calls merged) ── */}
+        {tab === 'sessions' && (
           <>
-            {isAM ? (
+            {/* Training sheet for AM/lead/manager/founder */}
+            {isAM && (
               <div className="mb-6">
                 {mySessionsLoading ? (
                   <div className="muted text-sm py-8 text-center">Loading…</div>
@@ -281,18 +284,7 @@ export function MySessionsPage() {
                   />
                 )}
               </div>
-            ) : (
-              <div className="muted text-sm py-8 text-center">Training sheet is only available for coordinators.</div>
             )}
-          </>
-        )}
-
-        {/* ── Tab: Weekly Payment ── */}
-        {tab === 'payment' && isAM && <WeeklyPaymentSummary />}
-
-        {/* ── Tab: Sessions ── */}
-        {tab === 'sessions' && (
-          <>
             {inProgress.length > 0 && (
               <Section title={`Live calls (${inProgress.length})`} tone="green">
                 {inProgress.map((c) => <CallRow key={c.id} c={c} />)}
