@@ -804,6 +804,7 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   // inline-edit state
   const [editField, setEditField] = useState<'client' | 'trainer' | 'skills' | null>(null);
   const [editVal, setEditVal] = useState('');
+  const [trainerReason, setTrainerReason] = useState('');
   const [commentVal, setCommentVal] = useState(t.lastSessionComment || '');
   const [editingComment, setEditingComment] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -856,7 +857,7 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
     setEditField(field);
     setEditVal(field === 'client' ? (t.client?.name || t.name || '') : field === 'trainer' ? (t.trainer?.id || '') : (t.trainer?.skills || ''));
   }
-  function cancelEdit() { setEditField(null); setEditVal(''); }
+  function cancelEdit() { setEditField(null); setEditVal(''); setTrainerReason(''); }
 
   function InlineEditIcon({ field }: { field: 'client' | 'trainer' | 'skills' }) {
     return (
@@ -909,15 +910,35 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
         {/* Trainer */}
         <td className="px-2 py-2" style={cell}>
           {editField === 'trainer' ? (
-            <div className="flex gap-1 items-center">
-              <select autoFocus className="flex-1 text-[11px] rounded px-1 py-0.5"
+            <div className="flex flex-col gap-1" style={{ minWidth: 160 }}>
+              <select autoFocus className="text-[11px] rounded px-1 py-0.5 w-full"
                 style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none' }}
                 value={editVal} onChange={(e) => setEditVal(e.target.value)}>
                 <option value="">— none —</option>
-                {(allTrainers || []).map((tr: any) => <option key={tr.id} value={tr.id}>{tr.name}</option>)}
+                {(allTrainers || []).map((tr: any) => {
+                  const phone = tr.phoneDigits ? ` · ${tr.phoneCode || ''}${tr.phoneDigits}` : '';
+                  return <option key={tr.id} value={tr.id}>{tr.name}{phone}</option>;
+                })}
               </select>
-              <button onClick={() => { updateField.mutate({ trainerId: editVal || null }); cancelEdit(); }} style={{ color: '#90ff90', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✓</button>
-              <button onClick={cancelEdit} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✕</button>
+              {t.trainer && editVal && editVal !== t.trainer.id && (
+                <input
+                  className="text-[11px] rounded px-1.5 py-0.5 w-full"
+                  style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(251,191,36,0.5)', color: '#fbbf24', outline: 'none' }}
+                  value={trainerReason}
+                  onChange={(e) => setTrainerReason(e.target.value)}
+                  placeholder="Reason for change (required)"
+                />
+              )}
+              <div className="flex gap-1">
+                <button
+                  onClick={() => {
+                    if (t.trainer && editVal && editVal !== t.trainer.id && !trainerReason.trim()) return;
+                    updateField.mutate({ trainerId: editVal || null, trainerReplacementReason: trainerReason || undefined });
+                    cancelEdit();
+                  }}
+                  style={{ color: '#90ff90', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✓</button>
+                <button onClick={cancelEdit} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 13 }}>✕</button>
+              </div>
             </div>
           ) : (
             <div className="flex items-center gap-1">
