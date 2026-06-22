@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { requireAuth } from '../middleware/auth';
-import prisma from '../lib/prisma';
+import { requireAuth } from '../lib/auth';
+import { prisma } from '../lib/prisma';
 
 export const retrospectiveRouter = Router();
 retrospectiveRouter.use(requireAuth);
