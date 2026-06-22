@@ -252,7 +252,7 @@ export function MySessionsPage() {
               onClick={() => setTab(key)}
               className="px-4 py-1.5 rounded-lg text-[13px] font-semibold transition-all"
               style={tab === key
-                ? { background: 'var(--brand-accent)', color: '#fff', border: 'none', cursor: 'pointer' }
+                ? { background: '#2563eb', color: '#ffffff', border: 'none', cursor: 'pointer', boxShadow: '0 1px 4px rgba(37,99,235,0.3)' }
                 : { background: 'transparent', color: 'var(--brand-textMuted)', border: 'none', cursor: 'pointer' }}
             >
               {label}{count != null && count > 0 ? <span className="ml-1.5 text-[11px] opacity-75">({count})</span> : null}
