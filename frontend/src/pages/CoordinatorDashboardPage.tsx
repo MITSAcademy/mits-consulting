@@ -18,7 +18,62 @@ import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import {
   Users, CalendarDays, AlertTriangle, CheckSquare, RefreshCw, ArrowRightLeft,
+  AlertCircle,
 } from 'lucide-react';
+
+interface TeamSummaryEntry {
+  id: string;
+  name: string;
+  role: string;
+  activeClients: number;
+  sessionsToday: number;
+  pendingTasks: number;
+  escalations: number;
+  atRiskClients: number;
+}
+
+function TeamOverviewCard({ coord }: { coord: TeamSummaryEntry }) {
+  return (
+    <div
+      className="rounded-xl p-4 space-y-3"
+      style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}
+    >
+      <div className="flex items-center gap-2">
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[13px] flex-shrink-0"
+          style={{ background: 'var(--accent-gold)', color: '#0a0c12' }}
+        >
+          {coord.name.charAt(0)}
+        </div>
+        <div>
+          <div className="font-semibold text-[13px]">{coord.name}</div>
+          <div className="text-[11px] muted capitalize">{coord.role.replace('_', ' ')}</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--bg-input)' }}>
+          <div className="text-[18px] font-bold tabular-nums" style={{ color: 'var(--status-green)' }}>{coord.activeClients}</div>
+          <div className="text-[10px] muted uppercase tracking-wider">Active</div>
+        </div>
+        <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--bg-input)' }}>
+          <div className="text-[18px] font-bold tabular-nums" style={{ color: 'var(--accent-gold)' }}>{coord.sessionsToday}</div>
+          <div className="text-[10px] muted uppercase tracking-wider">Today</div>
+        </div>
+        <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--bg-input)' }}>
+          <div className="flex items-center justify-center gap-1">
+            <div className="text-[18px] font-bold tabular-nums" style={{ color: coord.escalations > 0 ? 'var(--status-red)' : 'var(--brand-textMuted)' }}>{coord.escalations}</div>
+            {coord.escalations > 0 && <AlertCircle size={12} style={{ color: 'var(--status-red)' }} />}
+          </div>
+          <div className="text-[10px] muted uppercase tracking-wider">Escalations</div>
+        </div>
+        <div className="rounded-lg px-3 py-2 text-center" style={{ background: 'var(--bg-input)' }}>
+          <div className="text-[18px] font-bold tabular-nums" style={{ color: 'var(--brand-textSecondary)' }}>{coord.pendingTasks}</div>
+          <div className="text-[10px] muted uppercase tracking-wider">Tasks</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface CoordClient {
   id: string;
@@ -128,6 +183,12 @@ export default function CoordinatorDashboardPage() {
     refetchInterval: 60_000,
   });
 
+  const { data: teamSummaryData } = useQuery<{ coordinators: TeamSummaryEntry[] }>({
+    queryKey: ['coordinator-dashboard-team-summary'],
+    queryFn: () => api.get('/coordinator-dashboard/team-summary').then((r) => r.data),
+    refetchInterval: 60_000,
+  });
+
   const today = new Date().toISOString().slice(0, 10);
 
   const teamMembers = (data?.team || []).map((e) => ({
@@ -147,6 +208,20 @@ export default function CoordinatorDashboardPage() {
         <div className="callout">
           Live snapshot of coordinator activity. Click "Reallocate" to move a client between coordinators.
         </div>
+
+        {/* Team Overview — per-coordinator summary cards */}
+        {teamSummaryData && teamSummaryData.coordinators.length > 0 && (
+          <div className="mb-6">
+            <div className="text-[11px] uppercase tracking-wider font-semibold mb-3" style={{ color: 'var(--brand-textMuted)' }}>
+              Team Overview
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {teamSummaryData.coordinators.map((coord) => (
+                <TeamOverviewCard key={coord.id} coord={coord} />
+              ))}
+            </div>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="muted text-[13px] py-12 text-center">Loading team data…</div>

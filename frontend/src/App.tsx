@@ -67,6 +67,7 @@ const TimesheetReportPage = lazy(() => import('@/pages/TimesheetReportPage').the
 const FeatureFlagsPage = lazy(() => import('@/pages/FeatureFlagsPage'));
 const RolePermissionsPage = lazy(() => import('@/pages/RolePermissionsPage').then((m) => ({ default: m.RolePermissionsPage })));
 const MonthlyReportPage = lazy(() => import('@/pages/MonthlyReportPage').then((m) => ({ default: m.MonthlyReportPage })));
+const EscalationInboxPage = lazy(() => import('@/pages/EscalationInboxPage'));
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const user = useAuth((s) => s.user);
@@ -167,6 +168,7 @@ export default function App() {
           <Route path="/feature-flags" element={<FeatureFlagsPage />} />
           <Route path="/role-permissions" element={<RolePermissionsPage />} />
           <Route path="/reports/monthly" element={<MonthlyReportPage />} />
+          <Route path="/escalations" element={<EscalationInboxPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

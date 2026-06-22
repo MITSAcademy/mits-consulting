@@ -1,6 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { useState, createContext, useContext, Suspense } from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, Search } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Toaster } from '@/components/ui/toast';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -9,6 +9,7 @@ import { SetupAppPasswordModal } from '@/components/SetupAppPasswordModal';
 import { AskAIButton } from '@/components/AskAI';
 import { CelebrationLayer } from '@/components/CelebrationLayer';
 import { useAuth } from '@/store/auth';
+import { GlobalSearch, openGlobalSearch } from '@/components/GlobalSearch';
 
 /** Context lets the Topbar open the off-canvas sidebar without lifting state
  *  through every page. */
@@ -29,6 +30,7 @@ export function AppLayout() {
       <Toaster />
       <SetupAppPasswordModal />
       <CelebrationLayer />
+      <GlobalSearch />
     </MobileNavCtx.Provider>
   );
 }
@@ -98,6 +100,16 @@ export function Topbar({
       </div>
       <div className="flex gap-1.5 items-center flex-wrap">
         {actions}
+        <button
+          onClick={openGlobalSearch}
+          className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] transition-colors"
+          style={{ background: 'var(--bg-input)', color: 'var(--brand-textMuted)', border: '1px solid var(--brand-borderSoft)' }}
+          title="Search (⌘K)"
+        >
+          <Search size={13} />
+          <span>Search</span>
+          <kbd className="text-[10px] px-1 py-0.5 rounded ml-1" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-borderSoft)' }}>⌘K</kbd>
+        </button>
         <AskAIButton />
         <ThemeToggle />
         <NotificationBell />

@@ -77,7 +77,8 @@ const NAV: NavItem[] = [
 
   // ── Coordinator work (Mitali + Bhavneet + AMs) ───────────────────────
   { section: 'work', page: '/team-board', label: 'Team board', icon: UsersRound, roles: ['founder', 'manager', 'lead', 'account_manager'] },
-  { section: 'work', page: '/coordinator-dashboard', label: 'Coordinator dashboard', icon: UsersRound, roles: ['founder'] },
+  { section: 'work', page: '/coordinator-dashboard', label: 'Team dashboard', icon: UsersRound, roles: ['founder', 'manager', 'lead'] },
+  { section: 'work', page: '/escalations', label: 'Escalation inbox', icon: AlertCircle, roles: ['founder', 'manager', 'lead', 'demo_lead'] },
   { section: 'work', page: '/my-sessions', label: 'My calls & sessions', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager'] },
   { section: 'work', page: '/sessions', label: 'Sessions', icon: CalendarDays, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'] },
   { section: 'work', page: '/issues', label: 'Issues', icon: AlertTriangle, roles: ['founder', 'manager', 'lead', 'account_manager'] },
@@ -161,12 +162,14 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
     queryFn: async () => {
       const today = new Date().toISOString().slice(0, 10);
       const weekOut = (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().slice(0, 10); })();
-      const [home, sourcing, leverage, editReqs, clients] = await Promise.all([
+      const canSeeEscalations = ['founder', 'manager', 'lead', 'demo_lead'].includes(user?.role || '');
+      const [home, sourcing, leverage, editReqs, clients, escalations] = await Promise.all([
         api.get('/metrics/home').then((r) => r.data),
         api.get('/sourcing').then((r) => r.data),
         api.get('/leverage', { params: { status: 'PendingVaibhav' } }).then((r) => r.data),
         api.get('/edit-requests').then((r) => r.data),
         api.get('/clients').then((r) => r.data),
+        canSeeEscalations ? api.get('/escalations').then((r) => r.data).catch(() => []) : Promise.resolve([]),
       ]);
       const cl = (clients || []) as any[];
       const isSalesCloser = user?.role === 'sales_closer';
@@ -217,6 +220,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
         editReqPending: editReqs.filter((r: any) => r.status === 'Pending').length,
         dormantOverdue, holdDue, demoIntakePending, demosToday, feedbackPending,
         salesClosingActive, followUpsDue, renewalsDue, followUpActiveTotal,
+        escalationCount: (escalations as any[]).length,
       };
     },
     refetchInterval: 180_000,
@@ -246,6 +250,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
     if (page === '/roshni/follow-ups') return metrics.followUpsDue;
     if (page === '/renewals') return metrics.renewalsDue;
     if (page === '/follow-up-payments') return metrics.followUpActiveTotal;
+    if (page === '/escalations') return metrics.escalationCount || 0;
     return 0;
   };
 

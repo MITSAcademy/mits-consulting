@@ -47,6 +47,8 @@ import { timesheetRouter } from './routes/timesheet';
 import { retrospectiveRouter } from './routes/retrospective';
 import { rolePermissionsRouter } from './routes/rolePermissions';
 import { seedRouter } from './routes/seed';
+import { searchRouter } from './routes/search';
+import { escalationsRouter } from './routes/escalations';
 import { prisma } from './lib/prisma';
 
 const app = express();
@@ -142,6 +144,8 @@ app.use('/api/timesheet', timesheetRouter);
 app.use('/api/retrospective', retrospectiveRouter);
 app.use('/api/role-permissions', rolePermissionsRouter);
 app.use('/api/seed', seedRouter);
+app.use('/api/search', searchRouter);
+app.use('/api/escalations', escalationsRouter);
 
 // Global error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

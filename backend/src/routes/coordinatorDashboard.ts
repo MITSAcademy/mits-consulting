@@ -189,3 +189,57 @@ coordinatorDashboardRouter.patch('/reallocate/:clientId', async (req: AuthedRequ
 
   res.json(updated);
 });
+
+// Team summary — per-coordinator card data for the dashboard overview
+coordinatorDashboardRouter.get('/team-summary', async (_req: AuthedRequest, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Only account_manager and lead roles
+  const coordinators = await prisma.user.findMany({
+    where: { role: { in: ['account_manager', 'lead'] }, active: true },
+    select: { id: true, name: true, role: true },
+  });
+
+  const summaries = await Promise.all(
+    coordinators.map(async (coord) => {
+      const [activeClients, sessionsToday, pendingTasks, escalations] = await Promise.all([
+        prisma.regularTraining.count({
+          where: { hostedByDefaultId: coord.id, status: 'active' },
+        }),
+        prisma.regularTraining.count({
+          where: {
+            hostedByDefaultId: coord.id,
+            status: 'active',
+            sessions: {
+              some: {
+                scheduledFor: {
+                  gte: new Date(`${today}T00:00:00.000Z`),
+                  lte: new Date(`${today}T23:59:59.999Z`),
+                },
+              },
+            },
+          },
+        }),
+        prisma.task.count({
+          where: { ownerId: coord.id, status: { not: 'Done' } },
+        }),
+        prisma.regularTraining.count({
+          where: { hostedByDefaultId: coord.id, demoEscalationRequested: true, status: 'active' },
+        }),
+      ]);
+
+      return {
+        id: coord.id,
+        name: coord.name,
+        role: coord.role,
+        activeClients,
+        sessionsToday,
+        pendingTasks,
+        escalations,
+        atRiskClients: 0, // clientMood field not in schema
+      };
+    })
+  );
+
+  res.json({ coordinators: summaries });
+});
