@@ -242,11 +242,11 @@ export function MySessionsPage() {
         {/* ── Tabs ── */}
         <div className="flex gap-1 mb-5 p-1 rounded-xl" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', width: 'fit-content' }}>
           {([
-            { key: 'trainings', label: 'Trainings', count: isAM ? sessionCount : null },
-            { key: 'sessions',  label: 'Sessions',  count: inProgress.length + scheduledToday.length + overdueCalls.length },
-            { key: 'activities', label: 'Activities', count: (recentCalls || []).length + (recentLogs || []).length },
-            ...(isAM ? [{ key: 'payment', label: 'Weekly Payment', count: null }] : []),
-          ] as const).map(({ key, label, count }) => (
+            { key: 'trainings' as const, label: 'Trainings', count: isAM ? sessionCount : null },
+            { key: 'sessions' as const,  label: 'Sessions',  count: inProgress.length + scheduledToday.length + overdueCalls.length },
+            { key: 'activities' as const, label: 'Activities', count: (recentCalls || []).length + (recentLogs || []).length },
+            ...(isAM ? [{ key: 'payment' as const, label: 'Weekly Payment', count: null as null }] : []),
+          ]).map(({ key, label, count }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
