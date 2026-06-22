@@ -337,11 +337,15 @@ const CLIENT_PERMS: Record<string, Record<string, boolean>> = {
   payment_processor: { identity: false, contact: false, engagement: false, pipeline: false, workflow: false, financial: false, sensitive: false },
 };
 
+// Fields lead (Bhavneet) can edit regardless of category — team management
+const LEAD_ALLOWED_FIELDS = new Set(['assignedAmId']);
+
 function canEditFields(role: string, fields: string[]): { ok: boolean; blocked?: string[] } {
   if (role === 'founder') return { ok: true };
   const perms = CLIENT_PERMS[role] || {};
   const blocked: string[] = [];
   for (const f of fields) {
+    if (role === 'lead' && LEAD_ALLOWED_FIELDS.has(f)) continue;
     const cat = FIELD_CATEGORY[f];
     if (!cat) continue;
     if (!perms[cat]) blocked.push(`${f} (${cat})`);
