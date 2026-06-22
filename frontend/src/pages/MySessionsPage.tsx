@@ -750,7 +750,7 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
           <div className="rounded-xl overflow-hidden" style={{ border: '2px solid rgba(251,191,36,0.4)', boxShadow: '0 0 12px rgba(251,191,36,0.1)' }}>
             <div style={{ overflowX: 'auto' }}>
               <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
-                <thead><tr><TH w="16%">Clients</TH><TH w="11%">Trainers</TH><TH w="12%">Skills</TH><TH w="8%">Host</TH><TH w="5%">Tool</TH><TH w="5%">Time</TH><TH w="13%">Session Happened</TH><TH w="18%">Comments</TH><TH w="12%">Actions</TH></tr></thead>
+                <thead><tr><TH w="16%">Clients</TH><TH w="11%">Trainers</TH><TH w="12%">Skills</TH><TH w="8%">Host</TH><TH w="5%">Tool</TH><TH w="6%">Time</TH><TH w="13%">Session Happened</TH><TH w="14%">Comments</TH><TH w="12%">Actions</TH></tr></thead>
                 <tbody>{unassigned.map((t: any) => <AMSheetRow key={t.id} t={t} onChanged={onChanged} />)}</tbody>
               </table>
             </div>
@@ -767,9 +767,9 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
                 <TH w="12%">Skills</TH>
                 <TH w="8%">Host</TH>
                 <TH w="5%">Tool</TH>
-                <TH w="5%">Time</TH>
+                <TH w="6%">Time</TH>
                 <TH w="13%">Session Happened</TH>
-                <TH w="18%">Comments</TH>
+                <TH w="14%">Comments</TH>
                 <TH w="12%">Actions</TH>
               </tr>
             </thead>
@@ -1010,7 +1010,21 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
             </div>
           ) : (
             <div className="flex items-center gap-1">
-              <span>{t.defaultTimeIst || <span style={{ opacity: 0.4 }}>—</span>}</span>
+              {t.defaultTimeIst ? (() => {
+                const [hh, mm] = t.defaultTimeIst.split(':').map(Number);
+                const isAMTime = hh < 12;
+                const h12 = hh % 12 === 0 ? 12 : hh % 12;
+                const label = `${h12}:${String(mm).padStart(2, '0')} ${isAMTime ? 'AM' : 'PM'}`;
+                const bg = isAMTime ? 'rgba(251,191,36,0.15)' : 'rgba(99,102,241,0.2)';
+                const color = isAMTime ? '#fbbf24' : '#a5b4fc';
+                const tag = isAMTime ? 'Morning' : 'Evening';
+                return (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    <span style={{ background: bg, color, borderRadius: 4, padding: '1px 5px', fontWeight: 600, fontSize: 11 }}>{label}</span>
+                    <span style={{ color, opacity: 0.7, fontSize: 10 }}>{tag}</span>
+                  </span>
+                );
+              })() : <span style={{ opacity: 0.4 }}>—</span>}
               <button onClick={() => { setEditField('time' as any); setEditVal(t.defaultTimeIst || ''); }} title="Edit timing"
                 className="inline-flex opacity-0 group-hover:opacity-100 transition-opacity"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-textMuted)', padding: 0 }}>
