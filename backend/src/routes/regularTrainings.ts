@@ -341,7 +341,7 @@ regularTrainingsRouter.post('/my-sessions/send-daily', async (req: AuthedRequest
 
   const sender = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true, gmailAccessToken: true, gmailRefreshToken: true },
+    select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true },
   });
   const fromUser = sender ? safeBuildFromUser(sender) : undefined;
 
