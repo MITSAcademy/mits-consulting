@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, AuthedRequest } from '../lib/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 
 export const tasksRouter = Router();
 tasksRouter.use(requireAuth);
+
+const TASK_ROLES = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'accounts', 'payment_processor'];
 
 const include = {
   client: { select: { id: true, name: true } },
@@ -12,7 +14,7 @@ const include = {
   owner: { select: { id: true, name: true } },
 };
 
-tasksRouter.get('/', async (req: AuthedRequest, res) => {
+tasksRouter.get('/', requireRole(...TASK_ROLES), async (req: AuthedRequest, res) => {
   const { mine, status, dueOn } = req.query as any;
   const where: any = {};
   if (mine === '1') where.ownerId = req.user!.id;
@@ -27,7 +29,7 @@ const fields = [
   'status', 'priority', 'estimatedHours', 'type', 'engagementRateInr', 'completedAt',
 ];
 
-tasksRouter.post('/', async (req: AuthedRequest, res) => {
+tasksRouter.post('/', requireRole(...TASK_ROLES), async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of fields) if (f in req.body) data[f] = req.body[f];
   if (!data.title) return res.status(400).json({ error: 'title required' });
@@ -36,7 +38,7 @@ tasksRouter.post('/', async (req: AuthedRequest, res) => {
   res.status(201).json(t);
 });
 
-tasksRouter.patch('/:id', async (req: AuthedRequest, res) => {
+tasksRouter.patch('/:id', requireRole(...TASK_ROLES), async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of fields) if (f in req.body) data[f] = req.body[f];
   const t = await prisma.task.update({ where: { id: req.params.id }, data, include });
@@ -44,7 +46,7 @@ tasksRouter.patch('/:id', async (req: AuthedRequest, res) => {
 });
 
 // Mark session done -> create SessionLog
-tasksRouter.post('/:id/complete', async (req: AuthedRequest, res) => {
+tasksRouter.post('/:id/complete', requireRole('founder', 'manager', 'lead', 'account_manager'), async (req: AuthedRequest, res) => {
   const task = await prisma.task.findUnique({ where: { id: req.params.id }, include });
   if (!task) return res.status(404).json({ error: 'Not found' });
   const done = await prisma.$transaction(async (tx) => {
@@ -86,7 +88,7 @@ tasksRouter.post('/:id/complete', async (req: AuthedRequest, res) => {
   res.json(done);
 });
 
-tasksRouter.delete('/:id', async (req: AuthedRequest, res) => {
+tasksRouter.delete('/:id', requireRole('founder', 'manager', 'lead'), async (req: AuthedRequest, res) => {
   await prisma.task.delete({ where: { id: req.params.id } });
   res.json({ ok: true });
 });

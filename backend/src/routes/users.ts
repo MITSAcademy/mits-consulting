@@ -10,11 +10,13 @@ usersRouter.use(requireAuth);
 
 const ALLOWED_DOMAIN = '@mitssolution.com';
 
-usersRouter.get('/', async (_req, res) => {
-  const users = await prisma.user.findMany({
-    select: { id: true, name: true, email: true, role: true, reportsToId: true, active: true, createdAt: true, gmailAddress: true, smtpConfiguredAt: true },
-    orderBy: { createdAt: 'asc' },
-  });
+usersRouter.get('/', async (req: AuthedRequest, res) => {
+  const isLeadership = ['founder', 'manager', 'lead', 'demo_lead', 'account_manager'].includes(req.user!.role);
+  // Non-leadership roles (recruiter, sales_closer, etc.) get name+id only — no emails or roles exposed
+  const select = isLeadership
+    ? { id: true, name: true, email: true, role: true, reportsToId: true, active: true, createdAt: true, gmailAddress: true, smtpConfiguredAt: true }
+    : { id: true, name: true, active: true };
+  const users = await prisma.user.findMany({ select, orderBy: { createdAt: 'asc' } });
   res.json(users);
 });
 

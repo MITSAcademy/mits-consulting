@@ -1,22 +1,25 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, AuthedRequest } from '../lib/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 
 export const feedbackRouter = Router();
 feedbackRouter.use(requireAuth);
+
+const FEEDBACK_READERS = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'];
+const FEEDBACK_WRITERS = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'];
 
 const include = {
   client: { select: { id: true, name: true, phoneCode: true, phoneDigits: true } },
   trainer: { select: { id: true, name: true } },
 };
 
-feedbackRouter.get('/', async (_req, res) => {
+feedbackRouter.get('/', requireRole(...FEEDBACK_READERS), async (_req, res) => {
   const fb = await prisma.feedback.findMany({ include, orderBy: { weekStart: 'desc' } });
   res.json(fb);
 });
 
-feedbackRouter.post('/', async (req: AuthedRequest, res) => {
+feedbackRouter.post('/', requireRole(...FEEDBACK_WRITERS), async (req: AuthedRequest, res) => {
   const { clientId, weekStart, rating, notes, communicationStatus, trainerId } = req.body;
   if (!clientId || !weekStart || !rating) return res.status(400).json({ error: 'clientId, weekStart, rating required' });
   const fb = await prisma.feedback.create({
@@ -31,7 +34,7 @@ feedbackRouter.post('/', async (req: AuthedRequest, res) => {
   res.status(201).json(fb);
 });
 
-feedbackRouter.patch('/:id', async (req: AuthedRequest, res) => {
+feedbackRouter.patch('/:id', requireRole(...FEEDBACK_WRITERS), async (req: AuthedRequest, res) => {
   const { rating, notes, communicationStatus, trainerId, weekStart } = req.body;
   const fb = await prisma.feedback.update({
     where: { id: req.params.id },
@@ -47,7 +50,7 @@ feedbackRouter.patch('/:id', async (req: AuthedRequest, res) => {
   res.json(fb);
 });
 
-feedbackRouter.delete('/:id', async (_req, res) => {
+feedbackRouter.delete('/:id', requireRole('founder', 'manager'), async (_req, res) => {
   await prisma.feedback.delete({ where: { id: _req.params.id } });
   res.json({ ok: true });
 });

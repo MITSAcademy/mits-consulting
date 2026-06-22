@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, AuthedRequest } from '../lib/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 
 export const paymentsRouter = Router();
@@ -12,7 +12,7 @@ const include = {
   receivedBy: { select: { id: true, name: true } },
 };
 
-paymentsRouter.get('/', async (req, res) => {
+paymentsRouter.get('/', requireRole('founder', 'manager', 'demo_lead', 'sales_closer', 'accounts', 'payment_processor'), async (req, res) => {
   const { from, to, clientId } = req.query as any;
   const where: any = {};
   if (clientId) where.clientId = clientId;

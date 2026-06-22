@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, AuthedRequest } from '../lib/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 
 export const trainersRouter = Router();
@@ -10,9 +10,18 @@ const include = {
   recruitedBy: { select: { id: true, name: true, role: true } },
 };
 
-trainersRouter.get('/', async (_req, res) => {
+const FINANCE_ROLES = ['founder', 'manager', 'accounts', 'payment_processor'];
+
+trainersRouter.get('/', async (req: AuthedRequest, res) => {
   const trainers = await prisma.trainer.findMany({ include, orderBy: { name: 'asc' } });
-  res.json(trainers);
+  const canSeeFinance = FINANCE_ROLES.includes(req.user!.role);
+  // Strip bank/UPI/rate details for non-finance roles
+  const sanitized = trainers.map((t: any) => {
+    if (canSeeFinance) return t;
+    const { upiId, bankName, accountNumber, ifscCode, defaultRateInr, rateModel, ...safe } = t;
+    return safe;
+  });
+  res.json(sanitized);
 });
 
 // ─────────────────────────────────────────────────────────────────────────
