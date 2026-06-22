@@ -733,55 +733,91 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
     </th>
   );
 
+  const unassigned = rows.filter((t: any) => !t.hostedByDefault);
+  const assigned   = rows.filter((t: any) =>  t.hostedByDefault);
+
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--brand-border)', boxShadow: 'var(--shadow-sm)' }}>
-      <div style={{ overflowX: 'auto' }}>
-        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
-          <thead>
-            <tr>
-              <TH w="14%">Clients</TH>
-              <TH w="9%">Trainers</TH>
-              <TH w="10%">Skills</TH>
-              <TH w="7%">Permanent</TH>
-              <TH w="7%">Temporary</TH>
-              <TH w="5%">Tool</TH>
-              <TH w="5%">Time</TH>
-              <TH w="12%">Session Happened</TH>
-              <TH w="16%">Comments</TH>
-              <TH w="15%">Actions</TH>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((t: any) => (
-              <AMSheetRow key={t.id} t={t} onChanged={onChanged} />
-            ))}
-          </tbody>
-        </table>
+    <div className="space-y-4">
+      {unassigned.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-block w-2 h-2 rounded-full" style={{ background: 'var(--status-amber)', boxShadow: '0 0 6px var(--status-amber)' }} />
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--status-amber)' }}>
+              New clients — assign a host ({unassigned.length})
+            </span>
+          </div>
+          <div className="rounded-xl overflow-hidden" style={{ border: '2px solid rgba(251,191,36,0.4)', boxShadow: '0 0 12px rgba(251,191,36,0.1)' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
+                <thead><tr><TH w="14%">Clients</TH><TH w="9%">Trainers</TH><TH w="10%">Skills</TH><TH w="7%">Permanent</TH><TH w="7%">Temporary</TH><TH w="5%">Tool</TH><TH w="5%">Time</TH><TH w="12%">Session Happened</TH><TH w="16%">Comments</TH><TH w="15%">Actions</TH></tr></thead>
+                <tbody>{unassigned.map((t: any) => <AMSheetRow key={t.id} t={t} onChanged={onChanged} />)}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--brand-border)', boxShadow: 'var(--shadow-sm)' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
+            <thead>
+              <tr>
+                <TH w="14%">Clients</TH>
+                <TH w="9%">Trainers</TH>
+                <TH w="10%">Skills</TH>
+                <TH w="7%">Permanent</TH>
+                <TH w="7%">Temporary</TH>
+                <TH w="5%">Tool</TH>
+                <TH w="5%">Time</TH>
+                <TH w="12%">Session Happened</TH>
+                <TH w="16%">Comments</TH>
+                <TH w="15%">Actions</TH>
+              </tr>
+            </thead>
+            <tbody>
+              {assigned.map((t: any) => (
+                <AMSheetRow key={t.id} t={t} onChanged={onChanged} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 }
+
+const AM_HOSTS = [
+  { id: 'u-kashish', name: 'Kashish' },
+  { id: 'u-muskan',  name: 'Muskan'  },
+];
 
 function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const rowUser = useAuth((s) => s.user)!
   const skills = t.trainer?.skills || '—';
-  const permanentName = t.hostedByDefault?.name || '—';
-  const temporaryName = t.temporaryHost?.name || permanentName;
+  const permanentName = t.hostedByDefault?.name || <span style={{ color: 'var(--status-amber)', fontStyle: 'italic' }}>Unassigned</span>;
+  const temporaryName = t.temporaryHost?.name || t.hostedByDefault?.name || '—';
   const hasComment = !!(t.lastSessionComment && t.lastSessionComment.trim());
+  const isUnassigned = !t.hostedByDefault;
 
-  const rowBg = hasComment ? 'rgba(200,30,30,0.82)' : 'var(--bg-card)';
+  const rowBg = isUnassigned ? 'rgba(251,191,36,0.07)' : hasComment ? 'rgba(200,30,30,0.82)' : 'var(--bg-card)';
   const rowColor = hasComment ? '#fff' : 'var(--brand-text)';
-  const cellBorder = '1px solid rgba(255,255,255,0.10)';
+  const cellBorder = isUnassigned ? '1px solid rgba(251,191,36,0.25)' : '1px solid rgba(255,255,255,0.10)';
 
   const [commentVal, setCommentVal] = useState(t.lastSessionComment || '');
   const [editingComment, setEditingComment] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   const updateField = useMutation({
     mutationFn: (data: Record<string, any>) => api.patch(`/regular-trainings/trainings/${t.id}`, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); onChanged(); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const removeTraining = useMutation({
+    mutationFn: () => api.patch(`/regular-trainings/trainings/${t.id}`, { status: 'inactive' }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); onChanged(); showToast(`${t.client?.name || t.name} removed from sheet`); setShowRemoveConfirm(false); },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
@@ -918,10 +954,52 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
                 ⚠
               </button>
             )}
-            <AMScheduleButton training={t} onSent={onChanged} />
+            {isUnassigned && AM_HOSTS.map((h) => (
+              <button
+                key={h.id}
+                title={`Assign to ${h.name}`}
+                onClick={() => updateField.mutate({ hostedByDefaultId: h.id })}
+                className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold"
+                style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.4)', cursor: 'pointer' }}>
+                + {h.name}
+              </button>
+            ))}
+            {!isUnassigned && <AMScheduleButton training={t} onSent={onChanged} />}
+            {(rowUser.role === 'lead' || rowUser.role === 'founder' || rowUser.role === 'manager') && (
+              <button
+                title="Remove client from session sheet (mark lost / completed)"
+                onClick={() => setShowRemoveConfirm(true)}
+                className="inline-flex items-center justify-center rounded p-1"
+                style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171', border: 'none', cursor: 'pointer' }}>
+                ✕
+              </button>
+            )}
           </div>
         </td>
       </tr>
+      {showRemoveConfirm && (
+        <tr style={{ background: 'rgba(239,68,68,0.08)' }}>
+          <td colSpan={10} className="px-4 py-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <span className="text-[12px]" style={{ color: 'var(--brand-text)' }}>
+                Remove <strong>{t.client?.name || t.name}</strong> from the session sheet? This marks them as lost / completed.
+              </span>
+              <div className="flex gap-2">
+                <button onClick={() => setShowRemoveConfirm(false)}
+                  className="text-[11px] px-3 py-1 rounded-lg"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textMuted)', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button onClick={() => removeTraining.mutate()} disabled={removeTraining.isPending}
+                  className="text-[11px] px-3 py-1 rounded-lg font-semibold"
+                  style={{ background: 'rgba(239,68,68,0.8)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                  {removeTraining.isPending ? 'Removing…' : 'Yes, remove'}
+                </button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
       {showFeedback && (
         <tr style={{ background: hasComment ? 'rgba(180,20,20,0.65)' : 'rgba(99,179,237,0.06)', borderBottom: cellBorder }}>
           <td colSpan={10} className="px-4 py-3">

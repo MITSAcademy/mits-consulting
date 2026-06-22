@@ -632,6 +632,25 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
     } catch (e) {
       console.warn('[notify-mitali-active] failed (non-fatal):', (e as any)?.message);
     }
+
+    // Auto-create a RegularTraining stub so the client appears on the session sheet.
+    // Unassigned (hostedByDefaultId = null) — Bhavneet assigns the host from the sheet.
+    try {
+      const existing = await prisma.regularTraining.findFirst({ where: { clientId: client.id, status: 'active' } });
+      if (!existing) {
+        await prisma.regularTraining.create({
+          data: {
+            name: client.name,
+            clientId: client.id,
+            status: 'active',
+            ownerTeam: 'coordinator_team',
+            hostedByDefaultId: null,
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('[auto-training-stub] failed (non-fatal):', (e as any)?.message);
+    }
   }
 
   // ─── Sourcing side-effects ────────────────────────────────────────────────
