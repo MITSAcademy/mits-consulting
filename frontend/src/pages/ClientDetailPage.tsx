@@ -63,7 +63,8 @@ type ModalKind =
   | 'sendIntake' | 'recordIntake' | 'internalSearch'
   | 'scheduleDemo' | 'demoDone' | 'noShow' | 'freshPayment' | 'leverage' | 'hold' | 'renewal' | 'welcomeEmail' | 'postDemoFeedback' | 'sendSkillMatrix' | 'skipMatrix' | 'preDemoReminder'
   | 'engagementLetter' | 'handoverWelcome' | 'subStatus' | 'paymentConfirmation' | 'groupRename' | 'paymentChecklist'
-  | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume' | 'assignAm' | 'feedbackEmail';
+  | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume' | 'assignAm' | 'feedbackEmail'
+  | 'editTrainingSetup' | 'editHandover' | 'mitaliWelcomeEmail' | 'certificateEmail';
 
 export function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -855,6 +856,83 @@ export function ClientDetailPage() {
               {client.notes && <Field label="Notes"><div className="whitespace-pre-wrap text-xs">{client.notes}</div></Field>}
             </div>
 
+            {/* Training Setup & Handover — visible to manager/lead/founder/AM */}
+            {['manager', 'lead', 'founder', 'account_manager'].includes(user.role) && (
+              <div className="card">
+                <div className="card-h">
+                  <span>Training Setup & Handover</span>
+                  <Button size="sm" onClick={() => setModal('editTrainingSetup')}><EditIcon size={12}/></Button>
+                </div>
+                <Field label="Session timings">{(client as any).sessionTimings || <span className="muted">—</span>}</Field>
+                <Field label="Meeting platform">{(client as any).meetingPlatform || <span className="muted">—</span>}</Field>
+                <Field label="Client skill set">{(client as any).clientSkillSet || <span className="muted">—</span>}</Field>
+                <Field label="Client timezone">{(client as any).clientTimezone || <span className="muted">—</span>}</Field>
+                <Field label="WA group link">
+                  {client.whatsappGroupLink
+                    ? <a href={client.whatsappGroupLink} target="_blank" rel="noreferrer" style={{ color: '#25d366' }}>Open group →</a>
+                    : <span className="muted">—</span>}
+                </Field>
+              </div>
+            )}
+
+            {/* Handover workflow — manager/lead/founder */}
+            {['manager', 'lead', 'founder'].includes(user.role) && (
+              <div className="card">
+                <div className="card-h">
+                  <span>Handover</span>
+                  <div className="flex gap-1.5">
+                    <Button size="sm" onClick={() => setModal('editHandover')}><EditIcon size={12}/></Button>
+                    {!(client as any).welcomeEmailSentAt && (
+                      <Button size="sm" variant="primary" onClick={() => setModal('mitaliWelcomeEmail')}>
+                        <Mail size={12}/> Send welcome email
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <Field label="Handover status">
+                  {(client as any).handoverStatus
+                    ? <Pill color={(client as any).handoverStatus === 'Done' ? 'green' : 'amber'}>{(client as any).handoverStatus}</Pill>
+                    : <span className="muted">Not started</span>}
+                </Field>
+                <Field label="Handover date">{(client as any).handoverDate || <span className="muted">—</span>}</Field>
+                <Field label="Handover owner">{(client as any).handoverOwner?.name || <span className="muted">—</span>}</Field>
+                <Field label="Handover notes">{(client as any).handoverNotes || <span className="muted">—</span>}</Field>
+                {(client as any).welcomeEmailSentAt && (
+                  <Field label="Welcome email sent">
+                    <span className="text-green-400">{(client as any).welcomeEmailSentAt} ✓</span>
+                  </Field>
+                )}
+              </div>
+            )}
+
+            {/* Certificate of Completion — Hold/Completed clients */}
+            {['manager', 'lead', 'founder', 'account_manager'].includes(user.role) && ['Hold', 'Completed'].includes(client.lifecycle) && (
+              <div className="card">
+                <div className="card-h">
+                  <span>Certificate of Completion</span>
+                  <div className="flex gap-1.5">
+                    <Button size="sm" onClick={() => setModal('editTrainingSetup')}><EditIcon size={12}/></Button>
+                    {(client as any).certificateUrl && !(client as any).certificateEmailSentAt && (
+                      <Button size="sm" variant="primary" onClick={() => setModal('certificateEmail')}>
+                        <Mail size={12}/> Send certificate email
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {(client as any).certificateUrl ? (
+                  <Field label="Certificate">
+                    <a href={(client as any).certificateUrl} target="_blank" rel="noreferrer" className="text-brand-blue">View certificate →</a>
+                    {(client as any).certificateUploadedAt && <span className="muted text-[11px] ml-2">uploaded {(client as any).certificateUploadedAt}</span>}
+                  </Field>
+                ) : (
+                  <div className="muted text-[12px] py-2">No certificate uploaded yet. Edit to add certificate URL.</div>
+                )}
+                {(client as any).certificateEmailSentAt && (
+                  <Field label="Email sent"><span className="text-green-400">{(client as any).certificateEmailSentAt} ✓</span></Field>
+                )}
+              </div>
+            )}
+
             <CommentSection clientId={client.id} />
             <ActivityLog clientId={client.id} />
             <DemoHistoryCard clientId={client.id} />
@@ -919,6 +997,10 @@ export function ClientDetailPage() {
         {modal === 'handoverWelcome' && <HandoverWelcomeModal client={client} onClose={() => setModal(null)} />}
         {modal === 'feedbackEmail' && <FeedbackEmailModal client={client} onClose={() => setModal(null)} />}
         {modal === 'assignAm' && <AssignAmModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'editTrainingSetup' && <EditTrainingSetupModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'editHandover' && <EditHandoverModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'mitaliWelcomeEmail' && <MitaliWelcomeEmailModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'certificateEmail' && <CertificateEmailModal client={client} onClose={() => setModal(null)} />}
       </Page>
     </>
   );
@@ -4383,6 +4465,164 @@ function FeedbackEmailModal({ client, onClose }: any) {
           <Button onClick={onClose}>Cancel</Button>
           <Button variant="primary" disabled={!toEmail || send.isPending} onClick={() => send.mutate()}>
             <Mail size={12}/> {send.isPending ? 'Sending…' : 'Send feedback email'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Edit Training Setup modal ──────────────────────────────────────────── */
+function EditTrainingSetupModal({ client, onClose }: { client: any; onClose: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [f, setF] = useState({
+    sessionTimings: client.sessionTimings || '',
+    meetingPlatform: client.meetingPlatform || '',
+    clientSkillSet: client.clientSkillSet || '',
+    clientTimezone: client.clientTimezone || '',
+    whatsappGroupLink: client.whatsappGroupLink || '',
+    certificateUrl: client.certificateUrl || '',
+  });
+
+  const save = useMutation({
+    mutationFn: () => api.patch(`/clients/${client.id}`, f),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['client', client.id] }); showToast('Saved'); onClose(); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent title="Edit Training Setup" description="Session details visible on the coordinator sheet.">
+        <div className="form-row"><Label>Session timings</Label><Input value={f.sessionTimings} onChange={(e) => setF({ ...f, sessionTimings: e.target.value })} placeholder="e.g. Mon/Wed/Fri 9:00 AM IST" /></div>
+        <div className="form-row">
+          <Label>Meeting platform</Label>
+          <Select value={f.meetingPlatform} onChange={(e) => setF({ ...f, meetingPlatform: e.target.value })}>
+            <option value="">— select —</option>
+            <option>Zoom</option><option>Teams</option><option>Webex</option><option>Google Meet</option><option>GoToMeeting</option><option>Phone</option><option>Other</option>
+          </Select>
+        </div>
+        <div className="form-row"><Label>Client skill set</Label><Input value={f.clientSkillSet} onChange={(e) => setF({ ...f, clientSkillSet: e.target.value })} placeholder="e.g. Python, Data Analysis, AWS" /></div>
+        <div className="form-row"><Label>Client timezone</Label><Input value={f.clientTimezone} onChange={(e) => setF({ ...f, clientTimezone: e.target.value })} placeholder="e.g. America/New_York, Asia/Kolkata" /></div>
+        <div className="form-row"><Label>WhatsApp group link</Label><Input value={f.whatsappGroupLink} onChange={(e) => setF({ ...f, whatsappGroupLink: e.target.value })} placeholder="https://chat.whatsapp.com/…" /></div>
+        <div className="form-row"><Label>Certificate URL (when completed)</Label><Input value={f.certificateUrl} onChange={(e) => setF({ ...f, certificateUrl: e.target.value })} placeholder="https://drive.google.com/…" /></div>
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : 'Save'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Edit Handover modal ─────────────────────────────────────────────────── */
+function EditHandoverModal({ client, onClose }: { client: any; onClose: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [f, setF] = useState({
+    handoverStatus: client.handoverStatus || '',
+    handoverDate: client.handoverDate || '',
+    handoverOwnerId: client.handoverOwnerId || '',
+    handoverNotes: client.handoverNotes || '',
+  });
+  const { data: users } = useQuery({ queryKey: ['users-list'], queryFn: () => api.get('/users').then((r) => r.data) });
+  const teamMembers = (users || []).filter((u: any) => ['manager', 'lead', 'account_manager', 'founder'].includes(u.role));
+
+  const save = useMutation({
+    mutationFn: () => api.patch(`/clients/${client.id}`, f),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['client', client.id] }); showToast('Saved'); onClose(); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent title="Edit Handover" description="Track the client handover call and status.">
+        <div className="form-row">
+          <Label>Handover status</Label>
+          <Select value={f.handoverStatus} onChange={(e) => setF({ ...f, handoverStatus: e.target.value })}>
+            <option value="">— not started —</option>
+            <option value="Pending">Pending</option>
+            <option value="Done">Done</option>
+          </Select>
+        </div>
+        <div className="form-row"><Label>Handover date</Label><Input type="date" value={f.handoverDate} onChange={(e) => setF({ ...f, handoverDate: e.target.value })} /></div>
+        <div className="form-row">
+          <Label>Handover owner</Label>
+          <Select value={f.handoverOwnerId} onChange={(e) => setF({ ...f, handoverOwnerId: e.target.value })}>
+            <option value="">— select —</option>
+            {teamMembers.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </Select>
+        </div>
+        <div className="form-row"><Label>Handover notes</Label><Textarea rows={3} value={f.handoverNotes} onChange={(e) => setF({ ...f, handoverNotes: e.target.value })} placeholder="Topics covered, client concerns, special requests…" /></div>
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>{save.isPending ? 'Saving…' : 'Save'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Mitali welcome email modal ─────────────────────────────────────────── */
+function MitaliWelcomeEmailModal({ client, onClose }: { client: any; onClose: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const toEmail = client.email || (client.intakeData as any)?.client_email || '';
+
+  const send = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/mitali-welcome-email`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['client', client.id] }); showToast('Welcome email sent'); onClose(); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent title="Send welcome email" description="Sends Mitali's branded onboarding welcome to the client.">
+        <div className="rounded-lg px-4 py-3 text-[12px]" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+          <div className="font-semibold mb-1">To: {toEmail || <span className="text-red-400">No email on file</span>}</div>
+          <div className="muted">CC: vaibhav.aggarwal@mitssolution.com</div>
+          <div className="mt-2 muted">Subject: Welcome to MITS Solution – {client.name}</div>
+          <div className="mt-2 text-[11px] muted">Introduces Muskan (Coordinator), Bhavneet (Team Leader), Mitali (CSM) with escalation contacts + Client Playbook.</div>
+        </div>
+        {!toEmail && <div className="text-red-400 text-[12px] mt-2">Add client email before sending.</div>}
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!toEmail || send.isPending} onClick={() => send.mutate()}>
+            <Mail size={12}/> {send.isPending ? 'Sending…' : 'Send welcome email'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Certificate email modal ────────────────────────────────────────────── */
+function CertificateEmailModal({ client, onClose }: { client: any; onClose: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const toEmail = client.email || (client.intakeData as any)?.client_email || '';
+
+  const send = useMutation({
+    mutationFn: () => api.post(`/clients/${client.id}/certificate-email`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['client', client.id] }); showToast('Certificate email sent'); onClose(); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent title="Send certificate email" description="Sends the Certificate of Completion email to the client.">
+        <div className="rounded-lg px-4 py-3 text-[12px]" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+          <div className="font-semibold mb-1">To: {toEmail || <span className="text-red-400">No email on file</span>}</div>
+          <div className="mt-2 muted">Subject: Certificate of Completion – {client.name}</div>
+          {(client as any).certificateUrl && (
+            <div className="mt-2"><a href={(client as any).certificateUrl} target="_blank" rel="noreferrer" className="text-brand-blue text-[11px]">View certificate →</a></div>
+          )}
+        </div>
+        {!toEmail && <div className="text-red-400 text-[12px] mt-2">Add client email before sending.</div>}
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!toEmail || send.isPending} onClick={() => send.mutate()}>
+            <Mail size={12}/> {send.isPending ? 'Sending…' : 'Send certificate email'}
           </Button>
         </DialogFooter>
       </DialogContent>

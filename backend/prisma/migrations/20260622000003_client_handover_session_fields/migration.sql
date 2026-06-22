@@ -1,0 +1,14 @@
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "sessionTimings"          TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "meetingPlatform"         TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "clientSkillSet"          TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "clientTimezone"          TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "handoverStatus"          TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "handoverDate"            TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "handoverOwnerId"         TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "handoverNotes"           TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "welcomeEmailSentAt"      TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "welcomeEmailSentById"    TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "certificateUrl"          TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "certificateUploadedAt"   TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "certificateUploadedById" TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "certificateEmailSentAt"  TEXT;

@@ -114,7 +114,7 @@ export function MySessionsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
 
-  const isAM = user.role === 'account_manager' || user.role === 'lead';
+  const isAM = user.role === 'account_manager' || user.role === 'lead' || user.role === 'manager' || user.role === 'founder';
   const today = todayISO();
   const sevenAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10); })();
 

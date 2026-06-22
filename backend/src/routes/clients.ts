@@ -290,6 +290,10 @@ const allowedFields = [
   'demoOutcome', 'demoFeedback', 'demoNextSteps',
   'demoEvidenceUrl', 'demoEvidenceKind',
   'dormantSince', 'dormantReason', 'dormantCheckBackOn', 'dormantResumeFromStage',
+  'sessionTimings', 'meetingPlatform', 'clientSkillSet', 'clientTimezone',
+  'handoverStatus', 'handoverDate', 'handoverOwnerId', 'handoverNotes',
+  'welcomeEmailSentAt', 'welcomeEmailSentById',
+  'certificateUrl', 'certificateUploadedAt', 'certificateUploadedById', 'certificateEmailSentAt',
   'notes',
 ];
 
@@ -325,6 +329,14 @@ const FIELD_CATEGORY: Record<string, string> = {
   cycleStart: 'financial', cycleEnd: 'financial', nextRenewalDue: 'financial',
   sessionsPerCycle: 'financial', sessionsUsed: 'financial', churnRisk: 'financial',
   requiresVerification: 'sensitive',
+  // Session & handover fields (manager/lead/founder)
+  sessionTimings: 'workflow', meetingPlatform: 'workflow',
+  clientSkillSet: 'workflow', clientTimezone: 'workflow',
+  handoverStatus: 'workflow', handoverDate: 'workflow',
+  handoverOwnerId: 'pipeline', handoverNotes: 'workflow',
+  welcomeEmailSentAt: 'workflow', welcomeEmailSentById: 'workflow',
+  certificateUrl: 'workflow', certificateUploadedAt: 'workflow',
+  certificateUploadedById: 'workflow', certificateEmailSentAt: 'workflow',
 };
 
 // Permission matrix. "workflow" lets Team 2 capture intake / match trainers without
@@ -2773,3 +2785,106 @@ async function sendDemoInvite(
     { clientId: client.id },
   );
 }
+
+// ─── Mitali welcome email (new structured onboarding welcome) ──────────────
+// POST /:id/mitali-welcome-email
+// Sends Mitali's branded welcome email introducing the team + playbook.
+clientsRouter.post('/:id/mitali-welcome-email', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'lead'];
+  if (!allowed.includes(req.user!.role)) return res.status(403).json({ error: 'Only Mitali (manager), Bhavneet (lead) or founder can send this' });
+
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, name: true, email: true, intakeData: true, assignedAm: { select: { name: true } } },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const toEmail = client.email || (client.intakeData as any)?.client_email || '';
+  if (!toEmail) return res.status(400).json({ error: 'No email on file for this client' });
+
+  const coordinatorName = client.assignedAm?.name || 'Muskan';
+  const today = new Date().toISOString().slice(0, 10);
+
+  const subject = `Welcome to MITS Solution – ${client.name}`;
+  const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#222">
+  <p>Dear ${client.name},</p>
+  <p>We hope this email finds you well.</p>
+  <p>On behalf of the entire team at MITS Solution, we are delighted to welcome you aboard. We appreciate your trust in us and are committed to ensuring that your experience with MITS is exceptional.</p>
+  <p>To help you get started and better understand our processes, services, and how we work together, we have prepared a comprehensive guide – the <strong>MITS Client Playbook</strong>.</p>
+  <p>Myself (Mitali) would like to take this opportunity to introduce the team members who will support you throughout your journey with MITS.</p>
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0"/>
+  <table style="width:100%;font-size:13px">
+    <tr><td style="padding:8px 0"><strong>${coordinatorName} (Client Coordinator)</strong><br/>She will coordinate and schedule calls to ensure your service requirements are handled effectively.</td></tr>
+    <tr><td style="padding:8px 0"><strong>Bhavneet (Team Leader)</strong><br/>She will assist with resource changes, timing concerns, and service-related issues.<br/><em>Level 1 Escalation · Response ETA: 24 Hours</em></td></tr>
+    <tr><td style="padding:8px 0"><strong>Mitali (Customer Success Manager)</strong><br/>I will oversee your overall experience and ensure your satisfaction throughout the engagement.<br/><em>Level 2 Escalation · Response ETA: 48 Hours</em></td></tr>
+  </table>
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0"/>
+  <p>Please find the documents below:</p>
+  <ul><li>Client Playbook</li><li>Service Agreement (via SignEasy)</li></ul>
+  <p>We look forward to supporting your success.</p>
+  <p>Warm regards,<br/><strong>Mitali</strong><br/>Customer Success Manager, MITS Solution</p>
+</div>`;
+
+  const me = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
+  });
+  let fromUser;
+  if (me?.gmailAddress && me?.smtpAppPassword) {
+    fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword), sendAsAddress: me.sendAsAddress };
+  }
+
+  try {
+    await sendEmail({ to: toEmail, cc: ['vaibhav.aggarwal@mitssolution.com'], subject, body: subject, htmlBody, fromUser } as any);
+    await prisma.client.update({ where: { id: client.id }, data: { welcomeEmailSentAt: today, welcomeEmailSentById: req.user!.id } });
+    await audit(req.user!.id, req.user!.name, 'MITALI_WELCOME_EMAIL', `${client.name} → ${toEmail}`, { clientId: client.id });
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Email send failed' });
+  }
+});
+
+// ─── Certificate of completion email ──────────────────────────────────────
+// POST /:id/certificate-email
+// Sends the certificate of completion email to the client.
+clientsRouter.post('/:id/certificate-email', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'lead', 'account_manager'];
+  if (!allowed.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+
+  const client = await prisma.client.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, name: true, email: true, intakeData: true, certificateUrl: true },
+  });
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  const toEmail = client.email || (client.intakeData as any)?.client_email || '';
+  if (!toEmail) return res.status(400).json({ error: 'No email on file for this client' });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const subject = `Certificate of Completion – ${client.name}`;
+  const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#222">
+  <p>Dear ${client.name},</p>
+  <p>Congratulations on successfully completing your training with us.</p>
+  <p>Your dedication and hard work throughout the program have been truly appreciated.</p>
+  <p>Please find attached your official <strong>Certificate of Completion</strong>. We are confident that the skills and knowledge gained during this journey will contribute positively to your professional growth and future success.</p>
+  <p>Should you require any further assistance, please feel free to reach out to us.</p>
+  <p>Once again, congratulations on this achievement, and we wish you continued success in your career.</p>
+  <p>Warm regards,<br/><strong>MITS Solution Team</strong></p>
+</div>`;
+
+  const me = await prisma.user.findUnique({
+    where: { id: req.user!.id },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
+  });
+  let fromUser;
+  if (me?.gmailAddress && me?.smtpAppPassword) {
+    fromUser = { id: me.id, name: me.name, gmailAddress: me.gmailAddress, appPasswordPlain: decryptSecret(me.smtpAppPassword), sendAsAddress: me.sendAsAddress };
+  }
+
+  try {
+    await sendEmail({ to: toEmail, subject, body: subject, htmlBody, fromUser } as any);
+    await prisma.client.update({ where: { id: client.id }, data: { certificateEmailSentAt: today } });
+    await audit(req.user!.id, req.user!.name, 'CERTIFICATE_EMAIL_SENT', `${client.name} → ${toEmail}`, { clientId: client.id });
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Email send failed' });
+  }
+});

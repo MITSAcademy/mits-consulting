@@ -174,6 +174,7 @@ model User {
   dailyReports       DailyReport[]
   comments           Comment[]
   assignedAmClients  Client[]     @relation("AssignedAm")
+  handoverOwnedClients Client[]   @relation("HandoverOwner")
   editRequests       EditRequest[]    @relation("EditRequestBy")
   editReviewed       EditRequest[]    @relation("EditReviewedBy")
   meetingLinks       MeetingLink[]    @relation("MeetingLinkOwner")
@@ -439,6 +440,25 @@ model Client {
   // When a client can't pay, Mitali grants leverage — extends payDate2 by max 3 days.
   leverageUntil              String?  // ISO date — latest date leverage was extended to
   leverageNote               String?  // why leverage was granted
+  // Session & meeting details (filled at handover)
+  sessionTimings             String?  // e.g. "Mon/Wed/Fri 9:00 AM IST"
+  meetingPlatform            String?  // Zoom | Teams | Webex | GoogleMeet | Other
+  clientSkillSet             String?  // skills/topics the client is learning
+  clientTimezone             String?  // e.g. "Asia/Kolkata", "America/New_York"
+  // Structured handover workflow
+  handoverStatus             String?  // Pending | Done
+  handoverDate               String?  // ISO date of handover call
+  handoverOwnerId            String?
+  handoverOwner              User?    @relation("HandoverOwner", fields: [handoverOwnerId], references: [id], onDelete: SetNull)
+  handoverNotes              String?
+  // Welcome email tracking
+  welcomeEmailSentAt         String?  // ISO date — stamped when welcome email sent
+  welcomeEmailSentById       String?  // who sent it
+  // Certificate of completion
+  certificateUrl             String?  // uploaded file URL / base64
+  certificateUploadedAt      String?
+  certificateUploadedById    String?
+  certificateEmailSentAt     String?  // ISO date — stamped when cert email sent
   notes                    String?
   createdAt                DateTime       @default(now())
 
