@@ -303,13 +303,13 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
       select: { id: true },
     });
     if (nikhilPlain) {
-      // Merge: move training rows from Nikhil (Arun) to Nikhil plain, delete the old client
+      // Move training rows from Nikhil (Arun) to Nikhil plain, set old client inactive
       await prisma.regularTraining.updateMany({
         where: { clientId: nikhilArun.id },
         data: { clientId: nikhilPlain.id },
       });
-      await prisma.client.delete({ where: { id: nikhilArun.id } });
-      log.push(`✓ merged Nikhil (Arun) into Nikhil, deleted duplicate client`);
+      await prisma.client.update({ where: { id: nikhilArun.id }, data: { lifecycle: 'Dormant' as any } });
+      log.push(`✓ merged Nikhil (Arun) sessions into Nikhil, old client set dormant`);
       fixed++;
     } else {
       await prisma.client.update({ where: { id: nikhilArun.id }, data: { name: 'Nikhil' } });
