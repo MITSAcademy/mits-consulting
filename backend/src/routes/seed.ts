@@ -318,24 +318,42 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
     }
   }
 
-  // 3. Find and remove duplicate active RegularTraining rows (same clientId + trainerId)
+  // 3. Find and remove duplicate active RegularTraining rows per CLIENT
+  // A client should have at most ONE active session. Keep the row that has the most data
+  // (has trainerId + notes/skills), delete all others for that client.
   const allActive = await prisma.regularTraining.findMany({
     where: { status: 'active' },
-    select: { id: true, clientId: true, trainerId: true, createdAt: true, client: { select: { name: true } }, trainer: { select: { name: true } } },
+    select: {
+      id: true, clientId: true, trainerId: true, notes: true, createdAt: true,
+      client: { select: { name: true } },
+      trainer: { select: { name: true } },
+    },
     orderBy: { createdAt: 'asc' },
   });
 
-  // Group by clientId+trainerId, keep first (oldest), delete rest
-  const seen = new Map<string, string>();
-  const toDelete: string[] = [];
+  // Group by clientId — keep the "best" row (has trainerId AND notes preferred, else oldest)
+  const byClient = new Map<string, typeof allActive>();
   for (const rt of allActive) {
-    const key = `${rt.clientId}__${rt.trainerId}`;
-    if (seen.has(key)) {
-      toDelete.push(rt.id);
-      log.push(`✗ duplicate removed: ${rt.client?.name} ← ${rt.trainer?.name} (kept older row)`);
+    const group = byClient.get(rt.clientId) || [];
+    group.push(rt);
+    byClient.set(rt.clientId, group);
+  }
+
+  const toDelete: string[] = [];
+  for (const [, rows] of byClient) {
+    if (rows.length <= 1) continue;
+    // Score each row: +2 if has trainerId, +1 if has notes
+    const scored = rows.map(r => ({
+      ...r,
+      score: (r.trainerId ? 2 : 0) + (r.notes ? 1 : 0),
+    }));
+    // Sort: highest score first, then oldest first (createdAt asc)
+    scored.sort((a, b) => b.score - a.score || a.createdAt.getTime() - b.createdAt.getTime());
+    const [keep, ...rest] = scored;
+    for (const r of rest) {
+      toDelete.push(r.id);
+      log.push(`✗ removed duplicate: ${r.client?.name} ← ${r.trainer?.name || '(no trainer)'} [kept: ← ${keep.trainer?.name || '(no trainer)'}]`);
       deleted++;
-    } else {
-      seen.set(key, rt.id);
     }
   }
   if (toDelete.length > 0) {
