@@ -31,53 +31,54 @@ function fmtTrainerPhone(raw: string): { code: string; digits: string } | null {
 
 const RAW = [
   // ── Kashish ────────────────────────────────────────────────────────────────
-  { c: 'Venkat',           cp: '91993272035',  ce: 'balta.venkatesh@gmail.com',       t: 'Rahul Jasiwal', tp: '939844607',    te: 'rahuljais44@outlook.com',              host: 'Kashish', time: '08:00', skill: '' },
-  { c: 'Priya',            cp: '16144038079',  ce: 'mpriyadharshini92@gmail.com',     t: 'Chandra',       tp: '9182113854',   te: 'tchandrasekhar201@gmail.com',          host: 'Kashish', time: '16:30', skill: '' },
-  { c: 'Kavitha',          cp: '18723303776',  ce: 'kavi64050@gmail.com',             t: 'Gautham',       tp: '8075196292',   te: 'gautamrajr@gmail.com',                host: 'Kashish', time: '08:00', skill: '' },
-  { c: 'Vinith',           cp: '18046375396',  ce: 'vroy3006.sfg@gmail.com',          t: 'Ayush',         tp: '8448050455',   te: 'p.aayush@outlook.com',                host: 'Kashish', time: '06:30', skill: '' },
-  { c: 'Rohit',            cp: '19014384138',  ce: 'rohit.gadugu92@gmail.com',        t: 'Arnoald',       tp: '8248072423',   te: 'arnoldsajjan94@gmail.com',            host: 'Kashish', time: '12:30', skill: '' },
-  { c: 'Jahnavi',          cp: '18138935528',  ce: 'jahnavidasari28@gmail.com',       t: 'Pramil',        tp: '7755902019',   te: 'pramilgawande@gmail.com',             host: 'Kashish', time: '08:30', skill: '' },
-  { c: 'Priyanka',         cp: '919440133363', ce: 'priyankadantulu94@gmail.com',     t: 'Shivansh',      tp: '6394906234',   te: '',                                    host: 'Kashish', time: '10:30', skill: '' },
-  { c: 'Surya',            cp: '919994499850', ce: 'suryasimha.chintha@gmail.com',    t: 'Omkar',         tp: '7776902859',   te: 'shindediksha2012@gmail.com',          host: 'Kashish', time: '08:00', skill: '' },
-  { c: 'Shruthi',          cp: '16185270107',  ce: 'jshruthi97@gmail.com',            t: 'Bhupendra',     tp: '9987218936',   te: 'jiyana.bisht94@gmail.com',            host: 'Kashish', time: '20:00', skill: '' },
-  { c: 'Rahul',            cp: '13093636414',  ce: 'rahul122087@gmail.com',           t: 'Abhilash',      tp: '8378877766',   te: 'abwalke19@gmail.com',                 host: 'Kashish', time: '22:00', skill: '' },
-  { c: 'Yaswanth',         cp: '15128156436',  ce: 'yeshwanth.reddy166@gmail.com',    t: 'Niwaz',         tp: '6204364912',   te: 'Niwasgope2024@gmail.com',             host: 'Kashish', time: '09:00', skill: '' },
-  { c: 'Naveena',          cp: '14709022814',  ce: 'sunatangella@gmail.com',          t: 'Shivansh',      tp: '6394906234',   te: '',                                    host: 'Kashish', time: '21:30', skill: '' },
-  { c: 'Sujit',            cp: '18175280757',  ce: 'msujithmedha22@gmail.com',        t: 'Zakir',         tp: '',             te: '',                                    host: 'Kashish', time: '18:00', skill: '' },
-  { c: 'Asghar Jadhav',    cp: '17175712932',  ce: 'asgharmac@gmail.com',             t: 'Phanideep',     tp: '8328663598',   te: 'phanideep52@gmail.com',               host: 'Kashish', time: '20:00', skill: '' },
-  { c: 'Nikhil',           cp: '16095408222',  ce: 'nikhilreddy.t1405@gmail.com',     t: 'Raj',           tp: '8148829141',   te: 'mynarocikiaraj@gmail.com',            host: 'Kashish', time: '08:00', skill: '' },
-  { c: 'Teju',             cp: '17326721493',  ce: 'tejaswinipenchala@gmail.com',     t: 'Kishant',       tp: '9087070125',   te: 'rgkishanth@gmail.com',                host: 'Kashish', time: '08:00', skill: '' },
-  { c: 'Satvik',           cp: '18453770580',  ce: 'satvikmallempudi196@gmail.com',   t: 'Arun',          tp: '7338165435',   te: 'timsupt.ready@gmail.com',             host: 'Kashish', time: '19:30', skill: '' },
-  { c: 'Ambika',           cp: '18453200044',  ce: 'ambika.bathini@gmail.com',        t: 'Muthu',         tp: '9894998892',   te: 'muthu.vnathan6@gmail.com',            host: 'Kashish', time: '07:30', skill: '' },
-  { c: 'Sravya',           cp: '16129878685',  ce: 'sravya2331@gmail.com',            t: 'Durga',         tp: '9491335145',   te: 'velkuru.durgaprasad007@gmail.com',    host: 'Kashish', time: '14:30', skill: '' },
-  { c: 'Training Deepthi', cp: '19085651255',  ce: 'deeptikollu7@gmail.com',          t: 'Karthik',       tp: '814330543',    te: 'workmailkayy@gmail.com',              host: 'Kashish', time: '07:00', skill: '' },
-  { c: 'Training Sathvik', cp: '12106268596',  ce: 'sathvireddy1210@gmail.com',       t: 'Peet',          tp: '6290949166',   te: '',                                    host: 'Kashish', time: '09:00', skill: '' },
-  { c: 'Abhi',             cp: '19029826324',  ce: 'avajinapelli@gmail.com',          t: 'Jagdeesh',      tp: '8328682105',   te: 'c.jagan2012@gmail.com',               host: 'Kashish', time: '08:00', skill: '' },
-  { c: 'Nikhil (Arun)',    cp: '12035331095',  ce: 'nikhil.t1405@gmail.com',          t: 'Arun',          tp: '8143290149',   te: '',                                    host: 'Kashish', time: '08:00', skill: '' },
-  { c: 'Ooha',             cp: '14016668469',  ce: 'oohasi234@gmail.com',             t: 'Akram',         tp: '916394957133', te: 'codingmaniac007@gmail.com',            host: 'Kashish', time: '06:30', skill: '' },
-  { c: 'Sunny',            cp: '12815094456',  ce: 'dasarishirish@gmail.com',         t: 'Saroj',         tp: '918917335298', te: 'sarojekka1410@gmail.com',             host: 'Kashish', time: '07:00', skill: '' },
-  { c: 'Training Shalini', cp: '918464080186', ce: 'shalini123.dl@gmail.com',         t: 'Manoj',         tp: '8074834527',   te: 'manojbharat1803@gmail.com',           host: 'Kashish', time: '05:30', skill: 'PCL Scada' },
-  { c: 'Training Ashish',  cp: '17035777326',  ce: 'aashish.palla@gmail.com',         t: 'Ayush',         tp: '9111132565',   te: 'ayushgupta0426@gmail.com',            host: 'Kashish', time: '08:00', skill: 'Salesforce' },
-  { c: 'Yashwanthi',       cp: '15139969723',  ce: 'yashwanthiky@gmail.com',          t: 'Nikhil',        tp: '7978725393',   te: 'niks11.thadani@gmail.com',            host: 'Kashish', time: '09:00', skill: '' },
-  // New from updated PDF
-  { c: 'Shaikh',           cp: '17472268679',  ce: 'irshaikh177@gmail.com',           t: 'Nayan',         tp: '6394906234',   te: 'nayanjain928@gmail.com',              host: 'Kashish', time: '09:00', skill: '' },
-  { c: 'Priya (US)',       cp: '18035670442',  ce: '',                                t: 'Nayan',         tp: '6394906234',   te: 'nayanjain928@gmail.com',              host: 'Kashish', time: '09:00', skill: '' },
-  { c: 'Rumana',           cp: '19452706969',  ce: 'Rumanas803@gmail.com',            t: 'Yaseen',        tp: '7702895081',   te: 'yaseenmohammad777@gmail.com',         host: 'Kashish', time: '09:00', skill: '' },
-  { c: 'Training Alkehya', cp: '15166525623',  ce: '',                                t: 'Chandana',      tp: '6300231992',   te: 'Chandanagajula6666@gmail.com',        host: 'Kashish', time: '09:00', skill: '' },
-  { c: 'Sathiya',          cp: '9848160551',   ce: 'sathyajit90@gmail.com',           t: 'Siddeshwar',    tp: '9011645299',   te: '',                                    host: 'Kashish', time: '09:00', skill: '' },
+  // cg = client WhatsApp group link, tg = trainer WhatsApp group link
+  { c: 'Venkat',           cp: '91993272035',  ce: 'balta.venkatesh@gmail.com',       cg: 'https://chat.whatsapp.com/K0EUVaVAyr82S804prl3sq', t: 'Rahul Jasiwal', tp: '939844607',    te: 'rahuljais44@outlook.com',           tg: 'https://chat.whatsapp.com/BUpbnI1lKpcAAfRJCfxea9', host: 'Kashish', time: '08:00', skill: '' },
+  { c: 'Priya',            cp: '16144038079',  ce: 'mpriyadharshini92@gmail.com',     cg: 'https://chat.whatsapp.com/DsAglBSYpPP0fpTiZta1jx', t: 'Chandra',       tp: '9182113854',   te: 'tchandrasekhar201@gmail.com',       tg: 'https://chat.whatsapp.com/BBXtgSAq1F8DUhy2OKFRjw', host: 'Kashish', time: '16:30', skill: '' },
+  { c: 'Kavitha',          cp: '18723303776',  ce: 'kavi64050@gmail.com',             cg: 'https://chat.whatsapp.com/CBq8QiBWi6FIa8ybqnNSSZ', t: 'Gautham',       tp: '8075196292',   te: 'gautamrajr@gmail.com',              tg: 'https://chat.whatsapp.com/IceoBksqEyGHYDPDuUQCE5', host: 'Kashish', time: '08:00', skill: '' },
+  { c: 'Vinith',           cp: '18046375396',  ce: 'vroy3006.sfg@gmail.com',          cg: '',                                                 t: 'Akhil',         tp: '8522943664',   te: '',                                  tg: 'https://chat.whatsapp.com/Io94RLwNR3jEwDm12XUmu4', host: 'Kashish', time: '06:30', skill: '' },
+  { c: 'Rohit',            cp: '19014384138',  ce: 'rohit.gadugu92@gmail.com',        cg: 'https://chat.whatsapp.com/F9exCt0IAxW7wLpsG8SorJ', t: 'Arnoald',       tp: '8248072423',   te: 'arnoldsajjan94@gmail.com',          tg: 'https://chat.whatsapp.com/FkH9x6MobuSBgHVVTIOhU0', host: 'Kashish', time: '12:30', skill: '' },
+  { c: 'Jahnavi',          cp: '18138935528',  ce: 'jahnavidasari28@gmail.com',       cg: 'https://chat.whatsapp.com/K4L5OcsQLLE41RO2qTNq0E', t: 'Pramil',        tp: '7755902019',   te: 'pramilgawande@gmail.com',           tg: 'https://chat.whatsapp.com/HQ3V22L5fYs1QDUBoW3TuG', host: 'Kashish', time: '08:30', skill: '' },
+  { c: 'Priyanka',         cp: '919440133363', ce: 'priyankadantulu94@gmail.com',     cg: '',                                                 t: 'Shivansh',      tp: '6394906234',   te: '',                                  tg: 'https://chat.whatsapp.com/Gs4BXTZ60Ur7HflVeDxMVk', host: 'Kashish', time: '10:30', skill: '' },
+  { c: 'Surya',            cp: '919994499850', ce: 'suryasimha.chintha@gmail.com',    cg: 'https://chat.whatsapp.com/ByfKOSMZ92bEJRfGBhEwtZ', t: 'Omkar',         tp: '7776902859',   te: 'shindediksha2012@gmail.com',        tg: '',                                                 host: 'Kashish', time: '08:00', skill: '' },
+  { c: 'Shruthi',          cp: '16185270107',  ce: 'jshruthi97@gmail.com',            cg: 'https://chat.whatsapp.com/E72jtcOrAYvJFAK1gqbvVG', t: 'Bhupendra',     tp: '9987218936',   te: 'jiyana.bisht94@gmail.com',          tg: 'https://chat.whatsapp.com/JI1xfRiM5N09Zqw7JzRnxa', host: 'Kashish', time: '20:00', skill: '' },
+  { c: 'Rahul',            cp: '13093636414',  ce: 'rahul122087@gmail.com',           cg: 'https://chat.whatsapp.com/LSb09YUgc3MFwBQLyd7H9w', t: 'Abhilash',      tp: '8378877766',   te: 'abwalke19@gmail.com',               tg: 'https://chat.whatsapp.com/ED5S8CLKjE767Os0ngM0oB', host: 'Kashish', time: '22:00', skill: '' },
+  { c: 'Yaswanth',         cp: '15128156436',  ce: 'yeshwanth.reddy166@gmail.com',    cg: 'https://chat.whatsapp.com/IFjoGbGrEs45i23i4u5d3k', t: 'Niwaz',         tp: '6204364912',   te: 'Niwasgope2024@gmail.com',           tg: 'https://chat.whatsapp.com/BCQBqL9RZob2dc4WLVF2s4', host: 'Kashish', time: '09:00', skill: '' },
+  { c: 'Naveena',          cp: '14709022814',  ce: 'sunatangella@gmail.com',          cg: 'https://chat.whatsapp.com/EOX3cqLsVQj1o6vgXd5xEs', t: 'Shivansh',      tp: '6394906234',   te: '',                                  tg: 'https://chat.whatsapp.com/Gs4BXTZ60Ur7HflVeDxMVk', host: 'Kashish', time: '21:30', skill: '' },
+  { c: 'Sujit',            cp: '18175280757',  ce: 'msujithmedha22@gmail.com',        cg: 'https://chat.whatsapp.com/BtgCaHzG8Xw4cZYtbCfuEa', t: 'Zakir',         tp: '',             te: '',                                  tg: 'https://chat.whatsapp.com/KO8PKLYCI8K824ifZxZtWv', host: 'Kashish', time: '18:00', skill: '' },
+  { c: 'Asghar Jadhav',    cp: '17175712932',  ce: 'asgharmac@gmail.com',             cg: 'https://chat.whatsapp.com/HRCSzI2saesIZ3Gi7a5f0E', t: 'Phanideep',     tp: '8328663598',   te: 'phanideep52@gmail.com',             tg: '',                                                 host: 'Kashish', time: '20:00', skill: '' },
+  { c: 'Nikhil',           cp: '16095408222',  ce: 'nikhilreddy.t1405@gmail.com',     cg: 'https://chat.whatsapp.com/D5If7m1nrCt3yk5V8gx3Vc', t: 'Raj',           tp: '8148829141',   te: 'mynarocikiaraj@gmail.com',          tg: 'https://chat.whatsapp.com/D8unZjNqLiC66WKizpfZjv', host: 'Kashish', time: '08:00', skill: '' },
+  { c: 'Teju',             cp: '17326721493',  ce: 'tejaswinipenchala@gmail.com',     cg: 'https://chat.whatsapp.com/KQxkJREQohZ6Th4mknk3Yg', t: 'Kishant',       tp: '9087070125',   te: 'rgkishanth@gmail.com',              tg: 'https://chat.whatsapp.com/FK8Ct2qzGUDLb0qYf8hOEd', host: 'Kashish', time: '08:00', skill: '' },
+  { c: 'Satvik',           cp: '18453770580',  ce: 'satvikmallempudi196@gmail.com',   cg: 'https://chat.whatsapp.com/BkM9SgSdTtKGzbavbBghpb', t: 'Arun',          tp: '7338165435',   te: 'timsupt.ready@gmail.com',           tg: 'https://chat.whatsapp.com/GhQkovPX9E3KUYZbc591lt', host: 'Kashish', time: '19:30', skill: '' },
+  { c: 'Ambika',           cp: '18453200044',  ce: 'ambika.bathini@gmail.com',        cg: 'https://chat.whatsapp.com/KcUwJ2VMji0Gpq08XdMHJV', t: 'Muthu',         tp: '9894998892',   te: 'muthu.vnathan6@gmail.com',          tg: 'https://chat.whatsapp.com/LZ8miGCg6F7CQNZD7auz6s', host: 'Kashish', time: '07:30', skill: '' },
+  { c: 'Sravya',           cp: '16129878685',  ce: 'sravya2331@gmail.com',            cg: 'https://chat.whatsapp.com/IG1hoYqzCYF7LIix7Z6Rjq', t: 'Durga',         tp: '9491335145',   te: 'velkuru.durgaprasad007@gmail.com',  tg: 'https://chat.whatsapp.com/KXZjEPRarg04qsCuch3lZA', host: 'Kashish', time: '14:30', skill: '' },
+  { c: 'Training Deepthi', cp: '19085651255',  ce: 'deeptikollu7@gmail.com',          cg: '',                                                 t: 'Karthik',       tp: '814330543',    te: 'workmailkayy@gmail.com',            tg: 'https://chat.whatsapp.com/F2F9Kgaj8mVHp1JXBCxXbG', host: 'Kashish', time: '07:00', skill: '' },
+  { c: 'Training Sathvik', cp: '12106268596',  ce: 'sathvireddy1210@gmail.com',       cg: 'https://chat.whatsapp.com/FUqUhMajETv0FkW3wCsFSA', t: 'Peet',          tp: '6290949166',   te: '',                                  tg: '',                                                 host: 'Kashish', time: '09:00', skill: '' },
+  { c: 'Abhi',             cp: '19029826324',  ce: 'avajinapelli@gmail.com',          cg: 'https://chat.whatsapp.com/GSlmT2X1i3ZGNuw3eNkTKf', t: 'Jagdeesh',      tp: '8328682105',   te: 'c.jagan2012@gmail.com',             tg: '',                                                 host: 'Kashish', time: '08:00', skill: '' },
+  { c: 'Nikhil (Arun)',    cp: '12035331095',  ce: 'nikhil.t1405@gmail.com',          cg: 'https://chat.whatsapp.com/HvzQ7Krwrug1JIcwOfn9MO', t: 'Arun',          tp: '8143290149',   te: '',                                  tg: 'https://chat.whatsapp.com/HHFesHSZxWi7OBjpJOiqJq', host: 'Kashish', time: '08:00', skill: '' },
+  { c: 'Ooha',             cp: '14016668469',  ce: 'oohasi234@gmail.com',             cg: 'https://chat.whatsapp.com/LLPRgFIsIfDFj9XtDGW9IZ', t: 'Akram',         tp: '916394957133', te: 'codingmaniac007@gmail.com',         tg: 'https://chat.whatsapp.com/DvYzgIBZeiu2wXA684zrlJ', host: 'Kashish', time: '06:30', skill: '' },
+  { c: 'Sunny',            cp: '12815094456',  ce: 'dasarishirish@gmail.com',         cg: 'https://chat.whatsapp.com/EAehTbcKxhC8ifSG9PZFPv', t: 'Saroj',         tp: '918917335298', te: 'sarojekka1410@gmail.com',           tg: 'https://chat.whatsapp.com/F2hGcbfkowy5MbzlcbEFA6', host: 'Kashish', time: '07:00', skill: '' },
+  { c: 'Training Shalini', cp: '918464080186', ce: 'shalini123.dl@gmail.com',         cg: 'https://chat.whatsapp.com/FqQlySn5ikh90ADVGBuz1S', t: 'Manoj',         tp: '8074834527',   te: 'manojbharat1803@gmail.com',         tg: 'https://chat.whatsapp.com/HPhzqPjDg51CI0hUlAY9zE', host: 'Kashish', time: '05:30', skill: 'PCL Scada' },
+  { c: 'Training Ashish',  cp: '17035777326',  ce: 'aashish.palla@gmail.com',         cg: 'https://chat.whatsapp.com/C9lfJ4hteTv9E1yWXxSi95', t: 'Ayush',         tp: '9111132565',   te: 'ayushgupta0426@gmail.com',          tg: '',                                                 host: 'Kashish', time: '08:00', skill: 'Salesforce' },
+  { c: 'Yashwanthi',       cp: '15139969723',  ce: 'yashwanthiky@gmail.com',          cg: 'https://chat.whatsapp.com/KAsUJWzYr3qC7HEcqLxyKt', t: 'Nikhil',        tp: '7978725393',   te: 'niks11.thadani@gmail.com',          tg: 'https://chat.whatsapp.com/CGdqUKBIdWrHbceJJsCm9j', host: 'Kashish', time: '09:00', skill: '' },
+  // New clients from updated PDF
+  { c: 'Shaikh',           cp: '17472268679',  ce: 'irshaikh177@gmail.com',           cg: 'https://chat.whatsapp.com/KujymdCzDOw1mdYJizQbNO', t: 'Amit',          tp: '',             te: '',                                  tg: 'https://chat.whatsapp.com/IzJ6BYHzzD39LDExSe7p1D', host: 'Kashish', time: '09:00', skill: '' },
+  { c: 'Priya (US)',       cp: '18035670442',  ce: '',                                cg: 'https://chat.whatsapp.com/H8Mf8Xcx8Ox3fI4TRg5v51', t: 'Nayan',         tp: '6394906234',   te: 'nayanjain928@gmail.com',            tg: 'https://chat.whatsapp.com/Jqc1KcFxq92C6s2Fy3h1Sm', host: 'Kashish', time: '09:00', skill: '' },
+  { c: 'Rumana',           cp: '19452706969',  ce: 'Rumanas803@gmail.com',            cg: 'https://chat.whatsapp.com/H8Mf8Xcx8Ox3fI4TRg5v51', t: 'Yaseen',        tp: '7702895081',   te: 'yaseenmohammad777@gmail.com',       tg: 'https://chat.whatsapp.com/D9vtlhU9Lke38pu7DnH1rq', host: 'Kashish', time: '09:00', skill: '' },
+  { c: 'Training Alkehya', cp: '15166525623',  ce: '',                                cg: 'https://chat.whatsapp.com/CWbIErJ37Yr2olq9rgLcmG', t: 'Chandana',      tp: '6300231992',   te: 'Chandanagajula6666@gmail.com',      tg: 'https://chat.whatsapp.com/I5jqnuFMNVO6dncQfzwg1Z', host: 'Kashish', time: '09:00', skill: '' },
+  { c: 'Sathiya',          cp: '9848160551',   ce: 'sathyajit90@gmail.com',           cg: 'https://chat.whatsapp.com/EInW8q2Ej749tuoI7AivM7', t: 'Siddeshwar',    tp: '9011645299',   te: '',                                  tg: 'https://chat.whatsapp.com/IcWnoHk26ji6GxWTNeAOSZ', host: 'Kashish', time: '09:00', skill: '' },
   // ── Muskan ────────────────────────────────────────────────────────────────
-  { c: 'Akhil',            cp: '13094397619',  ce: 'akhilsai9700547755@gmail.com',    t: 'Shivam',        tp: '8294668059',   te: '',                                    host: 'Muskan',  time: '07:00', skill: 'Salesforce CPQ' },
-  { c: 'Bhargavi',         cp: '17797752785',  ce: 'ramayabharghavi.ch@gmail.com',    t: 'Shravn',        tp: '8870065714',   te: '',                                    host: 'Muskan',  time: '06:00', skill: 'Data Engineer' },
-  { c: 'Bipana',           cp: '19727301042',  ce: 'bipana.dreamgirl.@gmail.com',     t: 'Tushar',        tp: '9373231018',   te: 'shinde.tushar7211@gmail.com',         host: 'Muskan',  time: '07:30', skill: 'Java React' },
-  { c: 'Gayatri',          cp: '16475327092',  ce: 'gayathri.anbarasu2@gmail.com',    t: 'Abdul',         tp: '6397345306',   te: 'ar310786@gmail.com',                  host: 'Muskan',  time: '07:00', skill: 'Networking' },
-  { c: 'Mansa',            cp: '12342815550',  ce: 'mansa.qa66@gmail.com',            t: 'Samkit',        tp: '9691777815',   te: '',                                    host: 'Muskan',  time: '08:00', skill: 'Selenium' },
-  { c: 'Meghana',          cp: '19096835191',  ce: 'meghanavarayuri@gmail.com',       t: 'Bhuvansh',      tp: '8960914286',   te: 'bhuvaneshshukla25@gmail.com',         host: 'Muskan',  time: '06:00', skill: 'Java' },
-  { c: 'Nagasri',          cp: '19097519222',  ce: 'mnagasri0306@gmail.com',          t: 'Sidharth',      tp: '7017603885',   te: '',                                    host: 'Muskan',  time: '08:00', skill: 'Java Backend' },
-  { c: 'Pavitra',          cp: '16043772462',  ce: 'pk.pavithra777@gmail.com',        t: 'Tamil',         tp: '8939124684',   te: 'tamilselvants@yahoo.com',             host: 'Muskan',  time: '08:00', skill: 'Data Engineer' },
-  { c: 'Raja',             cp: '16478609409',  ce: 'gnsmrjrmn@gmail.com',             t: 'Arun',          tp: '7338165435',   te: 'timsupt.ready@gmail.com',             host: 'Muskan',  time: '21:00', skill: 'Java' },
-  { c: 'Ramya',            cp: '18137169143',  ce: '',                                t: 'Manoj',         tp: '8074834527',   te: 'manojbharat1803@gmail.com',           host: 'Muskan',  time: '22:30', skill: 'Sage Reporting' },
-  { c: 'Snehlatha',        cp: '919948989838', ce: 'thalakantisneha@gmail.com',       t: 'Virendra',      tp: '9545787470',   te: '',                                    host: 'Muskan',  time: '06:00', skill: 'Salesforce' },
-  { c: 'Training Vamshi',  cp: '13146882876',  ce: 'muppaneni565143n@gmail.com',      t: 'Peet',          tp: '6290949166',   te: '',                                    host: 'Muskan',  time: '09:00', skill: 'Data Engineer' },
+  { c: 'Akhil',            cp: '13094397619',  ce: 'akhilsai9700547755@gmail.com',    cg: 'https://chat.whatsapp.com/Hn9zXrNJTJM2n9sEWwtVkB', t: 'Shivam',        tp: '8294668059',   te: '',                                  tg: 'https://chat.whatsapp.com/FF5bny6CZP87nL9ExJTbag', host: 'Muskan',  time: '07:00', skill: 'Salesforce CPQ' },
+  { c: 'Bhargavi',         cp: '17797752785',  ce: 'ramayabharghavi.ch@gmail.com',    cg: 'https://chat.whatsapp.com/KjwVvBZVwUE33vEY7HQDoL', t: 'Shravn',        tp: '8870065714',   te: '',                                  tg: 'https://chat.whatsapp.com/C1rxU45L3VJFqaHfLU6wL6', host: 'Muskan',  time: '06:00', skill: 'Data Engineer' },
+  { c: 'Bipana',           cp: '19727301042',  ce: 'wagles840@gmail.com',             cg: 'https://chat.whatsapp.com/LTiNiZx1jqs1aGmOKsGodw', t: 'Tushar',        tp: '9373231018',   te: '',                                  tg: 'https://chat.whatsapp.com/HdMFMMxLT33BYZwh6IeLyv', host: 'Muskan',  time: '07:30', skill: 'Java React' },
+  { c: 'Gayatri',          cp: '16475327092',  ce: 'gayathri.anbarasu2@gmail.com',    cg: 'https://chat.whatsapp.com/L2ZECiONfrj6czQFQVjPs8', t: 'Abdul',         tp: '6397345306',   te: 'ar310786@gmail.com',                tg: 'https://chat.whatsapp.com/Faw7PiuMjDwEX9hjLo3Xd7', host: 'Muskan',  time: '07:00', skill: 'Networking' },
+  { c: 'Mansa',            cp: '12342815550',  ce: 'mansa.qa66@gmail.com',            cg: 'https://chat.whatsapp.com/FdfmMibhseLDxq53vU1vVy', t: 'Samkit',        tp: '9691777815',   te: '',                                  tg: 'https://chat.whatsapp.com/HPhzqPjDg51CI0hUlAY9zE', host: 'Muskan',  time: '08:00', skill: 'Selenium' },
+  { c: 'Meghana',          cp: '19096835191',  ce: 'meghanavarayuri@gmail.com',       cg: 'https://chat.whatsapp.com/Fgqd5lJkdULFqgW7ubTM1W', t: 'Bhuvansh',      tp: '8960914286',   te: 'bhuvaneshshukla25@gmail.com',       tg: '',                                                 host: 'Muskan',  time: '06:00', skill: 'Java' },
+  { c: 'Nagasri',          cp: '19097519222',  ce: 'mnagasri0306@gmail.com',          cg: 'https://chat.whatsapp.com/JacoV2h0P7uJvnfQnpukOw', t: 'Sidharth',      tp: '7017603885',   te: '',                                  tg: 'https://chat.whatsapp.com/JRwbPa3N4bG868mMetrgR9', host: 'Muskan',  time: '08:00', skill: 'Java Backend' },
+  { c: 'Pavitra',          cp: '16043772462',  ce: 'pk.pavithra777@gmail.com',        cg: 'https://chat.whatsapp.com/Iq4GnOk0BRw3vt6Wue5sCN', t: 'Tamil',         tp: '8939124684',   te: 'tamilselvants@yahoo.com',           tg: 'https://chat.whatsapp.com/EAd4L4D4WSE5GolwLHWVaN', host: 'Muskan',  time: '08:00', skill: 'Data Engineer' },
+  { c: 'Raja',             cp: '16478609409',  ce: 'gnsmrjrmn@gmail.com',             cg: 'https://chat.whatsapp.com/EwgGQEMLjkXJZoOudmfuNA', t: 'Arun',          tp: '7338165435',   te: 'timsupt.ready@gmail.com',           tg: '',                                                 host: 'Muskan',  time: '21:00', skill: 'Java' },
+  { c: 'Ramya',            cp: '18137169143',  ce: '',                                cg: 'https://chat.whatsapp.com/CWBag1KUket7t3HmHmo2kl', t: 'Manoj',         tp: '8074834527',   te: 'manojbharat1803@gmail.com',         tg: 'https://chat.whatsapp.com/HPhzqPjDg51CI0hUlAY9zE', host: 'Muskan',  time: '22:30', skill: 'Sage Reporting' },
+  { c: 'Snehlatha',        cp: '919948989838', ce: 'thalakantisneha@gmail.com',       cg: 'https://chat.whatsapp.com/EfWmRbGwSmSFGc1sI1JhFr', t: 'Virendra',      tp: '9545787470',   te: '',                                  tg: 'https://chat.whatsapp.com/GVyvWoxkog14izy8o4eBSm', host: 'Muskan',  time: '06:00', skill: 'Salesforce' },
+  { c: 'Training Vamshi',  cp: '13146882876',  ce: 'muppaneni565143n@gmail.com',      cg: 'https://chat.whatsapp.com/Jzpuqt7arkdIhlOzvuy7nw', t: 'Peet',          tp: '6290949166',   te: '',                                  tg: '',                                                 host: 'Muskan',  time: '09:00', skill: 'Data Engineer' },
 ];
 
 seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
@@ -114,12 +115,14 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
       where: { name: { equals: row.c, mode: 'insensitive' } },
       select: { id: true },
     });
+    const cg = (row as any).cg || null;
     if (!client) {
       client = await prisma.client.create({
         data: {
           name: row.c, email: ce,
           phoneCode: cp?.code || '+1', phoneDigits: cp?.digits || null,
           lifecycle: 'Active', engagementType: 'Training', hostOwnerId: hostId,
+          ...(cg ? { whatsappGroupLink: cg } : {}),
         },
         select: { id: true },
       });
@@ -130,6 +133,7 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
           ...(ce ? { email: ce } : {}),
           ...(cp ? { phoneCode: cp.code, phoneDigits: cp.digits } : {}),
           lifecycle: 'Active', hostOwnerId: hostId,
+          ...(cg ? { whatsappGroupLink: cg } : {}),
         },
       });
     }
@@ -141,6 +145,7 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
       where: { name: { equals: tName, mode: 'insensitive' } },
       select: { id: true },
     });
+    const tg = (row as any).tg || null;
     if (!trainer) {
       const te = (row as any).te && (row as any).te !== 'no email' ? (row as any).te.trim() : null;
       // Check phone conflict before creating
@@ -155,6 +160,7 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
           phoneDigits: !phoneConflict ? (tp?.digits || null) : null,
           ...(te ? { email: te } : {}),
           ...(row.skill ? { skills: row.skill } : {}),
+          ...(tg ? { whatsappGroupLink: tg } : {}),
         },
         select: { id: true },
       });
@@ -174,6 +180,7 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
         data: {
           ...phoneUpdate,
           ...(te ? { email: te } : {}),
+          ...(tg ? { whatsappGroupLink: tg } : {}),
         },
       });
     }
