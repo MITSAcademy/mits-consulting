@@ -12,7 +12,10 @@ import { useAuth } from '@/store/auth';
 import { Link } from 'react-router-dom';
 
 const LOG_ROLES = ['founder', 'manager', 'lead', 'account_manager', 'payment_processor'];
-const DAY_OPTIONS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7];
+const HOUR_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+const MINUTE_OPTIONS = [0, 15, 30, 45];
+function durationToDecimal(h: number, m: number) { return h + m / 60; }
+function decimalToDuration(d: number) { const h = Math.floor(d); const m = Math.round((d - h) * 60); return { h, m }; }
 type Feedback = 'positive' | 'neutral' | 'negative';
 
 const FEEDBACK_STYLE: Record<Feedback, { label: string; color: string; bg: string }> = {
@@ -56,7 +59,9 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
   const [trainerId, setTrainerId] = useState(prefillTrainerId);
   const [clientId, setClientId] = useState(prefillClientId);
   const [date, setDate] = useState(todayISO());
-  const [days, setDays] = useState('1');
+  const [durH, setDurH] = useState(1);
+  const [durM, setDurM] = useState(0);
+  const days = String(durationToDecimal(durH, durM));
   const [notes, setNotes] = useState('');
   const [feedback, setFeedback] = useState<Feedback | ''>('');
   const [overrideAmount, setOverrideAmount] = useState(false);
@@ -84,7 +89,7 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
     ? Math.round(parseFloat(customAmount) || 0)
     : Math.round((parseFloat(days) || 0) * defaultRate);
 
-  const canSubmit = !!trainerId && !!feedback && (!overrideAmount || (!!customAmount && !!overrideReason.trim()));
+  const canSubmit = !!trainerId && !!feedback && durationToDecimal(durH, durM) > 0 && (!overrideAmount || (!!customAmount && !!overrideReason.trim()));
 
   const create = useMutation({
     mutationFn: () => {
@@ -167,10 +172,22 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
           <input type="date" className="input" value={date} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setDate(e.target.value)} />
         </div>
         <div>
-          <label className="label">Duration (sessions) *</label>
-          <select className="input" value={days} onChange={(e) => setDays(e.target.value)}>
-            {DAY_OPTIONS.map((v) => (<option key={v} value={v}>{v}</option>))}
-          </select>
+          <label className="label">Duration *</label>
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <select className="input" value={durH} onChange={(e) => setDurH(Number(e.target.value))}>
+                {HOUR_OPTIONS.map((h) => <option key={h} value={h}>{h}h</option>)}
+              </select>
+            </div>
+            <div className="flex-1">
+              <select className="input" value={durM} onChange={(e) => setDurM(Number(e.target.value))}>
+                {MINUTE_OPTIONS.map((m) => <option key={m} value={m}>{String(m).padStart(2,'0')}m</option>)}
+              </select>
+            </div>
+          </div>
+          {durationToDecimal(durH, durM) === 0 && (
+            <div className="text-[11px] mt-0.5" style={{ color: 'var(--status-amber)' }}>Set a duration greater than 0</div>
+          )}
         </div>
       </div>
 
@@ -186,7 +203,8 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
         <div className="callout mb-3 text-xs flex items-center justify-between gap-3">
           <span>
             Rate: <strong>₹{defaultRate.toLocaleString()}</strong>/session ·
-            Sessions: <strong>{days}</strong> ·
+            Duration: <strong>{durH}h {durM > 0 ? `${durM}m` : ''}</strong>{' '}
+            ({parseFloat(days) || 0} sessions) ·
             Total: <strong>₹{total.toLocaleString()}</strong>
             {overrideAmount && customAmount && (
               <span className="ml-1" style={{ color: 'var(--status-amber)' }}>
@@ -301,7 +319,7 @@ function exportPdf(logs: any[]) {
       <td>${l.date}</td>
       <td>${l.trainer?.name || '—'}</td>
       <td>${l.client?.name || '—'}</td>
-      <td>${l.hours}</td>
+      <td>${(() => { const h = Math.floor(l.hours); const m = Math.round((l.hours - h) * 60); return `${h}h${m > 0 ? ` ${m}m` : ''}`; })()}</td>
       <td>₹${l.rateSnapshot?.toLocaleString()}</td>
       <td>₹${l.amountInr?.toLocaleString()}</td>
       <td>${l.feedback || '—'}</td>
@@ -323,7 +341,7 @@ function exportPdf(logs: any[]) {
   <h1>MITS Consulting — Session Logs</h1>
   <p>Exported ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ${logs.length} entries</p>
   <table>
-    <thead><tr><th>Date</th><th>Trainer</th><th>Client</th><th>Days</th><th>Rate</th><th>Amount</th><th>Feedback</th><th>Status</th><th>Notes</th></tr></thead>
+    <thead><tr><th>Date</th><th>Trainer</th><th>Client</th><th>Duration</th><th>Rate</th><th>Amount</th><th>Feedback</th><th>Status</th><th>Notes</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
   </body></html>`;
@@ -408,7 +426,7 @@ export function SessionLogsPage() {
                       <th>Date</th>
                       <th>Trainer</th>
                       <th>Client</th>
-                      <th>Days</th>
+                      <th>Duration</th>
                       <th>Rate</th>
                       <th>Amount</th>
                       <th>Feedback</th>
@@ -425,7 +443,7 @@ export function SessionLogsPage() {
                             ? <Link to={`/clients/${l.client.id}`} className="hover:underline">{l.client.name}</Link>
                             : '—'}
                         </td>
-                        <td className="mono">{l.hours}</td>
+                        <td className="mono">{(() => { const {h, m} = decimalToDuration(l.hours); return `${h}h${m > 0 ? ` ${m}m` : ''}`; })()}</td>
                         <td className="mono text-[12px]">₹{l.rateSnapshot?.toLocaleString()}</td>
                         <td className="mono font-semibold">₹{l.amountInr?.toLocaleString()}</td>
                         <td><FeedbackBadge value={l.feedback} /></td>
