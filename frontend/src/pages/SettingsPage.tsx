@@ -272,6 +272,13 @@ export function SettingsPage() {
                 </div>
                 <SeedRegularTrainingsButton />
               </div>
+              <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
+                <div>
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Archive seeded / dummy clients</div>
+                  <div className="text-[11px] muted mt-0.5">Sets lifecycle to Inactive for clients created by seed that are no longer in the active sheet. Run before re-seeding with a fresh PDF.</div>
+                </div>
+                <CleanupSeedButton />
+              </div>
             </div>
 
             <div className="callout">
@@ -346,6 +353,34 @@ function InfoCell({ label, value }: { label: string; value: React.ReactNode }) {
       <div className="text-[10px] uppercase tracking-[0.10em] font-bold muted mb-1">{label}</div>
       <div className="text-[13px] font-medium" style={{ color: 'var(--brand-text)' }}>{value || '—'}</div>
     </div>
+  );
+}
+
+function CleanupSeedButton() {
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
+  const cleanup = useMutation({
+    mutationFn: () => api.post('/seed/cleanup'),
+    onSuccess: (r: any) => {
+      const d = r.data;
+      showToast(`Cleanup done — ${d.archived} clients archived`);
+      qc.invalidateQueries({ queryKey: ['clients'] });
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Cleanup failed', 'error'),
+  });
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={cleanup.isPending}
+      onClick={() => {
+        if (confirm('Archive seeded/dummy clients that are no longer in the active sheet? This sets their lifecycle to Inactive.')) {
+          cleanup.mutate();
+        }
+      }}
+    >
+      {cleanup.isPending ? 'Archiving…' : '🗂 Archive old seeded clients'}
+    </Button>
   );
 }
 
