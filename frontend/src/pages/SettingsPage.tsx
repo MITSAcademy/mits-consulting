@@ -281,6 +281,13 @@ export function SettingsPage() {
               </div>
               <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
                 <div>
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Fix duplicates &amp; wrong names</div>
+                  <div className="text-[11px] muted mt-0.5">Removes duplicate session rows, renames Sathiya→Saiteja, merges Nikhil (Arun)→Nikhil. Run once after seeding.</div>
+                </div>
+                <DedupButton />
+              </div>
+              <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
+                <div>
                   <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Send Malika's status report now</div>
                   <div className="text-[11px] muted mt-0.5">Fires today's payments status report to malgup@mitssolution.com immediately (normally auto-sends at 5:30 PM IST).</div>
                 </div>
@@ -388,6 +395,35 @@ function CleanupSeedButton() {
       }}
     >
       {cleanup.isPending ? 'Archiving…' : '🗂 Archive old seeded clients'}
+    </Button>
+  );
+}
+
+function DedupButton() {
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
+  const dedup = useMutation({
+    mutationFn: () => api.post('/seed/dedup'),
+    onSuccess: (r: any) => {
+      const d = r.data;
+      showToast(`Done — ${d.deleted} duplicates removed, ${d.fixed} names fixed`);
+      qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] });
+      qc.invalidateQueries({ queryKey: ['regular-trainings'] });
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Dedup failed', 'error'),
+  });
+  return (
+    <Button
+      size="sm"
+      variant="danger"
+      disabled={dedup.isPending}
+      onClick={() => {
+        if (confirm('This will permanently delete duplicate session rows and fix client names in the live database. Continue?')) {
+          dedup.mutate();
+        }
+      }}
+    >
+      {dedup.isPending ? 'Fixing…' : '🧹 Fix duplicates'}
     </Button>
   );
 }

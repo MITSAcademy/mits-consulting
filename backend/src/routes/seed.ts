@@ -260,6 +260,92 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
   res.json({ ok: true, dryRun, created, updated, skipped, log });
 });
 
+// POST /api/seed/dedup — remove duplicate RegularTraining rows and fix Sathiya→Saiteja
+// Keeps the OLDEST row for each client+trainer pair (preserves any existing session data),
+// deletes the newer duplicate. Also fixes the Sathiya client name/phone/email to Saiteja.
+seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
+  if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
+
+  const log: string[] = [];
+  let deleted = 0, fixed = 0;
+
+  // 1. Fix Sathiya → Saiteja
+  const sathiya = await prisma.client.findFirst({
+    where: { name: { equals: 'Sathiya', mode: 'insensitive' } },
+    select: { id: true, name: true },
+  });
+  if (sathiya) {
+    await prisma.client.update({
+      where: { id: sathiya.id },
+      data: {
+        name: 'Saiteja',
+        email: 'Saitejats88@gmail.com',
+        phoneCode: '+91',
+        phoneDigits: '9348548056',
+        whatsappGroupLink: 'https://chat.whatsapp.com/EInW8q2Ej749tuoI7AivM7',
+      },
+    });
+    log.push(`✓ renamed client: Sathiya → Saiteja (phone + email + group link updated)`);
+    fixed++;
+  } else {
+    log.push(`— Sathiya not found (already fixed or never existed)`);
+  }
+
+  // 2. Fix Nikhil (Arun) → Nikhil (client name cleanup)
+  const nikhilArun = await prisma.client.findFirst({
+    where: { name: { equals: 'Nikhil (Arun)', mode: 'insensitive' } },
+    select: { id: true },
+  });
+  if (nikhilArun) {
+    // Check if a plain 'Nikhil' with phone 12035331095 already exists
+    const nikhilPlain = await prisma.client.findFirst({
+      where: { name: { equals: 'Nikhil', mode: 'insensitive' }, phoneDigits: '2035331095' },
+      select: { id: true },
+    });
+    if (nikhilPlain) {
+      // Merge: move training rows from Nikhil (Arun) to Nikhil plain, delete the old client
+      await prisma.regularTraining.updateMany({
+        where: { clientId: nikhilArun.id },
+        data: { clientId: nikhilPlain.id },
+      });
+      await prisma.client.delete({ where: { id: nikhilArun.id } });
+      log.push(`✓ merged Nikhil (Arun) into Nikhil, deleted duplicate client`);
+      fixed++;
+    } else {
+      await prisma.client.update({ where: { id: nikhilArun.id }, data: { name: 'Nikhil' } });
+      log.push(`✓ renamed Nikhil (Arun) → Nikhil`);
+      fixed++;
+    }
+  }
+
+  // 3. Find and remove duplicate active RegularTraining rows (same clientId + trainerId)
+  const allActive = await prisma.regularTraining.findMany({
+    where: { status: 'active' },
+    select: { id: true, clientId: true, trainerId: true, createdAt: true, client: { select: { name: true } }, trainer: { select: { name: true } } },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  // Group by clientId+trainerId, keep first (oldest), delete rest
+  const seen = new Map<string, string>();
+  const toDelete: string[] = [];
+  for (const rt of allActive) {
+    const key = `${rt.clientId}__${rt.trainerId}`;
+    if (seen.has(key)) {
+      toDelete.push(rt.id);
+      log.push(`✗ duplicate removed: ${rt.client?.name} ← ${rt.trainer?.name} (kept older row)`);
+      deleted++;
+    } else {
+      seen.set(key, rt.id);
+    }
+  }
+  if (toDelete.length > 0) {
+    await prisma.regularTraining.deleteMany({ where: { id: { in: toDelete } } });
+  }
+  if (deleted === 0) log.push('— no duplicate sessions found');
+
+  res.json({ ok: true, deleted, fixed, log });
+});
+
 // Canonical client names from the active PDF sheet (normalised lowercase for matching)
 const PDF_CLIENT_NAMES = RAW.map(r => r.c.toLowerCase().trim());
 
