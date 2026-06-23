@@ -101,7 +101,7 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
         trainerId,
         clientId: clientId || undefined,
         date,
-        hours: parseFloat(days) || 1,
+        hours: parseFloat(days) || 0,
         rateSnapshot: effectiveRate || defaultRate || 1200,
         rateModel: selectedTrainer?.rateModel || 'per_session',
         amountInr: overrideAmount && customAmount ? Math.round(parseFloat(customAmount)) : undefined,

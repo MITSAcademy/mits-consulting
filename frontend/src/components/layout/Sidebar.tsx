@@ -76,7 +76,7 @@ const NAV: NavItem[] = [
   { section: 'partners', page: '/partners', label: 'Partners', icon: Building, roles: ['founder', 'accounts'] },
 
   // ── Coordinator work (Mitali + Bhavneet + AMs) ───────────────────────
-  { section: 'work', page: '/team-board', label: 'Team board', icon: UsersRound, roles: ['founder', 'manager', 'lead', 'account_manager'] },
+  { section: 'work', page: '/team-board', label: 'Client assignment', icon: UsersRound, roles: ['founder', 'manager', 'lead', 'account_manager'] },
   { section: 'work', page: '/coordinator-dashboard', label: 'Team dashboard', icon: UsersRound, roles: ['founder', 'manager', 'lead'] },
   { section: 'work', page: '/escalations', label: 'Escalation inbox', icon: AlertCircle, roles: ['founder', 'manager', 'lead', 'demo_lead'] },
   { section: 'work', page: '/my-sessions', label: 'My calls & sessions', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager'] },

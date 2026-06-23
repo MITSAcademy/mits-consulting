@@ -331,6 +331,74 @@ function exportExcel(logs: Log[], weekLabel: string) {
   URL.revokeObjectURL(url);
 }
 
+function exportCSV(logs: Log[], weekLabel: string) {
+  // Group by trainer, sum days (hours) and total amount
+  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rate: number; total: number; comments: string[] }>();
+  logs.forEach((l, i) => {
+    const key = l.trainer.id;
+    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rate: l.rateSnapshot, total: 0, comments: [] });
+    const t = byTrainer.get(key)!;
+    t.days += l.hours;
+    t.total += l.amountInr;
+    if (l.comments) t.comments.push(l.comments);
+  });
+
+  const header = ['Sr No', 'Trainer Name', 'Bank Account / UPI Details', 'Phone (UPI)', 'Days', 'Rate/Session (₹)', 'Total Amount (₹)', 'Comments'].join(',');
+  const rows = Array.from(byTrainer.values()).map((t, i) => {
+    const tr = t.trainer;
+    const bankDetails = tr.upiId
+      ? `UPI: ${tr.upiId}`
+      : [tr.bankHolderName, tr.bankName, tr.bankAccountNumber ? `A/c: ${tr.bankAccountNumber}` : '', tr.bankIfscCode ? `IFSC: ${tr.bankIfscCode}` : ''].filter(Boolean).join(' | ');
+    const phone = tr.phoneCode && tr.phoneDigits ? `${tr.phoneCode}${tr.phoneDigits}` : '';
+    return [i + 1, tr.name, `"${bankDetails}"`, phone, t.days, t.rate, t.total, `"${t.comments.join('; ')}"`].join(',');
+  });
+
+  const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trainer-payment-${weekLabel.replace(/[^a-z0-9]/gi, '-')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportWhatsApp(logs: Log[], weekLabel: string) {
+  // Group by trainer
+  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rate: number; total: number }>();
+  logs.forEach((l) => {
+    const key = l.trainer.id;
+    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rate: l.rateSnapshot, total: 0 });
+    const t = byTrainer.get(key)!;
+    t.days += l.hours;
+    t.total += l.amountInr;
+  });
+
+  const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+  const lines: string[] = [
+    `Trainer Payment Sheet (Date: ${today})`,
+    `Trainer Payment Summary (${today})`,
+    '',
+    `${'Sr No'.padEnd(6)} ${'Trainer Name'.padEnd(22)} ${'Days'.padEnd(6)} ${'Rate/Session'.padEnd(14)} Total Amount`,
+    '',
+  ];
+
+  Array.from(byTrainer.values()).forEach((t, i) => {
+    lines.push(`${String(i + 1).padEnd(6)} ${t.trainer.name.padEnd(22)} ${String(t.days).padEnd(6)} * ${String(t.rate).padEnd(12)} (=) ${t.total}`);
+  });
+
+  const grand = Array.from(byTrainer.values()).reduce((s, t) => s + t.total, 0);
+  lines.push('');
+  lines.push(`Total: ₹${grand.toLocaleString()}`);
+
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trainer-payment-whatsapp-${today}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function exportPdf(logs: Log[], weekLabel: string) {
   const totalAmount = logs.reduce((s, l) => s + l.amountInr, 0);
   const rows = logs.map((l, i) => `<tr>
@@ -476,6 +544,12 @@ export function TrainerPaySheetPage() {
             </Button>
             {filtered.length > 0 && (
               <>
+                <Button size="sm" onClick={() => exportCSV(filtered, fmtWeek(weekStart))} title="Download CSV (grouped by trainer with bank details)">
+                  <Download size={12} /> CSV
+                </Button>
+                <Button size="sm" onClick={() => exportWhatsApp(filtered, fmtWeek(weekStart))} title="Download WhatsApp text format">
+                  <Download size={12} /> WhatsApp .txt
+                </Button>
                 <Button size="sm" onClick={() => exportExcel(filtered, fmtWeek(weekStart))}>
                   <Download size={12} /> Excel
                 </Button>
