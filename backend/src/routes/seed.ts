@@ -238,21 +238,25 @@ seedRouter.post('/cleanup', async (req: AuthedRequest, res) => {
       data: { status: 'inactive' },
     });
 
-    // Create retrospective entry
-    await (prisma as any).retrospective.upsert({
-      where: { sourceType_sourceId: { sourceType: 'RegularTraining', sourceId: rt.id } },
-      create: {
-        sourceType: 'RegularTraining',
-        sourceId: rt.id,
-        clientName: c.name,
-        trainerName: rt.trainer?.name || '',
-        removedAt: new Date().toISOString().slice(0, 10),
-        removedById: req.user!.id,
-        reason: 'Removed from active PDF sheet — not in latest client list',
-        sessionDate: rt.defaultTimeIst || null,
-      },
-      update: {},
+    // Create retrospective entry (skip if already exists for this training)
+    const existing = await (prisma as any).retrospective.findFirst({
+      where: { sourceType: 'RegularTraining', sourceId: rt.id },
+      select: { id: true },
     });
+    if (!existing) {
+      await (prisma as any).retrospective.create({
+        data: {
+          sourceType: 'RegularTraining',
+          sourceId: rt.id,
+          clientName: c.name,
+          trainerName: rt.trainer?.name || '',
+          removedAt: new Date().toISOString().slice(0, 10),
+          removedById: req.user!.id,
+          reason: 'Removed from active PDF sheet — not in latest client list',
+          sessionDate: rt.defaultTimeIst || null,
+        },
+      });
+    }
 
     log.push(`retired: ${c.name} (trainer: ${rt.trainer?.name || '—'})`);
     retired++;
