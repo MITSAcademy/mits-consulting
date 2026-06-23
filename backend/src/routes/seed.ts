@@ -219,8 +219,10 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
     }
 
     // RegularTraining
+    const clientId = client!.id;
+    const trainerId = trainer!.id;
     const existing = await prisma.regularTraining.findFirst({
-      where: { clientId: client.id, trainerId: trainer.id, status: 'active' },
+      where: { clientId, trainerId, status: 'active' },
       select: { id: true },
     });
     if (!existing) {
@@ -231,7 +233,7 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
         await prisma.regularTraining.create({
           data: {
             name: `${row.c} · ${tName}`,
-            clientId: client.id, trainerId: trainer.id,
+            clientId, trainerId,
             hostedByDefaultId: hostId, meetingMode: 'Zoom',
             defaultTimeIst: row.time, status: 'active',
             ...(row.skill ? { notes: row.skill } : {}),
