@@ -233,13 +233,37 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
       }
     }
 
-    // RegularTraining
+    // RegularTraining — find by exact match first, then any active row for this client
     const clientId = client!.id;
     const trainerId = trainer!.id;
-    const existing = await prisma.regularTraining.findFirst({
+    // First try exact client+trainer match
+    let existing = await prisma.regularTraining.findFirst({
       where: { clientId, trainerId, status: 'active' },
       select: { id: true },
     });
+    // If no exact match, check if client already has ANY active RT (avoid creating duplicates on re-seed)
+    if (!existing) {
+      existing = await prisma.regularTraining.findFirst({
+        where: { clientId, status: 'active' },
+        select: { id: true },
+      });
+      if (existing) {
+        // Client has an active session with a different trainer — update it to the new trainer
+        if (dryRun) {
+          log.push(`[DRY] would UPDATE session trainer: ${row.c} → ${tName} (${row.host} ${row.time})`);
+          updated++;
+        } else {
+          await prisma.regularTraining.update({
+            where: { id: existing.id },
+            data: { trainerId, name: `${row.c} · ${tName}`, defaultTimeIst: row.time, hostedByDefaultId: hostId,
+              ...(row.skill ? { notes: row.skill } : {}) },
+          });
+          log.push(`↺ updated session trainer: ${row.c} → ${tName}`);
+          updated++;
+        }
+        continue;
+      }
+    }
     if (!existing) {
       if (dryRun) {
         log.push(`[DRY] would CREATE session: ${row.c} ← ${tName} (${row.host} ${row.time})`);
