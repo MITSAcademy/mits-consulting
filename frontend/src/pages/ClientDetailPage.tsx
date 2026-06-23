@@ -369,7 +369,9 @@ export function ClientDetailPage() {
     actions.push(<Button key="act" variant="primary" onClick={() => stageM.mutate('Active')}><ArrowRight size={14}/> {isTraining ? 'Start training' : 'Handover · activate'}</Button>);
   }
   // Phase-2: Mitali sends her welcome message (introducing her team + feedback rhythm)
-  if (phase2 && canAMActions(user.role) && (client.lifecycle === 'Active' || client.lifecycle === 'SaleWon' || client.lifecycle === 'LeverageGranted')) {
+  // Available at ALL stages post-intake — client may share email late
+  const PRE_INTAKE_STAGES = ['Lead', 'IntakeSent', 'WithRecruiters', 'InternalSearch', 'Dormant'];
+  if (phase2 && canAMActions(user.role) && !PRE_INTAKE_STAGES.includes(client.lifecycle)) {
     actions.push(
       <Button key="handover-welcome" size="sm" onClick={() => setModal('handoverWelcome')} title="Send Mitali's handover welcome (intro to team + feedback rhythm)">
         <Mail size={12}/> Welcome email
@@ -882,11 +884,9 @@ export function ClientDetailPage() {
                   <span>Handover</span>
                   <div className="flex gap-1.5">
                     <Button size="sm" onClick={() => setModal('editHandover')}><EditIcon size={12}/></Button>
-                    {!(client as any).welcomeEmailSentAt && (
-                      <Button size="sm" variant="primary" onClick={() => setModal('mitaliWelcomeEmail')}>
-                        <Mail size={12}/> Send welcome email
-                      </Button>
-                    )}
+                    <Button size="sm" variant={(client as any).welcomeEmailSentAt ? 'secondary' : 'primary'} onClick={() => setModal('mitaliWelcomeEmail')}>
+                      <Mail size={12}/> {(client as any).welcomeEmailSentAt ? 'Resend welcome email' : 'Send welcome email'}
+                    </Button>
                   </div>
                 </div>
                 <Field label="Handover status">
