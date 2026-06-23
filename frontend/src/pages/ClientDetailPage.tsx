@@ -884,7 +884,7 @@ export function ClientDetailPage() {
                   <span>Handover</span>
                   <div className="flex gap-1.5">
                     <Button size="sm" onClick={() => setModal('editHandover')}><EditIcon size={12}/></Button>
-                    <Button size="sm" variant={(client as any).welcomeEmailSentAt ? 'secondary' : 'primary'} onClick={() => setModal('mitaliWelcomeEmail')}>
+                    <Button size="sm" variant={(client as any).welcomeEmailSentAt ? 'default' : 'primary'} onClick={() => setModal('mitaliWelcomeEmail')}>
                       <Mail size={12}/> {(client as any).welcomeEmailSentAt ? 'Resend welcome email' : 'Send welcome email'}
                     </Button>
                   </div>
