@@ -240,17 +240,16 @@ seedRouter.post('/cleanup', async (req: AuthedRequest, res) => {
 
     // Create retrospective entry (skip if already exists for this training)
     const existing = await (prisma as any).retrospective.findFirst({
-      where: { sourceType: 'RegularTraining', sourceId: rt.id },
+      where: { sourceType: 'training', sourceId: rt.id },
       select: { id: true },
     });
     if (!existing) {
       await (prisma as any).retrospective.create({
         data: {
-          sourceType: 'RegularTraining',
+          sourceType: 'training',
           sourceId: rt.id,
           clientName: c.name,
           trainerName: rt.trainer?.name || '',
-          removedAt: new Date().toISOString().slice(0, 10),
           removedById: req.user!.id,
           reason: 'Removed from active PDF sheet — not in latest client list',
           sessionDate: rt.defaultTimeIst || null,
