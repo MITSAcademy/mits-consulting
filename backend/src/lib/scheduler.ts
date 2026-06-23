@@ -14,6 +14,7 @@
 import cron from 'node-cron';
 import { sendTeam2Briefing, sendTeam1Briefing, sendSamitaBriefing, sendRoshniBriefing } from './dailyBriefing';
 import { runIssueEscalation } from './issueEscalation';
+import { sendMalikaStatusReport } from './malikaStatusReport';
 
 function safe(label: string, fn: () => Promise<void>) {
   fn().catch((e) => console.error(`[scheduler] ${label} failed:`, e));
@@ -58,6 +59,11 @@ export function initScheduler() {
 
   // Issue escalation — runs every hour
   cron.schedule('0 * * * *', () => safe('issue-escalation', () => runIssueEscalation()), {
+    timezone: 'Asia/Kolkata',
+  });
+
+  // Malika — daily payments status report at 5:30 PM IST
+  cron.schedule('30 17 * * *', () => safe('malika-status-report', () => sendMalikaStatusReport()), {
     timezone: 'Asia/Kolkata',
   });
 
