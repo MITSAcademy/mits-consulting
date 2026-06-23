@@ -334,6 +334,7 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
   // Group by clientId — keep the "best" row (has trainerId AND notes preferred, else oldest)
   const byClient = new Map<string, typeof allActive>();
   for (const rt of allActive) {
+    if (!rt.clientId) continue;
     const group = byClient.get(rt.clientId) || [];
     group.push(rt);
     byClient.set(rt.clientId, group);
