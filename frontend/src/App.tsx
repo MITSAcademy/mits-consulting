@@ -77,10 +77,7 @@ function PrivateRoute({ children }: { children: JSX.Element }) {
   return children;
 }
 
-/** Redirect lead (Bhavneet) away from Coordinator dashboard — she should not access it. */
 function CoordinatorDashboardGate() {
-  const user = useAuth((s) => s.user);
-  if (user?.role === 'lead') return <Navigate to="/team-board" replace />;
   return <CoordinatorDashboardPage />;
 }
 
