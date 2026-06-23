@@ -409,28 +409,58 @@ function MalikaReportButton() {
 function SeedRegularTrainingsButton() {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
+  const [preview, setPreview] = useState<string[] | null>(null);
+
+  const dryRun = useMutation({
+    mutationFn: () => api.post('/seed/regular-trainings?dry=true'),
+    onSuccess: (r: any) => setPreview(r.data.log),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Preview failed', 'error'),
+  });
+
   const seed = useMutation({
     mutationFn: () => api.post('/seed/regular-trainings'),
     onSuccess: (r: any) => {
       const d = r.data;
       showToast(`Seed done — ${d.created} created, ${d.updated} updated, ${d.skipped} skipped`);
+      setPreview(null);
       qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] });
       qc.invalidateQueries({ queryKey: ['regular-trainings'] });
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Seed failed', 'error'),
   });
+
   return (
-    <Button
-      size="sm"
-      variant="primary"
-      disabled={seed.isPending}
-      onClick={() => {
-        if (confirm('Re-seed Kashish + Muskan regular trainings from the reference sheet? Safe to re-run — existing rows are updated, not duplicated.')) {
-          seed.mutate();
-        }
-      }}
-    >
-      {seed.isPending ? 'Seeding…' : '↺ Seed Kashish/Muskan sessions'}
-    </Button>
+    <div className="flex flex-col gap-2 items-end">
+      <div className="flex gap-2">
+        <Button size="sm" variant="default" disabled={dryRun.isPending || seed.isPending} onClick={() => dryRun.mutate()}>
+          {dryRun.isPending ? 'Previewing…' : '🔍 Preview changes'}
+        </Button>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={seed.isPending || dryRun.isPending}
+          onClick={() => {
+            if (confirm('This will write to the live database. Run "Preview changes" first to see exactly what will happen. Continue?')) {
+              seed.mutate();
+            }
+          }}
+        >
+          {seed.isPending ? 'Seeding…' : '↺ Apply to database'}
+        </Button>
+      </div>
+      {preview && (
+        <div className="w-full mt-2 rounded border text-[11px] font-mono p-3 max-h-64 overflow-y-auto" style={{ background: 'var(--brand-surface)', borderColor: 'var(--brand-borderSoft)' }}>
+          <div className="font-semibold text-xs mb-2" style={{ color: 'var(--brand-text)' }}>
+            Preview — {preview.length} actions (nothing written yet)
+          </div>
+          {preview.map((line, i) => (
+            <div key={i} className={line.includes('would CREATE') ? 'text-green-400' : line.includes('⚠') ? 'text-amber-400' : 'text-brand-textMuted'}>
+              {line}
+            </div>
+          ))}
+          <Button size="sm" variant="ghost" className="mt-2" onClick={() => setPreview(null)}>Dismiss</Button>
+        </div>
+      )}
+    </div>
   );
 }

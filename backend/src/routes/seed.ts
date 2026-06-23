@@ -86,13 +86,15 @@ const RAW = [
 seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
   if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
 
+  // ?dry=true → read-only preview — NO writes to DB
+  const dryRun = req.query.dry === 'true';
+
   const hosts = await prisma.user.findMany({
     where: { name: { in: ['Kashish', 'Muskan', 'Bhavneet', 'Kashish Gupta', 'Muskan Maini'] } },
     select: { id: true, name: true },
   });
   const hostMap: Record<string, string> = {};
   for (const h of hosts) {
-    // Map by first name so seed rows using 'Kashish' always resolve
     const firstName = h.name.split(' ')[0];
     hostMap[h.name] = h.id;
     if (!hostMap[firstName]) hostMap[firstName] = h.id;
@@ -114,63 +116,82 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
     const ce = row.ce && row.ce !== 'no email' ? row.ce.trim() : null;
     let client = await prisma.client.findFirst({
       where: { name: { equals: row.c, mode: 'insensitive' } },
-      select: { id: true },
+      select: { id: true, name: true, email: true, phoneDigits: true, whatsappGroupLink: true },
     });
     const cg = (row as any).cg || null;
     if (!client) {
-      client = await prisma.client.create({
-        data: {
-          name: row.c, email: ce,
-          phoneCode: cp?.code || '+1', phoneDigits: cp?.digits || null,
-          lifecycle: 'Active', engagementType: 'Training', hostOwnerId: hostId,
-          ...(cg ? { whatsappGroupLink: cg } : {}),
-        },
-        select: { id: true },
-      });
+      if (dryRun) {
+        log.push(`[DRY] would CREATE client: ${row.c} | email: ${ce || '—'} | phone: ${cp?.digits || '—'} | group: ${cg || '—'}`);
+        created++;
+        // Use a placeholder so trainer/session checks below can still log
+        client = { id: '__dry__', name: row.c, email: ce, phoneDigits: cp?.digits || null, whatsappGroupLink: cg } as any;
+      } else {
+        client = await prisma.client.create({
+          data: {
+            name: row.c, email: ce,
+            phoneCode: cp?.code || '+1', phoneDigits: cp?.digits || null,
+            lifecycle: 'Active', engagementType: 'Training', hostOwnerId: hostId,
+            ...(cg ? { whatsappGroupLink: cg } : {}),
+          },
+          select: { id: true, name: true, email: true, phoneDigits: true, whatsappGroupLink: true },
+        });
+      }
     } else {
-      await prisma.client.update({
-        where: { id: client.id },
-        data: {
-          ...(ce ? { email: ce } : {}),
-          ...(cp ? { phoneCode: cp.code, phoneDigits: cp.digits } : {}),
-          lifecycle: 'Active', hostOwnerId: hostId,
-          ...(cg ? { whatsappGroupLink: cg } : {}),
-        },
-      });
+      const changes: string[] = [];
+      if (ce && ce !== client.email) changes.push(`email: ${client.email || '—'} → ${ce}`);
+      if (cp?.digits && cp.digits !== client.phoneDigits) changes.push(`phone: ${client.phoneDigits || '—'} → ${cp.digits}`);
+      if (cg && cg !== client.whatsappGroupLink) changes.push(`group link: updated`);
+      if (dryRun) {
+        log.push(`[DRY] would UPDATE client: ${row.c}${changes.length ? ` | ${changes.join(' | ')}` : ' | no field changes'}`);
+        updated++;
+      } else {
+        await prisma.client.update({
+          where: { id: client.id },
+          data: {
+            ...(ce ? { email: ce } : {}),
+            ...(cp ? { phoneCode: cp.code, phoneDigits: cp.digits } : {}),
+            lifecycle: 'Active', hostOwnerId: hostId,
+            ...(cg ? { whatsappGroupLink: cg } : {}),
+          },
+        });
+        if (changes.length) log.push(`↺ updated client: ${row.c} | ${changes.join(' | ')}`);
+      }
     }
 
-    // Skip trainer + RegularTraining creation if no trainer assigned
-    if (!row.t) { log.push(`↺ client-only: ${row.c} (no trainer)`); updated++; continue; }
+    // Skip trainer + RegularTraining if no trainer assigned
+    if (!row.t) { log.push(`${dryRun ? '[DRY] ' : ''}↺ client-only: ${row.c} (no trainer in sheet)`); if (!dryRun) updated++; continue; }
 
     // Trainer
     const tName = row.t.split('/')[0].trim();
     const tp = fmtTrainerPhone(row.tp);
     let trainer = await prisma.trainer.findFirst({
       where: { name: { equals: tName, mode: 'insensitive' } },
-      select: { id: true },
+      select: { id: true, name: true, email: true, phoneDigits: true, whatsappGroupLink: true },
     });
     const tg = (row as any).tg || null;
+    const te = (row as any).te && (row as any).te !== 'no email' ? (row as any).te.trim() : null;
     if (!trainer) {
-      const te = (row as any).te && (row as any).te !== 'no email' ? (row as any).te.trim() : null;
-      // Check phone conflict before creating
       const phoneConflict = tp?.digits ? await prisma.trainer.findFirst({
         where: { phoneDigits: tp.digits },
         select: { id: true },
       }) : null;
-      trainer = await prisma.trainer.create({
-        data: {
-          name: tName,
-          phoneCode: !phoneConflict ? (tp?.code || '+91') : '+91',
-          phoneDigits: !phoneConflict ? (tp?.digits || null) : null,
-          ...(te ? { email: te } : {}),
-          ...(row.skill ? { skills: row.skill } : {}),
-          ...(tg ? { whatsappGroupLink: tg } : {}),
-        },
-        select: { id: true },
-      });
+      if (dryRun) {
+        log.push(`[DRY] would CREATE trainer: ${tName} | email: ${te || '—'} | phone: ${!phoneConflict ? (tp?.digits || '—') : '⚠ phone conflict, skipped'} | group: ${tg || '—'}`);
+        trainer = { id: '__dry__', name: tName, email: te, phoneDigits: tp?.digits || null, whatsappGroupLink: tg } as any;
+      } else {
+        trainer = await prisma.trainer.create({
+          data: {
+            name: tName,
+            phoneCode: !phoneConflict ? (tp?.code || '+91') : '+91',
+            phoneDigits: !phoneConflict ? (tp?.digits || null) : null,
+            ...(te ? { email: te } : {}),
+            ...(row.skill ? { skills: row.skill } : {}),
+            ...(tg ? { whatsappGroupLink: tg } : {}),
+          },
+          select: { id: true, name: true, email: true, phoneDigits: true, whatsappGroupLink: true },
+        });
+      }
     } else {
-      const te = (row as any).te && (row as any).te !== 'no email' ? (row as any).te.trim() : null;
-      // Only update phone if no OTHER trainer already owns that phoneDigits
       let phoneUpdate: { phoneCode?: string; phoneDigits?: string } = {};
       if (tp?.digits) {
         const phoneConflict = await prisma.trainer.findFirst({
@@ -179,14 +200,22 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
         });
         if (!phoneConflict) phoneUpdate = { phoneCode: tp.code, phoneDigits: tp.digits };
       }
-      await prisma.trainer.update({
-        where: { id: trainer.id },
-        data: {
-          ...phoneUpdate,
-          ...(te ? { email: te } : {}),
-          ...(tg ? { whatsappGroupLink: tg } : {}),
-        },
-      });
+      const tChanges: string[] = [];
+      if (te && te !== trainer.email) tChanges.push(`email: ${trainer.email || '—'} → ${te}`);
+      if (phoneUpdate.phoneDigits && phoneUpdate.phoneDigits !== trainer.phoneDigits) tChanges.push(`phone: ${trainer.phoneDigits || '—'} → ${phoneUpdate.phoneDigits}`);
+      if (tg && tg !== trainer.whatsappGroupLink) tChanges.push(`group link: updated`);
+      if (dryRun) {
+        log.push(`[DRY] would UPDATE trainer: ${tName}${tChanges.length ? ` | ${tChanges.join(' | ')}` : ' | no field changes'}`);
+      } else {
+        await prisma.trainer.update({
+          where: { id: trainer.id },
+          data: {
+            ...phoneUpdate,
+            ...(te ? { email: te } : {}),
+            ...(tg ? { whatsappGroupLink: tg } : {}),
+          },
+        });
+      }
     }
 
     // RegularTraining
@@ -195,28 +224,38 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
       select: { id: true },
     });
     if (!existing) {
-      await prisma.regularTraining.create({
-        data: {
-          name: `${row.c} · ${tName}`,
-          clientId: client.id, trainerId: trainer.id,
-          hostedByDefaultId: hostId, meetingMode: 'Zoom',
-          defaultTimeIst: row.time, status: 'active',
-          ...(row.skill ? { notes: row.skill } : {}),
-        },
-      });
-      log.push(`✓ created: ${row.c} ← ${tName} (${row.host} ${row.time})`);
-      created++;
+      if (dryRun) {
+        log.push(`[DRY] would CREATE session: ${row.c} ← ${tName} (${row.host} ${row.time})`);
+        created++;
+      } else {
+        await prisma.regularTraining.create({
+          data: {
+            name: `${row.c} · ${tName}`,
+            clientId: client.id, trainerId: trainer.id,
+            hostedByDefaultId: hostId, meetingMode: 'Zoom',
+            defaultTimeIst: row.time, status: 'active',
+            ...(row.skill ? { notes: row.skill } : {}),
+          },
+        });
+        log.push(`✓ created: ${row.c} ← ${tName} (${row.host} ${row.time})`);
+        created++;
+      }
     } else {
-      await prisma.regularTraining.update({
-        where: { id: existing.id },
-        data: { defaultTimeIst: row.time, hostedByDefaultId: hostId },
-      });
-      log.push(`↺ updated: ${row.c} ← ${tName}`);
-      updated++;
+      if (dryRun) {
+        log.push(`[DRY] session exists: ${row.c} ← ${tName} (no changes needed)`);
+        updated++;
+      } else {
+        await prisma.regularTraining.update({
+          where: { id: existing.id },
+          data: { defaultTimeIst: row.time, hostedByDefaultId: hostId },
+        });
+        log.push(`↺ updated: ${row.c} ← ${tName}`);
+        updated++;
+      }
     }
   }
 
-  res.json({ ok: true, created, updated, skipped, log });
+  res.json({ ok: true, dryRun, created, updated, skipped, log });
 });
 
 // Canonical client names from the active PDF sheet (normalised lowercase for matching)
