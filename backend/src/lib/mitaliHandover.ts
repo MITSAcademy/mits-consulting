@@ -158,29 +158,28 @@ export function buildHandoverHtml(v: HandoverVars): string {
 </body></html>`;
 }
 
-/** WhatsApp text for the handover welcome — concise version of the email. */
+/** WhatsApp text for the handover welcome — matches Mitali's standard intro message. */
 export function buildHandoverWhatsAppText(v: HandoverVars): string {
   const senderName = v.senderName || 'Mitali';
-  const playbookUrl = v.playbookUrl || PLAYBOOK_URL;
+  const senderPhone = v.senderPhone || MITALI_PHONE;
+  const senderEmail = v.senderEmail || MITALI_EMAIL;
   return [
-    `Dear ${v.clientName},`,
+    `Thanks for joining us!!`,
     ``,
-    `Welcome aboard MITS Solution! 🎉`,
+    `I am *${senderName}* and I will be your first *point-of-contact or escalation* in case you face any issues with support or training`,
     ``,
-    `I'm ${senderName}, your Customer Success Manager. Thrilled to have you with us!`,
+    `I can help you fix any issues *related to timing or change of technology, support* or anything else very soon.`,
     ``,
-    `Here's your team:`,
-    `• Kashish – Client Coordinator (schedules your sessions)`,
-    `• Bhavneet – Team Leader (Level 1 escalation, ~24 hr response)`,
-    `• ${senderName} – Customer Success Manager (Level 2 escalation, payments, ~48 hr response)`,
-    v.trainerName ? `• ${v.trainerName} – Your Primary Trainer` : '',
+    `*Request you to follow the below guidelines:*`,
     ``,
-    `📖 MITS Client Playbook: ${playbookUrl}`,
+    `• Don't Share your personal details *(phone number/email)* with the trainer or ask their personal details. In case they ask/insist you, please ask them to talk to me or provide my contact only.`,
+    `• Please don't discuss anything regarding *payment* with the trainer/support.`,
+    `• You can share your availability or time change with the trainer. Also *do inform in the whatsapp group* so that they get to know about the same.`,
+    `• Anytime you feel task/training is not progressing, *please reach out to me* over the call/text directly for quick resolutions.`,
     ``,
-    `Please review and sign the service agreement — you'll receive it via SignEasy shortly.`,
-    ``,
-    `Feel free to reach out anytime. Looking forward to a great partnership! 🙏`,
-    `– ${senderName}`,
+    `*Feel free to reach out to me*`,
+    `${senderName} : ${senderPhone}`,
+    `${senderEmail}`,
   ].filter(Boolean).join('\n');
 }
 

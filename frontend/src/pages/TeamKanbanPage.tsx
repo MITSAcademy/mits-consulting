@@ -17,9 +17,11 @@ import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
-import { ExternalLink, UserPlus, AlertTriangle, Clock, CheckCircle2, MessageSquare, ChevronDown } from 'lucide-react';
+import { ExternalLink, UserPlus, AlertTriangle, Clock, CheckCircle2, MessageSquare, ChevronDown, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createPortal } from 'react-dom';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Textarea, Label } from '@/components/ui/input';
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -253,10 +255,66 @@ function HostChip({ training, canReassign }: { training: Client['regularTraining
   );
 }
 
+// ─── call log modal ───────────────────────────────────────────────────────────
+
+function CallLogModal({ client, onClose }: { client: Client; onClose: () => void }) {
+  const showToast = useUI((s) => s.showToast);
+  const [note, setNote] = useState('');
+  const [outcome, setOutcome] = useState<'answered' | 'no_answer' | 'callback'>('answered');
+
+  const log = useMutation({
+    mutationFn: () => api.post('/call-logs', {
+      clientId: client.id,
+      kind: 'checkin',
+      outcome: outcome === 'answered' ? 'connected' : outcome === 'no_answer' ? 'no_answer' : 'callback_requested',
+      notes: note || undefined,
+    }),
+    onSuccess: () => { showToast('Call logged ✓'); onClose(); },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed to log call', 'error'),
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent title={`Log call · ${client.name}`} className="max-w-sm">
+        <div className="space-y-3">
+          <div>
+            <Label>Outcome</Label>
+            <div className="flex gap-2 mt-1">
+              {(['answered', 'no_answer', 'callback'] as const).map(o => (
+                <button key={o} onClick={() => setOutcome(o)}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors"
+                  style={{
+                    background: outcome === o ? 'var(--brand-accent)' : 'var(--bg-input)',
+                    color: outcome === o ? '#fff' : 'var(--brand-text)',
+                    borderColor: outcome === o ? 'var(--brand-accent)' : 'var(--brand-border)',
+                  }}>
+                  {o === 'answered' ? '✓ Answered' : o === 'no_answer' ? '✗ No answer' : '↩ Callback'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label>Notes</Label>
+            <Textarea value={note} onChange={(e: any) => setNote(e.target.value)}
+              placeholder="What was discussed? Any follow-up needed?" rows={3} className="mt-1" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={log.isPending} onClick={() => log.mutate()}>
+            <Phone size={12}/> {log.isPending ? 'Saving…' : 'Log call'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── client card ──────────────────────────────────────────────────────────────
 
-function ClientCard({ client, canAssign, canReassignHost, showAmount = true, isUnassigned = false, isAllColumn = false }: { client: Client; canAssign: boolean; canReassignHost: boolean; showAmount?: boolean; isUnassigned?: boolean; isAllColumn?: boolean }) {
+function ClientCard({ client, canAssign, canReassignHost, showAmount = true, canLogCall = false, isUnassigned = false, isAllColumn = false }: { client: Client; canAssign: boolean; canReassignHost: boolean; showAmount?: boolean; canLogCall?: boolean; isUnassigned?: boolean; isAllColumn?: boolean }) {
   const [assigning, setAssigning] = useState(false);
+  const [loggingCall, setLoggingCall] = useState(false);
   const activeTraining = client.regularTrainings?.[0] ?? null;
   const due = daysUntil(client.payDate2);
   const fbAge = daysAgo(client.lastFeedbackTakenAt);
@@ -282,13 +340,22 @@ function ClientCard({ client, canAssign, canReassignHost, showAmount = true, isU
             {client.name}
             <ExternalLink size={9} className="opacity-0 group-hover:opacity-60"/>
           </Link>
-          {canAssign && !isUnassigned && (
-            <button onClick={() => setAssigning(true)}
-              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-white/10"
-              title="Reassign AM">
-              <UserPlus size={12} style={{ color: 'var(--accent-gold)' }}/>
-            </button>
-          )}
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+            {canLogCall && (
+              <button onClick={() => setLoggingCall(true)}
+                className="p-0.5 rounded hover:bg-white/10"
+                title="Log call">
+                <Phone size={12} style={{ color: 'var(--status-green)' }}/>
+              </button>
+            )}
+            {canAssign && !isUnassigned && (
+              <button onClick={() => setAssigning(true)}
+                className="p-0.5 rounded hover:bg-white/10"
+                title="Reassign AM">
+                <UserPlus size={12} style={{ color: 'var(--accent-gold)' }}/>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Engagement type */}
@@ -358,6 +425,7 @@ function ClientCard({ client, canAssign, canReassignHost, showAmount = true, isU
       </div>
 
       {assigning && <AssignModal client={client} onClose={() => setAssigning(false)}/>}
+      {loggingCall && <CallLogModal client={client} onClose={() => setLoggingCall(false)}/>}
     </>
   );
 }
@@ -365,7 +433,7 @@ function ClientCard({ client, canAssign, canReassignHost, showAmount = true, isU
 // ─── column ───────────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  title, subtitle, color, clients, canAssign, canReassignHost, showAmount, isUnassigned, isAllColumn,
+  title, subtitle, color, clients, canAssign, canReassignHost, showAmount, canLogCall, isUnassigned, isAllColumn,
 }: {
   title: string;
   subtitle: string;
@@ -374,6 +442,7 @@ function KanbanColumn({
   canAssign: boolean;
   canReassignHost: boolean;
   showAmount?: boolean;
+  canLogCall?: boolean;
   isUnassigned?: boolean;
   isAllColumn?: boolean;
 }) {
@@ -420,7 +489,7 @@ function KanbanColumn({
         {clients.length === 0 ? (
           <div className="text-[11px] muted text-center py-8">No active clients</div>
         ) : (
-          clients.map(c => <ClientCard key={c.id} client={c} canAssign={canAssign} canReassignHost={canReassignHost} showAmount={showAmount} isUnassigned={isUnassigned} isAllColumn={isAllColumn}/>)
+          clients.map(c => <ClientCard key={c.id} client={c} canAssign={canAssign} canReassignHost={canReassignHost} showAmount={showAmount} canLogCall={canLogCall} isUnassigned={isUnassigned} isAllColumn={isAllColumn}/>)
         )}
       </div>
     </div>
@@ -450,6 +519,7 @@ export function TeamKanbanPage() {
   const canAssign = role === 'manager' || role === 'founder' || role === 'lead';
   const canReassignHost = role === 'lead';
   const showAmount = role === 'founder' || role === 'manager' || role === 'accounts';
+  const canLogCall = role === 'manager' || role === 'founder' || role === 'lead' || role === 'account_manager';
 
   const columns = useMemo(() => {
     const unassigned = clients.filter(c => !c.assignedAmId);
@@ -534,6 +604,7 @@ export function TeamKanbanPage() {
                 canAssign={canAssign}
                 canReassignHost={canReassignHost}
                 showAmount={showAmount}
+                canLogCall={canLogCall}
                 isUnassigned={col.id === 'unassigned'}
                 isAllColumn={col.id === 'all'}
               />

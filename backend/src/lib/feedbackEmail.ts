@@ -4,7 +4,7 @@
  * Matches the email screenshot with Client Survey Form link.
  */
 
-const SURVEY_URL = 'https://forms.gle/MITSClientSurvey';
+const SURVEY_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSep1UNX-Cx3USsytUO2NvwtsQdanCYOlFANLzeNS442hx5TQQ/viewform';
 const WEBSITE = 'https://mitssolution.com';
 const MITALI_EMAIL = 'mitagg@mitssolution.com';
 const MITALI_PHONE = '+91 97795 30773';
