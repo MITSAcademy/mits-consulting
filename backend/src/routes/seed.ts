@@ -143,10 +143,16 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
     });
     if (!trainer) {
       const te = (row as any).te && (row as any).te !== 'no email' ? (row as any).te.trim() : null;
+      // Check phone conflict before creating
+      const phoneConflict = tp?.digits ? await prisma.trainer.findFirst({
+        where: { phoneDigits: tp.digits },
+        select: { id: true },
+      }) : null;
       trainer = await prisma.trainer.create({
         data: {
           name: tName,
-          phoneCode: tp?.code || '+91', phoneDigits: tp?.digits || null,
+          phoneCode: !phoneConflict ? (tp?.code || '+91') : '+91',
+          phoneDigits: !phoneConflict ? (tp?.digits || null) : null,
           ...(te ? { email: te } : {}),
           ...(row.skill ? { skills: row.skill } : {}),
         },
@@ -154,10 +160,19 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
       });
     } else {
       const te = (row as any).te && (row as any).te !== 'no email' ? (row as any).te.trim() : null;
+      // Only update phone if no OTHER trainer already owns that phoneDigits
+      let phoneUpdate: { phoneCode?: string; phoneDigits?: string } = {};
+      if (tp?.digits) {
+        const phoneConflict = await prisma.trainer.findFirst({
+          where: { phoneDigits: tp.digits, id: { not: trainer.id } },
+          select: { id: true },
+        });
+        if (!phoneConflict) phoneUpdate = { phoneCode: tp.code, phoneDigits: tp.digits };
+      }
       await prisma.trainer.update({
         where: { id: trainer.id },
         data: {
-          ...(tp?.digits ? { phoneCode: tp.code, phoneDigits: tp.digits } : {}),
+          ...phoneUpdate,
           ...(te ? { email: te } : {}),
         },
       });
