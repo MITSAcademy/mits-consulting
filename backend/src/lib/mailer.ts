@@ -123,6 +123,13 @@ export function formatSendError(label: string, err: unknown): { error: string; c
   if (code === 'MISSING_APP_PASSWORD') {
     return { error: message, code };
   }
+  // EAUTH = Gmail rejected credentials (expired/revoked App Password) — treat same as missing
+  if (code === 'EAUTH') {
+    return {
+      error: 'Your Gmail App Password has expired or been revoked. Please re-save it in Settings → My email.',
+      code: 'MISSING_APP_PASSWORD',
+    };
+  }
   return {
     error: `${label} send failed. Open Settings → My email to re-save your App Password, or contact admin if it persists.`,
     code,
