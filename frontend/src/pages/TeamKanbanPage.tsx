@@ -255,7 +255,7 @@ function HostChip({ training, canReassign }: { training: Client['regularTraining
 
 // ─── client card ──────────────────────────────────────────────────────────────
 
-function ClientCard({ client, canAssign, canReassignHost, isUnassigned = false, isAllColumn = false }: { client: Client; canAssign: boolean; canReassignHost: boolean; isUnassigned?: boolean; isAllColumn?: boolean }) {
+function ClientCard({ client, canAssign, canReassignHost, showAmount = true, isUnassigned = false, isAllColumn = false }: { client: Client; canAssign: boolean; canReassignHost: boolean; showAmount?: boolean; isUnassigned?: boolean; isAllColumn?: boolean }) {
   const [assigning, setAssigning] = useState(false);
   const activeTraining = client.regularTrainings?.[0] ?? null;
   const due = daysUntil(client.payDate2);
@@ -320,8 +320,8 @@ function ClientCard({ client, canAssign, canReassignHost, isUnassigned = false, 
           </div>
         )}
 
-        {/* Amount */}
-        {client.cycleAmount > 0 && (
+        {/* Amount — hidden for lead role */}
+        {showAmount && client.cycleAmount > 0 && (
           <div className="text-[10px] muted mt-1 font-mono">
             {client.currency} {client.cycleAmount}
           </div>
@@ -365,7 +365,7 @@ function ClientCard({ client, canAssign, canReassignHost, isUnassigned = false, 
 // ─── column ───────────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  title, subtitle, color, clients, canAssign, canReassignHost, isUnassigned, isAllColumn,
+  title, subtitle, color, clients, canAssign, canReassignHost, showAmount, isUnassigned, isAllColumn,
 }: {
   title: string;
   subtitle: string;
@@ -373,6 +373,7 @@ function KanbanColumn({
   clients: Client[];
   canAssign: boolean;
   canReassignHost: boolean;
+  showAmount?: boolean;
   isUnassigned?: boolean;
   isAllColumn?: boolean;
 }) {
@@ -419,7 +420,7 @@ function KanbanColumn({
         {clients.length === 0 ? (
           <div className="text-[11px] muted text-center py-8">No active clients</div>
         ) : (
-          clients.map(c => <ClientCard key={c.id} client={c} canAssign={canAssign} canReassignHost={canReassignHost} isUnassigned={isUnassigned} isAllColumn={isAllColumn}/>)
+          clients.map(c => <ClientCard key={c.id} client={c} canAssign={canAssign} canReassignHost={canReassignHost} showAmount={showAmount} isUnassigned={isUnassigned} isAllColumn={isAllColumn}/>)
         )}
       </div>
     </div>
@@ -448,6 +449,7 @@ export function TeamKanbanPage() {
   const role = user?.role || '';
   const canAssign = role === 'manager' || role === 'founder' || role === 'lead';
   const canReassignHost = role === 'lead';
+  const showAmount = role === 'founder' || role === 'manager' || role === 'accounts';
 
   const columns = useMemo(() => {
     const unassigned = clients.filter(c => !c.assignedAmId);
@@ -531,6 +533,7 @@ export function TeamKanbanPage() {
                 clients={col.clients}
                 canAssign={canAssign}
                 canReassignHost={canReassignHost}
+                showAmount={showAmount}
                 isUnassigned={col.id === 'unassigned'}
                 isAllColumn={col.id === 'all'}
               />

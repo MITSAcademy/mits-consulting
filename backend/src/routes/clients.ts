@@ -42,6 +42,12 @@ const include = {
 //   • everyone else (founder/manager/demo_lead/sales/host) → full visibility
 // `viewer` is the requesting user.
 function redactClient<T extends Record<string, any>>(c: T, viewer: { id: string; role: string }): T {
+  // lead (Bhavneet) — strip all payment/financial fields
+  if (viewer.role === 'lead') {
+    const { cycleAmount, currency, paymentModel, freshPaymentAmount, freshPaymentReceived,
+            payDate1, payDate2, nextRenewalDue, funderType, ...safe } = c as any;
+    return safe as T;
+  }
   const isRecruiter = viewer.role === 'recruiter';
   const isOtherIntake = viewer.role === 'demo_intake' && c.intakeOwnerId && c.intakeOwnerId !== viewer.id;
   if (!isRecruiter && !isOtherIntake) return c;
