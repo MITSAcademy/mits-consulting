@@ -342,7 +342,37 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
     }
   }
 
-  // 3. Find and remove duplicate active RegularTraining rows per CLIENT+TRAINER pair
+  // 3. Merge duplicate Client records with the same name (same-name dedup)
+  // When the seed ran multiple times, clients like "Bhargavi" got created twice.
+  // Keep the oldest record, move all RegularTraining from newer duplicates to it, set extras Dormant.
+  const allActiveClients = await prisma.client.findMany({
+    where: { lifecycle: { in: ['Active', 'LeverageGranted'] } },
+    select: { id: true, name: true, createdAt: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const clientsByName = new Map<string, typeof allActiveClients>();
+  for (const c of allActiveClients) {
+    const key = c.name.toLowerCase().trim();
+    const group = clientsByName.get(key) || [];
+    group.push(c);
+    clientsByName.set(key, group);
+  }
+  for (const [, clients] of clientsByName) {
+    if (clients.length <= 1) continue;
+    // Keep oldest, merge rest into it
+    const [keep, ...extras] = clients;
+    for (const dup of extras) {
+      await prisma.regularTraining.updateMany({
+        where: { clientId: dup.id },
+        data: { clientId: keep.id },
+      });
+      await prisma.client.update({ where: { id: dup.id }, data: { lifecycle: 'Dormant' as any } });
+      log.push(`✓ merged duplicate client "${dup.name}" (${dup.id}) → kept ${keep.id}, set duplicate Dormant`);
+      fixed++;
+    }
+  }
+
+  // 4. Find and remove duplicate active RegularTraining rows per CLIENT+TRAINER pair
   // Each client should have at most ONE active session per trainer.
   // (Multiple trainers per client is valid — e.g. Nikhil with Raj AND Nikhil with Arun are two different clients)
   const allActive = await prisma.regularTraining.findMany({
