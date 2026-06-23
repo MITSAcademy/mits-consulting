@@ -193,45 +193,70 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
   res.json({ ok: true, created, updated, skipped, log });
 });
 
-// Known fake/seeded client names that should be cleaned up
-const FAKE_CLIENT_NAMES = [
-  'Raja', 'Naveena', 'Saiteja', 'Uteej', 'Ramya Cerner',
-  'Training Python Ram', 'Nitesh', 'Nikhita', 'Apporiva saurab', 'Apporva saurab',
-  'Alice Johnson', 'Bob Smith', 'Carol White', 'David Brown',
-  'Test Client', 'Demo Client',
-];
+// Canonical client names from the active PDF sheet (normalised lowercase for matching)
+const PDF_CLIENT_NAMES = RAW.map(r => r.c.toLowerCase().trim());
 
-// POST /api/seed/cleanup — archive dummy/seeded clients + their RegularTrainings
+// PDF client phone digits for fallback matching (last 10 digits)
+const PDF_CLIENT_PHONES = RAW.map(r => r.cp.replace(/\D/g, '').slice(-10)).filter(Boolean);
+
+// POST /api/seed/cleanup — retire clients not in the active PDF sheet → Retrospective
 seedRouter.post('/cleanup', async (req: AuthedRequest, res) => {
   if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
 
-  const dummies = await prisma.client.findMany({
-    where: {
-      OR: [
-        { name: { startsWith: 'dummy_', mode: 'insensitive' } },
-        { name: { startsWith: 'test_', mode: 'insensitive' } },
-        { name: { startsWith: 'seed_', mode: 'insensitive' } },
-        { name: { in: FAKE_CLIENT_NAMES, mode: 'insensitive' } },
-      ],
+  // Fetch all active RegularTraining rows with client + trainer info
+  const activeTrainings = await prisma.regularTraining.findMany({
+    where: { status: 'active' },
+    include: {
+      client: { select: { id: true, name: true, phoneDigits: true, lifecycle: true } },
+      trainer: { select: { id: true, name: true } },
+      hostedByDefault: { select: { id: true, name: true } },
     },
-    select: { id: true, name: true },
   });
 
   const log: string[] = [];
-  let archived = 0;
+  let retired = 0, kept = 0;
 
-  for (const c of dummies) {
-    await prisma.regularTraining.updateMany({
-      where: { clientId: c.id },
-      data: { status: 'archived' },
+  for (const rt of activeTrainings) {
+    const c = rt.client;
+    if (!c) continue;
+
+    const nameLower = c.name.toLowerCase().trim();
+    const phone10 = (c.phoneDigits || '').replace(/\D/g, '').slice(-10);
+
+    // Match by name or phone against PDF list
+    const inPdf = PDF_CLIENT_NAMES.includes(nameLower)
+      || (phone10.length >= 8 && PDF_CLIENT_PHONES.some(p => p.endsWith(phone10.slice(-8)) || phone10.endsWith(p.slice(-8))));
+
+    if (inPdf) {
+      kept++;
+      continue;
+    }
+
+    // Not in PDF — archive the training and create a Retrospective entry
+    await prisma.regularTraining.update({
+      where: { id: rt.id },
+      data: { status: 'inactive' },
     });
-    await prisma.client.update({
-      where: { id: c.id },
-      data: { lifecycle: 'Churned' },
+
+    // Create retrospective entry
+    await (prisma as any).retrospective.upsert({
+      where: { sourceType_sourceId: { sourceType: 'RegularTraining', sourceId: rt.id } },
+      create: {
+        sourceType: 'RegularTraining',
+        sourceId: rt.id,
+        clientName: c.name,
+        trainerName: rt.trainer?.name || '',
+        removedAt: new Date().toISOString().slice(0, 10),
+        removedById: req.user!.id,
+        reason: 'Removed from active PDF sheet — not in latest client list',
+        sessionDate: rt.defaultTimeIst || null,
+      },
+      update: {},
     });
-    log.push(`archived: ${c.name}`);
-    archived++;
+
+    log.push(`retired: ${c.name} (trainer: ${rt.trainer?.name || '—'})`);
+    retired++;
   }
 
-  res.json({ ok: true, archived, log });
+  res.json({ ok: true, retired, kept, log });
 });

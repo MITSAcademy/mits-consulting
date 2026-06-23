@@ -274,8 +274,8 @@ export function SettingsPage() {
               </div>
               <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
                 <div>
-                  <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Archive seeded / dummy clients</div>
-                  <div className="text-[11px] muted mt-0.5">Sets lifecycle to Inactive for clients created by seed that are no longer in the active sheet. Run before re-seeding with a fresh PDF.</div>
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Sync from PDF — retire clients not in active sheet</div>
+                  <div className="text-[11px] muted mt-0.5">Compares all active RegularTraining rows against the PDF list. Clients NOT in the PDF are set inactive and logged to Retrospective. Run this first, then re-seed.</div>
                 </div>
                 <CleanupSeedButton />
               </div>
@@ -363,8 +363,9 @@ function CleanupSeedButton() {
     mutationFn: () => api.post('/seed/cleanup'),
     onSuccess: (r: any) => {
       const d = r.data;
-      showToast(`Cleanup done — ${d.archived} clients archived`);
+      showToast(`Done — ${d.retired} clients retired to Retrospective, ${d.kept} kept`);
       qc.invalidateQueries({ queryKey: ['clients'] });
+      qc.invalidateQueries({ queryKey: ['retrospective'] });
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Cleanup failed', 'error'),
   });
@@ -374,7 +375,7 @@ function CleanupSeedButton() {
       variant="ghost"
       disabled={cleanup.isPending}
       onClick={() => {
-        if (confirm('Archive seeded/dummy clients that are no longer in the active sheet? This sets their lifecycle to Inactive.')) {
+        if (confirm('Retire clients not in the active PDF sheet? They will be set Inactive and logged to Retrospective. Run BEFORE re-seeding.')) {
           cleanup.mutate();
         }
       }}
