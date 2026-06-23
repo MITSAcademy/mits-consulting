@@ -114,10 +114,25 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
     // Client
     const cp = fmtClientPhone(row.cp);
     const ce = row.ce && row.ce !== 'no email' ? row.ce.trim() : null;
-    let client = await prisma.client.findFirst({
-      where: { name: { equals: row.c, mode: 'insensitive' } },
-      select: { id: true, name: true, email: true, phoneDigits: true, whatsappGroupLink: true },
-    });
+    // Match by phone first (unique), then email, then name — prevents same-name clients from colliding
+    let client = cp?.digits
+      ? await prisma.client.findFirst({
+          where: { phoneDigits: cp.digits },
+          select: { id: true, name: true, email: true, phoneDigits: true, whatsappGroupLink: true },
+        })
+      : null;
+    if (!client && ce) {
+      client = await prisma.client.findFirst({
+        where: { email: { equals: ce, mode: 'insensitive' } },
+        select: { id: true, name: true, email: true, phoneDigits: true, whatsappGroupLink: true },
+      });
+    }
+    if (!client) {
+      client = await prisma.client.findFirst({
+        where: { name: { equals: row.c, mode: 'insensitive' } },
+        select: { id: true, name: true, email: true, phoneDigits: true, whatsappGroupLink: true },
+      });
+    }
     const cg = (row as any).cg || null;
     if (!client) {
       if (dryRun) {
@@ -260,9 +275,10 @@ seedRouter.post('/regular-trainings', async (req: AuthedRequest, res) => {
   res.json({ ok: true, dryRun, created, updated, skipped, log });
 });
 
-// POST /api/seed/dedup — remove duplicate RegularTraining rows and fix Sathiya→Saiteja
-// Keeps the OLDEST row for each client+trainer pair (preserves any existing session data),
-// deletes the newer duplicate. Also fixes the Sathiya client name/phone/email to Saiteja.
+// POST /api/seed/dedup — fix all duplicate data:
+//   1. Sathiya → Saiteja name/phone/email fix
+//   2. Merge spelling-variant client records (Meghana→Meghna, Snehlatha→Snehlata)
+//   3. Remove duplicate active RegularTraining rows per client+trainer pair (keep oldest)
 seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
   if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
 
@@ -291,36 +307,44 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
     log.push(`— Sathiya not found (already fixed or never existed)`);
   }
 
-  // 2. Fix Nikhil (Arun) → Nikhil (client name cleanup)
-  const nikhilArun = await prisma.client.findFirst({
-    where: { name: { equals: 'Nikhil (Arun)', mode: 'insensitive' } },
-    select: { id: true },
-  });
-  if (nikhilArun) {
-    // Check if a plain 'Nikhil' with phone 12035331095 already exists
-    const nikhilPlain = await prisma.client.findFirst({
-      where: { name: { equals: 'Nikhil', mode: 'insensitive' }, phoneDigits: '2035331095' },
+  // 2. Merge spelling-variant duplicate client records
+  // These are separate DB rows that represent the same real person (typo in name)
+  const SPELLING_MERGES: Array<{ keep: string; drop: string }> = [
+    { keep: 'Meghna',    drop: 'Meghana' },
+    { keep: 'Snehlata',  drop: 'Snehlatha' },
+  ];
+  for (const { keep, drop } of SPELLING_MERGES) {
+    const keepClient = await prisma.client.findFirst({
+      where: { name: { equals: keep, mode: 'insensitive' } },
       select: { id: true },
     });
-    if (nikhilPlain) {
-      // Move training rows from Nikhil (Arun) to Nikhil plain, set old client inactive
+    const dropClient = await prisma.client.findFirst({
+      where: { name: { equals: drop, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (keepClient && dropClient) {
+      // Move all RegularTraining rows from the duplicate to the canonical client
       await prisma.regularTraining.updateMany({
-        where: { clientId: nikhilArun.id },
-        data: { clientId: nikhilPlain.id },
+        where: { clientId: dropClient.id },
+        data: { clientId: keepClient.id },
       });
-      await prisma.client.update({ where: { id: nikhilArun.id }, data: { lifecycle: 'Dormant' as any } });
-      log.push(`✓ merged Nikhil (Arun) sessions into Nikhil, old client set dormant`);
+      // Set the duplicate client dormant
+      await prisma.client.update({ where: { id: dropClient.id }, data: { lifecycle: 'Dormant' as any } });
+      log.push(`✓ merged "${drop}" → "${keep}" (sessions moved, duplicate set Dormant)`);
+      fixed++;
+    } else if (!keepClient && dropClient) {
+      // Canonical name doesn't exist — just rename the typo version
+      await prisma.client.update({ where: { id: dropClient.id }, data: { name: keep } });
+      log.push(`✓ renamed client: "${drop}" → "${keep}"`);
       fixed++;
     } else {
-      await prisma.client.update({ where: { id: nikhilArun.id }, data: { name: 'Nikhil' } });
-      log.push(`✓ renamed Nikhil (Arun) → Nikhil`);
-      fixed++;
+      log.push(`— "${drop}" not found (already fixed or never existed)`);
     }
   }
 
-  // 3. Find and remove duplicate active RegularTraining rows per CLIENT
-  // A client should have at most ONE active session. Keep the row that has the most data
-  // (has trainerId + notes/skills), delete all others for that client.
+  // 3. Find and remove duplicate active RegularTraining rows per CLIENT+TRAINER pair
+  // Each client should have at most ONE active session per trainer.
+  // (Multiple trainers per client is valid — e.g. Nikhil with Raj AND Nikhil with Arun are two different clients)
   const allActive = await prisma.regularTraining.findMany({
     where: { status: 'active' },
     select: {
@@ -331,29 +355,24 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
     orderBy: { createdAt: 'asc' },
   });
 
-  // Group by clientId — keep the "best" row (has trainerId AND notes preferred, else oldest)
-  const byClient = new Map<string, typeof allActive>();
+  // Group by clientId+trainerId — keep the oldest row (most likely to have session history), delete newer duplicates
+  const byPair = new Map<string, typeof allActive>();
   for (const rt of allActive) {
     if (!rt.clientId) continue;
-    const group = byClient.get(rt.clientId) || [];
+    const key = `${rt.clientId}::${rt.trainerId || 'none'}`;
+    const group = byPair.get(key) || [];
     group.push(rt);
-    byClient.set(rt.clientId, group);
+    byPair.set(key, group);
   }
 
   const toDelete: string[] = [];
-  for (const [, rows] of byClient) {
+  for (const [, rows] of byPair) {
     if (rows.length <= 1) continue;
-    // Score each row: +2 if has trainerId, +1 if has notes
-    const scored = rows.map(r => ({
-      ...r,
-      score: (r.trainerId ? 2 : 0) + (r.notes ? 1 : 0),
-    }));
-    // Sort: highest score first, then oldest first (createdAt asc)
-    scored.sort((a, b) => b.score - a.score || a.createdAt.getTime() - b.createdAt.getTime());
-    const [keep, ...rest] = scored;
+    // Keep oldest (createdAt asc — already sorted), delete rest
+    const [, ...rest] = rows;
     for (const r of rest) {
       toDelete.push(r.id);
-      log.push(`✗ removed duplicate: ${r.client?.name} ← ${r.trainer?.name || '(no trainer)'} [kept: ← ${keep.trainer?.name || '(no trainer)'}]`);
+      log.push(`✗ removed duplicate: ${r.client?.name} ← ${r.trainer?.name || '(no trainer)'} (keeping oldest)`);
       deleted++;
     }
   }
