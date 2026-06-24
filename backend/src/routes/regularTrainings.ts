@@ -199,6 +199,34 @@ regularTrainingsRouter.post('/trainings/:id/escalate', async (req: AuthedRequest
   res.json(updated);
 });
 
+// Flag a session issue directly to the Issues section (coordinator team)
+regularTrainingsRouter.post('/trainings/:id/flag-issue', async (req: AuthedRequest, res) => {
+  if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const training = await prisma.regularTraining.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, name: true, clientId: true, trainerId: true, client: { select: { name: true } } },
+  });
+  if (!training) return res.status(404).json({ error: 'Not found' });
+
+  const { description } = req.body || {};
+  const today = new Date().toISOString().slice(0, 10);
+
+  const issue = await prisma.issueTracker.create({
+    data: {
+      title: `Issue flagged by ${req.user!.name} — ${training.client?.name || training.name}`,
+      date: today,
+      coordinatorId: req.user!.id,
+      coordinatorName: req.user!.name,
+      ...(training.clientId ? { clientId: training.clientId } : {}),
+      ...(training.trainerId ? { trainerId: training.trainerId } : {}),
+      ...(description ? { description } : {}),
+      status: 'Open',
+    },
+  });
+  await audit(req.user!.id, req.user!.name, 'ISSUE_FLAGGED', `${training.client?.name || training.name} → issue #${issue.id}`);
+  res.json({ ok: true, issueId: issue.id });
+});
+
 regularTrainingsRouter.delete('/trainings/:id', async (req: AuthedRequest, res) => {
   if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const t = await prisma.regularTraining.findUnique({ where: { id: req.params.id }, select: { name: true } });

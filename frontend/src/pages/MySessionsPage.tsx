@@ -1217,6 +1217,18 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
                     </button>
                   )}
 
+                  {/* Flag for Regular Team → goes to Issues */}
+                  <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fb923c', textAlign: 'left' }}
+                    onClick={() => {
+                      api.post(`/regular-trainings/trainings/${t.id}/flag-issue`)
+                        .then(() => { onChanged(); qc.invalidateQueries({ queryKey: ['issues'] }); showToast('Flagged — issue created in Issues inbox'); })
+                        .catch((e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'));
+                      setMenuOpen(false);
+                    }}>
+                    <Flag size={13} /> Flag for Regular Team
+                  </button>
+
                   {/* Divider + Remove */}
                   {(rowUser.role === 'lead' || rowUser.role === 'founder' || rowUser.role === 'manager') && (
                     <>
