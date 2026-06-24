@@ -88,6 +88,15 @@ sessionLogsRouter.patch('/:id', requireRole(...SESSION_LOG_WRITE), async (req: A
   res.json(log);
 });
 
+// Founder-only: delete all session logs before a given date (irreversible)
+sessionLogsRouter.delete('/purge-before', requireRole('founder'), async (req: AuthedRequest, res) => {
+  const { before } = req.query as any;
+  if (!before) return res.status(400).json({ error: 'before date required' });
+  const { count } = await prisma.sessionLog.deleteMany({ where: { date: { lt: before } } });
+  await audit(req.user!.id, req.user!.name, 'SESSION_PURGE', `Deleted ${count} session logs before ${before}`);
+  res.json({ ok: true, deleted: count });
+});
+
 sessionLogsRouter.post('/bulk-status', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const { ids, status } = req.body;
   if (!Array.isArray(ids) || !status) return res.status(400).json({ error: 'ids + status required' });

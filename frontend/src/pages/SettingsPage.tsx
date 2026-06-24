@@ -316,6 +316,13 @@ export function SettingsPage() {
               </div>
               <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
                 <div>
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--status-red)' }}>Purge session logs before today</div>
+                  <div className="text-[11px] muted mt-0.5">Permanently deletes all session log entries before today. Cannot be undone. Payout history will be lost.</div>
+                </div>
+                <PurgeSessionLogsButton />
+              </div>
+              <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
+                <div>
                   <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Send Malika's status report now</div>
                   <div className="text-[11px] muted mt-0.5">Fires today's payments status report to malgup@mitssolution.com immediately (normally auto-sends at 5:30 PM IST).</div>
                 </div>
@@ -495,6 +502,40 @@ function MalikaReportButton() {
     <Button size="sm" variant="primary" disabled={report.isPending} onClick={() => report.mutate()}>
       <Send size={12} /> {report.isPending ? 'Sending…' : 'Send now'}
     </Button>
+  );
+}
+
+function PurgeSessionLogsButton() {
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
+  const [confirmed, setConfirmed] = useState(false);
+  const purge = useMutation({
+    mutationFn: () => {
+      const today = new Date().toISOString().slice(0, 10);
+      return api.delete(`/session-logs/purge-before?before=${today}`);
+    },
+    onSuccess: (r: any) => {
+      qc.invalidateQueries({ queryKey: ['session-logs'] });
+      showToast(`Deleted ${r.data.deleted} session log entries ✓`);
+      setConfirmed(false);
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Purge failed', 'error'),
+  });
+  if (!confirmed) {
+    return (
+      <Button size="sm" variant="danger" onClick={() => setConfirmed(true)}>
+        🗑 Purge old logs
+      </Button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[11px]" style={{ color: 'var(--status-red)' }}>Are you sure? This cannot be undone.</span>
+      <Button size="sm" onClick={() => setConfirmed(false)}>Cancel</Button>
+      <Button size="sm" variant="danger" disabled={purge.isPending} onClick={() => purge.mutate()}>
+        {purge.isPending ? 'Deleting…' : 'Yes, delete all'}
+      </Button>
+    </div>
   );
 }
 
