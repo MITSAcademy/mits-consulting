@@ -513,6 +513,45 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
   res.json({ ok: true, deleted, fixed, synced, log });
 });
 
+// POST /api/seed/fix-priya — one-time fix for Priya (priyaananthula27@gmail.com / +15015025408)
+// Finds her client record, ensures lifecycle=WithRecruiters, re-points her sourcing request.
+seedRouter.post('/fix-priya', async (req: AuthedRequest, res) => {
+  if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
+  const log: string[] = [];
+
+  const priya = await prisma.client.findFirst({
+    where: { OR: [{ email: 'priyaananthula27@gmail.com' }, { phoneDigits: '5015025408' }] },
+    select: { id: true, name: true, lifecycle: true, email: true, phoneDigits: true },
+  });
+
+  if (!priya) return res.status(404).json({ error: 'Priya not found by email or phone' });
+  log.push(`Found: ${priya.name} (${priya.id}) — lifecycle: ${priya.lifecycle}`);
+
+  // Restore lifecycle so Anjali/Aman can see her
+  if (priya.lifecycle === 'Dormant') {
+    await prisma.client.update({ where: { id: priya.id }, data: { lifecycle: 'WithRecruiters' as any } });
+    log.push(`✓ restored lifecycle: Dormant → WithRecruiters`);
+  } else {
+    log.push(`— lifecycle is already ${priya.lifecycle}, no change`);
+  }
+
+  // Re-point any sourcing requests that may point to a different Priya record
+  const allPriya = await prisma.client.findMany({
+    where: { name: { equals: 'Priya', mode: 'insensitive' } },
+    select: { id: true, lifecycle: true },
+  });
+  const otherIds = allPriya.map(c => c.id).filter(id => id !== priya.id);
+  if (otherIds.length > 0) {
+    const moved = await (prisma as any).sourcingRequest.updateMany({
+      where: { clientId: { in: otherIds }, status: { in: ['Open', 'Proposed'] } },
+      data: { clientId: priya.id },
+    });
+    if (moved.count > 0) log.push(`✓ re-pointed ${moved.count} sourcing request(s) to correct Priya`);
+  }
+
+  res.json({ ok: true, log });
+});
+
 // Canonical client names from the active PDF sheet (normalised lowercase for matching)
 const PDF_CLIENT_NAMES = RAW.map(r => r.c.toLowerCase().trim());
 

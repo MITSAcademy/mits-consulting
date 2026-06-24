@@ -288,6 +288,13 @@ export function SettingsPage() {
               </div>
               <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
                 <div>
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Fix Priya (sourcing request)</div>
+                  <div className="text-[11px] muted mt-0.5">Restores Priya (priyaananthula27@gmail.com) so Anjali + Aman can see her and send the proposal.</div>
+                </div>
+                <FixPriyaButton />
+              </div>
+              <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
+                <div>
                   <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Send Malika's status report now</div>
                   <div className="text-[11px] muted mt-0.5">Fires today's payments status report to malgup@mitssolution.com immediately (normally auto-sends at 5:30 PM IST).</div>
                 </div>
@@ -424,6 +431,20 @@ function DedupButton() {
       }}
     >
       {dedup.isPending ? 'Fixing…' : '🧹 Fix duplicates'}
+    </Button>
+  );
+}
+
+function FixPriyaButton() {
+  const showToast = useUI((s) => s.showToast);
+  const fix = useMutation({
+    mutationFn: () => api.post('/seed/fix-priya'),
+    onSuccess: (r: any) => showToast(`Priya fixed ✓ — ${r.data?.log?.join(' | ')}`),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Fix failed', 'error'),
+  });
+  return (
+    <Button size="sm" variant="primary" disabled={fix.isPending} onClick={() => fix.mutate()}>
+      {fix.isPending ? 'Fixing…' : '🔧 Fix Priya'}
     </Button>
   );
 }
