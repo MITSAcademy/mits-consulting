@@ -2812,26 +2812,16 @@ clientsRouter.post('/:id/mitali-welcome-email', async (req: AuthedRequest, res) 
 
   const coordinatorName = client.assignedAm?.name || 'Muskan';
   const today = new Date().toISOString().slice(0, 10);
+  const { playbookUrl, agreementUrl } = req.body || {};
 
-  const subject = `Welcome to MITS Solution – ${client.name}`;
-  const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#222">
-  <p>Dear ${client.name},</p>
-  <p>We hope this email finds you well.</p>
-  <p>On behalf of the entire team at MITS Solution, we are delighted to welcome you aboard. We appreciate your trust in us and are committed to ensuring that your experience with MITS is exceptional.</p>
-  <p>To help you get started and better understand our processes, services, and how we work together, we have prepared a comprehensive guide – the <strong>MITS Client Playbook</strong>.</p>
-  <p>Myself (Mitali) would like to take this opportunity to introduce the team members who will support you throughout your journey with MITS.</p>
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0"/>
-  <table style="width:100%;font-size:13px">
-    <tr><td style="padding:8px 0"><strong>${coordinatorName} (Client Coordinator)</strong><br/>She will coordinate and schedule calls to ensure your service requirements are handled effectively.</td></tr>
-    <tr><td style="padding:8px 0"><strong>Bhavneet (Team Leader)</strong><br/>She will assist with resource changes, timing concerns, and service-related issues.<br/><em>Level 1 Escalation · Response ETA: 24 Hours</em></td></tr>
-    <tr><td style="padding:8px 0"><strong>Mitali (Customer Success Manager)</strong><br/>I will oversee your overall experience and ensure your satisfaction throughout the engagement.<br/><em>Level 2 Escalation · Response ETA: 48 Hours</em></td></tr>
-  </table>
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0"/>
-  <p>Please find the documents below:</p>
-  <ul><li>Client Playbook</li><li>Service Agreement (via SignEasy)</li></ul>
-  <p>We look forward to supporting your success.</p>
-  <p>Warm regards,<br/><strong>Mitali</strong><br/>Customer Success Manager, MITS Solution</p>
-</div>`;
+  const subject = HANDOVER_SUBJECT(client.name);
+  const vars = {
+    clientName: client.name,
+    playbookUrl: playbookUrl || undefined,
+    agreementUrl: agreementUrl || undefined,
+  };
+  const htmlBody = buildHandoverHtml({ ...vars, senderName: 'Mitali' });
+  const textBody = buildHandoverText({ ...vars, senderName: 'Mitali' });
 
   const me = await prisma.user.findUnique({
     where: { id: req.user!.id },
@@ -2843,7 +2833,7 @@ clientsRouter.post('/:id/mitali-welcome-email', async (req: AuthedRequest, res) 
   }
 
   try {
-    await sendEmail({ to: toEmail, cc: ['vaibhav.aggarwal@mitssolution.com'], subject, body: subject, htmlBody, fromUser } as any);
+    await sendEmail({ to: toEmail, cc: ['vaibhav.aggarwal@mitssolution.com'], subject, body: textBody, htmlBody, fromUser } as any);
     await prisma.client.update({ where: { id: client.id }, data: { welcomeEmailSentAt: today, welcomeEmailSentById: req.user!.id } });
     await audit(req.user!.id, req.user!.name, 'MITALI_WELCOME_EMAIL', `${client.name} → ${toEmail}`, { clientId: client.id });
     res.json({ ok: true });
