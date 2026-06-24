@@ -86,6 +86,19 @@ sessionLogsRouter.patch('/:id', requireRole(...SESSION_LOG_WRITE), async (req: A
     }
     data.status = req.body.status;
   }
+
+  // Auto-recalculate amountInr when rate or hours change (unless explicitly overridden)
+  if (('rateSnapshot' in req.body || 'hours' in req.body) && !('amountInr' in req.body)) {
+    const existing = await prisma.sessionLog.findUnique({ where: { id: req.params.id }, select: { hours: true, rateSnapshot: true, rateModel: true } });
+    if (existing) {
+      const hours = data.hours ?? existing.hours;
+      const rate = data.rateSnapshot ?? existing.rateSnapshot ?? 0;
+      const rateModel = existing.rateModel;
+      const hourlyRate = rateModel === 'per_session' ? rate / 2 : rate;
+      data.amountInr = Math.round(hours * hourlyRate);
+    }
+  }
+
   const log = await prisma.sessionLog.update({ where: { id: req.params.id }, data, include });
   res.json(log);
 });
