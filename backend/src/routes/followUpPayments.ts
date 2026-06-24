@@ -50,7 +50,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
     : {};
 
   const clients = await prisma.client.findMany({
-    where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] }, ...teamFilter },
+    where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] }, cycleAmount: { gt: 0 }, ...teamFilter },
     select: {
       id: true, name: true,
       currency: true, cycleAmount: true,
