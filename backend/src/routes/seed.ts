@@ -745,7 +745,7 @@ const MITALI_SHEET: Array<{
   { name: 'Naveena',                      payDate1: '2026-07-04', payDate2: '2026-07-18', amount: 650,  comments: 'done',                          followupNote: 'she paid rest amount',              accountName: 'Mytabtech',                phone: '+14709202814',  email: 'sunatangella@gmail.com',            pendingVaibhav: false },
   { name: 'Nagasri Jadhav',              payDate1: '2026-07-04', payDate2: null,          amount: 750,  comments: 'Payment pending on Vaibhav',    followupNote: '',                                  accountName: 'MITS Solution PVT LTD',    phone: '+19097519222',  email: 'mnagasri0306@gmail.com',            pendingVaibhav: true  },
   { name: 'Mehrazz',                      payDate1: '2026-07-06', payDate2: '2026-07-20', amount: 600,  comments: 'done',                          followupNote: '',                                  accountName: 'Reva Mehrotra',            phone: '+16039305488',  email: 'mehraazmehraaz50@gmail.com',        pendingVaibhav: false },
-  { name: 'Nikhil / Greeshu',            payDate1: '2026-07-07', payDate2: '2026-07-21', amount: 650,  comments: 'done',                          followupNote: '',                                  accountName: 'Anuradha',                 phone: '+16095408222',  email: 'nikhilreddyt1@gmail.com',           pendingVaibhav: false },
+  { name: 'Greeshu',                      payDate1: '2026-07-07', payDate2: '2026-07-21', amount: 650,  comments: 'done',                          followupNote: '',                                  accountName: 'Anuradha',                 phone: '+16095408222',  email: 'nikhilreddyt1@gmail.com',           pendingVaibhav: false },
   { name: 'Satvik arun',                 payDate1: '2026-07-07', payDate2: null,          amount: 700,  comments: 'done',                          followupNote: '',                                  accountName: 'Anupama Aggarwal',         phone: '+18453770580',  email: 'satvikmallempudi196@gmail.com',     pendingVaibhav: false },
   { name: 'Priyanka shivansh',           payDate1: '2026-07-11', payDate2: '2026-07-25', amount: 650,  comments: 'done',                          followupNote: '',                                  accountName: 'anuradha',                 phone: '+919440133363', email: 'priyankadantuluri94@gmail.com',     pendingVaibhav: false },
   { name: 'Raja',                         payDate1: '2026-07-11', payDate2: null,          amount: 900,  comments: 'cad',                           followupNote: '',                                  accountName: 'Shakti Kumar Aggarwal',    phone: '+16478609409',  email: 'gnsnrjrmn@gmail.com',               pendingVaibhav: false },
@@ -792,12 +792,38 @@ seedRouter.post('/sync-payment-sheet', async (req: AuthedRequest, res) => {
   const unmatched: string[] = [];
 
   for (const row of MITALI_SHEET) {
-    // Match priority: phone → email → name
+    // Match priority: phone → email → exact name → partial name (first word)
     const phoneKey = row.phone.replace(/\D/g, '').slice(-10);
     const emailKey = row.email.toLowerCase().trim();
     const nameKey  = row.name.toLowerCase().trim();
+    // Strip "Training " prefix and take first word for fuzzy fallback
+    const stripped = nameKey.replace(/^training\s+/, '').split(/[\s/,]+/)[0];
 
-    const client = byPhone.get(phoneKey) || byEmail.get(emailKey) || byName.get(nameKey);
+    // Alias map for names that differ between sheet and DB
+    const ALIASES: Record<string, string> = {
+      'greeshu': 'greeshu',
+      'nikhil greeshu': 'greeshu',
+    };
+    const aliasKey = ALIASES[nameKey] || ALIASES[stripped];
+
+    let client = byPhone.get(phoneKey) || byEmail.get(emailKey) || byName.get(nameKey);
+    if (!client && aliasKey) client = byName.get(aliasKey);
+    if (!client && stripped.length >= 4) {
+      // Try first word of each DB client name
+      client = allClients.find(c => {
+        const cn = c.name.toLowerCase().trim();
+        const cfirst = cn.replace(/^training\s+/, '').split(/[\s/,]+/)[0];
+        return cfirst === stripped;
+      });
+    }
+    // Also try partial contains match for compound names (e.g. "Nikhil / Greeshu" → client named "Greeshu")
+    if (!client) {
+      const parts = row.name.toLowerCase().split(/[\s/,]+/).filter(p => p.length >= 4);
+      for (const part of parts) {
+        client = allClients.find(c => c.name.toLowerCase().includes(part));
+        if (client) break;
+      }
+    }
 
     if (!client) {
       unmatched.push(row.name);
