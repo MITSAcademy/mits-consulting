@@ -514,15 +514,20 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
   // Kanban columns filter by assignedAmId — if it's null or points to a different user than
   // hostOwnerId, the client falls into "Unassigned" or disappears from the expected column.
   const clientsToSyncAm = await prisma.client.findMany({
-    where: { lifecycle: { in: ['Active', 'LeverageGranted'] }, hostOwnerId: { not: null } },
-    select: { id: true, hostOwnerId: true, assignedAmId: true },
+    where: { lifecycle: { in: ['Active', 'LeverageGranted'] } },
+    select: {
+      id: true, hostOwnerId: true, assignedAmId: true,
+      regularTrainings: { where: { status: 'active' }, select: { hostedByDefaultId: true }, take: 1 },
+    },
   });
   let amSynced = 0;
   for (const c of clientsToSyncAm) {
-    if (c.assignedAmId !== c.hostOwnerId) {
+    const targetHost = c.hostOwnerId ?? c.regularTrainings[0]?.hostedByDefaultId ?? null;
+    if (!targetHost) continue;
+    if (c.assignedAmId !== targetHost) {
       await prisma.client.update({
         where: { id: c.id },
-        data: { assignedAmId: c.hostOwnerId },
+        data: { assignedAmId: targetHost, ...(c.hostOwnerId ? {} : { hostOwnerId: targetHost }) },
       });
       amSynced++;
     }
