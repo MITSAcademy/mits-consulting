@@ -390,8 +390,38 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
         where: { clientId: dup.id },
         data: { clientId: keep.id },
       });
+      // Re-point sourcing requests so Aman/recruiters can still propose
+      await (prisma as any).sourcingRequest.updateMany({
+        where: { clientId: dup.id },
+        data: { clientId: keep.id },
+      });
       await prisma.client.update({ where: { id: dup.id }, data: { lifecycle: 'Dormant' as any } });
       log.push(`✓ merged duplicate client "${dup.name}" (${dup.id}) → kept ${keep.id}, set duplicate Dormant`);
+      fixed++;
+    }
+  }
+
+  // 3b. Re-point sourcing requests from Dormant clients to their Active counterpart
+  // (fixes cases where dedup already ran before this re-point logic was added)
+  const dormantWithSourcing = await (prisma as any).sourcingRequest.findMany({
+    where: { status: { in: ['Open', 'Proposed'] } },
+    select: { id: true, clientId: true, client: { select: { id: true, name: true, lifecycle: true } } },
+  });
+  for (const sr of dormantWithSourcing) {
+    if (!sr.client || sr.client.lifecycle !== 'Dormant') continue;
+    // Find the active counterpart by name
+    const active = await prisma.client.findFirst({
+      where: { name: { equals: sr.client.name, mode: 'insensitive' }, lifecycle: { in: ['Active', 'WithRecruiters', 'InternalSearch', 'LeverageGranted'] } },
+      select: { id: true },
+    });
+    if (active) {
+      await (prisma as any).sourcingRequest.update({ where: { id: sr.id }, data: { clientId: active.id } });
+      log.push(`✓ re-pointed sourcing request for "${sr.client.name}" → active client ${active.id}`);
+      fixed++;
+    } else {
+      // No active counterpart — restore the client lifecycle so Anjali/Aman can see it
+      await prisma.client.update({ where: { id: sr.client.id }, data: { lifecycle: 'WithRecruiters' as any } });
+      log.push(`✓ restored "${sr.client.name}" lifecycle → WithRecruiters (has active sourcing request)`);
       fixed++;
     }
   }
