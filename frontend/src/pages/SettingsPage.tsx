@@ -220,6 +220,7 @@ export function SettingsPage() {
   const showToast = useUI((s) => s.showToast);
 
   const isFounder = user?.role === 'founder';
+  const canFixKanban = ['founder', 'manager', 'lead'].includes(user?.role ?? '');
 
   const { data: flags } = useQuery({
     queryKey: ['flags'],
@@ -260,6 +261,19 @@ export function SettingsPage() {
           </div>
         </div>
 
+        {canFixKanban && !isFounder && (
+          <div className="card mb-4">
+            <div className="card-h">Team tools</div>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Fix unassigned clients on Kanban</div>
+                <div className="text-[11px] muted mt-0.5">Assigns each active client to their coordinator so no one shows as "Unassigned" on the team board.</div>
+              </div>
+              <FixKanbanButton />
+            </div>
+          </div>
+        )}
+
         {isFounder && (
           <>
             {/* ── Data ops ── */}
@@ -292,6 +306,13 @@ export function SettingsPage() {
                   <div className="text-[11px] muted mt-0.5">Restores Priya (priyaananthula27@gmail.com) so Anjali + Aman can see her and send the proposal.</div>
                 </div>
                 <FixPriyaButton />
+              </div>
+              <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
+                <div>
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Fix unassigned clients on Kanban</div>
+                  <div className="text-[11px] muted mt-0.5">Assigns each active client to their coordinator so no one shows as "Unassigned" on the team board.</div>
+                </div>
+                <FixKanbanButton />
               </div>
               <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
                 <div>
@@ -445,6 +466,20 @@ function FixPriyaButton() {
   return (
     <Button size="sm" variant="primary" disabled={fix.isPending} onClick={() => fix.mutate()}>
       {fix.isPending ? 'Fixing…' : '🔧 Fix Priya'}
+    </Button>
+  );
+}
+
+function FixKanbanButton() {
+  const showToast = useUI((s) => s.showToast);
+  const fix = useMutation({
+    mutationFn: () => api.post('/seed/fix-kanban'),
+    onSuccess: (r: any) => showToast(r.data?.fixed > 0 ? `Fixed ${r.data.fixed} clients ✓` : 'All clients already assigned ✓'),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Fix failed', 'error'),
+  });
+  return (
+    <Button size="sm" variant="primary" disabled={fix.isPending} onClick={() => fix.mutate()}>
+      {fix.isPending ? 'Fixing…' : '📋 Fix Kanban'}
     </Button>
   );
 }

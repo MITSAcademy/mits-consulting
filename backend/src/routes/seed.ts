@@ -663,3 +663,36 @@ seedRouter.post('/cleanup', async (req: AuthedRequest, res) => {
 
   res.json({ ok: true, retired, kept, log });
 });
+
+// POST /api/seed/fix-kanban — sync assignedAmId from hostOwnerId (or RT hostedByDefaultId)
+// for all Active/LeverageGranted clients. Fixes "Unassigned" column on Kanban.
+// Accessible to founder, manager, and lead.
+seedRouter.post('/fix-kanban', async (req: AuthedRequest, res) => {
+  const allowed = ['founder', 'manager', 'lead'];
+  if (!allowed.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+
+  const clients = await prisma.client.findMany({
+    where: { lifecycle: { in: ['Active', 'LeverageGranted'] } },
+    select: {
+      id: true, name: true, hostOwnerId: true, assignedAmId: true,
+      regularTrainings: { where: { status: 'active' }, select: { hostedByDefaultId: true }, take: 1 },
+    },
+  });
+
+  let fixed = 0;
+  const log: string[] = [];
+  for (const c of clients) {
+    const target = c.hostOwnerId ?? c.regularTrainings[0]?.hostedByDefaultId ?? null;
+    if (!target) continue;
+    if (c.assignedAmId !== target) {
+      await prisma.client.update({
+        where: { id: c.id },
+        data: { assignedAmId: target, ...(c.hostOwnerId ? {} : { hostOwnerId: target }) },
+      });
+      log.push(`fixed: ${c.name}`);
+      fixed++;
+    }
+  }
+
+  res.json({ ok: true, fixed, log });
+});
