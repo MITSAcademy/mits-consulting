@@ -790,6 +790,7 @@ seedRouter.post('/sync-payment-sheet', async (req: AuthedRequest, res) => {
 
   const matched: string[] = [];
   const unmatched: string[] = [];
+  const usedIds = new Set<string>();
 
   for (const row of MITALI_SHEET) {
     // Match priority: phone → email → exact name → partial name (first word)
@@ -799,15 +800,12 @@ seedRouter.post('/sync-payment-sheet', async (req: AuthedRequest, res) => {
     // Strip "Training " prefix and take first word for fuzzy fallback
     const stripped = nameKey.replace(/^training\s+/, '').split(/[\s/,]+/)[0];
 
-    // Alias map for names that differ between sheet and DB
-    const ALIASES: Record<string, string> = {
-      'greeshu': 'greeshu',
-      'nikhil greeshu': 'greeshu',
-    };
-    const aliasKey = ALIASES[nameKey] || ALIASES[stripped];
-
     let client = byPhone.get(phoneKey) || byEmail.get(emailKey) || byName.get(nameKey);
-    if (!client && aliasKey) client = byName.get(aliasKey);
+    // Also try matching by phone last 7 digits (some clients stored without country code)
+    if (!client) {
+      const last7 = phoneKey.slice(-7);
+      client = allClients.find(c => !usedIds.has(c.id) && c.phoneDigits && c.phoneDigits.replace(/\D/g,'').endsWith(last7));
+    }
     if (!client && stripped.length >= 4) {
       // Try first word of each DB client name
       client = allClients.find(c => {
@@ -817,10 +815,11 @@ seedRouter.post('/sync-payment-sheet', async (req: AuthedRequest, res) => {
       });
     }
     // Also try partial contains match for compound names (e.g. "Nikhil / Greeshu" → client named "Greeshu")
+    // Skip already-matched clients to avoid stealing a match from a previous row
     if (!client) {
       const parts = row.name.toLowerCase().split(/[\s/,]+/).filter(p => p.length >= 4);
       for (const part of parts) {
-        client = allClients.find(c => c.name.toLowerCase().includes(part));
+        client = allClients.find(c => !usedIds.has(c.id) && c.name.toLowerCase().includes(part));
         if (client) break;
       }
     }
@@ -844,6 +843,7 @@ seedRouter.post('/sync-payment-sheet', async (req: AuthedRequest, res) => {
         ...((!client.email && row.email) ? { email: row.email } : {}),
       },
     });
+    usedIds.add(client.id);
     matched.push(`${row.name} → ${client.name}`);
   }
 
