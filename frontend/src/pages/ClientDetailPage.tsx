@@ -53,6 +53,7 @@ function canEditClient(role: string, cat: 'identity' | 'contact' | 'engagement' 
   const m: Record<string, Record<string, boolean>> = {
     demo_lead:    { identity: true,  contact: true,  engagement: true,  pipeline: true,  financial: false, sensitive: false },
     manager:      { identity: true,  contact: true,  engagement: true,  pipeline: true,  financial: true,  sensitive: true },
+    lead:         { identity: false, contact: true,  engagement: false, pipeline: false, financial: false, sensitive: false },
     sales_closer: { identity: false, contact: false, engagement: true,  pipeline: false, financial: true,  sensitive: false },
     accounts:     { identity: false, contact: false, engagement: false, pipeline: false, financial: true,  sensitive: false },
   };
@@ -987,7 +988,7 @@ export function ClientDetailPage() {
           />
         )}
         {modal === 'assignOwner' && <AssignOwnerModal client={client} onClose={() => setModal(null)} />}
-        {modal === 'editContact' && <EditContactModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'editContact' && <EditContactModal client={client} emailOnly={user.role === 'lead'} onClose={() => setModal(null)} />}
         {modal === 'editEngagement' && <EditEngagementModal client={client} onClose={() => setModal(null)} />}
         {modal === 'recordIntake' && <RecordIntakeModal client={client} onClose={() => setModal(null)} />}
         {modal === 'sendIntake' && <SendIntakeModal client={client} onClose={() => setModal(null)} />}
@@ -1062,7 +1063,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 // ----- MODALS -----
 
-function EditContactModal({ client, onClose }: any) {
+function EditContactModal({ client, onClose, emailOnly = false }: any) {
   const qc = useQueryClient(); const showToast = useUI((s) => s.showToast);
   const [f, setF] = useState({
     whatsappGroupName: client.whatsappGroupName || '',
@@ -1072,27 +1073,32 @@ function EditContactModal({ client, onClose }: any) {
     email: client.email || '',
   });
   const save = useMutation({
-    mutationFn: () => api.patch(`/clients/${client.id}`, f),
+    mutationFn: () => {
+      const payload = emailOnly ? { email: f.email } : f;
+      return api.patch(`/clients/${client.id}`, payload);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['client', client.id] }); showToast('Saved'); onClose(); },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent title={`Edit contact · ${client.name}`} description="WhatsApp group is primary. Direct phone is backup.">
-        <div className="form-row"><Label>WhatsApp group name</Label><Input value={f.whatsappGroupName} onChange={(e) => setF({...f, whatsappGroupName: e.target.value})} /></div>
-        <div className="form-row"><Label>WhatsApp group invite link</Label><Input value={f.whatsappGroupLink} onChange={(e) => setF({...f, whatsappGroupLink: e.target.value})} placeholder="https://chat.whatsapp.com/..." /></div>
-        <div className="form-row"><Label>Direct phone (backup)</Label>
-          <div className="grid grid-cols-[120px_1fr] gap-2">
-            <Select value={f.phoneCode} onChange={(e) => setF({...f, phoneCode: e.target.value})}>
-              <option>+1</option><option>+91</option><option>+44</option><option>+61</option><option>+971</option><option>+65</option>
-            </Select>
-            <Input value={f.phoneDigits} onChange={(e) => setF({...f, phoneDigits: e.target.value.replace(/\D/g,'')})} placeholder="10 digits" />
+      <DialogContent title={`Edit contact · ${client.name}`} description={emailOnly ? 'Update client email address.' : 'WhatsApp group is primary. Direct phone is backup.'}>
+        {!emailOnly && <>
+          <div className="form-row"><Label>WhatsApp group name</Label><Input value={f.whatsappGroupName} onChange={(e) => setF({...f, whatsappGroupName: e.target.value})} /></div>
+          <div className="form-row"><Label>WhatsApp group invite link</Label><Input value={f.whatsappGroupLink} onChange={(e) => setF({...f, whatsappGroupLink: e.target.value})} placeholder="https://chat.whatsapp.com/..." /></div>
+          <div className="form-row"><Label>Direct phone (backup)</Label>
+            <div className="grid grid-cols-[120px_1fr] gap-2">
+              <Select value={f.phoneCode} onChange={(e) => setF({...f, phoneCode: e.target.value})}>
+                <option>+1</option><option>+91</option><option>+44</option><option>+61</option><option>+971</option><option>+65</option>
+              </Select>
+              <Input value={f.phoneDigits} onChange={(e) => setF({...f, phoneDigits: e.target.value.replace(/\D/g,'')})} placeholder="10 digits" />
+            </div>
           </div>
-        </div>
+        </>}
         <div className="form-row"><Label>Email</Label><Input type="email" value={f.email} onChange={(e) => setF({...f, email: e.target.value})} /></div>
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!f.whatsappGroupName && !f.phoneDigits} onClick={() => save.mutate()}>Save</Button>
+          <Button variant="primary" onClick={() => save.mutate()}>Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
