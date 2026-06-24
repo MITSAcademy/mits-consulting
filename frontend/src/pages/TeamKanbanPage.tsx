@@ -41,6 +41,22 @@ const VISIBLE_COLUMNS: Record<string, string[]> = {
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
+interface Training {
+  id: string;
+  name: string;
+  ownerTeam: string | null;
+  lastSessionStatus: string | null;
+  lastFeedbackTakenAt?: string | null;
+  lastClientFeedback: string | null;
+  lastSessionDate: string | null;
+  client: { id: string; name: string; whatsappGroupLink: string | null; phoneCode: string | null; phoneDigits: string | null } | null;
+  trainer: { id: string; name: string; skills: string[] } | null;
+  hostedByDefault: { id: string; name: string } | null;
+  temporaryHost: { id: string; name: string } | null;
+  sessions: Array<{ id: string; scheduledFor: string }>;
+}
+
+// Legacy Client type kept for CallLogModal and AssignModal (used via client.id)
 interface Client {
   id: string;
   name: string;
@@ -310,150 +326,83 @@ function CallLogModal({ client, onClose }: { client: Client; onClose: () => void
   );
 }
 
-// ─── client card ──────────────────────────────────────────────────────────────
+// ─── training card ────────────────────────────────────────────────────────────
 
-function ClientCard({ client, canAssign, canReassignHost, showAmount = true, canLogCall = false, isUnassigned = false, isAllColumn = false }: { client: Client; canAssign: boolean; canReassignHost: boolean; showAmount?: boolean; canLogCall?: boolean; isUnassigned?: boolean; isAllColumn?: boolean }) {
-  const [assigning, setAssigning] = useState(false);
-  const [loggingCall, setLoggingCall] = useState(false);
-  const activeTraining = client.regularTrainings?.[0] ?? null;
-  const due = daysUntil(client.payDate2);
-  const fbAge = daysAgo(client.lastFeedbackTakenAt);
-  const feedbackWarn = fbAge === null || fbAge > 30;
-  const isOverdue = due !== null && due < 0;
-  const isDueSoon = due !== null && due >= 0 && due <= 3;
+function TrainingCard({ training, canReassignHost, isAllColumn = false }: {
+  training: Training;
+  canReassignHost: boolean;
+  isAllColumn?: boolean;
+}) {
+  const fbAge = daysAgo(training.lastSessionDate);
+  const feedbackWarn = training.lastClientFeedback === null;
+  const host = training.hostedByDefault;
+
+  // Fake RT shape for HostChip
+  const rtForChip = { id: training.id, status: 'active', hostedByDefault: host };
 
   return (
-    <>
-      <div className="rounded-xl p-3 mb-2 group cursor-default" style={{
-        background: 'var(--bg-card)',
-        border: `1px solid ${
-          isOverdue  ? 'rgba(239,68,68,0.40)' :
-          isDueSoon  ? 'rgba(245,158,11,0.35)' :
-          'var(--brand-borderSoft)'}`,
-        boxShadow: isOverdue ? '0 0 0 1px rgba(239,68,68,0.10) inset' : undefined,
-      }}>
-        {/* Header row */}
-        <div className="flex items-start justify-between gap-1">
-          <Link to={`/clients/${client.id}`}
-            className="font-semibold text-[12px] hover:underline flex items-center gap-1 leading-tight"
-            style={{ color: 'var(--brand-text)' }}>
-            {client.name}
-            <ExternalLink size={9} className="opacity-0 group-hover:opacity-60"/>
-          </Link>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-            {canLogCall && (
-              <button onClick={() => setLoggingCall(true)}
-                className="p-0.5 rounded hover:bg-white/10"
-                title="Log call">
-                <Phone size={12} style={{ color: 'var(--status-green)' }}/>
-              </button>
-            )}
-            {canAssign && !isUnassigned && (
-              <button onClick={() => setAssigning(true)}
-                className="p-0.5 rounded hover:bg-white/10"
-                title="Reassign AM">
-                <UserPlus size={12} style={{ color: 'var(--accent-gold)' }}/>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Engagement type */}
-        <div className="text-[10px] muted mt-0.5">{client.engagementType}</div>
-
-        {/* Payment row */}
-        <div className="flex items-center gap-1 mt-1.5 text-[11px]">
-          {isOverdue ? <AlertTriangle size={10} style={{ color: 'var(--status-red)' }}/> :
-           isDueSoon  ? <Clock size={10} style={{ color: 'var(--status-amber)' }}/> :
-                        <CheckCircle2 size={10} style={{ color: 'var(--status-green)', opacity: 0.6 }}/>}
-          <span style={{
-            color: isOverdue ? 'var(--status-red)' : isDueSoon ? 'var(--status-amber)' : 'var(--brand-textSecondary)',
-            fontWeight: isOverdue || isDueSoon ? 600 : 400,
-          }}>
-            {client.payDate2
-              ? (isOverdue
-                  ? `${Math.abs(due!)}d overdue · ${fmtDate(client.payDate2)}`
-                  : `Due ${fmtDate(client.payDate2)}${isDueSoon ? ` (${due}d)` : ''}`)
-              : 'No due date'}
-          </span>
-        </div>
-
-        {/* Feedback warning */}
-        {feedbackWarn && (
-          <div className="flex items-center gap-1 mt-0.5 text-[10px]"
-            style={{ color: 'var(--status-amber)' }}>
-            <MessageSquare size={9}/>
-            <span>{fbAge === null ? 'Feedback never taken' : `Feedback ${fbAge}d ago`} ⚠</span>
-          </div>
-        )}
-
-        {/* Amount — hidden for lead role */}
-        {showAmount && client.cycleAmount > 0 && (
-          <div className="text-[10px] muted mt-1 font-mono">
-            {client.currency} {client.cycleAmount}
-          </div>
-        )}
-
-        {/* Host chip — only when there's an active regular training */}
-        {activeTraining && (
-          <div className="flex items-center gap-1 mt-1.5">
-            <span className="text-[10px] muted">Host</span>
-            <HostChip training={activeTraining} canReassign={canReassignHost} />
-          </div>
-        )}
-
-        {/* Assign button — always visible on unassigned cards */}
-        {/* In All Clients column — show assigned AM as a small tag */}
-        {isAllColumn && (
-          <div className="mt-1.5 text-[10px]" style={{ color: 'var(--brand-textMuted)' }}>
-            {client.assignedAm
-              ? <span style={{ color: TEAM_MEMBERS.find(t => t.id === client.assignedAm?.id)?.color || 'var(--accent-gold)' }}>
-                  👤 {client.assignedAm.name}
-                </span>
-              : <span style={{ color: 'var(--status-amber)' }}>⚠ Unassigned</span>}
-          </div>
-        )}
-
-        {canAssign && isUnassigned && (
-          <button
-            onClick={() => setAssigning(true)}
-            className="mt-2 w-full flex items-center justify-center gap-1 rounded-lg py-1 text-[11px] font-semibold transition-colors hover:opacity-90"
-            style={{ background: 'rgba(251,191,36,0.15)', color: 'var(--accent-gold)', border: '1px solid rgba(251,191,36,0.30)' }}>
-            <UserPlus size={11}/> Assign AM
-          </button>
-        )}
+    <div className="rounded-xl p-3 mb-2 group cursor-default" style={{
+      background: 'var(--bg-card)',
+      border: '1px solid var(--brand-borderSoft)',
+    }}>
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-1">
+        <Link to={`/clients/${training.client?.id}`}
+          className="font-semibold text-[12px] hover:underline flex items-center gap-1 leading-tight"
+          style={{ color: 'var(--brand-text)' }}>
+          {training.client?.name ?? training.name}
+          <ExternalLink size={9} className="opacity-0 group-hover:opacity-60"/>
+        </Link>
       </div>
 
-      {assigning && <AssignModal client={client} onClose={() => setAssigning(false)}/>}
-      {loggingCall && <CallLogModal client={client} onClose={() => setLoggingCall(false)}/>}
-    </>
+      {/* Trainer */}
+      {training.trainer && (
+        <div className="text-[10px] muted mt-0.5">{training.trainer.name}</div>
+      )}
+
+      {/* Feedback warning */}
+      {feedbackWarn && (
+        <div className="flex items-center gap-1 mt-1 text-[10px]"
+          style={{ color: 'var(--status-amber)' }}>
+          <MessageSquare size={9}/>
+          <span>{fbAge === null ? 'Feedback never taken' : `Last session ${fbAge}d ago`} ⚠</span>
+        </div>
+      )}
+
+      {/* Host chip */}
+      <div className="flex items-center gap-1 mt-1.5">
+        <span className="text-[10px] muted">Host</span>
+        <HostChip training={rtForChip} canReassign={canReassignHost} />
+      </div>
+
+      {/* In All column — show which AM this belongs to */}
+      {isAllColumn && host && (
+        <div className="mt-1 text-[10px]" style={{ color: TEAM_MEMBERS.find(t => t.id === host.id)?.color || 'var(--accent-gold)' }}>
+          👤 {host.name}
+        </div>
+      )}
+    </div>
   );
 }
 
 // ─── column ───────────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  title, subtitle, color, clients, canAssign, canReassignHost, showAmount, canLogCall, isUnassigned, isAllColumn,
+  title, subtitle, color, clients, canReassignHost, isAllColumn,
 }: {
   title: string;
   subtitle: string;
   color: string;
-  clients: Client[];
-  canAssign: boolean;
+  clients: Training[];
+  canAssign?: boolean;
   canReassignHost: boolean;
   showAmount?: boolean;
   canLogCall?: boolean;
   isUnassigned?: boolean;
   isAllColumn?: boolean;
 }) {
-  const overdue = clients.filter(c => {
-    const d = daysUntil(c.payDate2);
-    return d !== null && d < 0;
-  }).length;
-  const dueSoon = clients.filter(c => {
-    const d = daysUntil(c.payDate2);
-    return d !== null && d >= 0 && d <= 3;
-  }).length;
+  const overdue = 0;
+  const dueSoon = 0;
 
   return (
     <div className="flex flex-col rounded-2xl" style={{
@@ -489,7 +438,7 @@ function KanbanColumn({
         {clients.length === 0 ? (
           <div className="text-[11px] muted text-center py-8">No active clients</div>
         ) : (
-          clients.map(c => <ClientCard key={c.id} client={c} canAssign={canAssign} canReassignHost={canReassignHost} showAmount={showAmount} canLogCall={canLogCall} isUnassigned={isUnassigned} isAllColumn={isAllColumn}/>)
+          clients.map(t => <TrainingCard key={t.id} training={t} canReassignHost={canReassignHost} isAllColumn={isAllColumn}/>)
         )}
       </div>
     </div>
@@ -502,36 +451,33 @@ export function TeamKanbanPage() {
   const user = useAuth((s) => s.user);
   const [search, setSearch] = useState('');
 
-  const { data: allClients = [], isLoading } = useQuery<Client[]>({
-    queryKey: ['clients', 'team-kanban'],
-    queryFn: () =>
-      api.get('/clients?lifecycle=Active,LeverageGranted&scope=team').then((r) => r.data),
+  const { data: allTrainings = [], isLoading } = useQuery<Training[]>({
+    queryKey: ['trainings', 'team-kanban'],
+    queryFn: () => api.get('/trainings/my-sessions').then((r) => r.data),
   });
 
-  const clients = useMemo(() => {
+  const trainings = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return allClients;
-    return allClients.filter(c => c.name.toLowerCase().includes(q));
-  }, [allClients, search]);
+    if (!q) return allTrainings;
+    return allTrainings.filter(t =>
+      (t.client?.name ?? t.name).toLowerCase().includes(q) ||
+      t.trainer?.name.toLowerCase().includes(q)
+    );
+  }, [allTrainings, search]);
 
-  // Determine which columns this role sees
   const role = user?.role || '';
-  const canAssign = role === 'manager' || role === 'founder' || role === 'lead';
   const canReassignHost = role === 'lead';
-  const showAmount = role === 'founder' || role === 'manager' || role === 'accounts';
-  const canLogCall = role === 'manager' || role === 'founder' || role === 'lead' || role === 'account_manager';
 
   const columns = useMemo(() => {
-    const unassigned = clients.filter(c => !c.assignedAmId);
+    const unassigned = trainings.filter(t => !t.hostedByDefault);
 
     if (role === 'account_manager') {
-      // AM sees only their own column
-      const mine = clients.filter(c => c.assignedAmId === user?.id);
+      const mine = trainings.filter(t => t.hostedByDefault?.id === user?.id);
       const me = TEAM_MEMBERS.find(t => t.id === user?.id);
       return [
         {
           id: 'mine',
-          title: me?.name || 'My clients',
+          title: me?.name || 'My sessions',
           subtitle: me?.role || 'Account manager',
           color: me?.color || 'var(--accent-gold)',
           clients: mine,
@@ -539,19 +485,19 @@ export function TeamKanbanPage() {
       ];
     }
 
-    // lead / manager / founder: 5 columns — All | Unassigned | Bhavneet | Kashish | Muskan
+    // lead / manager / founder: All | Unassigned | Bhavneet | Kashish | Muskan
     return [
       {
         id: 'all',
-        title: 'All Clients',
-        subtitle: 'Every active client',
+        title: 'All Sessions',
+        subtitle: 'Every active training',
         color: '#94a3b8',
-        clients: clients,
+        clients: trainings,
       },
       {
         id: 'unassigned',
         title: 'Unassigned',
-        subtitle: 'New · needs a coordinator',
+        subtitle: 'No host set',
         color: 'var(--brand-textMuted)',
         clients: unassigned,
       },
@@ -560,19 +506,19 @@ export function TeamKanbanPage() {
         title: t.name,
         subtitle: t.role,
         color: t.color,
-        clients: clients.filter(c => c.assignedAmId === t.id),
+        clients: trainings.filter(tr => tr.hostedByDefault?.id === t.id),
       })),
     ];
-  }, [clients, role, user?.id]);
+  }, [trainings, role, user?.id]);
 
-  const total = allClients.length;
-  const assigned = allClients.filter(c => c.assignedAmId).length;
+  const total = allTrainings.length;
+  const assigned = allTrainings.filter(t => t.hostedByDefault).length;
 
   return (
     <>
       <Topbar
         title="Team board"
-        subtitle={`${total} active · ${total - assigned} unassigned`}
+        subtitle={`${total} active trainings · ${total - assigned} unassigned`}
         actions={
           <input
             type="text"
@@ -601,11 +547,7 @@ export function TeamKanbanPage() {
                 subtitle={col.subtitle}
                 color={col.color}
                 clients={col.clients}
-                canAssign={canAssign}
                 canReassignHost={canReassignHost}
-                showAmount={showAmount}
-                canLogCall={canLogCall}
-                isUnassigned={col.id === 'unassigned'}
                 isAllColumn={col.id === 'all'}
               />
             ))}
