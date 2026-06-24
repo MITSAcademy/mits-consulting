@@ -368,9 +368,18 @@ export function ClientDetailPage() {
   if (canActivate(user.role) && client.lifecycle === 'SaleWon') {
     actions.push(<Button key="act" variant="primary" onClick={() => stageM.mutate('Active')}><ArrowRight size={14}/> {isTraining ? 'Start training' : 'Handover · activate'}</Button>);
   }
+  // Intake team welcome email — available at any stage post-Lead so Anjali can send it
+  // whenever the client shares their email address late in the process
+  const PRE_INTAKE_STAGES = ['Lead', 'IntakeSent', 'WithRecruiters', 'InternalSearch', 'Dormant'];
+  if (canIntake(user.role) && !PRE_INTAKE_STAGES.includes(client.lifecycle)) {
+    actions.push(
+      <Button key="welcome-email" size="sm" onClick={() => setModal('welcomeEmail')} title="Send welcome email to client">
+        <Mail size={12}/> Welcome email
+      </Button>
+    );
+  }
   // Phase-2: Mitali sends her welcome message (introducing her team + feedback rhythm)
   // Available at ALL stages post-intake — client may share email late
-  const PRE_INTAKE_STAGES = ['Lead', 'IntakeSent', 'WithRecruiters', 'InternalSearch', 'Dormant'];
   if (phase2 && canAMActions(user.role) && !PRE_INTAKE_STAGES.includes(client.lifecycle)) {
     actions.push(
       <Button key="handover-welcome" size="sm" onClick={() => setModal('handoverWelcome')} title="Send Mitali's handover welcome (intro to team + feedback rhythm)">
