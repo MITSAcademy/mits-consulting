@@ -116,7 +116,7 @@ const NAV: NavItem[] = [
   { section: 'admin', page: '/role-permissions', label: 'Role permissions', icon: ShieldCheck, roles: ['founder'] },
   { section: 'admin', page: '/banks', label: 'Bank accounts', icon: Building2, roles: ['founder', 'accounts'] },
   { section: 'admin', page: '/audit', label: 'Activity log', icon: History, roles: ['founder', 'manager'] },
-  { section: 'admin', page: '/settings', label: 'Settings', icon: Settings, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
+  { section: 'admin', page: '/settings', label: 'Settings', icon: Settings, roles: ['founder', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
 ];
 
 const SECTIONS: Record<string, string> = {
