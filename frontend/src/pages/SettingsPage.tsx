@@ -219,7 +219,7 @@ export function SettingsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
 
-  const isFounder = user?.role === 'founder' || user?.role === 'manager';
+  const isFounder = user?.role === 'founder';
 
   const { data: flags } = useQuery({
     queryKey: ['flags'],
