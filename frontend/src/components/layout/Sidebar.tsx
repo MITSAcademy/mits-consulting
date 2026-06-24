@@ -425,7 +425,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
         </div>
 
         {/* View as — founder only */}
-        {!collapsed && (realUser ? realUser.role === 'founder' : user?.role === 'founder') && allUsers && (
+        {!collapsed && (isImpersonating || user?.role === 'founder') && allUsers && (
           <div className="mx-2 mb-2 flex-shrink-0">
             {isImpersonating ? (
               <div
