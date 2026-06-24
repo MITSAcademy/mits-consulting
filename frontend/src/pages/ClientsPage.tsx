@@ -30,10 +30,13 @@ export function ClientsPage() {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [mineOnly, setMineOnly] = useState(SHOW_MINE_FILTER_ROLES.includes(user.role));
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 60;
 
-  const { data: clients } = useQuery({
-    queryKey: ['clients', search],
-    queryFn: () => api.get('/clients', { params: { search } }).then((r) => r.data),
+  const { data: clientsResp } = useQuery({
+    queryKey: ['clients', search, page],
+    queryFn: () => api.get('/clients', { params: { search, page, pageSize: PAGE_SIZE } }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   });
   const { data: sources } = useQuery({
     queryKey: ['sources'],
@@ -75,14 +78,16 @@ export function ClientsPage() {
     if (user.role === 'staff') return c.hostOwnerId === user.id;
     return true;
   };
-  const all = (clients || []) as any[];
+  const all = ((clientsResp as any)?.data || []) as any[];
+  const total: number = (clientsResp as any)?.total ?? all.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
   const list = mineOnly ? all.filter(isMine) : all;
 
   return (
     <>
       <Topbar
         title="Clients"
-        subtitle={`${list.length}${mineOnly ? ' · mine' : ` of ${all.length}`}`}
+        subtitle={`${mineOnly ? `${list.length} mine` : `${total} total`}${totalPages > 1 ? ` · page ${page}/${totalPages}` : ''}`}
         actions={
           <>
             {SHOW_MINE_FILTER_ROLES.includes(user.role) && (
@@ -95,7 +100,7 @@ export function ClientsPage() {
               placeholder="Search…"
               className="max-w-[240px]"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
             {user.role !== 'account_manager' && <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
@@ -261,6 +266,14 @@ export function ClientsPage() {
             </tbody>
           </table>
         </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 py-4">
+            <Button disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>← Prev</Button>
+            <span className="text-[13px] muted">Page {page} of {totalPages}</span>
+            <Button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next →</Button>
+          </div>
+        )}
       </Page>
     </>
   );

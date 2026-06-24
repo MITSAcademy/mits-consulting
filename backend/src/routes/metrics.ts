@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, requireRole } from '../lib/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 
 export const metricsRouter = Router();
 metricsRouter.use(requireAuth);
@@ -113,4 +113,135 @@ metricsRouter.get('/money-flow', requireRole('founder', 'manager', 'accounts'), 
     };
   });
   res.json({ byBank: byBank.filter((b) => b.count > 0) });
+});
+
+// Single lightweight endpoint for all sidebar badge counts.
+// Uses DB count() queries scoped to the requesting user's role — no full client dumps.
+metricsRouter.get('/nav-badges', async (req: AuthedRequest, res) => {
+  const role = req.user!.role;
+  const userId = req.user!.id;
+  const today = todayISO();
+  const weekOut = (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().slice(0, 10); })();
+
+  // Helper: count clients matching a where clause
+  const cc = (where: any) => prisma.client.count({ where });
+
+  const [
+    pendingVaibhavCount,
+    pendingLeverageCount,
+    sourcingOpenCount,
+    verPendingCount,
+    editReqPendingCount,
+    escalationCount,
+    dormantOverdueCount,
+    holdDueCount,
+    demoIntakePendingCount,
+    demosTodayCount,
+    feedbackPendingCount,
+    renewalsDueCount,
+    followUpActiveTotalCount,
+    salesClosingActiveCount,
+    followUpsDueCount,
+  ] = await Promise.all([
+    // pendingVaibhav — founder/accounts only
+    ['founder', 'accounts'].includes(role)
+      ? cc({ paymentPendingVaibhav: true })
+      : Promise.resolve(0),
+
+    // leverage pending — founder only
+    role === 'founder'
+      ? prisma.leverageRequest.count({ where: { status: 'PendingVaibhav' } })
+      : Promise.resolve(0),
+
+    // sourcing open — founder/recruiter
+    ['founder', 'recruiter'].includes(role)
+      ? prisma.sourcingRequest.count({ where: { status: 'Open' } })
+      : Promise.resolve(0),
+
+    // verifications pending — founder/demo_lead/demo_intake
+    ['founder', 'demo_lead', 'demo_intake'].includes(role)
+      ? prisma.sourcingRequest.count({ where: { status: 'Proposed' } })
+      : Promise.resolve(0),
+
+    // edit requests pending — founder/demo_lead
+    ['founder', 'demo_lead'].includes(role)
+      ? prisma.editRequest.count({ where: { status: 'Pending' } })
+      : Promise.resolve(0),
+
+    // escalations — founder/manager/lead/demo_lead
+    ['founder', 'manager', 'lead', 'demo_lead'].includes(role)
+      ? prisma.regularTraining.count({ where: { demoEscalationRequested: true, status: 'active' } })
+      : Promise.resolve(0),
+
+    // dormant overdue
+    role === 'sales_closer'
+      ? cc({ lifecycle: 'SaleClosing', saleClosingSubStatus: 'DP', salesOwnerId: userId })
+      : ['founder', 'demo_lead', 'demo_intake', 'sales_closer'].includes(role)
+      ? cc({ lifecycle: 'Dormant', dormantCheckBackOn: { lte: today } })
+      : Promise.resolve(0),
+
+    // hold due
+    role === 'sales_closer'
+      ? cc({ lifecycle: 'SaleClosing', saleClosingSubStatus: { in: ['CP', 'C'] }, salesOwnerId: userId })
+      : ['founder', 'manager', 'demo_lead', 'sales_closer'].includes(role)
+      ? cc({ lifecycle: 'Hold', holdCheckBackOn: { lte: today } })
+      : Promise.resolve(0),
+
+    // demo intake pending — founder/demo_lead/demo_intake
+    ['founder', 'demo_lead', 'demo_intake'].includes(role)
+      ? cc({ lifecycle: { in: ['Lead', 'IntakeSent'] } })
+      : Promise.resolve(0),
+
+    // demos today — founder/demo_lead/demo_intake
+    ['founder', 'demo_lead', 'demo_intake'].includes(role)
+      ? cc({ lifecycle: 'DemoScheduled', demoDate: { lte: weekOut } })
+      : Promise.resolve(0),
+
+    // feedback pending — founder/demo_lead
+    ['founder', 'demo_lead'].includes(role)
+      ? cc({ lifecycle: { in: ['DemoDone', 'FeedbackPending'] } })
+      : Promise.resolve(0),
+
+    // renewals due — founder only
+    role === 'founder'
+      ? cc({ lifecycle: { in: ['Active', 'LeverageGranted'] }, nextRenewalDue: { lte: weekOut } })
+      : Promise.resolve(0),
+
+    // follow-up payments active total — founder/manager/accounts/demo_lead
+    ['founder', 'manager', 'accounts', 'demo_lead'].includes(role)
+      ? cc({ lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] }, cycleAmount: { gt: 0 } })
+      : Promise.resolve(0),
+
+    // sales closing active — founder/sales_closer
+    role === 'sales_closer'
+      ? cc({ lifecycle: { in: ['SaleClosing', 'SaleWon'] }, saleClosingSubStatus: { not: 'DP' }, salesOwnerId: userId })
+      : ['founder', 'demo_lead'].includes(role)
+      ? cc({ lifecycle: { in: ['DemoDone', 'FeedbackPending', 'SaleClosing'] } })
+      : Promise.resolve(0),
+
+    // follow-ups due (Roshni) — founder/sales_closer
+    role === 'sales_closer'
+      ? cc({ lifecycle: { in: ['SaleClosing', 'SaleWon'] }, OR: [{ saleClosingSubStatus: null }, { saleClosingSubStatus: 'RP' }], salesOwnerId: userId })
+      : role === 'founder'
+      ? cc({ lifecycle: { in: ['SaleClosing', 'SaleWon'] }, saleClosingSubStatus: { in: ['RP', 'CP', 'C'] }, roshniNextCallOn: { lte: today } })
+      : Promise.resolve(0),
+  ]);
+
+  res.json({
+    pendingVaibhav: pendingVaibhavCount,
+    pendingLeverage: pendingLeverageCount,
+    sourcingOpen: sourcingOpenCount,
+    verPending: verPendingCount,
+    editReqPending: editReqPendingCount,
+    escalationCount,
+    dormantOverdue: dormantOverdueCount,
+    holdDue: holdDueCount,
+    demoIntakePending: demoIntakePendingCount,
+    demosToday: demosTodayCount,
+    feedbackPending: feedbackPendingCount,
+    renewalsDue: renewalsDueCount,
+    followUpActiveTotal: followUpActiveTotalCount,
+    salesClosingActive: salesClosingActiveCount,
+    followUpsDue: followUpsDueCount,
+  });
 });

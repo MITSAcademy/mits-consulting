@@ -75,7 +75,7 @@ function redactClient<T extends Record<string, any>>(c: T, viewer: { id: string;
 }
 
 clientsRouter.get('/', async (req: AuthedRequest, res) => {
-  const { lifecycle, search, scope } = req.query as any;
+  const { lifecycle, search, scope, page, pageSize } = req.query as any;
   const where: any = {};
   // lifecycle supports comma-separated values: ?lifecycle=Active,LeverageGranted
   if (lifecycle) {
@@ -133,6 +133,17 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
     } else {
       where.hostOwnerId = { in: ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'] };
     }
+  }
+  // Pagination: if ?page is provided return { data, total, page, pageSize }.
+  // Without ?page, return the full array (backwards-compatible for sidebar/other callers).
+  if (page !== undefined) {
+    const pg = Math.max(1, parseInt(page, 10) || 1);
+    const ps = Math.min(200, Math.max(1, parseInt(pageSize, 10) || 50));
+    const [clients, total] = await Promise.all([
+      prisma.client.findMany({ where, include, orderBy: { createdAt: 'desc' }, skip: (pg - 1) * ps, take: ps }),
+      prisma.client.count({ where }),
+    ]);
+    return res.json({ data: clients.map((c) => redactClient(c, req.user!)), total, page: pg, pageSize: ps });
   }
   const clients = await prisma.client.findMany({ where, include, orderBy: { createdAt: 'desc' } });
   res.json(clients.map((c) => redactClient(c, req.user!)));

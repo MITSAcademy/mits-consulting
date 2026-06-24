@@ -159,70 +159,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
 
   const { data: metrics } = useQuery({
     queryKey: ['nav-badges'],
-    queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const weekOut = (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().slice(0, 10); })();
-      const canSeeEscalations = ['founder', 'manager', 'lead', 'demo_lead'].includes(user?.role || '');
-      const [home, sourcing, leverage, editReqs, clients, escalations] = await Promise.all([
-        api.get('/metrics/home').then((r) => r.data),
-        api.get('/sourcing').then((r) => r.data),
-        api.get('/leverage', { params: { status: 'PendingVaibhav' } }).then((r) => r.data),
-        api.get('/edit-requests').then((r) => r.data),
-        api.get('/clients').then((r) => r.data),
-        canSeeEscalations ? api.get('/escalations').then((r) => r.data).catch(() => []) : Promise.resolve([]),
-      ]);
-      const cl = (clients || []) as any[];
-      const isSalesCloser = user?.role === 'sales_closer';
-      // For sales_closer: dormant = DP clients, hold = CP+C clients
-      const dormantOverdue = isSalesCloser
-        ? cl.filter((c) => c.lifecycle === 'SaleClosing' && c.saleClosingSubStatus === 'DP' && c.salesOwnerId === user?.id).length
-        : cl.filter((c) => c.lifecycle === 'Dormant' && c.dormantCheckBackOn && c.dormantCheckBackOn <= today).length;
-      const holdDue = isSalesCloser
-        ? cl.filter((c) => c.lifecycle === 'SaleClosing' && ['CP', 'C'].includes(c.saleClosingSubStatus) && c.salesOwnerId === user?.id).length
-        : cl.filter((c) => c.lifecycle === 'Hold' && c.holdCheckBackOn && c.holdCheckBackOn <= today).length;
-      const demoIntakePending = cl.filter((c) => ['Lead', 'IntakeSent'].includes(c.lifecycle)).length;
-      const demosToday = cl.filter((c) => c.lifecycle === 'DemoScheduled' && c.demoDate && c.demoDate <= weekOut).length;
-      const feedbackPending = cl.filter((c) => ['DemoDone', 'FeedbackPending'].includes(c.lifecycle)).length;
-      const salesClosingActive = isSalesCloser
-        ? cl.filter((c) =>
-            ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
-            && c.saleClosingSubStatus !== 'DP'
-            && c.salesOwnerId === user?.id,
-          ).length
-        : cl.filter((c) =>
-            ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon'].includes(c.lifecycle)
-            && c.lifecycle !== 'Active',
-          ).length;
-      // For sales_closer: count all RP clients (= exactly what My follow-ups page shows)
-      const followUpsDue = isSalesCloser
-        ? cl.filter((c) =>
-            ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
-            && (!c.saleClosingSubStatus || c.saleClosingSubStatus === 'RP')
-            && c.salesOwnerId === user?.id,
-          ).length
-        : cl.filter((c) =>
-            ['SaleClosing', 'SaleWon'].includes(c.lifecycle)
-            && (c.saleClosingSubStatus === 'RP' || c.saleClosingSubStatus === 'CP' || c.saleClosingSubStatus === 'C')
-            && c.roshniNextCallOn && c.roshniNextCallOn <= today,
-          ).length;
-      const renewalsDue = cl.filter((c) =>
-        ['Active', 'LeverageGranted'].includes(c.lifecycle)
-        && c.nextRenewalDue && c.nextRenewalDue <= weekOut,
-      ).length;
-      const followUpActiveTotal = cl.filter((c) =>
-        ['Active', 'LeverageGranted', 'SaleWon'].includes(c.lifecycle),
-      ).length;
-      return {
-        pendingVaibhav: home.ops.pendingVaibhav,
-        pendingLeverage: leverage.length,
-        sourcingOpen: sourcing.filter((s: any) => s.status === 'Open').length,
-        verPending: sourcing.filter((s: any) => s.status === 'Proposed').length,
-        editReqPending: editReqs.filter((r: any) => r.status === 'Pending').length,
-        dormantOverdue, holdDue, demoIntakePending, demosToday, feedbackPending,
-        salesClosingActive, followUpsDue, renewalsDue, followUpActiveTotal,
-        escalationCount: (escalations as any[]).length,
-      };
-    },
+    queryFn: () => api.get('/metrics/nav-badges').then((r) => r.data),
     refetchInterval: 180_000,
     staleTime: 60_000,
     enabled: !!user,
