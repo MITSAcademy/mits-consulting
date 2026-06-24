@@ -1426,27 +1426,18 @@ function AMScheduleDialog({ training, onClose, onSent }: { training: any; onClos
           <Label>Trainer for invite</Label>
           <Select
             value={trainerOverrideId || training.trainer?.id || ''}
-            onChange={(e) => setTrainerOverrideId(e.target.value === (training.trainer?.id || '') ? '' : e.target.value)}
+            onChange={(e) => setTrainerOverrideId(e.target.value)}
           >
-            {training.trainer && (
+            {training.trainer ? (
               <option value={training.trainer.id}>
-                {training.trainer.name} (default){training.trainer.email ? ` · ${training.trainer.email}` : ''}
+                {training.trainer.name}
+                {training.trainer.phoneCode && training.trainer.phoneDigits ? ` · ${training.trainer.phoneCode} ${training.trainer.phoneDigits}` : ''}
+                {training.trainer.email ? ` · ${training.trainer.email}` : ''}
               </option>
+            ) : (
+              <option value="">— no trainer linked —</option>
             )}
-            {!training.trainer && <option value="">— no trainer linked —</option>}
-            {(allTrainers || [])
-              .filter((t: any) => t.id !== training.trainer?.id)
-              .map((t: any) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}{t.email ? ` · ${t.email}` : ' · no email'}
-                </option>
-              ))}
           </Select>
-          {trainerOverrideId && trainerOverrideId !== training.trainer?.id && (
-            <p className="text-[11px] mt-0.5" style={{ color: 'var(--status-amber)' }}>
-              Invite will go to the selected trainer, not the one linked to this training.
-            </p>
-          )}
         </div>
         <div className="form-row mt-1">
           <Label>Notes <span className="muted normal-case">(optional)</span></Label>
