@@ -510,7 +510,28 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
   }
   log.push(`✓ re-synced host assignments for ${synced} clients`);
 
-  res.json({ ok: true, deleted, fixed, synced, log });
+  // 6. Sync assignedAmId from hostOwnerId for Active/LeverageGranted clients missing it.
+  // Kanban groups by assignedAmId — if null, client shows as "Unassigned" even if hostOwnerId is set.
+  const missingAm = await prisma.client.findMany({
+    where: {
+      lifecycle: { in: ['Active', 'LeverageGranted'] },
+      hostOwnerId: { not: null },
+      assignedAmId: null,
+    },
+    select: { id: true, hostOwnerId: true },
+  });
+  let amSynced = 0;
+  for (const c of missingAm) {
+    await prisma.client.update({
+      where: { id: c.id },
+      data: { assignedAmId: c.hostOwnerId },
+    });
+    amSynced++;
+  }
+  if (amSynced > 0) log.push(`✓ assigned ${amSynced} clients to their hostOwner as AM`);
+  else log.push('— all active clients already have assignedAmId set');
+
+  res.json({ ok: true, deleted, fixed, synced, amSynced, log });
 });
 
 // POST /api/seed/fix-priya — one-time fix for Priya (priyaananthula27@gmail.com / +15015025408)
@@ -526,12 +547,20 @@ seedRouter.post('/fix-priya', async (req: AuthedRequest, res) => {
   });
 
   if (!priya) {
-    // Return all clients named Priya so founder can see what's there
+    // Return all clients with priya in name OR email so founder can see what's in DB
     const allPriyas = await prisma.client.findMany({
-      where: { name: { contains: 'Priya', mode: 'insensitive' } },
-      select: { id: true, name: true, lifecycle: true, email: true, phoneDigits: true },
+      where: { OR: [
+        { name: { contains: 'Priya', mode: 'insensitive' } },
+        { email: { contains: 'priya', mode: 'insensitive' } },
+      ]},
+      select: { id: true, name: true, lifecycle: true, email: true, phoneDigits: true, phoneCode: true },
     });
-    return res.status(404).json({ error: 'Priya not found by email/phone', allPriyas });
+    // Also check sourcing requests with no client or matching name
+    const sourcing = await (prisma as any).sourcingRequest.findMany({
+      where: { status: { in: ['Open', 'Proposed'] }, client: { name: { contains: 'Priya', mode: 'insensitive' } } },
+      select: { id: true, status: true, client: { select: { id: true, name: true, lifecycle: true, email: true } } },
+    });
+    return res.status(404).json({ error: 'Priya not found by email/phone', allPriyas, sourcing });
   }
   log.push(`Found: ${priya.name} (${priya.id}) — lifecycle: ${priya.lifecycle}`);
 
