@@ -95,14 +95,17 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
   // Enforced unconditionally — explicit ?lifecycle= param cannot bypass this.
   if (req.user!.role === 'demo_intake') {
     const INTAKE_STAGES = ['Lead','IntakeSent','IntakeReceived','InternalSearch','WithRecruiters',
-                           'VerificationPending','TrainerMatched','DemoScheduled','DemoDone','FeedbackPending'];
-    // Intersect with any explicit lifecycle filter so ?lifecycle=Active is still blocked
+                           'VerificationPending','TrainerMatched','DemoScheduled','DemoDone','FeedbackPending','Dormant'];
+    // Also show any client they own as intakeOwner (e.g. moved to Active/SaleWon by someone else)
     if (lifecycle) {
       const requested = String(lifecycle).split(',').map(s => s.trim()).filter(Boolean);
       const allowed = requested.filter(s => INTAKE_STAGES.includes(s));
       where.lifecycle = allowed.length ? { in: allowed } : { in: [] };
     } else {
-      where.lifecycle = { in: INTAKE_STAGES };
+      where.OR = [
+        { lifecycle: { in: INTAKE_STAGES } },
+        { intakeOwnerId: req.user!.id },
+      ];
     }
   }
   // account_manager (Kashish / Muskan) — always scoped to Active/LeverageGranted only.
