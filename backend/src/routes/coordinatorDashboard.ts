@@ -60,20 +60,17 @@ coordinatorDashboardRouter.get('/', async (req: AuthedRequest, res) => {
         weekSessions,
         recentSessions,
       ] = await Promise.all([
-        // Active clients owned by this coordinator
-        prisma.client.count({
-          where: {
-            hostOwnerId: coordinator.id,
-            lifecycle: { in: ['Active', 'LeverageGranted'] },
-          },
+        // Active trainings hosted by this coordinator
+        prisma.regularTraining.count({
+          where: { hostedByDefaultId: coordinator.id, status: 'active' },
         }),
 
-        // Overdue renewals (past nextRenewalDue date)
-        prisma.client.count({
+        // Overdue renewals — active training clients with past nextRenewalDue
+        prisma.regularTraining.count({
           where: {
-            hostOwnerId: coordinator.id,
-            lifecycle: { in: ['Active', 'LeverageGranted'] },
-            nextRenewalDue: { lt: today },
+            hostedByDefaultId: coordinator.id,
+            status: 'active',
+            client: { nextRenewalDue: { lt: today } },
           },
         }),
 
@@ -81,7 +78,7 @@ coordinatorDashboardRouter.get('/', async (req: AuthedRequest, res) => {
         prisma.issueTracker.count({
           where: {
             status: { in: ['Open', 'InProgress'] },
-            client: { hostOwnerId: coordinator.id },
+            client: { regularTrainings: { some: { hostedByDefaultId: coordinator.id, status: 'active' } } },
           },
         }),
 
@@ -123,18 +120,18 @@ coordinatorDashboardRouter.get('/', async (req: AuthedRequest, res) => {
         }),
       ]);
 
-      // Client list for allocation view
-      const clients = await prisma.client.findMany({
-        where: {
-          hostOwnerId: coordinator.id,
-          lifecycle: { in: ['Active', 'LeverageGranted'] },
-        },
+      // Client list for allocation view — derived from active trainings
+      const activeTrainings = await prisma.regularTraining.findMany({
+        where: { hostedByDefaultId: coordinator.id, status: 'active' },
         select: {
-          id: true, name: true, lifecycle: true, nextRenewalDue: true,
-          primaryTrainer: { select: { name: true } },
+          client: {
+            select: { id: true, name: true, lifecycle: true, nextRenewalDue: true,
+              primaryTrainer: { select: { name: true } } },
+          },
         },
-        orderBy: { name: 'asc' },
+        orderBy: { client: { name: 'asc' } },
       });
+      const clients = activeTrainings.map(t => t.client).filter(Boolean);
 
       return {
         coordinator: { id: coordinator.id, name: coordinator.name, role: coordinator.role },
