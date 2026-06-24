@@ -519,12 +519,20 @@ seedRouter.post('/fix-priya', async (req: AuthedRequest, res) => {
   if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
   const log: string[] = [];
 
-  const priya = await prisma.client.findFirst({
+  // Try exact match first, then fall back to all Priyas so we can see what's in the DB
+  let priya = await prisma.client.findFirst({
     where: { OR: [{ email: 'priyaananthula27@gmail.com' }, { phoneDigits: '5015025408' }] },
     select: { id: true, name: true, lifecycle: true, email: true, phoneDigits: true },
   });
 
-  if (!priya) return res.status(404).json({ error: 'Priya not found by email or phone' });
+  if (!priya) {
+    // Return all clients named Priya so founder can see what's there
+    const allPriyas = await prisma.client.findMany({
+      where: { name: { contains: 'Priya', mode: 'insensitive' } },
+      select: { id: true, name: true, lifecycle: true, email: true, phoneDigits: true },
+    });
+    return res.status(404).json({ error: 'Priya not found by email/phone', allPriyas });
+  }
   log.push(`Found: ${priya.name} (${priya.id}) — lifecycle: ${priya.lifecycle}`);
 
   // Restore lifecycle so Anjali/Aman can see her
