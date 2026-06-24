@@ -155,15 +155,24 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
           <label className="label">Trainer *</label>
           <select className="input" value={trainerId} onChange={(e) => { setTrainerId(e.target.value); setOverrideAmount(false); setCustomAmount(''); }}>
             <option value="">— select trainer —</option>
-            {(trainers || []).map((t: any) => (
-              <option key={t.id} value={t.id}>
-                {t.name}{t.defaultRateInr ? ` · ₹${t.defaultRateInr}/session` : ''}
-              </option>
-            ))}
+            {(trainers || []).map((t: any) => {
+              const phone = t.phoneDigits ? `${t.phoneCode || ''}${t.phoneDigits}` : null;
+              const tag = t.seqId ? `#${t.seqId}` : null;
+              const suffix = [tag, phone].filter(Boolean).join(' · ');
+              return (
+                <option key={t.id} value={t.id}>
+                  {t.name}{suffix ? ` (${suffix})` : ''}{t.defaultRateInr ? ` · ₹${t.defaultRateInr}/session` : ''}
+                </option>
+              );
+            })}
           </select>
-          {selectedTrainer && (selectedTrainer.phoneCode || selectedTrainer.phoneDigits) && (
-            <div className="text-[11px] muted mt-0.5">
-              Trainer: <span className="mono">{selectedTrainer.phoneCode}{selectedTrainer.phoneDigits}</span>
+          {selectedTrainer && (
+            <div className="text-[11px] muted mt-0.5 flex gap-2">
+              {selectedTrainer.seqId && <span>#{selectedTrainer.seqId}</span>}
+              {selectedTrainer.phoneDigits && (
+                <span className="mono">{selectedTrainer.phoneCode}{selectedTrainer.phoneDigits}</span>
+              )}
+              {selectedTrainer.email && <span>{selectedTrainer.email}</span>}
             </div>
           )}
         </div>
