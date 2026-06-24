@@ -13,7 +13,7 @@
  *   • Schedule new call / log past call / log session — all in topbar.
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
