@@ -1350,7 +1350,7 @@ function AMScheduleMenuItem({ training, onSent }: { training: any; onSent: () =>
   );
 }
 
-function AMScheduleDialog({ training, coordinatorTrainers, onClose, onSent }: { training: any; coordinatorTrainers?: any[]; onClose: () => void; onSent: () => void }) {
+export function AMScheduleDialog({ training, coordinatorTrainers, onClose, onSent }: { training: any; coordinatorTrainers?: any[]; onClose: () => void; onSent: () => void }) {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
 

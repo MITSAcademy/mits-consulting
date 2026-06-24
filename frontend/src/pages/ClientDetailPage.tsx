@@ -20,6 +20,7 @@ import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 import { CallHistoryCard } from '@/components/CallHistoryCard';
 import { CommentSection } from '@/components/CommentSection';
 import { ActivityLog } from '@/components/ActivityLog';
+import { AMScheduleDialog } from '@/pages/MySessionsPage';
 
 const INTAKE_FIELDS = [
   { key: 'detailed_skill_set', label: 'Detailed skill set', required: true },
@@ -63,7 +64,7 @@ type ModalKind =
   | 'sendIntake' | 'recordIntake' | 'internalSearch'
   | 'scheduleDemo' | 'demoDone' | 'noShow' | 'freshPayment' | 'leverage' | 'hold' | 'renewal' | 'welcomeEmail' | 'postDemoFeedback' | 'sendSkillMatrix' | 'skipMatrix' | 'preDemoReminder'
   | 'engagementLetter' | 'handoverWelcome' | 'subStatus' | 'paymentConfirmation' | 'groupRename' | 'paymentChecklist'
-  | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume' | 'assignAm' | 'feedbackEmail'
+  | 'sendEmail' | 'sendWA' | 'moveBack' | 'dormant' | 'resume' | 'assignAm' | 'feedbackEmail' | 'scheduleSession'
   | 'editTrainingSetup' | 'editHandover' | 'mitaliWelcomeEmail' | 'certificateEmail';
 
 export function ClientDetailPage() {
@@ -415,6 +416,14 @@ export function ClientDetailPage() {
     } else if (isTraining && user.role === 'founder') {
       actions.push(<Button key="cmpl" variant="success" onClick={() => stageM.mutate('Completed')}><Check size={14}/> Mark completed</Button>);
     }
+  }
+  // Schedule session — AM/lead can schedule a calendar invite for active clients
+  if (['account_manager', 'lead', 'manager', 'founder'].includes(user.role) && (client.lifecycle === 'Active' || client.lifecycle === 'LeverageGranted')) {
+    actions.push(
+      <Button key="sched-session" size="sm" onClick={() => setModal('scheduleSession')}>
+        <CalendarPlus size={12}/> Schedule session
+      </Button>
+    );
   }
   // Assign AM — Mitali (manager) can assign active clients to Bhavneet / Kashish / Muskan
   if (user.role === 'manager' && (client.lifecycle === 'Active' || client.lifecycle === 'LeverageGranted')) {
@@ -1006,6 +1015,33 @@ export function ClientDetailPage() {
         {modal === 'handoverWelcome' && <HandoverWelcomeModal client={client} onClose={() => setModal(null)} />}
         {modal === 'feedbackEmail' && <FeedbackEmailModal client={client} onClose={() => setModal(null)} />}
         {modal === 'assignAm' && <AssignAmModal client={client} onClose={() => setModal(null)} />}
+        {modal === 'scheduleSession' && (() => {
+          const rt = client.regularTrainings?.[0];
+          if (!rt) return (
+            <Dialog open onOpenChange={(v) => !v && setModal(null)}>
+              <DialogContent title="Schedule session">
+                <p className="text-sm muted">No active training session found for this client. Add one from My Sessions first.</p>
+                <DialogFooter><Button onClick={() => setModal(null)}>Close</Button></DialogFooter>
+              </DialogContent>
+            </Dialog>
+          );
+          return (
+            <AMScheduleDialog
+              training={{
+                id: rt.id,
+                name: client.name,
+                client: { id: client.id, name: client.name, whatsappGroupLink: client.whatsappGroupLink, phoneCode: client.phoneCode, phoneDigits: client.phoneDigits },
+                trainer: client.primaryTrainer ? { id: client.primaryTrainer.id, name: client.primaryTrainer.name, email: client.primaryTrainer.email, phoneCode: client.primaryTrainer.phoneCode, phoneDigits: client.primaryTrainer.phoneDigits } : null,
+                meetingMode: client.meetingMode || 'Zoom',
+                defaultTimeIst: client.demoTimeIst || '',
+                scheduleNotes: rt.scheduleNotes || null,
+                sessions: [],
+              }}
+              onClose={() => setModal(null)}
+              onSent={() => setModal(null)}
+            />
+          );
+        })()}
         {modal === 'editTrainingSetup' && <EditTrainingSetupModal client={client} onClose={() => setModal(null)} />}
         {modal === 'editHandover' && <EditHandoverModal client={client} onClose={() => setModal(null)} />}
         {modal === 'mitaliWelcomeEmail' && <MitaliWelcomeEmailModal client={client} onClose={() => setModal(null)} />}
