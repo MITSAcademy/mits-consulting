@@ -513,12 +513,12 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
   // 6. Force-sync assignedAmId = hostOwnerId for ALL Active/LeverageGranted clients.
   // Kanban columns filter by assignedAmId — if it's null or points to a different user than
   // hostOwnerId, the client falls into "Unassigned" or disappears from the expected column.
-  const allActiveClients = await prisma.client.findMany({
+  const clientsToSyncAm = await prisma.client.findMany({
     where: { lifecycle: { in: ['Active', 'LeverageGranted'] }, hostOwnerId: { not: null } },
     select: { id: true, hostOwnerId: true, assignedAmId: true },
   });
   let amSynced = 0;
-  for (const c of allActiveClients) {
+  for (const c of clientsToSyncAm) {
     if (c.assignedAmId !== c.hostOwnerId) {
       await prisma.client.update({
         where: { id: c.id },
