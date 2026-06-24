@@ -955,7 +955,7 @@ export function ClientDetailPage() {
             <CommentSection clientId={client.id} />
             <ActivityLog clientId={client.id} />
             <DemoHistoryCard clientId={client.id} />
-            <CallHistoryCard clientId={client.id} />
+            <CallHistoryCard clientId={client.id} role={user.role} />
             <MessagesHistoryCard clientId={client.id} />
           </div>
         </div>

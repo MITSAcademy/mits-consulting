@@ -43,7 +43,7 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-export function CallHistoryCard({ clientId }: { clientId: string }) {
+export function CallHistoryCard({ clientId, role }: { clientId: string; role?: string }) {
   const { data, isLoading } = useQuery<CallRow[]>({
     queryKey: ['call-logs', { clientId }],
     queryFn: () => api.get('/call-logs', { params: { clientId, limit: 20 } }).then((r) => r.data),
@@ -53,7 +53,7 @@ export function CallHistoryCard({ clientId }: { clientId: string }) {
     <div className="card">
       <div className="card-h">
         <span>Call history{(data || []).length > 0 ? ` · ${(data || []).length}` : ''}</span>
-        <LogCallInline clientId={clientId} />
+        <LogCallInline clientId={clientId} role={role} />
       </div>
       {isLoading ? (
         <div className="muted text-sm">Loading…</div>
@@ -140,7 +140,8 @@ const DEFAULT_FORM: LogForm = {
   notes: '',
 };
 
-function LogCallInline({ clientId }: { clientId: string }) {
+function LogCallInline({ clientId, role }: { clientId: string; role?: string }) {
+  const hideSessionTypes = role === 'account_manager' || role === 'lead';
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const [open, setOpen] = useState(false);
@@ -205,9 +206,9 @@ function LogCallInline({ clientId }: { clientId: string }) {
           <Label>Activity type *</Label>
           <Select value={form.activityType} onChange={(e) => patch({ activityType: e.target.value, sessionTookPlace: '', durationMinutes: '', cancellationReason: '' })}>
             <option value="">— select type —</option>
-            <option value="training">Training</option>
-            <option value="session">Session</option>
-            <option value="">─────</option>
+            {!hideSessionTypes && <option value="training">Training</option>}
+            {!hideSessionTypes && <option value="session">Session</option>}
+            {!hideSessionTypes && <option value="">─────</option>}
             <option value="__call__">Call / Check-in</option>
           </Select>
         </div>
