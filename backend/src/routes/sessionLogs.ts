@@ -53,7 +53,9 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
       return res.status(403).json({ error: 'You can only log sessions for clients on your team (Bhavneet / Kashish / Muskan)' });
     }
   }
-  const defaultAmount = Math.round(hours * rateSnapshot);
+  // per_session rate is quoted for a 2-hour session; scale proportionally by actual hours
+  const effectiveHourlyRate = rateModel === 'per_session' ? rateSnapshot / 2 : rateSnapshot;
+  const defaultAmount = Math.round(hours * effectiveHourlyRate);
   const amount = (amountOverride != null && !isNaN(Number(amountOverride))) ? Math.round(Number(amountOverride)) : defaultAmount;
   const log = await prisma.sessionLog.create({
     data: {

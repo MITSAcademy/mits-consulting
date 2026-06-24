@@ -85,9 +85,11 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
   const selectedTrainer = (trainers || []).find((t: any) => t.id === trainerId);
   const selectedClient = (clients || []).find((c: any) => c.id === clientId);
   const defaultRate = selectedTrainer?.defaultRateInr || 0;
+  const rateModel = selectedTrainer?.rateModel || 'per_session';
+  const effectiveHourlyRate = rateModel === 'per_session' ? defaultRate / 2 : defaultRate;
   const total = overrideAmount && customAmount
     ? Math.round(parseFloat(customAmount) || 0)
-    : Math.round((parseFloat(days) || 0) * defaultRate);
+    : Math.round((parseFloat(days) || 0) * effectiveHourlyRate);
 
   const canSubmit = !!trainerId && !!feedback && durationToDecimal(durH, durM) > 0 && (!overrideAmount || (!!customAmount && !!overrideReason.trim()));
 
