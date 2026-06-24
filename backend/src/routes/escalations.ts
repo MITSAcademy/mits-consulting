@@ -30,13 +30,10 @@ escalationsRouter.patch('/:id/status', async (req: AuthedRequest, res) => {
   const training = await prisma.regularTraining.findUnique({ where: { id: req.params.id } });
   if (!training) return res.status(404).json({ error: 'Training not found' });
 
-  const updated = await (prisma.regularTraining.update as any)({
-    where: { id: req.params.id },
-    data: {
-      ...(escalationStatus !== undefined ? { escalationStatus } : {}),
-      ...(escalationActionsTaken !== undefined ? { escalationActionsTaken } : {}),
-    },
-  });
+  const data: any = {};
+  if (escalationStatus !== undefined) data.escalationStatus = escalationStatus;
+  if (escalationActionsTaken !== undefined) data.escalationActionsTaken = escalationActionsTaken;
+  const updated = await prisma.regularTraining.update({ where: { id: req.params.id }, data });
   res.json(updated);
 });
 
@@ -47,10 +44,8 @@ escalationsRouter.post('/:id/resolve', async (req: AuthedRequest, res) => {
   const training = await prisma.regularTraining.findUnique({ where: { id } });
   if (!training) return res.status(404).json({ error: 'Training not found' });
 
-  await prisma.regularTraining.update({
-    where: { id },
-    data: { demoEscalationRequested: false, ...({ escalationStatus: 'Resolved' } as any) },
-  });
+  const resolveData: any = { demoEscalationRequested: false, escalationStatus: 'Resolved' };
+  await prisma.regularTraining.update({ where: { id }, data: resolveData });
 
   if (notes && training.clientId) {
     const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { name: true } });
