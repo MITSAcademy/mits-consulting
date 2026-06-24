@@ -767,6 +767,7 @@ seedRouter.post('/sync-payment-sheet', async (req: AuthedRequest, res) => {
     where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] } },
     data: {
       payDate1: null, payDate2: null,
+      cycleAmount: 0,
       followupNote: null, followupNoteAt: null,
       paymentPendingVaibhav: false,
     },
