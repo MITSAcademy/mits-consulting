@@ -453,7 +453,7 @@ export function TeamKanbanPage() {
 
   const { data: allTrainings = [], isLoading } = useQuery<Training[]>({
     queryKey: ['trainings', 'team-kanban'],
-    queryFn: () => api.get('/trainings/my-sessions').then((r) => r.data),
+    queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
   });
 
   const trainings = useMemo(() => {
