@@ -26,7 +26,7 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Label, Textarea } from '@/components/ui/input';
 import {
   AlertTriangle, CheckCircle2, Clock, MessageSquare,
-  Send, Pin, Trash2, Users
+  Send, Pin, Trash2, Users, LayoutList, Table2
 } from 'lucide-react';
 import { minFutureDate, maxTodayDate, minPastDate } from '@/lib/utils';
 
@@ -56,6 +56,8 @@ interface Row {
   primaryTrainer: { id: string; name: string; phone: string | null; groupLink: string | null } | null;
   trainingId: string | null;
   trainingName: string | null;
+  followupNote: string | null;
+  followupNoteAt: string | null;
   latestComment: LatestComment | null;
   feedbackNeeded: boolean;
   status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'no_date';
@@ -707,9 +709,218 @@ function PayRow({ r }: { r: Row }) {
   );
 }
 
+// ─── spreadsheet table view ───────────────────────────────────────────────────
+
+function TableView({ rows }: { rows: Row[] }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [showComments, setShowComments] = useState<string | null>(null);
+  const [showAdvance, setShowAdvance] = useState<Row | null>(null);
+  const [showEditDates, setShowEditDates] = useState<Row | null>(null);
+
+  const saveNote = useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string }) =>
+      api.patch(`/follow-up-payments/${id}/note`, { note }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingNote(null); showToast('Note saved'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const togglePending = useMutation({
+    mutationFn: ({ id, pending }: { id: string; pending: boolean }) =>
+      api.post(`/follow-up-payments/${id}/pending-vaibhav`, { pending }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['follow-up-payments'] }),
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const thStyle: React.CSSProperties = {
+    padding: '8px 10px', textAlign: 'left', fontSize: 11,
+    fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
+    color: 'var(--brand-textMuted)', borderBottom: '2px solid var(--brand-border)',
+    whiteSpace: 'nowrap', background: 'var(--bg-card)', position: 'sticky', top: 0, zIndex: 2,
+  };
+
+  return (
+    <>
+      <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--brand-border)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              <th style={thStyle}>#</th>
+              <th style={thStyle}>Client</th>
+              <th style={thStyle}>Pay Date 1</th>
+              <th style={thStyle}>Pay Date 2</th>
+              <th style={thStyle}>Amount</th>
+              <th style={thStyle}>Comments</th>
+              <th style={thStyle}>Feedback / Notes</th>
+              <th style={thStyle}>Account</th>
+              <th style={thStyle}>Phone</th>
+              <th style={thStyle}>Email</th>
+              <th style={thStyle}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const isPendingV = r.status === 'pending_vaibhav';
+              const isOverdue = r.status === 'overdue';
+              const isDueSoon = r.status === 'due_soon';
+
+              const rowBg = isPendingV
+                ? 'rgba(250,204,21,0.12)'   // yellow — pending Vaibhav
+                : isOverdue
+                ? 'rgba(239,68,68,0.08)'    // red tint — overdue
+                : isDueSoon
+                ? 'rgba(245,158,11,0.07)'   // amber tint — due soon
+                : i % 2 === 0 ? 'var(--bg-card)' : 'rgba(255,255,255,0.02)';
+
+              const nameColor = isPendingV ? '#ca8a04' : isOverdue ? 'var(--status-red)' : 'var(--brand-text)';
+
+              const tdStyle: React.CSSProperties = {
+                padding: '7px 10px',
+                borderBottom: '1px solid var(--brand-borderSoft)',
+                verticalAlign: 'middle',
+                background: rowBg,
+              };
+
+              return (
+                <tr key={r.id}>
+                  <td style={{ ...tdStyle, color: 'var(--brand-textMuted)', width: 32, textAlign: 'center' }}>{i + 1}</td>
+
+                  {/* Client */}
+                  <td style={{ ...tdStyle, fontWeight: 600, color: nameColor, whiteSpace: 'nowrap' }}>
+                    <Link to={`/clients/${r.id}`} className="hover:underline">{r.name}</Link>
+                  </td>
+
+                  {/* Pay Date 1 */}
+                  <td style={{ ...tdStyle, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                    {fmtDate(r.payDate1)}
+                  </td>
+
+                  {/* Pay Date 2 */}
+                  <td style={{ ...tdStyle, fontFamily: 'monospace', whiteSpace: 'nowrap',
+                    color: isOverdue ? 'var(--status-red)' : isDueSoon ? 'var(--status-amber)' : 'var(--brand-text)',
+                    fontWeight: isOverdue || isDueSoon ? 700 : 400 }}>
+                    {r.payDate2 ? fmtDate(r.payDate2) : <span style={{ color: 'var(--brand-textMuted)' }}>NA</span>}
+                  </td>
+
+                  {/* Amount */}
+                  <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 600 }}>
+                    {r.cycleAmount > 0 ? r.cycleAmount : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
+                  </td>
+
+                  {/* Comments (latest comment body) */}
+                  <td style={{ ...tdStyle, maxWidth: 180 }}>
+                    <div style={{ color: isPendingV ? '#ca8a04' : 'var(--brand-text)', lineHeight: 1.4 }}>
+                      {isPendingV ? 'Payment pending on Vaibhav' : (r.latestComment?.body || <span style={{ color: 'var(--brand-textMuted)' }}>done</span>)}
+                    </div>
+                    <button onClick={() => setShowComments(r.id)}
+                      className="text-[10px] hover:underline mt-0.5 block"
+                      style={{ color: 'var(--accent-gold)' }}>
+                      {r.latestComment ? 'view' : '+ add'}
+                    </button>
+                  </td>
+
+                  {/* Feedback / followup note — inline editable */}
+                  <td style={{ ...tdStyle, maxWidth: 200 }}>
+                    {editingNote === r.id ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          autoFocus
+                          value={noteDraft}
+                          onChange={(e) => setNoteDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveNote.mutate({ id: r.id, note: noteDraft });
+                            if (e.key === 'Escape') setEditingNote(null);
+                          }}
+                          style={{
+                            background: 'var(--bg-input)', border: '1px solid var(--brand-border)',
+                            color: 'var(--brand-text)', borderRadius: 4, padding: '2px 6px',
+                            fontSize: 11, width: 140,
+                          }}
+                        />
+                        <button onClick={() => saveNote.mutate({ id: r.id, note: noteDraft })}
+                          style={{ color: 'var(--status-green)', fontSize: 13 }}>✓</button>
+                        <button onClick={() => setEditingNote(null)}
+                          style={{ color: 'var(--brand-textMuted)', fontSize: 13 }}>✕</button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => { setEditingNote(r.id); setNoteDraft(r.followupNote || ''); }}
+                        className="cursor-pointer hover:opacity-80 group"
+                        title="Click to edit"
+                      >
+                        {r.followupNote
+                          ? <span style={{ color: r.followupNote.toLowerCase().includes('not available') || r.followupNote.toLowerCase().includes('unwell') ? 'var(--status-red)' : 'var(--brand-text)' }}>{r.followupNote}</span>
+                          : <span style={{ color: 'var(--brand-textMuted)', fontStyle: 'italic' }} className="group-hover:opacity-100 opacity-40">+ add note</span>
+                        }
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Account */}
+                  <td style={{ ...tdStyle, color: 'var(--brand-textMuted)', whiteSpace: 'nowrap', fontSize: 11 }}>
+                    {r.accountName || '—'}
+                  </td>
+
+                  {/* Phone */}
+                  <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 11, whiteSpace: 'nowrap' }}>
+                    {r.clientPhone
+                      ? <a href={`https://wa.me/${r.clientPhone}`} target="whatsapp_window" style={{ color: '#25D366' }}>{r.clientPhone}</a>
+                      : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
+                  </td>
+
+                  {/* Email */}
+                  <td style={{ ...tdStyle, fontSize: 11 }}>
+                    {r.clientEmail
+                      ? <a href={`mailto:${r.clientEmail}`} style={{ color: 'var(--brand-textSecondary)' }}>{r.clientEmail}</a>
+                      : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
+                  </td>
+
+                  {/* Actions */}
+                  <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setShowAdvance(r)} title="Mark payment done"
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80"
+                        style={{ background: 'rgba(34,197,94,0.15)', color: 'var(--status-green)', border: '1px solid rgba(34,197,94,0.3)' }}>
+                        ✓ Done
+                      </button>
+                      <button onClick={() => setShowEditDates(r)} title="Edit pay dates"
+                        className="px-2 py-0.5 rounded text-[10px] hover:opacity-80"
+                        style={{ background: 'var(--bg-input)', color: 'var(--brand-textMuted)', border: '1px solid var(--brand-borderSoft)' }}>
+                        Dates
+                      </button>
+                      <button
+                        onClick={() => togglePending.mutate({ id: r.id, pending: !r.paymentPendingVaibhav })}
+                        title="Toggle pending on Vaibhav"
+                        className="px-2 py-0.5 rounded text-[10px] hover:opacity-80"
+                        style={{
+                          background: isPendingV ? 'rgba(250,204,21,0.2)' : 'var(--bg-input)',
+                          color: isPendingV ? '#ca8a04' : 'var(--brand-textMuted)',
+                          border: `1px solid ${isPendingV ? 'rgba(250,204,21,0.4)' : 'var(--brand-borderSoft)'}`,
+                        }}>
+                        {isPendingV ? '★ V' : '☆ V'}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {showComments  && <CommentThread clientId={showComments} onClose={() => setShowComments(null)}/>}
+      {showAdvance   && <AdvancePaymentModal r={showAdvance} onClose={() => setShowAdvance(null)}/>}
+      {showEditDates && <EditDatesModal r={showEditDates} onClose={() => setShowEditDates(null)}/>}
+    </>
+  );
+}
+
 export function FollowUpPaymentsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'due_soon' | 'pending_vaibhav'>('all');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
 
   const { data, isLoading } = useQuery<Row[]>({
     queryKey: ['follow-up-payments'],
@@ -744,12 +955,34 @@ export function FollowUpPaymentsPage() {
         title="Payment follow-up"
         subtitle={`${(data || []).length} active clients`}
         actions={
-          <Input
-            placeholder="Search client…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-[240px]"
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Search client…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-[220px]"
+            />
+            <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid var(--brand-border)' }}>
+              <button
+                onClick={() => setViewMode('table')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium transition-colors"
+                style={{
+                  background: viewMode === 'table' ? 'var(--brand-accent)' : 'var(--bg-card)',
+                  color: viewMode === 'table' ? 'white' : 'var(--brand-textMuted)',
+                }}>
+                <Table2 size={13}/> Sheet
+              </button>
+              <button
+                onClick={() => setViewMode('cards')}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium transition-colors"
+                style={{
+                  background: viewMode === 'cards' ? 'var(--brand-accent)' : 'var(--bg-card)',
+                  color: viewMode === 'cards' ? 'white' : 'var(--brand-textMuted)',
+                }}>
+                <LayoutList size={13}/> Cards
+              </button>
+            </div>
+          </div>
         }
       />
       <Page>
@@ -790,6 +1023,8 @@ export function FollowUpPaymentsPage() {
           <div className="muted text-sm">Loading…</div>
         ) : filtered.length === 0 ? (
           <EmptyState icon={CheckCircle2} tone="green" title="All clear" description="No clients match this filter." />
+        ) : viewMode === 'table' ? (
+          <TableView rows={filtered} />
         ) : (
           <div className="space-y-0">
             {filtered.map((r) => <PayRow key={r.id} r={r}/>)}
