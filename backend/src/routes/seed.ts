@@ -696,3 +696,130 @@ seedRouter.post('/fix-kanban', async (req: AuthedRequest, res) => {
 
   res.json({ ok: true, fixed, log });
 });
+
+// ─── Sync Mitali's payment sheet data ────────────────────────────────────────
+// POST /api/seed/sync-payment-sheet
+// Clears payDate1/payDate2/followupNote/accountNameRaw/cycleAmount/paymentPendingVaibhav
+// for all Active/LeverageGranted/SaleWon clients, then re-populates from Mitali's sheet.
+// Matches by phone → email → name (case-insensitive trim).
+// Only touches payment-tracking fields — lifecycle, assignments, trainer untouched.
+
+const MITALI_SHEET: Array<{
+  name: string; payDate1: string | null; payDate2: string | null;
+  amount: number; comments: string; followupNote: string;
+  accountName: string; phone: string; email: string; pendingVaibhav: boolean;
+}> = [
+  { name: 'Venkat',                      payDate1: '2026-06-05', payDate2: '2026-06-19', amount: 600,  comments: 'done',                          followupNote: '',                                  accountName: 'MITS Solution PVT LTD',    phone: '+919392272035', email: 'batta.venkatesh@gmail.com',         pendingVaibhav: false },
+  { name: 'Priya',                        payDate1: '2026-06-06', payDate2: '2026-06-20', amount: 650,  comments: 'done',                          followupNote: '',                                  accountName: 'Reva',                     phone: '+18144038079',  email: 'mpriyadharshini892@gmail.com',      pendingVaibhav: false },
+  { name: 'Vinith',                       payDate1: '2026-06-14', payDate2: '2026-06-20', amount: 600,  comments: 'done',                          followupNote: 'paid 200',                          accountName: 'Riya',                     phone: '+18046375396',  email: 'vroy3006.s@gmail.com',              pendingVaibhav: false },
+  { name: 'Surya',                        payDate1: '2026-06-14', payDate2: '2026-06-28', amount: 600,  comments: 'done',                          followupNote: '',                                  accountName: 'Mytabtech',                phone: '+919949499850', email: 'suryasimha.chintha@gmail.com',      pendingVaibhav: false },
+  { name: 'Ramya Cerner',                 payDate1: '2026-06-16', payDate2: null,          amount: 550,  comments: 'Payment pending on Vaibhav',    followupNote: '',                                  accountName: 'MITS Solution PVT LTD',    phone: '+18137169143',  email: '',                                  pendingVaibhav: true  },
+  { name: 'Akhil Cerner',                 payDate1: '2026-06-21', payDate2: null,          amount: 550,  comments: 'Payment pending on Vaibhav',    followupNote: '',                                  accountName: '',                         phone: '+13094397619',  email: 'akhilsai9700547755@gmail.com',      pendingVaibhav: true  },
+  { name: 'Rumana',                       payDate1: '2026-06-21', payDate2: '2026-07-28', amount: 600,  comments: 'done',                          followupNote: 'paid for 1 week',                   accountName: 'shakti',                   phone: '+19452706969',  email: 'rumanas803@gmail.com',              pendingVaibhav: false },
+  { name: 'Pavitra Jadhav',              payDate1: '2026-06-22', payDate2: null,          amount: 750,  comments: 'Payment pending on Vaibhav',    followupNote: '',                                  accountName: 'MITS Solution PVT LTD',    phone: '+16043772462',  email: 'pk.pavithra777@gmail.com',          pendingVaibhav: true  },
+  { name: 'Asghar Jadhav',              payDate1: '2026-06-22', payDate2: null,          amount: 550,  comments: 'Payment pending on Vaibhav',    followupNote: '',                                  accountName: 'MITS Solution PVT LTD',    phone: '+17175712932',  email: 'asgharmac@gmail.com',               pendingVaibhav: true  },
+  { name: 'Training Scada Shalini',      payDate1: '2026-06-23', payDate2: '2026-07-30', amount: 450,  comments: 'done',                          followupNote: '',                                  accountName: 'Mytabtech',                phone: '+918464080186', email: 'shalini123.dl@gmail.com',           pendingVaibhav: false },
+  { name: 'Bipana',                       payDate1: '2026-06-23', payDate2: '2026-07-07', amount: 650,  comments: 'done',                          followupNote: '',                                  accountName: 'MITS Solution PVT LTD',    phone: '+19727301042',  email: 'bipana.dreamgirl@gmail.com',        pendingVaibhav: false },
+  { name: 'Training Alekhya',            payDate1: '2026-06-24', payDate2: '2026-07-05', amount: 400,  comments: 'done',                          followupNote: '',                                  accountName: 'Reva Mehrotra',            phone: '+15166525623',  email: 'alekhya.mugi406@gmail.com',         pendingVaibhav: false },
+  { name: 'Shaik',                        payDate1: '2026-06-24', payDate2: '2026-07-08', amount: 550,  comments: 'done',                          followupNote: '',                                  accountName: 'shakti',                   phone: '+17472268679',  email: 'irshaik177@gmail.com',              pendingVaibhav: false },
+  { name: 'Jahnavi',                      payDate1: '2026-06-25', payDate2: '2026-07-02', amount: 650,  comments: 'done',                          followupNote: 'paid 1 week',                       accountName: 'Reva Mehrotra',            phone: '+18138935528',  email: 'jahnavidasari28@gmail.com',         pendingVaibhav: false },
+  { name: 'Abhi',                         payDate1: '2026-06-25', payDate2: null,          amount: 500,  comments: 'done',                          followupNote: 'cad',                               accountName: 'MITS Solution PVT LTD',    phone: '+19029826324',  email: 'avajinapelli@gmail.com',            pendingVaibhav: false },
+  { name: 'Priya collibra',              payDate1: '2026-06-25', payDate2: '2026-07-09', amount: 750,  comments: 'done',                          followupNote: '',                                  accountName: 'Thiru',                    phone: '+18035670442',  email: 'priya.geddam117@gmail.com',         pendingVaibhav: false },
+  { name: 'Ooha',                         payDate1: '2026-06-26', payDate2: '2026-07-10', amount: 650,  comments: 'done',                          followupNote: 'trainer not available',             accountName: 'Reva Mehrotra',            phone: '+14016668469',  email: 'oohasi234@gmail.com',               pendingVaibhav: false },
+  { name: 'Bhargavi',                     payDate1: '2026-06-26', payDate2: null,          amount: 450,  comments: 'done',                          followupNote: 'trainer is not available for 1 week', accountName: 'anuradha',               phone: '+17797752785',  email: 'ramyabhargavi.ch@gmail.com',        pendingVaibhav: false },
+  { name: 'Meghna',                       payDate1: '2026-06-26', payDate2: '2026-07-10', amount: 600,  comments: 'done',                          followupNote: '',                                  accountName: 'anuradha',                 phone: '+19096835191',  email: 'meghanavarayuri@gmail.com',         pendingVaibhav: false },
+  { name: 'Yaswanth',                     payDate1: '2026-06-26', payDate2: '2026-07-10', amount: 700,  comments: 'done',                          followupNote: '',                                  accountName: 'Mytabtech',                phone: '+15128156436',  email: 'yeshwanth.reddy166@gmail.com',      pendingVaibhav: false },
+  { name: 'Yashwanti',                    payDate1: '2026-06-26', payDate2: '2026-07-10', amount: 650,  comments: 'done',                          followupNote: '',                                  accountName: 'Reva Mehrotra',            phone: '+15139969723',  email: 'yaswanthiky@gmail.com',             pendingVaibhav: false },
+  { name: 'Saiteja',                      payDate1: '2026-06-26', payDate2: '2026-07-10', amount: 650,  comments: 'done',                          followupNote: '',                                  accountName: 'shakti',                   phone: '+919348548056', email: 'masvolks2@gmail.com',               pendingVaibhav: false },
+  { name: 'Sujit',                        payDate1: '2026-06-28', payDate2: '2026-07-12', amount: 650,  comments: '',                              followupNote: '',                                  accountName: 'shakri',                   phone: '+18175280757',  email: 'msujithmedha22@gmail.com',          pendingVaibhav: false },
+  { name: 'Sruthi',                       payDate1: '2026-06-28', payDate2: '2026-07-12', amount: 400,  comments: 'done',                          followupNote: '1 hour daily',                      accountName: 'Shakti kumar',             phone: '+16185270107',  email: 'jshruthi97@gmail.com',              pendingVaibhav: false },
+  { name: 'Gayathri. Jadhav',            payDate1: '2026-06-28', payDate2: null,          amount: 750,  comments: 'Payment pending on Vaibhav',    followupNote: '',                                  accountName: 'MITS Solution PVT LTD',    phone: '+16475327092',  email: 'gayathri.anbarasu@yahoo.com',       pendingVaibhav: true  },
+  { name: 'Mansa',                        payDate1: '2026-06-29', payDate2: '2026-07-13', amount: 650,  comments: 'done',                          followupNote: '',                                  accountName: 'Shakti kumar',             phone: '+12342815550',  email: 'mansa.qa66@gmail.com',              pendingVaibhav: false },
+  { name: 'Kavitha',                      payDate1: '2026-06-29', payDate2: '2026-07-13', amount: 600,  comments: 'done',                          followupNote: '',                                  accountName: 'Rishab',                   phone: '+18723303776',  email: 'kavi64050@gmail.com',               pendingVaibhav: false },
+  { name: 'Nikhil Amit',                 payDate1: '2026-06-30', payDate2: '2026-07-14', amount: 750,  comments: 'done',                          followupNote: '',                                  accountName: 'shakti',                   phone: '+12035331095',  email: 'nikhil.t1405@gmail.com',            pendingVaibhav: false },
+  { name: 'Snehalatha',                   payDate1: '2026-06-30', payDate2: '2026-07-14', amount: 585,  comments: 'done',                          followupNote: 'due to unwell not taking sessions', accountName: 'Reva Mehrotra',            phone: '+919948989838', email: 'thalakantisneha@gmail.com',         pendingVaibhav: false },
+  { name: 'Rahul',                        payDate1: '2026-07-01', payDate2: '2026-07-15', amount: 700,  comments: 'done',                          followupNote: '',                                  accountName: 'Mytabtech',                phone: '+13093636414',  email: 'rahul122087@gmail.com',             pendingVaibhav: false },
+  { name: 'Teju',                         payDate1: '2026-07-01', payDate2: null,          amount: 650,  comments: 'no invoice, no email required', followupNote: '',                                  accountName: 'Thiru',                    phone: '+17326721493',  email: 'Tejaswinipenchala@gmail.com',       pendingVaibhav: false },
+  { name: 'Sunny',                        payDate1: '2026-07-01', payDate2: '2026-07-16', amount: 650,  comments: 'done',                          followupNote: '',                                  accountName: 'Shakti Kumar Aggarwal',    phone: '+12815094456',  email: 'dasarishrish@gmail.com',            pendingVaibhav: false },
+  { name: 'Chandana',                     payDate1: '2026-07-02', payDate2: '2026-07-17', amount: 528,  comments: 'done',                          followupNote: '',                                  accountName: 'Reva Mehrotra',            phone: '+916300231992', email: 'chandagajula6666@gmail.com',        pendingVaibhav: false },
+  { name: 'Naveena',                      payDate1: '2026-07-04', payDate2: '2026-07-18', amount: 650,  comments: 'done',                          followupNote: 'she paid rest amount',              accountName: 'Mytabtech',                phone: '+14709202814',  email: 'sunatangella@gmail.com',            pendingVaibhav: false },
+  { name: 'Nagasri Jadhav',              payDate1: '2026-07-04', payDate2: null,          amount: 750,  comments: 'Payment pending on Vaibhav',    followupNote: '',                                  accountName: 'MITS Solution PVT LTD',    phone: '+19097519222',  email: 'mnagasri0306@gmail.com',            pendingVaibhav: true  },
+  { name: 'Mehrazz',                      payDate1: '2026-07-06', payDate2: '2026-07-20', amount: 600,  comments: 'done',                          followupNote: '',                                  accountName: 'Reva Mehrotra',            phone: '+16039305488',  email: 'mehraazmehraaz50@gmail.com',        pendingVaibhav: false },
+  { name: 'Nikhil / Greeshu',            payDate1: '2026-07-07', payDate2: '2026-07-21', amount: 650,  comments: 'done',                          followupNote: '',                                  accountName: 'Anuradha',                 phone: '+16095408222',  email: 'nikhilreddyt1@gmail.com',           pendingVaibhav: false },
+  { name: 'Satvik arun',                 payDate1: '2026-07-07', payDate2: null,          amount: 700,  comments: 'done',                          followupNote: '',                                  accountName: 'Anupama Aggarwal',         phone: '+18453770580',  email: 'satvikmallempudi196@gmail.com',     pendingVaibhav: false },
+  { name: 'Priyanka shivansh',           payDate1: '2026-07-11', payDate2: '2026-07-25', amount: 650,  comments: 'done',                          followupNote: '',                                  accountName: 'anuradha',                 phone: '+919440133363', email: 'priyankadantuluri94@gmail.com',     pendingVaibhav: false },
+  { name: 'Raja',                         payDate1: '2026-07-11', payDate2: null,          amount: 900,  comments: 'cad',                           followupNote: '',                                  accountName: 'Shakti Kumar Aggarwal',    phone: '+16478609409',  email: 'gnsnrjrmn@gmail.com',               pendingVaibhav: false },
+  { name: 'Ambika',                       payDate1: '2026-07-11', payDate2: null,          amount: 350,  comments: 'done',                          followupNote: '',                                  accountName: 'Anuradha',                 phone: '+18453200044',  email: 'ambika.bathini@gmail.com',          pendingVaibhav: false },
+  { name: 'Rohit',                        payDate1: '2026-07-12', payDate2: null,          amount: 350,  comments: 'done',                          followupNote: '',                                  accountName: 'Reva Mehrotra',            phone: '+19014384138',  email: 'rohit.godugu92@gmail.com',          pendingVaibhav: false },
+  { name: 'Sravya',                       payDate1: '2026-07-16', payDate2: null,          amount: 600,  comments: 'done',                          followupNote: '',                                  accountName: 'MITS Solution PVT LTD',    phone: '+16129878685',  email: 'sravya2331@gmail.com',              pendingVaibhav: false },
+  { name: 'Training Testing Deepthi',    payDate1: null,          payDate2: null,          amount: 350,  comments: '25/6/2026',                     followupNote: '',                                  accountName: 'Mytabtech',                phone: '+19085651255',  email: 'deeptikollu7@gmail.com',            pendingVaibhav: false },
+  { name: 'Sathvik',                      payDate1: null,          payDate2: null,          amount: 900,  comments: '25/6/2026',                     followupNote: '',                                  accountName: 'Reva Mehrotra',            phone: '+12106288596',  email: 'sathvikreddy1210@gmail.com',        pendingVaibhav: false },
+  { name: 'Training data engineer Vamshi', payDate1: null,        payDate2: null,          amount: 500,  comments: '20/4/2026',                     followupNote: '',                                  accountName: 'MITS Solution PVT LTD',    phone: '+13146882876',  email: 'muppaneni565143n@gmail.com',        pendingVaibhav: false },
+  { name: 'Training Python Ram',         payDate1: null,          payDate2: null,          amount: 400,  comments: '30/5/2026',                     followupNote: '',                                  accountName: 'Thiru',                    phone: '+19044347258',  email: 'ramkidec11@gmail.com',              pendingVaibhav: false },
+  { name: 'Training Salesforce Ashish Technumen', payDate1: null, payDate2: null,          amount: 550,  comments: '5/6/2026',                      followupNote: '',                                  accountName: 'MITS Solution PVT LTD',    phone: '+17035777326',  email: 'aashish.palla@gmail.com',           pendingVaibhav: false },
+];
+
+seedRouter.post('/sync-payment-sheet', async (req: AuthedRequest, res) => {
+  if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
+
+  // Step 1: Clear payment tracking fields for ALL active clients
+  await prisma.client.updateMany({
+    where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] } },
+    data: {
+      payDate1: null, payDate2: null,
+      followupNote: null, followupNoteAt: null,
+      paymentPendingVaibhav: false,
+    },
+  });
+
+  // Step 2: Fetch all active clients for matching
+  const allClients = await prisma.client.findMany({
+    where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] } },
+    select: { id: true, name: true, email: true, phoneDigits: true, phoneCode: true, accountNameRaw: true },
+  });
+
+  // Build phone → client map (digits only, last 10)
+  const byPhone = new Map<string, typeof allClients[0]>();
+  const byEmail = new Map<string, typeof allClients[0]>();
+  const byName  = new Map<string, typeof allClients[0]>();
+  for (const c of allClients) {
+    if (c.phoneDigits) byPhone.set(c.phoneDigits.replace(/\D/g, '').slice(-10), c);
+    if (c.email) byEmail.set(c.email.toLowerCase().trim(), c);
+    byName.set(c.name.toLowerCase().trim(), c);
+  }
+
+  const matched: string[] = [];
+  const unmatched: string[] = [];
+
+  for (const row of MITALI_SHEET) {
+    // Match priority: phone → email → name
+    const phoneKey = row.phone.replace(/\D/g, '').slice(-10);
+    const emailKey = row.email.toLowerCase().trim();
+    const nameKey  = row.name.toLowerCase().trim();
+
+    const client = byPhone.get(phoneKey) || byEmail.get(emailKey) || byName.get(nameKey);
+
+    if (!client) {
+      unmatched.push(row.name);
+      continue;
+    }
+
+    await prisma.client.update({
+      where: { id: client.id },
+      data: {
+        payDate1: row.payDate1 || null,
+        payDate2: row.payDate2 || null,
+        cycleAmount: row.amount,
+        followupNote: row.followupNote || null,
+        followupNoteAt: row.followupNote ? new Date().toISOString().slice(0, 10) : null,
+        accountNameRaw: row.accountName || client.accountNameRaw,
+        paymentPendingVaibhav: row.pendingVaibhav,
+        // Also update email/phone if missing on client
+        ...((!client.email && row.email) ? { email: row.email } : {}),
+      },
+    });
+    matched.push(`${row.name} → ${client.name}`);
+  }
+
+  res.json({ ok: true, matched: matched.length, unmatched, matchedList: matched });
+});

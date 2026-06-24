@@ -316,6 +316,13 @@ export function SettingsPage() {
               </div>
               <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
                 <div>
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Sync Mitali's payment sheet</div>
+                  <div className="text-[11px] muted mt-0.5">Clears pay dates + notes for all active clients, then re-populates from Mitali's June/July 2026 sheet. Matches by phone → email → name.</div>
+                </div>
+                <SyncPaymentSheetButton />
+              </div>
+              <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
+                <div>
                   <div className="text-[13px] font-semibold" style={{ color: 'var(--status-red)' }}>Purge session logs before today</div>
                   <div className="text-[11px] muted mt-0.5">Permanently deletes all session log entries before today. Cannot be undone. Payout history will be lost.</div>
                 </div>
@@ -501,6 +508,26 @@ function MalikaReportButton() {
   return (
     <Button size="sm" variant="primary" disabled={report.isPending} onClick={() => report.mutate()}>
       <Send size={12} /> {report.isPending ? 'Sending…' : 'Send now'}
+    </Button>
+  );
+}
+
+function SyncPaymentSheetButton() {
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
+  const sync = useMutation({
+    mutationFn: () => api.post('/seed/sync-payment-sheet'),
+    onSuccess: (r: any) => {
+      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
+      const unmatched = r.data?.unmatched || [];
+      showToast(`Synced ${r.data?.matched} clients ✓${unmatched.length ? ` · ${unmatched.length} unmatched` : ''}`);
+      if (unmatched.length) console.warn('Unmatched clients:', unmatched);
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Sync failed', 'error'),
+  });
+  return (
+    <Button size="sm" variant="primary" disabled={sync.isPending} onClick={() => sync.mutate()}>
+      {sync.isPending ? 'Syncing…' : '📋 Sync payment sheet'}
     </Button>
   );
 }
