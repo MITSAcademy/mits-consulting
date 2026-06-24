@@ -38,6 +38,7 @@ export function DialogContent({
           'fixed left-1/2 top-1/2 z-[101] w-[92%] max-w-[620px] max-h-[88vh] overflow-y-auto rounded-2xl p-6',
           className,
         )}
+        onInteractOutside={(e) => e.preventDefault()}
         style={{
           background:
             'radial-gradient(700px 200px at 100% 0%, rgba(229,178,76,0.04), transparent 60%), ' +

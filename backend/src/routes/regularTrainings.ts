@@ -134,6 +134,13 @@ regularTrainingsRouter.patch('/trainings/:id', async (req: AuthedRequest, res) =
   for (const k of ['name', 'status', 'recordingAccountEmail', 'recordingAccountLabel', 'recordingFolderUrl', 'scheduleNotes', 'defaultTimeIst', 'meetingMode', 'lastSessionStatus', 'lastSessionComment', 'lastClientFeedback', 'lastTrainerFeedback', 'lastSessionDate', 'weeklySessionCount', 'notes', 'clientId', 'trainerId', 'hostedByDefaultId', 'temporaryHostId', 'trainerReplacementReason', 'clientMood', 'trainerAttendance', 'dailyNotes']) {
     if (k in b) data[k] = b[k] === '' ? null : b[k];
   }
+  // trainerSkillsOverride — update the linked trainer's skills field
+  if ('trainerSkillsOverride' in b) {
+    const rt = await prisma.regularTraining.findUnique({ where: { id: req.params.id }, select: { trainerId: true } });
+    if (rt?.trainerId) {
+      await prisma.trainer.update({ where: { id: rt.trainerId }, data: { skills: b.trainerSkillsOverride || null } });
+    }
+  }
   // Require reason when changing trainer
   if ('trainerId' in b) {
     const existing = await prisma.regularTraining.findUnique({ where: { id: req.params.id }, select: { trainerId: true } });
