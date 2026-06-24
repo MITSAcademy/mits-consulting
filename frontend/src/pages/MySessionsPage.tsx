@@ -1401,7 +1401,7 @@ function AMScheduleDialog({ training, onClose, onSent }: { training: any; onClos
         <div className="grid grid-cols-2 gap-2.5">
           <div className="form-row">
             <Label>Date *</Label>
-            <Input type="date" value={date} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setDate(e.target.value)} />
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="form-row">
             <Label>Time IST * <span className="muted normal-case">(pre-filled)</span></Label>
