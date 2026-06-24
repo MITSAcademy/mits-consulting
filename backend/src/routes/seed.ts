@@ -435,7 +435,52 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
   }
   if (deleted === 0) log.push('— no duplicate sessions found');
 
-  res.json({ ok: true, deleted, fixed, log });
+  // 5. Re-sync hostOwnerId on clients + hostedByDefaultId on RT rows from RAW
+  // After merging duplicates the oldest client record may have a stale/null hostOwnerId.
+  // Walk RAW and patch every matched client + its active RT rows to the correct host.
+  const hostUsers = await prisma.user.findMany({
+    where: { role: { in: ['account_manager', 'lead', 'manager', 'founder'] } },
+    select: { id: true, name: true },
+  });
+  const hostMapSync: Record<string, string> = {};
+  for (const h of hostUsers) {
+    const firstName = h.name.split(' ')[0];
+    if (!hostMapSync[firstName]) hostMapSync[firstName] = h.id;
+  }
+
+  let synced = 0;
+  for (const row of RAW) {
+    const hostId = hostMapSync[row.host];
+    if (!hostId) continue;
+    const cp = fmtClientPhone(row.cp);
+    const ce = row.ce && row.ce !== 'no email' ? row.ce.trim() : null;
+    // Find the canonical client by phone → email → name
+    let client = cp?.digits
+      ? await prisma.client.findFirst({ where: { phoneDigits: cp.digits }, select: { id: true, name: true } })
+      : null;
+    if (!client && ce) {
+      client = await prisma.client.findFirst({ where: { email: { equals: ce, mode: 'insensitive' } }, select: { id: true, name: true } });
+    }
+    if (!client) {
+      client = await prisma.client.findFirst({ where: { name: { equals: row.c, mode: 'insensitive' } }, select: { id: true, name: true } });
+    }
+    if (!client) continue;
+
+    // Patch client hostOwnerId + lifecycle
+    await prisma.client.update({
+      where: { id: client.id },
+      data: { hostOwnerId: hostId, lifecycle: 'Active' },
+    });
+    // Patch all active RT rows for this client to correct hostedByDefaultId
+    await prisma.regularTraining.updateMany({
+      where: { clientId: client.id, status: 'active' },
+      data: { hostedByDefaultId: hostId },
+    });
+    synced++;
+  }
+  log.push(`✓ re-synced host assignments for ${synced} clients`);
+
+  res.json({ ok: true, deleted, fixed, synced, log });
 });
 
 // Canonical client names from the active PDF sheet (normalised lowercase for matching)
