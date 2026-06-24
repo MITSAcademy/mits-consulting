@@ -729,6 +729,18 @@ const SESSION_STATUS_OPTIONS = [
 const TOOL_OPTIONS = ['Zoom', 'GoToMeeting', 'Teams', 'Google Meet', 'Phone', 'Other'];
 
 function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void }) {
+  // Build unique trainer list from this coordinator's sessions (with phone + email)
+  const coordinatorTrainers = useMemo(() => {
+    const seen = new Set<string>();
+    const list: any[] = [];
+    for (const t of rows) {
+      if (t.trainer && !seen.has(t.trainer.id)) {
+        seen.add(t.trainer.id);
+        list.push({ id: t.trainer.id, name: t.trainer.name, email: t.trainer.email || '', phoneCode: t.trainer.phoneCode || '', phoneDigits: t.trainer.phoneDigits || '' });
+      }
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [rows]);
   const TH = ({ children, w }: { children: React.ReactNode; w?: string }) => (
     <th
       className="text-left px-2 py-2 font-bold text-[10px] uppercase tracking-[0.08em] whitespace-nowrap"
@@ -755,7 +767,7 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
             <div style={{ overflowX: 'auto' }}>
               <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
                 <thead><tr><TH w="14%">Clients</TH><TH w="11%">Trainers</TH><TH w="12%">Skills</TH><TH w="8%">Host</TH><TH w="5%">Tool</TH><TH w="6%">Time</TH><TH w="13%">Session Happened</TH><TH w="5%">Mood</TH><TH w="11%">Comments</TH><TH w="12%">Actions</TH></tr></thead>
-                <tbody>{unassigned.map((t: any) => <AMSheetRow key={t.id} t={t} onChanged={onChanged} />)}</tbody>
+                <tbody>{unassigned.map((t: any) => <AMSheetRow key={t.id} t={t} onChanged={onChanged} coordinatorTrainers={coordinatorTrainers} />)}</tbody>
               </table>
             </div>
           </div>
@@ -780,7 +792,7 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
             </thead>
             <tbody>
               {assigned.map((t: any) => (
-                <AMSheetRow key={t.id} t={t} onChanged={onChanged} />
+                <AMSheetRow key={t.id} t={t} onChanged={onChanged} coordinatorTrainers={coordinatorTrainers} />
               ))}
             </tbody>
           </table>
@@ -795,7 +807,7 @@ const AM_HOSTS = [
   { id: 'u-muskan',  name: 'Muskan'  },
 ];
 
-function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
+function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: () => void; coordinatorTrainers?: any[] }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const rowUser = useAuth((s) => s.user)!;
@@ -1225,7 +1237,7 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
 
       {showSchedule && (
         <tr><td colSpan={10}>
-          <AMScheduleDialog training={t} onClose={() => setShowSchedule(false)} onSent={() => { setShowSchedule(false); onChanged(); }} />
+          <AMScheduleDialog training={t} coordinatorTrainers={coordinatorTrainers} onClose={() => setShowSchedule(false)} onSent={() => { setShowSchedule(false); onChanged(); }} />
         </td></tr>
       )}
       {showRemoveConfirm && (
@@ -1338,7 +1350,7 @@ function AMScheduleMenuItem({ training, onSent }: { training: any; onSent: () =>
   );
 }
 
-function AMScheduleDialog({ training, onClose, onSent }: { training: any; onClose: () => void; onSent: () => void }) {
+function AMScheduleDialog({ training, coordinatorTrainers, onClose, onSent }: { training: any; coordinatorTrainers?: any[]; onClose: () => void; onSent: () => void }) {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
 
@@ -1352,13 +1364,16 @@ function AMScheduleDialog({ training, onClose, onSent }: { training: any; onClos
   const [notes, setNotes] = useState('');
   const [trainerOverrideId, setTrainerOverrideId] = useState('');
 
-  const { data: allTrainers } = useQuery({
+  // Use coordinator's trainers if provided, otherwise fall back to all trainers
+  const { data: allTrainersFallback } = useQuery({
     queryKey: ['trainers', 'for-invite'],
     queryFn: () => api.get('/trainers').then((r) =>
-      (r.data as any[]).map((t: any) => ({ id: t.id, name: t.name, email: t.email || '' }))
+      (r.data as any[]).map((t: any) => ({ id: t.id, name: t.name, email: t.email || '', phoneCode: t.phoneCode || '', phoneDigits: t.phoneDigits || '' }))
     ),
     staleTime: 300_000,
+    enabled: !coordinatorTrainers,
   });
+  const allTrainers = coordinatorTrainers ?? allTrainersFallback;
 
   const nextSession = training.sessions?.[0];
   const fmtSession = (iso: string) => new Date(iso).toLocaleString('en-IN', {
@@ -1428,15 +1443,23 @@ function AMScheduleDialog({ training, onClose, onSent }: { training: any; onClos
             value={trainerOverrideId || training.trainer?.id || ''}
             onChange={(e) => setTrainerOverrideId(e.target.value)}
           >
-            {training.trainer ? (
+            {training.trainer && (
               <option value={training.trainer.id}>
-                {training.trainer.name}
+                {training.trainer.name} (assigned)
                 {training.trainer.phoneCode && training.trainer.phoneDigits ? ` · ${training.trainer.phoneCode} ${training.trainer.phoneDigits}` : ''}
                 {training.trainer.email ? ` · ${training.trainer.email}` : ''}
               </option>
-            ) : (
-              <option value="">— no trainer linked —</option>
             )}
+            {!training.trainer && <option value="">— no trainer linked —</option>}
+            {(allTrainers || [])
+              .filter((t: any) => t.id !== training.trainer?.id)
+              .map((t: any) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.phoneCode && t.phoneDigits ? ` · ${t.phoneCode} ${t.phoneDigits}` : ''}
+                  {t.email ? ` · ${t.email}` : ' · no email'}
+                </option>
+              ))}
           </Select>
         </div>
         <div className="form-row mt-1">
