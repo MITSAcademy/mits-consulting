@@ -193,7 +193,10 @@ regularTrainingsRouter.post('/trainings/:id/escalate', async (req: AuthedRequest
   const flag = !training.demoEscalationRequested;
   const updated = await prisma.regularTraining.update({
     where: { id: req.params.id },
-    data: { demoEscalationRequested: flag },
+    data: {
+      demoEscalationRequested: flag,
+      ...(flag ? { escalationFlaggedAt: new Date().toISOString().slice(0, 10), escalationStatus: null } : {}),
+    },
   });
   await audit(req.user!.id, req.user!.name, flag ? 'DEMO_ESCALATION_REQUESTED' : 'DEMO_ESCALATION_CLEARED', training.name);
   res.json(updated);

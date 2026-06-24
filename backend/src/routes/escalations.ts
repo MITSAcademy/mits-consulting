@@ -8,10 +8,7 @@ escalationsRouter.use(requireRole('founder', 'manager', 'lead', 'demo_lead'));
 
 escalationsRouter.get('/', async (_req: AuthedRequest, res) => {
   const escalations = await prisma.regularTraining.findMany({
-    where: {
-      demoEscalationRequested: true,
-      status: 'active',
-    },
+    where: { demoEscalationRequested: true, status: 'active' },
     include: {
       client: { select: { id: true, name: true, lifecycle: true } },
       trainer: { select: { id: true, name: true } },
@@ -24,8 +21,23 @@ escalationsRouter.get('/', async (_req: AuthedRequest, res) => {
     },
     orderBy: { updatedAt: 'desc' },
   });
-
   res.json(escalations);
+});
+
+// PATCH /:id/status — update escalationStatus and/or escalationActionsTaken
+escalationsRouter.patch('/:id/status', async (req: AuthedRequest, res) => {
+  const { escalationStatus, escalationActionsTaken } = req.body || {};
+  const training = await prisma.regularTraining.findUnique({ where: { id: req.params.id } });
+  if (!training) return res.status(404).json({ error: 'Training not found' });
+
+  const updated = await prisma.regularTraining.update({
+    where: { id: req.params.id },
+    data: {
+      ...(escalationStatus !== undefined ? { escalationStatus } : {}),
+      ...(escalationActionsTaken !== undefined ? { escalationActionsTaken } : {}),
+    },
+  });
+  res.json(updated);
 });
 
 escalationsRouter.post('/:id/resolve', async (req: AuthedRequest, res) => {
@@ -37,10 +49,9 @@ escalationsRouter.post('/:id/resolve', async (req: AuthedRequest, res) => {
 
   await prisma.regularTraining.update({
     where: { id },
-    data: { demoEscalationRequested: false },
+    data: { demoEscalationRequested: false, escalationStatus: 'Resolved' },
   });
 
-  // Record resolution as a comment on the client if notes provided
   if (notes && training.clientId) {
     const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { name: true } });
     await prisma.comment.create({
