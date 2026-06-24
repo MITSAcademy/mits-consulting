@@ -816,6 +816,7 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
   const [removeReason, setRemoveReason] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // trainers list for trainer picker
@@ -1154,7 +1155,11 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
                 <div className="absolute right-0 top-full mt-1 rounded-xl overflow-hidden z-50 min-w-[200px]"
                   style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)', boxShadow: '0 8px 24px rgba(0,0,0,0.3)' }}>
                   {/* Schedule */}
-                  <AMScheduleMenuItem training={t} onSent={() => { onChanged(); setMenuOpen(false); }} />
+                  <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-accent)', textAlign: 'left' }}
+                    onClick={() => { setShowSchedule(true); setMenuOpen(false); }}>
+                    <CalendarIcon size={13} /> Schedule calendar invite
+                  </button>
 
                   {/* WhatsApp Client */}
                   {clientWa ? (
@@ -1218,6 +1223,11 @@ function AMSheetRow({ t, onChanged }: { t: any; onChanged: () => void }) {
         </td>
       </tr>
 
+      {showSchedule && (
+        <tr><td colSpan={10}>
+          <AMScheduleDialog training={t} onClose={() => setShowSchedule(false)} onSent={() => { setShowSchedule(false); onChanged(); }} />
+        </td></tr>
+      )}
       {showRemoveConfirm && (
         <tr style={{ background: 'rgba(239,68,68,0.08)' }}>
           <td colSpan={10} className="px-4 py-3">
