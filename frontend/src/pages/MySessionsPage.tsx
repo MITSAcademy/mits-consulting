@@ -129,7 +129,7 @@ export function MySessionsPage() {
   const { data: scheduledCalls } = useQuery<ScheduledCall[]>({
     queryKey: ['call-logs', { mine: true, scheduledOnly: true }],
     queryFn: () => api.get('/call-logs', { params: { mine: true, scheduledOnly: true } }).then((r) => r.data),
-    refetchInterval: 30_000,  // keep timer-relevant data fresh
+    refetchInterval: 5 * 60_000,
   });
 
   // Recently completed calls (last 7 days, mine).

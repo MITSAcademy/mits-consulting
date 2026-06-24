@@ -68,7 +68,7 @@ export function DemoTeamReportPage() {
   const { data, isLoading } = useQuery<ReportData>({
     queryKey: ['reports/demo-team'],
     queryFn: () => api.get('/reports/demo-team').then((r) => r.data),
-    refetchInterval: 60_000,
+    refetchInterval: 10 * 60_000,
   });
 
   return (

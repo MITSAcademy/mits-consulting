@@ -40,17 +40,17 @@ export function NotificationBell() {
     // Only fetch the list when the dropdown is open OR on a fresh page load —
     // otherwise rely on refetchOnWindowFocus.
     queryFn: () => api.get('/notifications').then((r) => r.data),
-    refetchInterval: open ? 60_000 : false,
+    refetchInterval: open ? 5 * 60_000 : false,
     refetchOnWindowFocus: true,
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
   });
 
   const { data: countData } = useQuery<{ count: number }>({
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => api.get('/notifications/unread-count').then((r) => r.data),
-    refetchInterval: 120_000, // 2 min — was 30s
+    refetchInterval: 10 * 60_000,
     refetchOnWindowFocus: true,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
 
   const unread = countData?.count ?? 0;

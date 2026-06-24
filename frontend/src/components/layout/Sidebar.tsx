@@ -160,8 +160,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
   const { data: metrics } = useQuery({
     queryKey: ['nav-badges'],
     queryFn: () => api.get('/metrics/nav-badges').then((r) => r.data),
-    refetchInterval: 180_000,
-    staleTime: 60_000,
+    refetchInterval: 10 * 60_000,  // 10 min — counts don't change that fast
+    staleTime: 10 * 60_000,
     enabled: !!user,
   });
 

@@ -18,8 +18,8 @@ const qc = new QueryClient({
       // means navigating between pages doesn't refetch the same data over
       // and over. Components that need fresh data (e.g. lists with mutations)
       // call qc.invalidateQueries themselves on success.
-      staleTime: 60_000,
-      gcTime: 5 * 60_000,
+      staleTime: 10 * 60_000,  // 10 min — data changes slowly, mutations invalidate manually
+      gcTime: 30 * 60_000,     // 30 min — keep cache warm between page navigations
     },
   },
 });

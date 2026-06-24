@@ -180,13 +180,13 @@ export default function CoordinatorDashboardPage() {
   const { data, isLoading } = useQuery<{ team: CoordEntry[]; generatedAt: string }>({
     queryKey: ['coordinator-dashboard'],
     queryFn: () => api.get('/coordinator-dashboard').then((r) => r.data),
-    refetchInterval: 60_000,
+    refetchInterval: 10 * 60_000,
   });
 
   const { data: teamSummaryData } = useQuery<{ coordinators: TeamSummaryEntry[] }>({
     queryKey: ['coordinator-dashboard-team-summary'],
     queryFn: () => api.get('/coordinator-dashboard/team-summary').then((r) => r.data),
-    refetchInterval: 60_000,
+    refetchInterval: 10 * 60_000,
   });
 
   const today = new Date().toISOString().slice(0, 10);

@@ -114,7 +114,7 @@ export function RegularTrainingDetailPage() {
     queryKey: ['regular-training', id],
     queryFn: () => api.get(`/regular-trainings/trainings/${id}`).then((r) => r.data),
     enabled: features.regularCalls && !!id,
-    refetchInterval: 30_000,
+    refetchInterval: 5 * 60_000,
   });
 
   const archive = useMutation({

@@ -1191,7 +1191,7 @@ export default function SessionsDashboardPage() {
   const { data: sessions = [], isLoading, isFetching } = useQuery<TrainingSession[]>({
     queryKey: ['sessions-dashboard', params],
     queryFn: () => api.get('/regular-trainings/sessions', { params }).then((r) => r.data),
-    refetchInterval: 60_000,
+    refetchInterval: 10 * 60_000,
   });
 
   // Partition into today / upcoming / past

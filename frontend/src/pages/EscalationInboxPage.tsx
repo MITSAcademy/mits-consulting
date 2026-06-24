@@ -174,7 +174,7 @@ export default function EscalationInboxPage() {
   const { data: escalations = [], isLoading } = useQuery<Escalation[]>({
     queryKey: ['escalations'],
     queryFn: () => api.get('/escalations').then((r) => r.data),
-    refetchInterval: 60_000,
+    refetchInterval: 10 * 60_000,
   });
 
   return (
