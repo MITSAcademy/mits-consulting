@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import { initScheduler } from './lib/scheduler';
 import cors from 'cors';
@@ -55,6 +56,7 @@ const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 
+app.use(compression());  // gzip all JSON responses — cuts payload size ~60-70%
 app.use(
   cors({
     origin: CLIENT_ORIGIN.split(',').map((s) => s.trim()),
