@@ -510,26 +510,25 @@ seedRouter.post('/dedup', async (req: AuthedRequest, res) => {
   }
   log.push(`✓ re-synced host assignments for ${synced} clients`);
 
-  // 6. Sync assignedAmId from hostOwnerId for Active/LeverageGranted clients missing it.
-  // Kanban groups by assignedAmId — if null, client shows as "Unassigned" even if hostOwnerId is set.
-  const missingAm = await prisma.client.findMany({
-    where: {
-      lifecycle: { in: ['Active', 'LeverageGranted'] },
-      hostOwnerId: { not: null },
-      assignedAmId: null,
-    },
-    select: { id: true, hostOwnerId: true },
+  // 6. Force-sync assignedAmId = hostOwnerId for ALL Active/LeverageGranted clients.
+  // Kanban columns filter by assignedAmId — if it's null or points to a different user than
+  // hostOwnerId, the client falls into "Unassigned" or disappears from the expected column.
+  const allActive = await prisma.client.findMany({
+    where: { lifecycle: { in: ['Active', 'LeverageGranted'] }, hostOwnerId: { not: null } },
+    select: { id: true, hostOwnerId: true, assignedAmId: true },
   });
   let amSynced = 0;
-  for (const c of missingAm) {
-    await prisma.client.update({
-      where: { id: c.id },
-      data: { assignedAmId: c.hostOwnerId },
-    });
-    amSynced++;
+  for (const c of allActive) {
+    if (c.assignedAmId !== c.hostOwnerId) {
+      await prisma.client.update({
+        where: { id: c.id },
+        data: { assignedAmId: c.hostOwnerId },
+      });
+      amSynced++;
+    }
   }
-  if (amSynced > 0) log.push(`✓ assigned ${amSynced} clients to their hostOwner as AM`);
-  else log.push('— all active clients already have assignedAmId set');
+  if (amSynced > 0) log.push(`✓ re-synced assignedAmId for ${amSynced} clients to match hostOwnerId`);
+  else log.push('— all active clients already have correct assignedAmId');
 
   res.json({ ok: true, deleted, fixed, synced, amSynced, log });
 });
