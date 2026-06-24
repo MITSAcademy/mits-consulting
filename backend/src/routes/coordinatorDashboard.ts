@@ -180,8 +180,14 @@ coordinatorDashboardRouter.patch('/reallocate/:clientId', async (req: AuthedRequ
 
   const updated = await prisma.client.update({
     where: { id: client.id },
-    data: { hostOwnerId: newHostOwnerId },
+    data: { hostOwnerId: newHostOwnerId, assignedAmId: newHostOwnerId },
     select: { id: true, name: true, hostOwner: { select: { id: true, name: true } } },
+  });
+
+  // Also update all active RT rows so My Sessions reflects the change immediately
+  await prisma.regularTraining.updateMany({
+    where: { clientId: client.id, status: 'active' },
+    data: { hostedByDefaultId: newHostOwnerId },
   });
 
   res.json(updated);
