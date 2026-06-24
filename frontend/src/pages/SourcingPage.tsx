@@ -25,6 +25,8 @@ type ProposalDraft = {
   // go to the group instead of the personal phone (group is the preferred channel).
   whatsappGroupLink?: string;
   rateInr: number;
+  paymentType?: 'perSession' | 'training';
+  totalDays?: number;
   experienceYears: number;
   // Trainer's availability windows for THIS request (captured by recruiter).
   availabilitySlots?: AvailabilitySlot[];
@@ -450,7 +452,23 @@ function ProposalsCard({ req, trainers, qc, showToast, mode }: any) {
                         </div>
                       </>
                     )}
-                    <div className="form-row"><Label>Rate ₹</Label><Input type="number" value={p.rateInr} onChange={(e) => updateAt(i, { rateInr: +e.target.value })} /></div>
+                    <div className="form-row md:col-span-2">
+                      <Label>Payment type</Label>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant={(!p.paymentType || p.paymentType === 'perSession') ? 'primary' : 'default'} onClick={() => updateAt(i, { paymentType: 'perSession' })}>Per session</Button>
+                        <Button size="sm" variant={p.paymentType === 'training' ? 'primary' : 'default'} onClick={() => updateAt(i, { paymentType: 'training' })}>Training (2 installments)</Button>
+                      </div>
+                    </div>
+                    <div className="form-row">
+                      <Label>{p.paymentType === 'training' ? 'Total training fee ₹' : 'Rate ₹ / session'}</Label>
+                      <Input type="number" value={p.rateInr} onChange={(e) => updateAt(i, { rateInr: +e.target.value })} />
+                    </div>
+                    {p.paymentType === 'training' && (
+                      <div className="form-row">
+                        <Label>Total training days</Label>
+                        <Input type="number" value={p.totalDays || ''} placeholder="e.g. 22" onChange={(e) => updateAt(i, { totalDays: +e.target.value })} />
+                      </div>
+                    )}
                     <div className="form-row"><Label>Experience yrs</Label><Input type="number" value={p.experienceYears} onChange={(e) => updateAt(i, { experienceYears: +e.target.value })} /></div>
 
                     {/* Trainer-confirmed availability (visible to Anjali on the verification card) */}
@@ -851,8 +869,9 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
   const qc = useQueryClient();
 
   // Editable overrides — recruiter can tweak before sending
-  const [pricingMode, setPricingMode] = useState<'session' | 'oneShot'>('session');
+  const [pricingMode, setPricingMode] = useState<'session' | 'oneShot' | 'training'>(proposal.paymentType === 'training' ? 'training' : 'session');
   const [rateInr, setRateInr] = useState<number>(proposal.rateInr || 0);
+  const [totalDays, setTotalDays] = useState<number>(proposal.totalDays || 0);
   const [hoursPerSession, setHoursPerSession] = useState<number>(2);
   const [paymentClearanceDay, setPaymentClearanceDay] = useState('Every Wednesday');
   // Pre-fill demo call time from the proposal's availability slot so Aman doesn't have to re-enter it.
@@ -890,15 +909,18 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
   useEffect(() => {
     if (!initial?.text || manualEdit) return;
     let txt: string = initial.text;
+    const half = Math.round(rateInr / 2).toLocaleString('en-IN');
     const paymentLine = pricingMode === 'oneShot'
       ? `Payment:         ₹${rateInr.toLocaleString('en-IN')} (one-shot · full engagement)`
-      : `Payment:         ₹${rateInr.toLocaleString('en-IN')} for ${hoursPerSession} hour${hoursPerSession === 1 ? '' : 's'}`;
+      : pricingMode === 'training'
+        ? `Payment:         ₹${rateInr.toLocaleString('en-IN')} total${totalDays ? ` · ${totalDays} days` : ''} · 50% mid-training (₹${half}) + 50% on completion (₹${half})`
+        : `Payment:         ₹${rateInr.toLocaleString('en-IN')} for ${hoursPerSession} hour${hoursPerSession === 1 ? '' : 's'}`;
     txt = txt.replace(/Payment:\s+₹[^\n]*/, paymentLine);
     txt = txt.replace(/Payment clearance:\s+[^\n]*/, `Payment clearance: ${paymentClearanceDay}`);
     if (demoCallTime.trim()) txt = txt.replace(/Demo call time:\s+[^\n]*/, `Demo call time:  ${demoCallTime}`);
     setMessageText(txt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pricingMode, rateInr, hoursPerSession, paymentClearanceDay, demoCallTime, initial?.text, manualEdit]);
+  }, [pricingMode, rateInr, hoursPerSession, totalDays, paymentClearanceDay, demoCallTime, initial?.text, manualEdit]);
 
   function resetMessageToAuto() {
     setManualEdit(false);
@@ -907,7 +929,7 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
   }
 
   function buildOverrides() {
-    const o: any = { rateInr, hoursPerSession, paymentClearanceDay, pricingMode };
+    const o: any = { rateInr, hoursPerSession, paymentClearanceDay, pricingMode, totalDays };
     if (demoCallTime.trim()) o.demoCallTime = demoCallTime.trim();
     if (guidelinesLink.trim()) o.guidelinesLink = guidelinesLink.trim();
     // Pass the recruiter's edited subject/body verbatim — backend uses these as-is when present.
@@ -947,22 +969,21 @@ function NotifyTrainerModal({ proposal, onClose }: any) {
           <div className="form-row md:col-span-2">
             <Label>Pricing mode</Label>
             <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={pricingMode === 'session' ? 'primary' : 'default'}
-                onClick={() => setPricingMode('session')}
-              >Per session</Button>
-              <Button
-                size="sm"
-                variant={pricingMode === 'oneShot' ? 'primary' : 'default'}
-                onClick={() => setPricingMode('oneShot')}
-              >One-shot (full project)</Button>
+              <Button size="sm" variant={pricingMode === 'session' ? 'primary' : 'default'} onClick={() => setPricingMode('session')}>Per session</Button>
+              <Button size="sm" variant={pricingMode === 'oneShot' ? 'primary' : 'default'} onClick={() => setPricingMode('oneShot')}>One-shot (full project)</Button>
+              <Button size="sm" variant={pricingMode === 'training' ? 'primary' : 'default'} onClick={() => setPricingMode('training')}>Training (2 installments)</Button>
             </div>
           </div>
           <div className="form-row">
-            <Label>{pricingMode === 'oneShot' ? 'Total project cost (₹)' : 'Rate (₹)'}</Label>
+            <Label>{pricingMode === 'training' ? 'Total training fee (₹)' : pricingMode === 'oneShot' ? 'Total project cost (₹)' : 'Rate (₹)'}</Label>
             <Input type="number" value={rateInr} onChange={(e) => setRateInr(+e.target.value)} />
           </div>
+          {pricingMode === 'training' && (
+            <div className="form-row">
+              <Label>Total training days</Label>
+              <Input type="number" value={totalDays || ''} placeholder="e.g. 22" onChange={(e) => setTotalDays(+e.target.value)} />
+            </div>
+          )}
           {pricingMode === 'session' && (
             <div className="form-row">
               <Label>Hours / session</Label>
@@ -1057,7 +1078,8 @@ function AlreadyNotifiedModal({ proposal, onClose }: { proposal: any; onClose: (
   const [rateInr, setRateInr] = useState<number>(last?.rateInr || proposal.rateInr || 0);
   const [hoursPerSession, setHoursPerSession] = useState<number>(last?.hoursPerSession || 2);
   const [paymentClearanceDay, setPaymentClearanceDay] = useState(last?.paymentClearanceDay || 'Every Wednesday');
-  const [pricingMode, setPricingMode] = useState<'session' | 'oneShot'>(last?.pricingMode || 'session');
+  const [pricingMode, setPricingMode] = useState<'session' | 'oneShot' | 'training'>(last?.pricingMode || 'session');
+  const [totalDays, setTotalDays] = useState<number>(last?.totalDays || 0);
   const [demoCallTime, setDemoCallTime] = useState(last?.demoCallTime || '');
 
   const mut = useMutation({
@@ -1065,6 +1087,7 @@ function AlreadyNotifiedModal({ proposal, onClose }: { proposal: any; onClose: (
       confirmed: sameAsLast && !!last,
       rateInr: sameAsLast && last ? undefined : rateInr,
       hoursPerSession: sameAsLast && last ? undefined : hoursPerSession,
+      totalDays: sameAsLast && last ? undefined : totalDays,
       paymentClearanceDay: sameAsLast && last ? undefined : paymentClearanceDay,
       pricingMode: sameAsLast && last ? undefined : pricingMode,
       demoCallTime: sameAsLast && last ? undefined : demoCallTime,
@@ -1087,7 +1110,7 @@ function AlreadyNotifiedModal({ proposal, onClose }: { proposal: any; onClose: (
             <div className="text-xs font-semibold mb-2" style={{ color: 'var(--brand-gold)' }}>Last notified details</div>
             <div className="text-xs space-y-1 muted">
               <div>Rate: <span className="text-white font-semibold">₹{last.rateInr?.toLocaleString('en-IN')}</span>
-                {last.pricingMode === 'session' ? ` · ${last.hoursPerSession}h/session` : ' (one-shot)'}</div>
+                {last.pricingMode === 'session' ? ` · ${last.hoursPerSession}h/session` : last.pricingMode === 'training' ? ` · ${last.totalDays || '?'} days · 2 installments` : ' (one-shot)'}</div>
               <div>Payment day: <span className="text-white">{last.paymentClearanceDay}</span></div>
               {last.demoCallTime && <div>Demo call: <span className="text-white">{last.demoCallTime}</span></div>}
             </div>
@@ -1115,12 +1138,19 @@ function AlreadyNotifiedModal({ proposal, onClose }: { proposal: any; onClose: (
               <div className="flex gap-2">
                 <Button size="sm" variant={pricingMode === 'session' ? 'primary' : 'default'} onClick={() => setPricingMode('session')}>Per session</Button>
                 <Button size="sm" variant={pricingMode === 'oneShot' ? 'primary' : 'default'} onClick={() => setPricingMode('oneShot')}>One-shot</Button>
+                <Button size="sm" variant={pricingMode === 'training' ? 'primary' : 'default'} onClick={() => setPricingMode('training')}>Training (2 installments)</Button>
               </div>
             </div>
             <div className="form-row">
-              <Label>Rate (₹)</Label>
+              <Label>{pricingMode === 'training' ? 'Total training fee (₹)' : 'Rate (₹)'}</Label>
               <Input type="number" value={rateInr} onChange={(e) => setRateInr(+e.target.value)} />
             </div>
+            {pricingMode === 'training' && (
+              <div className="form-row">
+                <Label>Total training days</Label>
+                <Input type="number" value={totalDays || ''} placeholder="e.g. 22" onChange={(e) => setTotalDays(+e.target.value)} />
+              </div>
+            )}
             {pricingMode === 'session' && (
               <div className="form-row">
                 <Label>Hours / session</Label>
