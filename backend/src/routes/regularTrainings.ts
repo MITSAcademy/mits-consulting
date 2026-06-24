@@ -191,7 +191,7 @@ regularTrainingsRouter.post('/trainings/:id/escalate', async (req: AuthedRequest
     return res.status(400).json({ error: 'Client already transferred to coordinator team — escalation not needed.' });
   }
   const flag = !training.demoEscalationRequested;
-  const updated = await prisma.regularTraining.update({
+  const updated = await (prisma.regularTraining.update as any)({
     where: { id: req.params.id },
     data: {
       demoEscalationRequested: flag,
