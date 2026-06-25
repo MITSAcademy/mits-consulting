@@ -207,12 +207,12 @@ regularTrainingsRouter.post('/trainings/:id/flag-issue', async (req: AuthedReque
   });
   if (!training) return res.status(404).json({ error: 'Not found' });
 
-  const { description } = req.body || {};
+  const { description, title: customTitle } = req.body || {};
   const today = new Date().toISOString().slice(0, 10);
 
   const issue = await prisma.issueTracker.create({
     data: {
-      title: `Issue flagged by ${req.user!.name} — ${training.client?.name || training.name}`,
+      title: customTitle?.trim() || `Issue flagged by ${req.user!.name} — ${training.client?.name || training.name}`,
       date: today,
       coordinatorId: req.user!.id,
       coordinatorName: req.user!.name,

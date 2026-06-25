@@ -829,6 +829,9 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
   const [removeReason, setRemoveReason] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
+  const [flagIssueId, setFlagIssueId] = useState<string | null>(null);
+  const [flagTitle, setFlagTitle] = useState('');
+  const [flagDesc, setFlagDesc] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
 
   // trainers list for trainer picker
@@ -1220,12 +1223,7 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
                   {/* Flag for Regular Team → goes to Issues */}
                   <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fb923c', textAlign: 'left' }}
-                    onClick={() => {
-                      api.post(`/regular-trainings/trainings/${t.id}/flag-issue`)
-                        .then(() => { onChanged(); qc.invalidateQueries({ queryKey: ['issues'] }); showToast('Flagged — issue created in Issues inbox'); })
-                        .catch((e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'));
-                      setMenuOpen(false);
-                    }}>
+                    onClick={() => { setFlagIssueId(t.id); setMenuOpen(false); }}>
                     <Flag size={13} /> Flag for Regular Team
                   </button>
 
@@ -1342,6 +1340,51 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
             <div className="text-[10px] mt-1.5" style={{ opacity: 0.6 }}>Auto-saves on blur.</div>
           </td>
         </tr>
+      )}
+
+      {/* Flag for Regular Team dialog */}
+      {flagIssueId && (
+        <Dialog open onOpenChange={(v) => { if (!v) { setFlagIssueId(null); setFlagTitle(''); setFlagDesc(''); } }}>
+          <DialogContent title="Flag issue for Regular Team" description="Describe the issue clearly — this title will appear in the Issues inbox.">
+            <div className="space-y-3">
+              <div className="form-row">
+                <Label>Issue title *</Label>
+                <input
+                  className="input w-full"
+                  placeholder="e.g. Trainer arriving late to sessions"
+                  value={flagTitle}
+                  onChange={(e) => setFlagTitle(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="form-row">
+                <Label>Additional details (optional)</Label>
+                <textarea
+                  className="input w-full resize-none text-[13px]"
+                  rows={3}
+                  placeholder="Any context, frequency, impact…"
+                  value={flagDesc}
+                  onChange={(e) => setFlagDesc(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => { setFlagIssueId(null); setFlagTitle(''); setFlagDesc(''); }}>Cancel</Button>
+              <Button
+                variant="primary"
+                disabled={!flagTitle.trim()}
+                onClick={() => {
+                  api.post(`/regular-trainings/trainings/${flagIssueId}/flag-issue`, { title: flagTitle.trim(), description: flagDesc.trim() || undefined })
+                    .then(() => { onChanged(); qc.invalidateQueries({ queryKey: ['issues'] }); showToast('Flagged — issue created in Issues inbox'); })
+                    .catch((e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'));
+                  setFlagIssueId(null); setFlagTitle(''); setFlagDesc('');
+                }}
+              >
+                Create issue
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </>
   );
