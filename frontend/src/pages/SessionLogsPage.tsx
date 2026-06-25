@@ -68,22 +68,36 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
   const [customAmount, setCustomAmount] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
 
-  const { data: trainers } = useQuery({
+  const user = useAuth((s) => s.user)!;
+  const isAM = user.role === 'account_manager';
+  const [sessionHappened, setSessionHappened] = useState(true);
+
+  // For AM: clients already backend-scoped to their hostOwnerId; use paginated response
+  const { data: clientsResp } = useQuery({
+    queryKey: ['clients-active'],
+    queryFn: () =>
+      api.get('/clients', isAM ? {} : {}).then((r) => {
+        const arr = Array.isArray(r.data) ? r.data : (r.data?.data || []);
+        return arr.filter((c: any) => ['Active', 'LeverageGranted'].includes(c.lifecycle))
+                  .sort((a: any, b: any) => a.name.localeCompare(b.name));
+      }),
+  });
+  const clients = (clientsResp as any[]) || [];
+
+  // For AM: only show trainers linked to their clients as primaryTrainer
+  const { data: allTrainers } = useQuery({
     queryKey: ['trainers-active'],
     queryFn: () => api.get('/trainers').then((r) => r.data.filter((t: any) => t.active)),
   });
-  const { data: clients } = useQuery({
-    queryKey: ['clients-active'],
-    queryFn: () =>
-      api.get('/clients').then((r) =>
-        r.data
-          .filter((c: any) => ['Active', 'LeverageGranted'].includes(c.lifecycle))
-          .sort((a: any, b: any) => a.name.localeCompare(b.name))
-      ),
-  });
+  const trainers = isAM
+    ? (() => {
+        const trainerIds = new Set(clients.map((c: any) => c.primaryTrainerId).filter(Boolean));
+        return (allTrainers || []).filter((t: any) => trainerIds.has(t.id));
+      })()
+    : (allTrainers || []);
 
-  const selectedTrainer = (trainers || []).find((t: any) => t.id === trainerId);
-  const selectedClient = (clients || []).find((c: any) => c.id === clientId);
+  const selectedTrainer = trainers.find((t: any) => t.id === trainerId);
+  const selectedClient = clients.find((c: any) => c.id === clientId);
   const defaultRate = selectedTrainer?.defaultRateInr || 0;
   const rateModel = selectedTrainer?.rateModel || 'per_session';
   const effectiveHourlyRate = rateModel === 'per_session' ? defaultRate / 2 : defaultRate;
@@ -91,13 +105,14 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
     ? Math.round(parseFloat(customAmount) || 0)
     : Math.round((parseFloat(days) || 0) * effectiveHourlyRate);
 
-  const canSubmit = !!trainerId && !!feedback && durationToDecimal(durH, durM) > 0 && (!overrideAmount || (!!customAmount && !!overrideReason.trim()));
+  const canSubmit = !!trainerId && (sessionHappened ? (!!feedback && durationToDecimal(durH, durM) > 0) : true)
+    && (!overrideAmount || (!!customAmount && !!overrideReason.trim()));
 
   const create = useMutation({
     mutationFn: () => {
       if (!trainerId) throw new Error('Select a trainer');
-      if (!feedback) throw new Error('Select session feedback');
-      if (overrideAmount && !overrideReason.trim()) throw new Error('Reason required for amount override');
+      if (sessionHappened && !feedback) throw new Error('Select session feedback');
+      if (sessionHappened && overrideAmount && !overrideReason.trim()) throw new Error('Reason required for amount override');
       const effectiveRate = overrideAmount && customAmount
         ? Math.round(parseFloat(customAmount) / (parseFloat(days) || 1))
         : defaultRate;
@@ -108,17 +123,18 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
         trainerId,
         clientId: clientId || undefined,
         date,
-        hours: parseFloat(days) || 0,
+        hours: sessionHappened ? (parseFloat(days) || 0) : 0,
         rateSnapshot: effectiveRate || defaultRate || 1200,
         rateModel: selectedTrainer?.rateModel || 'per_session',
-        amountInr: overrideAmount && customAmount ? Math.round(parseFloat(customAmount)) : undefined,
-        feedback,
+        amountInr: sessionHappened && overrideAmount && customAmount ? Math.round(parseFloat(customAmount)) : undefined,
+        feedback: sessionHappened ? feedback : undefined,
         notes: finalNotes,
+        sessionHappened,
       });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['session-logs'] });
-      showToast('Session logged');
+      showToast(sessionHappened ? 'Session logged' : 'No-show logged');
       onDone();
     },
     onError: (e: any) => showToast(e.message || e.response?.data?.error || 'Failed', 'error'),
@@ -131,6 +147,25 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
         <span className="font-bold">Log session</span>
         <button className="ml-auto muted hover:text-white" onClick={onDone}><X size={14} /></button>
       </div>
+      {/* Session Happened? */}
+      <div className="mb-3 flex items-center gap-3">
+        <span className="label mb-0">Session happened?</span>
+        <div className="flex gap-1.5">
+          {[true, false].map((val) => (
+            <button key={String(val)} type="button"
+              onClick={() => setSessionHappened(val)}
+              className="px-3 py-1 rounded-lg text-[12px] font-semibold border transition-all"
+              style={{
+                background: sessionHappened === val ? (val ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.12)') : 'transparent',
+                borderColor: sessionHappened === val ? (val ? '#22c55e' : '#ef4444') : 'var(--brand-border)',
+                color: sessionHappened === val ? (val ? '#22c55e' : '#ef4444') : 'var(--brand-textMuted)',
+              }}>
+              {val ? 'Yes' : 'No — client no-show'}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div>
           <label className="label">Client (optional)</label>
@@ -138,12 +173,12 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
             const cid = e.target.value;
             setClientId(cid);
             if (cid) {
-              const client = (clients || []).find((c: any) => c.id === cid);
+              const client = clients.find((c: any) => c.id === cid);
               if (client?.primaryTrainerId && !trainerId) setTrainerId(client.primaryTrainerId);
             }
           }}>
             <option value="">— no specific client —</option>
-            {(clients || []).map((c: any) => (
+            {clients.map((c: any) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
@@ -157,7 +192,7 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
           <label className="label">Trainer *</label>
           <select className="input" value={trainerId} onChange={(e) => { setTrainerId(e.target.value); setOverrideAmount(false); setCustomAmount(''); }}>
             <option value="">— select trainer —</option>
-            {(trainers || []).map((t: any) => {
+            {trainers.map((t: any) => {
               const phone = t.phoneDigits ? `${t.phoneCode || ''}${t.phoneDigits}` : null;
               const tag = t.seqId ? `#${t.seqId}` : null;
               const suffix = [tag, phone].filter(Boolean).join(' · ');
@@ -182,35 +217,39 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
           <label className="label">Date *</label>
           <input type="date" className="input" value={date} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setDate(e.target.value)} />
         </div>
-        <div>
-          <label className="label">Duration *</label>
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <select className="input" value={durH} onChange={(e) => setDurH(Number(e.target.value))}>
-                {HOUR_OPTIONS.map((h) => <option key={h} value={h}>{h}h</option>)}
-              </select>
+        {sessionHappened && (
+          <div>
+            <label className="label">Duration *</label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <select className="input" value={durH} onChange={(e) => setDurH(Number(e.target.value))}>
+                  {HOUR_OPTIONS.map((h) => <option key={h} value={h}>{h}h</option>)}
+                </select>
+              </div>
+              <div className="flex-1">
+                <select className="input" value={durM} onChange={(e) => setDurM(Number(e.target.value))}>
+                  {MINUTE_OPTIONS.map((m) => <option key={m} value={m}>{String(m).padStart(2,'0')}m</option>)}
+                </select>
+              </div>
             </div>
-            <div className="flex-1">
-              <select className="input" value={durM} onChange={(e) => setDurM(Number(e.target.value))}>
-                {MINUTE_OPTIONS.map((m) => <option key={m} value={m}>{String(m).padStart(2,'0')}m</option>)}
-              </select>
-            </div>
+            {durationToDecimal(durH, durM) === 0 && (
+              <div className="text-[11px] mt-0.5" style={{ color: 'var(--status-amber)' }}>Set a duration greater than 0</div>
+            )}
           </div>
-          {durationToDecimal(durH, durM) === 0 && (
-            <div className="text-[11px] mt-0.5" style={{ color: 'var(--status-amber)' }}>Set a duration greater than 0</div>
-          )}
+        )}
+      </div>
+
+      {/* Feedback — required only when session happened */}
+      {sessionHappened && (
+        <div className="mb-3">
+          <label className="label">Session feedback *</label>
+          <FeedbackPicker value={feedback} onChange={setFeedback} />
+          {!feedback && <div className="text-[11px] mt-1" style={{ color: 'var(--status-amber)' }}>Required before logging</div>}
         </div>
-      </div>
+      )}
 
-      {/* Feedback — required */}
-      <div className="mb-3">
-        <label className="label">Session feedback *</label>
-        <FeedbackPicker value={feedback} onChange={setFeedback} />
-        {!feedback && <div className="text-[11px] mt-1" style={{ color: 'var(--status-amber)' }}>Required before logging</div>}
-      </div>
-
-      {/* Rate summary + override toggle */}
-      {selectedTrainer && (
+      {/* Rate summary + override toggle — only when session happened */}
+      {sessionHappened && selectedTrainer && (
         <div className="callout mb-3 text-xs flex items-center justify-between gap-3">
           <span>
             Rate: <strong>₹{defaultRate.toLocaleString()}</strong>/session ·
@@ -231,7 +270,7 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
         </div>
       )}
 
-      {overrideAmount && (
+      {sessionHappened && overrideAmount && (
         <div className="grid grid-cols-2 gap-3 mb-3 p-3 rounded-lg" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)' }}>
           <div>
             <label className="label" style={{ color: 'var(--status-amber)' }}>Custom total ₹ *</label>
@@ -254,7 +293,7 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
       <div className="flex justify-end gap-2">
         <Button onClick={onDone}>Cancel</Button>
         <Button variant="primary" disabled={!canSubmit || create.isPending} onClick={() => create.mutate()}>
-          Log session
+          {sessionHappened ? 'Log session' : 'Log no-show'}
         </Button>
       </div>
     </div>
@@ -264,15 +303,15 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
 /* ── My clients panel (left sidebar for account_manager) ──────────────────── */
 
 function MyClientsPanel({ onSelect }: { onSelect: (trainerId: string, clientId: string) => void }) {
-  const { data: clients } = useQuery({
+  const { data: clientsRaw } = useQuery({
     queryKey: ['clients-active'],
-    queryFn: () =>
-      api.get('/clients').then((r) =>
-        r.data
-          .filter((c: any) => ['Active', 'LeverageGranted'].includes(c.lifecycle))
-          .sort((a: any, b: any) => a.name.localeCompare(b.name))
-      ),
+    queryFn: () => api.get('/clients').then((r) => {
+      const arr = Array.isArray(r.data) ? r.data : (r.data?.data || []);
+      return arr.filter((c: any) => ['Active', 'LeverageGranted'].includes(c.lifecycle))
+                .sort((a: any, b: any) => a.name.localeCompare(b.name));
+    }),
   });
+  const clients = (clientsRaw as any[]) || [];
 
   return (
     <div className="flex-shrink-0 rounded-xl border overflow-hidden" style={{ width: 220, background: 'var(--bg-card)', borderColor: 'var(--brand-border)' }}>
@@ -280,10 +319,10 @@ function MyClientsPanel({ onSelect }: { onSelect: (trainerId: string, clientId: 
         My clients
       </div>
       <div className="overflow-y-auto" style={{ maxHeight: 500 }}>
-        {(clients || []).length === 0 && (
+        {clients.length === 0 && (
           <div className="text-[11px] muted p-3">No active clients assigned yet.</div>
         )}
-        {(clients || []).map((c: any) => (
+        {clients.map((c: any) => (
           <button
             key={c.id}
             onClick={() => c.primaryTrainerId && onSelect(c.primaryTrainerId, c.id)}
@@ -454,9 +493,13 @@ export function SessionLogsPage() {
                             ? <Link to={`/clients/${l.client.id}`} className="hover:underline">{l.client.name}</Link>
                             : '—'}
                         </td>
-                        <td className="mono">{(() => { const {h, m} = decimalToDuration(l.hours); return `${h}h${m > 0 ? ` ${m}m` : ''}`; })()}</td>
+                        <td className="mono">
+                          {l.sessionHappened === false
+                            ? <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>No Show</span>
+                            : (() => { const {h, m} = decimalToDuration(l.hours); return `${h}h${m > 0 ? ` ${m}m` : ''}`; })()}
+                        </td>
                         <td className="mono text-[12px]">₹{l.rateSnapshot?.toLocaleString()}</td>
-                        <td className="mono font-semibold">₹{l.amountInr?.toLocaleString()}</td>
+                        <td className="mono font-semibold">{l.sessionHappened === false ? <span className="muted text-[12px]">₹0</span> : `₹${l.amountInr?.toLocaleString()}`}</td>
                         <td><FeedbackBadge value={l.feedback} /></td>
                         <td><Pill color={STATUS_COLOR[l.status] || 'grey'}>{l.status}</Pill></td>
                       </tr>

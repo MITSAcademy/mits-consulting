@@ -626,12 +626,13 @@ model SessionLog {
   status        SessionStatus @default(Logged)
   taskId        String?
   task          Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  notes         String?
-  feedback      String?       // positive | neutral | negative
-  proceed       String?       // Yes | No | Hold — payment proceed flag
-  comments      String?       // remarks/issues for payment processing
-  loggedById    String?       // who logged this session
-  createdAt     DateTime      @default(now())
+  notes            String?
+  feedback         String?       // positive | neutral | negative
+  proceed          String?       // Yes | No | Hold — payment proceed flag
+  comments         String?       // remarks/issues for payment processing
+  loggedById       String?       // who logged this session
+  sessionHappened  Boolean       @default(true)  // false = client no-show
+  createdAt        DateTime      @default(now())
 }
 
 // -------- LEVERAGE --------
@@ -699,6 +700,9 @@ model RegularTraining {
   completedSessionCount    Int      @default(0)            // total completed sessions — auto-incremented on session end
   ownerTeam                String   @default("demo_team")  // demo_team | coordinator_team — auto-switches at 4 completed sessions
   demoEscalationRequested  Boolean  @default(false)        // coordinator flagged a trainer issue needing Demo Team intervention
+  escalationStatus         String?                         // "Work in Progress" | "Not Resolved" | "Resolved"
+  escalationActionsTaken   String?                         // notes logged by demo team on actions taken
+  escalationFlaggedAt      String?                         // ISO date when escalation was first flagged
   trainerReplacementReason String?                         // reason recorded when trainer is changed
   clientMood               String?                         // "happy" | "neutral" | "at_risk"
   trainerAttendance        String?                         // "present" | "late" | "no_show"

@@ -41,11 +41,12 @@ sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req, res) =>
 const LEAD_TEAM_IDS = ['u-bhavneet', 'u-kashish', 'u-muskan'];
 
 sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
-  const { trainerId, clientId, date, hours, rateSnapshot, rateModel, notes, amountInr: amountOverride, feedback } = req.body;
-  if (!trainerId || !date || !hours) return res.status(400).json({ error: 'trainerId, date, hours required' });
+  const { trainerId, clientId, date, hours, rateSnapshot, rateModel, notes, amountInr: amountOverride, feedback, sessionHappened } = req.body;
+  const didHappen = sessionHappened !== false && sessionHappened !== 'false';
+  if (!trainerId || !date) return res.status(400).json({ error: 'trainerId and date required' });
+  if (didHappen && !hours) return res.status(400).json({ error: 'hours required when session happened' });
 
   // lead (Bhavneet) can only log sessions for clients owned by her team.
-  // null hostOwnerId = unassigned → also blocked (not her team).
   if (req.user!.role === 'lead' && clientId) {
     const client = await prisma.client.findUnique({ where: { id: clientId }, select: { hostOwnerId: true } });
     if (!client) return res.status(404).json({ error: 'Client not found' });
@@ -53,29 +54,40 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
       return res.status(403).json({ error: 'You can only log sessions for clients on your team (Bhavneet / Kashish / Muskan)' });
     }
   }
-  // per_session rate is quoted for a 2-hour session; scale proportionally by actual hours
-  const effectiveHourlyRate = rateModel === 'per_session' ? rateSnapshot / 2 : rateSnapshot;
-  const defaultAmount = Math.round(hours * effectiveHourlyRate);
-  const amount = (amountOverride != null && !isNaN(Number(amountOverride))) ? Math.round(Number(amountOverride)) : defaultAmount;
-  const log = await prisma.sessionLog.create({
-    data: {
-      trainerId, clientId, date, hours, rateSnapshot, rateModel,
-      amountInr: amount, status: 'Logged', notes,
-      feedback: feedback || null,
-      loggedById: req.user!.id,
-    },
-    include,
-  });
-  const overrideNote = (amountOverride != null && amount !== defaultAmount) ? ` · amount overridden to ₹${amount} (default ₹${defaultAmount})` : '';
+  // account_manager can only log for their own clients
+  if (req.user!.role === 'account_manager' && clientId) {
+    const client = await prisma.client.findUnique({ where: { id: clientId }, select: { hostOwnerId: true, assignedAmId: true } });
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+    if (client.hostOwnerId !== req.user!.id && client.assignedAmId !== req.user!.id) {
+      return res.status(403).json({ error: 'You can only log sessions for your assigned clients' });
+    }
+  }
+
+  // No-show: hours=0, amount=0, regardless of what was sent
+  const actualHours = didHappen ? (hours || 0) : 0;
+  const effectiveHourlyRate = rateModel === 'per_session' ? (rateSnapshot || 0) / 2 : (rateSnapshot || 0);
+  const defaultAmount = didHappen ? Math.round(actualHours * effectiveHourlyRate) : 0;
+  const amount = didHappen && amountOverride != null && !isNaN(Number(amountOverride))
+    ? Math.round(Number(amountOverride)) : defaultAmount;
+
+  const data: any = {
+    trainerId, clientId, date, hours: actualHours, rateSnapshot: rateSnapshot || 0,
+    rateModel: rateModel || 'per_session', amountInr: amount, status: 'Logged',
+    notes: notes || null, feedback: feedback || null, loggedById: req.user!.id,
+    sessionHappened: didHappen,
+  };
+  const log = await prisma.sessionLog.create({ data, include });
+  const noShowNote = !didHappen ? ' · NO SHOW' : '';
+  const overrideNote = didHappen && amountOverride != null && amount !== defaultAmount ? ` · amount overridden to ₹${amount}` : '';
   const feedbackNote = feedback ? ` · feedback: ${feedback}` : '';
-  await audit(req.user!.id, req.user!.name, 'SESSION_LOG', `${log.trainer.name} · ${date}${overrideNote}${feedbackNote}`);
+  await audit(req.user!.id, req.user!.name, 'SESSION_LOG', `${log.trainer.name} · ${date}${noShowNote}${overrideNote}${feedbackNote}`);
   res.status(201).json(log);
 });
 
 sessionLogsRouter.patch('/:id', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const data: any = {};
   // Any authorized role can edit these operational fields
-  for (const f of ['hours', 'rateSnapshot', 'amountInr', 'notes', 'proceed', 'comments']) {
+  for (const f of ['hours', 'rateSnapshot', 'amountInr', 'notes', 'proceed', 'comments', 'sessionHappened']) {
     if (f in req.body) data[f] = req.body[f];
   }
   // Status (Paid/NotPaid) is restricted to demo_lead (Samita) and founder
