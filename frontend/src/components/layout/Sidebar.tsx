@@ -95,7 +95,7 @@ const NAV: NavItem[] = [
 
   // ── My work (universal) ───────────────────────────────────────────────
   { section: 'work', page: '/tasks', label: 'My tasks', icon: CheckSquare, roles: ['founder', 'manager', 'lead', 'staff', 'accounts', 'sales_closer', 'demo_lead', 'demo_intake', 'recruiter', 'payment_processor', 'account_manager'] },
-  { section: 'work', page: '/leverage', label: 'Leverage', icon: Clock, roles: ['founder'] },
+  { section: 'work', page: '/leverage', label: 'Leverage', icon: Clock, roles: ['founder', 'demo_lead'] },
   { section: 'work', page: '/accounts-queue', label: 'Accounts queue', icon: Receipt, roles: ['founder', 'accounts'] },
   { section: 'work', page: '/daily-report', label: 'Daily report', icon: Notebook, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
   { section: 'work', page: '/my-calendar', label: 'My calendar', icon: Calendar, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
