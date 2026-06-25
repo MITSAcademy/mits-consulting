@@ -77,9 +77,9 @@ sourcingRouter.get('/', async (req: AuthedRequest, res) => {
   const { status } = req.query as any;
   const where: any = {};
   if (status) where.status = status;
-  // Recruiters only see requests routed to them (or unrouted)
+  // Recruiters only see requests explicitly routed to them
   if (req.user!.role === 'recruiter') {
-    where.OR = [{ sentToId: req.user!.id }, { sentToId: null }];
+    where.sentToId = req.user!.id;
   }
   const items = await prisma.sourcingRequest.findMany({ where, include, orderBy: { createdAt: 'desc' } });
   res.json(items.map((it) => redactSourcingForRecruiter(it, req.user!.role)));
