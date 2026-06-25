@@ -1718,6 +1718,10 @@ function WeeklyPaymentSummary() {
 function RetrospectiveSection({ rows }: { rows: any[] }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const rowUser = useAuth((s) => s.user)!;
+  const canDelete = ['founder', 'manager', 'lead'].includes(rowUser.role);
+  const [purgeDupConfirm, setPurgeDupConfirm] = useState(false);
+
   const { data: allUsers } = useQuery({
     queryKey: ['users', 'minimal'],
     queryFn: () => api.get('/users').then((r) => r.data),
@@ -1730,6 +1734,20 @@ function RetrospectiveSection({ rows }: { rows: any[] }) {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  const deleteRow = useMutation({
+    mutationFn: (id: string) => api.delete(`/retrospective/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['retrospective'] }); showToast('Entry deleted'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const purgeDuplicates = useMutation({
+    mutationFn: () => api.delete('/retrospective/purge-duplicates'),
+    onSuccess: (r: any) => { qc.invalidateQueries({ queryKey: ['retrospective'] }); showToast(`Deleted ${r.data.deleted} duplicate entries`); setPurgeDupConfirm(false); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const dupCount = rows.filter((r) => r.reason === 'Duplicate').length;
+
   if (rows.length === 0) {
     return (
       <div className="rounded-xl p-8 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
@@ -1740,28 +1758,56 @@ function RetrospectiveSection({ rows }: { rows: any[] }) {
   }
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--brand-border)' }}>
-      <div style={{ overflowX: 'auto' }}>
-        <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
-          <thead>
-            <tr style={{ background: 'var(--bg-tableHeader, #1e293b)' }}>
-              {['Date', 'Client', 'Trainer', 'Type', 'Reason', 'Ownership', 'Comments', 'Removed by'].map((h) => (
-                <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--brand-textMuted)', borderBottom: '1px solid var(--brand-border)' }}>{h}</th>
+    <div className="space-y-3">
+      {canDelete && dupCount > 0 && (
+        <div className="flex items-center gap-2 justify-end">
+          {!purgeDupConfirm ? (
+            <button
+              onClick={() => setPurgeDupConfirm(true)}
+              className="text-[12px] px-3 py-1.5 rounded"
+              style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--status-red)', border: '1px solid rgba(239,68,68,0.2)', cursor: 'pointer' }}
+            >
+              Clear {dupCount} duplicate entries
+            </button>
+          ) : (
+            <>
+              <span className="text-[12px] muted">Delete all {dupCount} duplicate entries?</span>
+              <button
+                onClick={() => purgeDuplicates.mutate()}
+                disabled={purgeDuplicates.isPending}
+                className="text-[12px] px-3 py-1.5 rounded"
+                style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--status-red)', border: '1px solid rgba(239,68,68,0.3)', cursor: 'pointer' }}
+              >
+                {purgeDuplicates.isPending ? 'Deleting…' : 'Yes, delete all'}
+              </button>
+              <button onClick={() => setPurgeDupConfirm(false)} className="text-[12px] px-3 py-1.5 rounded" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', cursor: 'pointer' }}>Cancel</button>
+            </>
+          )}
+        </div>
+      )}
+      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--brand-border)' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="w-full text-[12px]" style={{ borderCollapse: 'collapse', minWidth: 900 }}>
+            <thead>
+              <tr style={{ background: 'var(--bg-tableHeader, #1e293b)' }}>
+                {['Date', 'Client', 'Trainer', 'Type', 'Reason', 'Ownership', 'Comments', 'Removed by', ''].map((h) => (
+                  <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--brand-textMuted)', borderBottom: '1px solid var(--brand-border)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r: any) => (
+                <RetrospectiveRow key={r.id} r={r} users={allUsers || []} onUpdate={(data) => updateRow.mutate({ id: r.id, data })} onDelete={canDelete ? () => deleteRow.mutate(r.id) : undefined} />
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r: any) => (
-              <RetrospectiveRow key={r.id} r={r} users={allUsers || []} onUpdate={(data) => updateRow.mutate({ id: r.id, data })} />
-            ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 }
 
-function RetrospectiveRow({ r, users, onUpdate }: { r: any; users: any[]; onUpdate: (data: any) => void }) {
+function RetrospectiveRow({ r, users, onUpdate, onDelete }: { r: any; users: any[]; onUpdate: (data: any) => void; onDelete?: () => void }) {
   const [editingReason, setEditingReason] = useState(false);
   const [editingComments, setEditingComments] = useState(false);
   const [reasonVal, setReasonVal] = useState(r.reason || '');
@@ -1831,6 +1877,15 @@ function RetrospectiveRow({ r, users, onUpdate }: { r: any; users: any[]; onUpda
         )}
       </td>
       <td style={cellStyle} className="text-[11px]">{r.removedBy?.name || <span style={{ opacity: 0.4 }}>—</span>}</td>
+      <td style={{ ...cellStyle, width: 32 }}>
+        {onDelete && (
+          <button
+            onClick={() => { if (confirm('Delete this entry?')) onDelete(); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-red)', opacity: 0.5, fontSize: 14, padding: '0 4px' }}
+            title="Delete"
+          >✕</button>
+        )}
+      </td>
     </tr>
   );
 }

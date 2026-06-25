@@ -8,7 +8,7 @@ issueTrackerRouter.use(requireAuth);
 
 const READ_ROLES  = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'];
 const WRITE_ROLES = ['founder', 'manager', 'lead', 'account_manager'];
-const ADMIN_ROLES = ['founder', 'manager'];
+const ADMIN_ROLES = ['founder', 'manager', 'lead'];
 
 const include = {
   client:   { select: { id: true, name: true } },
@@ -96,7 +96,7 @@ issueTrackerRouter.patch('/:id', async (req: AuthedRequest, res) => {
   res.json(issue);
 });
 
-// DELETE /:id — founder/manager only
+// DELETE /:id — founder/manager/lead
 issueTrackerRouter.delete('/:id', async (req: AuthedRequest, res) => {
   if (!ADMIN_ROLES.includes(req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
 
@@ -106,4 +106,12 @@ issueTrackerRouter.delete('/:id', async (req: AuthedRequest, res) => {
   await prisma.issueTracker.delete({ where: { id: req.params.id } });
   await audit(req.user!.id, req.user!.name, 'ISSUE_DELETE', issue.title);
   res.json({ ok: true });
+});
+
+// DELETE /purge-all — founder only, wipes all issue tracker entries
+issueTrackerRouter.delete('/purge-all', async (req: AuthedRequest, res) => {
+  if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Founder only' });
+  const { count } = await prisma.issueTracker.deleteMany({});
+  await audit(req.user!.id, req.user!.name, 'ISSUE_PURGE_ALL', `Deleted ${count} issues`);
+  res.json({ ok: true, deleted: count });
 });

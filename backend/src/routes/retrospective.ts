@@ -38,6 +38,22 @@ retrospectiveRouter.post('/', async (req: any, res) => {
   res.json(entry);
 });
 
+// DELETE /retrospective/:id — lead/manager/founder
+retrospectiveRouter.delete('/:id', async (req: any, res) => {
+  const role = req.user.role;
+  if (!['founder', 'manager', 'lead'].includes(role)) return res.status(403).json({ error: 'Forbidden' });
+  await prisma.retrospective.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
+});
+
+// DELETE /retrospective/purge-duplicates — delete all rows with reason "Duplicate"
+retrospectiveRouter.delete('/purge-duplicates', async (req: any, res) => {
+  const role = req.user.role;
+  if (!['founder', 'manager', 'lead'].includes(role)) return res.status(403).json({ error: 'Forbidden' });
+  const { count } = await prisma.retrospective.deleteMany({ where: { reason: 'Duplicate' } });
+  res.json({ ok: true, deleted: count });
+});
+
 // PATCH /retrospective/:id — update reason, owner, comments
 retrospectiveRouter.patch('/:id', async (req: any, res) => {
   if (!await checkPermission('sessions.retrospective', req.user.role)) return res.status(403).json({ error: 'Forbidden' });

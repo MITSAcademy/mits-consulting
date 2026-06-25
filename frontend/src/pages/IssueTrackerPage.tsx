@@ -314,9 +314,27 @@ const STATUS_FILTERS: Array<{ value: string; label: string }> = [
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export default function IssueTrackerPage() {
+  const user = useAuth((s) => s.user)!;
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
   const [statusFilter, setStatusFilter] = useState('All');
   const [fromDate, setFromDate]         = useState('');
   const [toDate, setToDate]             = useState('');
+  const [purgeConfirm, setPurgeConfirm] = useState(false);
+
+  const canDelete = ['founder', 'manager', 'lead'].includes(user.role);
+
+  const deleteIssue = useMutation({
+    mutationFn: (id: string) => api.delete(`/issue-tracker/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['issue-tracker'] }); showToast('Issue deleted'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const purgeAll = useMutation({
+    mutationFn: () => api.delete('/issue-tracker/purge-all'),
+    onSuccess: (r: any) => { qc.invalidateQueries({ queryKey: ['issue-tracker'] }); showToast(`Deleted ${r.data.deleted} issues`); setPurgeConfirm(false); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
 
   const { data: issues, isLoading } = useQuery<Issue[]>({
     queryKey: ['issue-tracker'],
@@ -365,7 +383,21 @@ export default function IssueTrackerPage() {
         title="Issues & Escalation Tracker"
         subtitle={`${openCount} open · ${inProgressCount} in progress`}
         actions={
-          <NewIssueModal clients={clients || []} trainers={trainers || []} users={users || []} />
+          <div className="flex items-center gap-2">
+            {user.role === 'founder' && !purgeConfirm && (
+              <Button onClick={() => setPurgeConfirm(true)}>Purge all</Button>
+            )}
+            {user.role === 'founder' && purgeConfirm && (
+              <>
+                <span className="text-[12px] muted">Delete ALL issues?</span>
+                <Button onClick={() => purgeAll.mutate()} disabled={purgeAll.isPending} style={{ color: 'var(--status-red)' }}>
+                  {purgeAll.isPending ? 'Deleting…' : 'Yes, delete all'}
+                </Button>
+                <Button onClick={() => setPurgeConfirm(false)}>Cancel</Button>
+              </>
+            )}
+            <NewIssueModal clients={clients || []} trainers={trainers || []} users={users || []} />
+          </div>
         }
       />
       <Page>
@@ -498,7 +530,19 @@ export default function IssueTrackerPage() {
                       <StatusBadge status={issue.status} />
                     </td>
                     <td>
-                      <UpdateIssueModal issue={issue} />
+                      <div className="flex items-center gap-1.5">
+                        <UpdateIssueModal issue={issue} />
+                        {canDelete && (
+                          <button
+                            onClick={() => { if (confirm('Delete this issue?')) deleteIssue.mutate(issue.id); }}
+                            className="text-[11px] px-2 py-1 rounded"
+                            style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--status-red)', border: '1px solid rgba(239,68,68,0.2)', cursor: 'pointer' }}
+                            title="Delete issue"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
