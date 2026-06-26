@@ -3,6 +3,8 @@ import express from 'express';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import { initScheduler } from './lib/scheduler';
+import { sendPaymentFollowUpReport } from './lib/paymentFollowUpReport';
+import { requireAuth, requireRole } from './lib/auth';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { authRouter } from './routes/auth';
@@ -150,6 +152,16 @@ app.use('/api/role-permissions', rolePermissionsRouter);
 app.use('/api/seed', seedRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/escalations', escalationsRouter);
+
+// Founder-only: manually trigger the payment follow-up email right now
+app.post('/api/internal/send-payment-report', requireAuth, requireRole('founder'), async (_req, res) => {
+  try {
+    await sendPaymentFollowUpReport({ force: true });
+    res.json({ ok: true, message: 'Payment follow-up report sent.' });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to send report' });
+  }
+});
 
 // Global error handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
