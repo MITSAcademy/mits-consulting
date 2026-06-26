@@ -993,7 +993,9 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
                   }}
                 />
               )}
-              <span>{t.trainer?.name || <span style={{ opacity: 0.4 }}>—</span>}</span>
+              {t.trainer?.id
+                ? <Link to={`/trainers/${t.trainer.id}`} className="hover:underline" style={{ color: 'inherit' }}>{t.trainer.name}</Link>
+                : <span style={{ opacity: 0.4 }}>—</span>}
               <InlineEditIcon field="trainer" />
             </div>
           )}

@@ -175,6 +175,12 @@ callLogsRouter.post('/', async (req: AuthedRequest, res) => {
       notes: typeof notes === 'string' ? notes.slice(0, 1000) : null,
     },
   });
+  // When a feedback check-in is logged, stamp lastFeedbackTakenAt so the
+  // Payment follow-up page and feedback tracking stay in sync automatically.
+  if (kind === 'feedback') {
+    const today = new Date().toISOString().slice(0, 10);
+    await prisma.client.update({ where: { id: clientId }, data: { lastFeedbackTakenAt: today } });
+  }
   await audit(req.user!.id, req.user!.name, 'CALL_LOG', `${client.name} · ${activityType || kind || 'checkin'}${outcome ? ' · ' + outcome : ''}`);
   res.status(201).json(log);
 });
