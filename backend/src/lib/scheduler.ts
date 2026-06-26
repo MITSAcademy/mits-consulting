@@ -68,8 +68,11 @@ export function initScheduler() {
     timezone: 'Asia/Kolkata',
   });
 
-  // Payment Follow-Up — daily sheet to Vaibhav + Samita + Mitali at 12:00 PM IST
-  cron.schedule('0 12 * * *', () => safe('payment-followup-report', () => sendPaymentFollowUpReport()), {
+  // Payment Follow-Up — daily sheet at 12:00 PM IST and 2:00 PM IST
+  cron.schedule('0 12 * * *', () => safe('payment-followup-report-noon', () => sendPaymentFollowUpReport({ force: true })), {
+    timezone: 'Asia/Kolkata',
+  });
+  cron.schedule('0 14 * * *', () => safe('payment-followup-report-2pm', () => sendPaymentFollowUpReport({ force: true })), {
     timezone: 'Asia/Kolkata',
   });
 

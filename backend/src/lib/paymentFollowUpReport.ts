@@ -98,6 +98,15 @@ interface Row {
   daysUntilDue: number | null;
 }
 
+interface PaymentRow {
+  clientName: string;
+  amount: number;
+  currency: string;
+  paymentDate: string;
+  punchedBy: string | null;
+  notes: string | null;
+}
+
 // ── HTML builder ──────────────────────────────────────────────────────────────
 
 const PILL: Record<string, string> = {
@@ -158,12 +167,12 @@ function buildHtml(params: {
   dueSoon: Row[];
   upcoming: Row[];
   noDate: Row[];
+  freshPayments: PaymentRow[];
+  followUpPayments: PaymentRow[];
 }): string {
-  const { date, overdue, dueSoon, upcoming, noDate } = params;
+  const { date, overdue, dueSoon, upcoming, noDate, freshPayments, followUpPayments } = params;
 
-  const totalOverdue = overdue.reduce((s, r) => s + r.cycleAmount, 0);
-  const totalDueSoon = dueSoon.reduce((s, r) => s + r.cycleAmount, 0);
-  const totalUpcoming = upcoming.reduce((s, r) => s + r.cycleAmount, 0);
+  const totalTracked = overdue.length + dueSoon.length + upcoming.length + noDate.length;
 
   const summaryHtml = `
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
@@ -188,8 +197,8 @@ function buildHtml(params: {
         </td>
         <td width="25%" style="padding:4px;">
           <table width="100%" cellpadding="12" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;text-align:center;">
-            <tr><td style="font-size:20px;font-weight:800;color:#15803d;line-height:1;">₹${(totalOverdue + totalDueSoon + totalUpcoming).toLocaleString('en-IN')}</td></tr>
-            <tr><td style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;padding-top:4px;">Total Tracked</td></tr>
+            <tr><td style="font-size:28px;font-weight:800;color:#15803d;line-height:1;">${totalTracked}</td></tr>
+            <tr><td style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;padding-top:4px;">Total Clients</td></tr>
           </table>
         </td>
       </tr>
@@ -233,6 +242,29 @@ function buildHtml(params: {
       </tr>`).join('')}</tbody>
     </table>` : '';
 
+  const weeklyPaymentSection = (title: string, emoji: string, color: string, bg: string, border: string, payments: PaymentRow[]) => {
+    if (payments.length === 0) return `
+      <h3 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin:28px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb;color:#374151;">${emoji} ${title} (0)</h3>
+      <p style="color:#9ca3af;font-style:italic;font-size:13px;margin:0 0 16px;">None this week.</p>`;
+    const trs = payments.map(p => `<tr>
+      <td style="${TD}"><strong>${esc(p.clientName)}</strong></td>
+      <td style="${TD}font-weight:700;color:${color};">${fmtAmt(p.amount, p.currency)}</td>
+      <td style="${TD}color:#9ca3af;font-size:12px;">${fmtDate(p.paymentDate)}</td>
+      <td style="${TD}color:#6b7280;font-size:12px;">${esc(p.punchedBy || '—')}</td>
+    </tr>`).join('');
+    return `
+      <h3 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin:28px 0 10px;padding-bottom:6px;border-bottom:2px solid ${border};color:#374151;">${emoji} ${title} (${payments.length})</h3>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;margin-bottom:8px;border:1px solid ${border};border-radius:8px;overflow:hidden;">
+        <thead><tr style="background:${bg};">
+          <th style="${TH}">Client</th><th style="${TH}">Amount</th><th style="${TH}">Date</th><th style="${TH}">Received By</th>
+        </tr></thead>
+        <tbody>${trs}</tbody>
+      </table>`;
+  };
+
+  const freshSection = weeklyPaymentSection('Fresh Payments Received This Week (by Roshni)', '💵', '#15803d', '#f0fdf4', '#bbf7d0', freshPayments);
+  const followUpWeekSection = weeklyPaymentSection('Follow-Up Payments Collected This Week (by Mitali\'s Team)', '✅', '#1d4ed8', '#eff6ff', '#bfdbfe', followUpPayments);
+
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"/></head>
 <body style="font-family:'Helvetica Neue',Arial,sans-serif;background:#f4f4f5;margin:0;padding:0;">
@@ -242,9 +274,11 @@ function buildHtml(params: {
       <tr><td>
         <h2 style="margin:0 0 4px;font-size:20px;color:#111827;">💰 Payment Follow-Up — Daily Report</h2>
         <p style="font-size:12px;color:#9ca3af;margin:0 0 12px;">${esc(date)} · Generated at 12:00 PM IST · MITS Consulting Hub</p>
-        <div style="display:inline-block;background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;border-radius:4px;padding:3px 10px;margin-bottom:20px;letter-spacing:.3px;">🔒 CONFIDENTIAL — Vaibhav, Samita &amp; Mitali only</div>
+        <div style="display:inline-block;background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;border-radius:4px;padding:3px 10px;margin-bottom:20px;letter-spacing:.3px;">🔒 CONFIDENTIAL — Vaibhav, Samita, Mitali &amp; Bhavneet only</div>
 
         ${summaryHtml}
+        ${freshSection}
+        ${followUpWeekSection}
         ${overdueSection}
         ${dueSoonSection}
         ${upcomingSection}
@@ -263,6 +297,53 @@ function buildHtml(params: {
 }
 
 // ── Data fetch ────────────────────────────────────────────────────────────────
+
+function weekStart(): string {
+  const d = nowIST();
+  const day = d.getUTCDay(); // 0=Sun
+  const diff = day === 0 ? 6 : day - 1; // Monday = 0
+  d.setUTCDate(d.getUTCDate() - diff);
+  return d.toISOString().slice(0, 10);
+}
+
+async function fetchWeeklyPayments(): Promise<{ fresh: PaymentRow[]; followUp: PaymentRow[] }> {
+  const since = weekStart();
+
+  const payments = await prisma.payment.findMany({
+    where: { paymentDate: { gte: since } },
+    select: {
+      kind: true,
+      amount: true,
+      currency: true,
+      paymentDate: true,
+      client: { select: { name: true } },
+      receivedBy: { select: { name: true } },
+    },
+    orderBy: { paymentDate: 'desc' },
+  });
+
+  const fresh: PaymentRow[] = [];
+  const followUp: PaymentRow[] = [];
+
+  for (const p of payments) {
+    const row: PaymentRow = {
+      clientName: p.client?.name || '—',
+      amount: p.amount,
+      currency: (p.currency as string) || 'USD',
+      paymentDate: p.paymentDate,
+      punchedBy: p.receivedBy?.name || null,
+      notes: null,
+    };
+
+    if (p.kind === 'Fresh') {
+      fresh.push(row);
+    } else {
+      followUp.push(row);
+    }
+  }
+
+  return { fresh, followUp };
+}
 
 async function fetchData(): Promise<Row[]> {
   const today = todayIST();
@@ -345,7 +426,10 @@ export async function sendPaymentFollowUpReport({ force = false }: { force?: boo
     }
   }
 
-  const rows = await fetchData();
+  const [rows, { fresh: freshPayments, followUp: followUpPayments }] = await Promise.all([
+    fetchData(),
+    fetchWeeklyPayments(),
+  ]);
 
   const overdue  = rows.filter(r => r.daysUntilDue !== null && r.daysUntilDue < 0);
   const dueSoon  = rows.filter(r => r.daysUntilDue !== null && r.daysUntilDue >= 0 && r.daysUntilDue <= 3);
@@ -361,7 +445,7 @@ export async function sendPaymentFollowUpReport({ force = false }: { force?: boo
     : dueSoon.length > 0 ? '🟡 ' : '🟢 ';
 
   const subject = `${urgency}Payment Follow-Up Report — ${dateLabel}`;
-  const html = buildHtml({ date: dateLabel, overdue, dueSoon, upcoming, noDate });
+  const html = buildHtml({ date: dateLabel, overdue, dueSoon, upcoming, noDate, freshPayments, followUpPayments });
 
   // Send from Vaibhav's account
   const vaibhav = await prisma.user.findFirst({
@@ -380,16 +464,16 @@ export async function sendPaymentFollowUpReport({ force = false }: { force?: boo
     return;
   }
 
-  // Recipients: Vaibhav + Samita + Mitali ONLY
+  // Recipients: Vaibhav + Samita + Mitali + Bhavneet + Areena
   const recipients = await prisma.user.findMany({
-    where: { id: { in: ['u-vaibhav', 'u-samita', 'u-mitali'] } },
+    where: { id: { in: ['u-vaibhav', 'u-samita', 'u-mitali', 'u-bhavneet'] } },
     select: { email: true, gmailAddress: true },
   });
 
-  const toEmails = recipients
-    .map(u => u.gmailAddress || u.email)
-    .filter(Boolean)
-    .join(', ');
+  const toEmails = [
+    ...recipients.map(u => u.gmailAddress || u.email).filter(Boolean),
+    'areena.beri@mitssolution.com',
+  ].join(', ');
 
   await sendEmail({
     to: toEmails,

@@ -964,7 +964,7 @@ export function FollowUpPaymentsPage() {
         subtitle={`${(data || []).length} active clients`}
         actions={
           <div className="flex items-center gap-2">
-            {['founder', 'manager'].includes(pageUser?.role || '') && (
+            {['founder', 'manager', 'lead'].includes(pageUser?.role || '') && (
               <Button
                 variant="primary"
                 onClick={() => sendReport.mutate()}
