@@ -168,8 +168,8 @@ metricsRouter.get('/nav-badges', async (req: AuthedRequest, res) => {
       ? prisma.editRequest.count({ where: { status: 'Pending' } })
       : Promise.resolve(0),
 
-    // escalations — founder/manager/lead/demo_lead
-    ['founder', 'manager', 'lead', 'demo_lead'].includes(role)
+    // escalations — founder/manager/lead/demo_lead/demo_intake
+    ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake'].includes(role)
       ? prisma.regularTraining.count({ where: { demoEscalationRequested: true, status: 'active' } })
       : Promise.resolve(0),
 
