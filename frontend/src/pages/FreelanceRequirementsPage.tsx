@@ -417,9 +417,8 @@ export default function FreelanceRequirementsPage() {
       <Topbar
         title="Freelance Requirements"
         subtitle={escalated.length > 0 ? `${escalated.length} escalated` : `${reqs.length} total`}
-      >
-        <NewRequirementDialog onCreated={() => qc.invalidateQueries({ queryKey: ['freelance-requirements'] })} />
-      </Topbar>
+        actions={<NewRequirementDialog onCreated={() => qc.invalidateQueries({ queryKey: ['freelance-requirements'] })} />}
+      />
       <Page>
         {/* Filter tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
