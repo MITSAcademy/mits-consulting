@@ -15,6 +15,7 @@ import cron from 'node-cron';
 import { sendTeam2Briefing, sendTeam1Briefing, sendSamitaBriefing, sendRoshniBriefing } from './dailyBriefing';
 import { runIssueEscalation } from './issueEscalation';
 import { sendMalikaStatusReport } from './malikaStatusReport';
+import { sendPaymentFollowUpReport } from './paymentFollowUpReport';
 
 function safe(label: string, fn: () => Promise<void>) {
   fn().catch((e) => console.error(`[scheduler] ${label} failed:`, e));
@@ -67,9 +68,15 @@ export function initScheduler() {
     timezone: 'Asia/Kolkata',
   });
 
+  // Payment Follow-Up — daily sheet to Vaibhav + Samita + Mitali at 12:00 PM IST
+  cron.schedule('0 12 * * *', () => safe('payment-followup-report', () => sendPaymentFollowUpReport()), {
+    timezone: 'Asia/Kolkata',
+  });
+
   console.log('[scheduler] Daily briefing crons registered (Asia/Kolkata timezone)');
   console.log('[scheduler]   Team 2 (Anjali + Taran) → 06:00 + 18:00 IST');
   console.log('[scheduler]   Team 1 (Aman + Kanchan) → 09:00 + 16:00 IST (CC Samita + Vaibhav)');
   console.log('[scheduler]   Samita (team overview)  → 07:00 + 19:00 IST (CC Vaibhav)');
   console.log('[scheduler]   Roshni (sales pipeline) → 08:00 + 20:00 IST (CC Vaibhav)');
+  console.log('[scheduler]   Payment follow-up report → 12:00 IST (Vaibhav + Samita + Mitali only)');
 }
