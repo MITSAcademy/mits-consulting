@@ -317,7 +317,7 @@ export default function IssueTrackerPage() {
   const user = useAuth((s) => s.user)!;
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const [statusFilter, setStatusFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('Open');
   const [fromDate, setFromDate]         = useState('');
   const [toDate, setToDate]             = useState('');
   const [purgeConfirm, setPurgeConfirm] = useState(false);
