@@ -921,6 +921,14 @@ export function FollowUpPaymentsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'due_soon' | 'pending_vaibhav'>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
+  const showToast = useUI((s) => s.showToast);
+  const pageUser = useAuth((s) => s.user);
+
+  const sendReport = useMutation({
+    mutationFn: () => api.post('/internal/send-payment-report'),
+    onSuccess: () => showToast('📧 Report sent to Vaibhav, Samita & Mitali', 'success'),
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to send', 'error'),
+  });
 
   const { data, isLoading } = useQuery<Row[]>({
     queryKey: ['follow-up-payments'],
@@ -956,6 +964,17 @@ export function FollowUpPaymentsPage() {
         subtitle={`${(data || []).length} active clients`}
         actions={
           <div className="flex items-center gap-2">
+            {['founder', 'manager'].includes(pageUser?.role || '') && (
+              <Button
+                variant="primary"
+                onClick={() => sendReport.mutate()}
+                disabled={sendReport.isPending}
+                title="Send today's payment follow-up sheet to Vaibhav, Samita & Mitali"
+                style={{ fontSize: 12, padding: '5px 12px' }}
+              >
+                {sendReport.isPending ? 'Sending…' : '📧 Send Report'}
+              </Button>
+            )}
             <Input
               placeholder="Search client…"
               value={search}
