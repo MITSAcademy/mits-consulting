@@ -59,6 +59,7 @@ const FeedbackPendingPage = lazy(() => import('@/pages/FeedbackPendingPage').the
 const RoshniFollowUpsPage = lazy(() => import('@/pages/RoshniFollowUpsPage').then((m) => ({ default: m.RoshniFollowUpsPage })));
 const SessionsDashboardPage = lazy(() => import('@/pages/SessionsDashboardPage'));
 const IssueTrackerPage = lazy(() => import('@/pages/IssueTrackerPage'));
+const FreelanceRequirementsPage = lazy(() => import('@/pages/FreelanceRequirementsPage'));
 const MeetingLinksPage = lazy(() => import('@/pages/MeetingLinksPage'));
 const CoordinatorDashboardPage = lazy(() => import('@/pages/CoordinatorDashboardPage'));
 const TeamKanbanPage = lazy(() => import('@/pages/TeamKanbanPage').then((m) => ({ default: m.TeamKanbanPage })));
@@ -160,6 +161,7 @@ export default function App() {
           <Route path="/feedback-pending" element={<FeedbackPendingPage />} />
           <Route path="/sessions" element={<SessionsDashboardPage />} />
           <Route path="/issues" element={<IssueTrackerPage />} />
+          <Route path="/freelance-requirements" element={<FreelanceRequirementsPage />} />
           <Route path="/timesheet" element={<MyTimesheetPage />} />
           <Route path="/timesheet/report" element={<TimesheetReportPage />} />
           <Route path="/feature-flags" element={<FeatureFlagsPage />} />

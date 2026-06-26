@@ -832,6 +832,9 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
   const [flagIssueId, setFlagIssueId] = useState<string | null>(null);
   const [flagTitle, setFlagTitle] = useState('');
   const [flagDesc, setFlagDesc] = useState('');
+  const [flagFreelanceId, setFlagFreelanceId] = useState<string | null>(null);
+  const [flagFreelanceSkill, setFlagFreelanceSkill] = useState('');
+  const [flagFreelanceTimings, setFlagFreelanceTimings] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
 
   // trainers list for trainer picker
@@ -1229,6 +1232,18 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
                     <Flag size={13} /> Flag for Regular Team
                   </button>
 
+                  {/* Flag for Freelance Team → goes to Freelance Requirements */}
+                  <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#a78bfa', textAlign: 'left' }}
+                    onClick={() => {
+                      setFlagFreelanceId(t.id);
+                      setFlagFreelanceSkill(t.trainer?.skills || '');
+                      setFlagFreelanceTimings('');
+                      setMenuOpen(false);
+                    }}>
+                    <Flag size={13} /> Flag for Freelance Team
+                  </button>
+
                   {/* Divider + Remove */}
                   {(rowUser.role === 'lead' || rowUser.role === 'founder' || rowUser.role === 'manager') && (
                     <>
@@ -1383,6 +1398,57 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
                 }}
               >
                 Create issue
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Flag for Freelance Team dialog */}
+      {flagFreelanceId && (
+        <Dialog open onOpenChange={(v) => { if (!v) { setFlagFreelanceId(null); setFlagFreelanceSkill(''); setFlagFreelanceTimings(''); } }}>
+          <DialogContent title="Flag for Freelance Team" description="This will create a requirement in the Freelance Requirements section.">
+            <div className="space-y-3">
+              <div className="form-row">
+                <label className="label">Skill Required *</label>
+                <input
+                  className="input w-full"
+                  placeholder="e.g. Salesforce, Python, Data Analysis"
+                  value={flagFreelanceSkill}
+                  onChange={(e) => setFlagFreelanceSkill(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="form-row">
+                <label className="label">Client Available Timings</label>
+                <textarea
+                  className="input w-full resize-none text-[13px]"
+                  rows={2}
+                  placeholder="e.g. 9–11 AM IST Mon–Fri"
+                  value={flagFreelanceTimings}
+                  onChange={(e) => setFlagFreelanceTimings(e.target.value)}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => { setFlagFreelanceId(null); setFlagFreelanceSkill(''); setFlagFreelanceTimings(''); }}>Cancel</Button>
+              <Button
+                variant="primary"
+                disabled={!flagFreelanceSkill.trim()}
+                onClick={() => {
+                  const training = t;
+                  api.post('/freelance-requirements', {
+                    clientName: training.client?.name || training.name || 'Unknown',
+                    skillRequired: flagFreelanceSkill.trim(),
+                    currentTrainer: training.trainer?.name || null,
+                    clientTimings: flagFreelanceTimings.trim() || null,
+                  })
+                    .then(() => { showToast('Added to Freelance Requirements'); })
+                    .catch((e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'));
+                  setFlagFreelanceId(null); setFlagFreelanceSkill(''); setFlagFreelanceTimings('');
+                }}
+              >
+                Add to Freelance Requirements
               </Button>
             </DialogFooter>
           </DialogContent>

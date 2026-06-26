@@ -192,6 +192,8 @@ model User {
   retrospectivesRemoved  Retrospective[]    @relation("RetrospectiveRemovedBy")
   retrospectivesOwned    Retrospective[]    @relation("RetrospectiveOwner")
   rolePermissionsUpdated RolePermission[] @relation("RolePermissionUpdatedBy")
+  freelanceFlagged       FreelanceRequirement[] @relation("FreelanceRequirementFlagged")
+  freelanceUpdated       FreelanceRequirement[] @relation("FreelanceRequirementUpdated")
 }
 
 // -------- NOTIFICATIONS --------
@@ -478,6 +480,7 @@ model Client {
   callLogs         CallLog[]
   regularTrainings RegularTraining[] @relation("RegularTrainingClient")
   issueTrackers    IssueTracker[]
+  freelanceRequirements FreelanceRequirement[]
 
   @@index([lifecycle])                                    // every kanban/queue filters by stage
   @@index([nextRenewalDue])                               // RenewalsPage + Roshni queue
@@ -1115,4 +1118,54 @@ model UserFeatureFlag {
   updatedAt DateTime @updatedAt
 
   @@id([userId, flag])
+}
+
+model FreelanceRequirement {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Filled by Regular Team
+  clientName        String
+  skillRequired     String
+  currentTrainer    String?
+  clientTimings     String?   // available timings for demo + sessions
+  trainersUsed      String?   // comma-separated names already tried
+
+  // Filled by Freelance Team
+  trainerName       String?
+  trainerRecording  String?
+  trainerTimings    String?
+  trainerPhone      String?
+  trainerEmail      String?
+
+  // Status (updated by Regular Team)
+  status            String    @default("Open")
+
+  // Priority
+  priority          String    @default("Medium")
+
+  // Long-pending / escalation flag (auto-set after 7 days with no update)
+  isEscalated       Boolean   @default(false)
+
+  // Meta
+  flaggedById   String?
+  flaggedBy     User?    @relation("FreelanceRequirementFlagged", fields: [flaggedById], references: [id], onDelete: SetNull)
+  clientId      String?
+  client        Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  comments      FreelanceRequirementComment[]
+
+  lastUpdatedById   String?
+  lastUpdatedBy     User?    @relation("FreelanceRequirementUpdated", fields: [lastUpdatedById], references: [id], onDelete: SetNull)
+}
+
+model FreelanceRequirementComment {
+  id            String   @id @default(cuid())
+  requirementId String
+  requirement   FreelanceRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  authorId      String
+  authorName    String
+  body          String
+  createdAt     DateTime @default(now())
 }
