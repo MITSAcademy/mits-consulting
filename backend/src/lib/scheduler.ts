@@ -16,6 +16,7 @@ import { sendTeam2Briefing, sendTeam1Briefing, sendSamitaBriefing, sendRoshniBri
 import { runIssueEscalation } from './issueEscalation';
 import { sendMalikaStatusReport } from './malikaStatusReport';
 import { sendPaymentFollowUpReport } from './paymentFollowUpReport';
+import { sendBhavneetDailySheet } from './bhavneetDailySheet';
 
 function safe(label: string, fn: () => Promise<void>) {
   fn().catch((e) => console.error(`[scheduler] ${label} failed:`, e));
@@ -68,11 +69,13 @@ export function initScheduler() {
     timezone: 'Asia/Kolkata',
   });
 
-  // Payment Follow-Up — daily sheet at 12:00 PM IST and 2:00 PM IST
-  cron.schedule('0 12 * * *', () => safe('payment-followup-report-noon', () => sendPaymentFollowUpReport({ force: true })), {
+  // Payment Follow-Up Report — 12:00 PM IST → Vaibhav, Samita, Mitali, Areena
+  cron.schedule('0 12 * * *', () => safe('payment-followup-report', () => sendPaymentFollowUpReport({ force: true })), {
     timezone: 'Asia/Kolkata',
   });
-  cron.schedule('0 14 * * *', () => safe('payment-followup-report-2pm', () => sendPaymentFollowUpReport({ force: true })), {
+
+  // Bhavneet's daily session sheet — 2:00 PM IST → Kashish, Muskan (CC: Samita, Vaibhav, Mitali, Bhavneet)
+  cron.schedule('0 14 * * *', () => safe('bhavneet-daily-sheet', () => sendBhavneetDailySheet()), {
     timezone: 'Asia/Kolkata',
   });
 
