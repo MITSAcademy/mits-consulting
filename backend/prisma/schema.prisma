@@ -703,6 +703,7 @@ model RegularTraining {
   escalationStatus         String?                         // "Work in Progress" | "Not Resolved" | "Resolved"
   escalationActionsTaken   String?                         // notes logged by demo team on actions taken
   escalationFlaggedAt      String?                         // ISO date when escalation was first flagged
+  escalationDemoAck        String?                         // acknowledgment/response from demo team
   trainerReplacementReason String?                         // reason recorded when trainer is changed
   clientMood               String?                         // "happy" | "neutral" | "at_risk"
   trainerAttendance        String?                         // "present" | "late" | "no_show"

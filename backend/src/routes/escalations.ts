@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 
 export const escalationsRouter = Router();
 escalationsRouter.use(requireAuth);
-escalationsRouter.use(requireRole('founder', 'manager', 'lead', 'demo_lead'));
+escalationsRouter.use(requireRole('founder', 'manager', 'lead', 'demo_lead', 'demo_intake'));
 
 escalationsRouter.get('/', async (_req: AuthedRequest, res) => {
   const escalations = await prisma.regularTraining.findMany({
@@ -26,13 +26,14 @@ escalationsRouter.get('/', async (_req: AuthedRequest, res) => {
 
 // PATCH /:id/status — update escalationStatus and/or escalationActionsTaken
 escalationsRouter.patch('/:id/status', async (req: AuthedRequest, res) => {
-  const { escalationStatus, escalationActionsTaken } = req.body || {};
+  const { escalationStatus, escalationActionsTaken, escalationDemoAck } = req.body || {};
   const training = await prisma.regularTraining.findUnique({ where: { id: req.params.id } });
   if (!training) return res.status(404).json({ error: 'Training not found' });
 
   const data: any = {};
   if (escalationStatus !== undefined) data.escalationStatus = escalationStatus;
   if (escalationActionsTaken !== undefined) data.escalationActionsTaken = escalationActionsTaken;
+  if (escalationDemoAck !== undefined) data.escalationDemoAck = escalationDemoAck;
   const updated = await prisma.regularTraining.update({ where: { id: req.params.id }, data });
   res.json(updated);
 });
