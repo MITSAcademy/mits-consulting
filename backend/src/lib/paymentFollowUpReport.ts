@@ -100,33 +100,53 @@ interface Row {
 
 // ── HTML builder ──────────────────────────────────────────────────────────────
 
-function section(title: string, rows: Row[], pillClass: string, pillLabel: (r: Row) => string, rowClass: string): string {
+const PILL: Record<string, string> = {
+  'pill-red':   'display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;background:#fee2e2;color:#991b1b;',
+  'pill-amber': 'display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;background:#fef3c7;color:#92400e;',
+  'pill-blue':  'display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;background:#dbeafe;color:#1e40af;',
+  'pill-green': 'display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534;',
+};
+
+const TH = 'background:#f3f4f6;text-align:left;padding:9px 12px;color:#4b5563;font-weight:600;font-size:12px;border-bottom:2px solid #e5e7eb;';
+const TD = 'padding:9px 12px;font-size:13px;vertical-align:middle;border-bottom:1px solid #f3f4f6;';
+
+function section(title: string, rows: Row[], pillClass: string, pillLabel: (r: Row) => string, bgColor: string): string {
+  const h3 = `<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin:28px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb;color:#374151;">${title}</h3>`;
+
   if (rows.length === 0) {
-    return `<h3>${title}</h3><p class="empty">None.</p>`;
+    return `${h3}<p style="color:#9ca3af;font-style:italic;font-size:13px;margin:0 0 16px;">None.</p>`;
   }
+
   const trs = rows.map(r => {
     const days = r.daysUntilDue;
     const daysStr = days === null ? '—'
-      : days < 0 ? `<span class="red">${Math.abs(days)}d overdue</span>`
-      : days === 0 ? '<span class="amber">Today</span>'
-      : `<span class="amber">In ${days}d</span>`;
+      : days < 0 ? `<span style="color:#b91c1c;font-weight:700;">${Math.abs(days)}d overdue</span>`
+      : days === 0 ? '<span style="color:#b45309;font-weight:700;">Today</span>'
+      : `<span style="color:#b45309;font-weight:600;">In ${days}d</span>`;
 
-    return `<tr class="${rowClass}">
-      <td><strong>${esc(r.name)}</strong>${r.feedbackNeeded ? ' <span class="pill pill-amber" style="font-size:10px;">⚠ feedback</span>' : ''}</td>
-      <td class="muted">${esc(r.hostOwner || '—')}</td>
-      <td>${fmtDate(r.payDate1)}</td>
-      <td>${fmtDate(r.payDate2)}${r.leverageUntil ? ' <span class="muted">(leverage)</span>' : ''}</td>
-      <td>${daysStr}</td>
-      <td class="amount">${fmtAmt(r.cycleAmount, r.currency)}</td>
-      <td><span class="pill ${pillClass}">${pillLabel(r)}</span></td>
+    const rowBg = bgColor ? `background:${bgColor};` : '';
+
+    return `<tr style="${rowBg}">
+      <td style="${TD}"><strong style="font-size:13px;">${esc(r.name)}</strong>${r.feedbackNeeded ? '&nbsp;<span style="display:inline-block;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;">⚠ feedback</span>' : ''}</td>
+      <td style="${TD}color:#9ca3af;font-size:12px;">${esc(r.hostOwner || '—')}</td>
+      <td style="${TD}">${fmtDate(r.payDate1)}</td>
+      <td style="${TD}">${fmtDate(r.payDate2)}${r.leverageUntil ? ' <span style="color:#9ca3af;font-size:11px;">(leverage)</span>' : ''}</td>
+      <td style="${TD}">${daysStr}</td>
+      <td style="${TD}font-weight:600;">${fmtAmt(r.cycleAmount, r.currency)}</td>
+      <td style="${TD}"><span style="${PILL[pillClass] || ''}">${pillLabel(r)}</span></td>
     </tr>`;
   }).join('');
 
-  return `
-    <h3>${title}</h3>
-    <table>
+  return `${h3}
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;margin-bottom:8px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
       <thead><tr>
-        <th>Client</th><th>Host</th><th>Last Paid</th><th>Next Due</th><th>Days</th><th>Amount</th><th>Status</th>
+        <th style="${TH}">Client</th>
+        <th style="${TH}">Host</th>
+        <th style="${TH}">Last Paid</th>
+        <th style="${TH}">Next Due</th>
+        <th style="${TH}">Days</th>
+        <th style="${TH}">Amount</th>
+        <th style="${TH}">Status</th>
       </tr></thead>
       <tbody>${trs}</tbody>
     </table>`;
@@ -146,19 +166,41 @@ function buildHtml(params: {
   const totalUpcoming = upcoming.reduce((s, r) => s + r.cycleAmount, 0);
 
   const summaryHtml = `
-    <div class="summary">
-      <div class="stat"><div class="stat-n red-n">${overdue.length}</div><div class="stat-l">Overdue</div></div>
-      <div class="stat"><div class="stat-n amber-n">${dueSoon.length}</div><div class="stat-l">Due Soon</div></div>
-      <div class="stat"><div class="stat-n blue-n">${upcoming.length}</div><div class="stat-l">Upcoming</div></div>
-      <div class="stat"><div class="stat-n green-n">₹${(totalOverdue + totalDueSoon + totalUpcoming).toLocaleString('en-IN')}</div><div class="stat-l">Total Tracked</div></div>
-    </div>`;
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr>
+        <td width="25%" style="padding:4px;">
+          <table width="100%" cellpadding="12" cellspacing="0" style="background:#fff5f5;border:1px solid #fecaca;border-radius:8px;text-align:center;">
+            <tr><td style="font-size:28px;font-weight:800;color:#b91c1c;line-height:1;">${overdue.length}</td></tr>
+            <tr><td style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;padding-top:4px;">Overdue</td></tr>
+          </table>
+        </td>
+        <td width="25%" style="padding:4px;">
+          <table width="100%" cellpadding="12" cellspacing="0" style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;text-align:center;">
+            <tr><td style="font-size:28px;font-weight:800;color:#b45309;line-height:1;">${dueSoon.length}</td></tr>
+            <tr><td style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;padding-top:4px;">Due Soon</td></tr>
+          </table>
+        </td>
+        <td width="25%" style="padding:4px;">
+          <table width="100%" cellpadding="12" cellspacing="0" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;text-align:center;">
+            <tr><td style="font-size:28px;font-weight:800;color:#1d4ed8;line-height:1;">${upcoming.length}</td></tr>
+            <tr><td style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;padding-top:4px;">Upcoming</td></tr>
+          </table>
+        </td>
+        <td width="25%" style="padding:4px;">
+          <table width="100%" cellpadding="12" cellspacing="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;text-align:center;">
+            <tr><td style="font-size:20px;font-weight:800;color:#15803d;line-height:1;">₹${(totalOverdue + totalDueSoon + totalUpcoming).toLocaleString('en-IN')}</td></tr>
+            <tr><td style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px;padding-top:4px;">Total Tracked</td></tr>
+          </table>
+        </td>
+      </tr>
+    </table>`;
 
   const overdueSection = section(
     `🔴 Overdue (${overdue.length})`,
     overdue,
     'pill-red',
     (r) => `${Math.abs(r.daysUntilDue!)}d overdue`,
-    'overdue-row',
+    '#fff5f5',
   );
 
   const dueSoonSection = section(
@@ -166,7 +208,7 @@ function buildHtml(params: {
     dueSoon,
     'pill-amber',
     (r) => r.daysUntilDue === 0 ? 'Due today' : `Due in ${r.daysUntilDue}d`,
-    'duesoon-row',
+    '#fffbeb',
   );
 
   const upcomingSection = section(
@@ -178,38 +220,45 @@ function buildHtml(params: {
   );
 
   const noDateSection = noDate.length > 0 ? `
-    <h3>⚪ No Due Date Set (${noDate.length})</h3>
-    <table>
-      <thead><tr><th>Client</th><th>Host</th><th>Last Paid</th><th>Amount</th></tr></thead>
+    <h3 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin:28px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb;color:#374151;">⚪ No Due Date Set (${noDate.length})</h3>
+    <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;margin-bottom:8px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+      <thead><tr>
+        <th style="${TH}">Client</th><th style="${TH}">Host</th><th style="${TH}">Last Paid</th><th style="${TH}">Amount</th>
+      </tr></thead>
       <tbody>${noDate.map(r => `<tr>
-        <td>${esc(r.name)}</td>
-        <td class="muted">${esc(r.hostOwner || '—')}</td>
-        <td>${fmtDate(r.payDate1)}</td>
-        <td class="amount">${fmtAmt(r.cycleAmount, r.currency)}</td>
+        <td style="${TD}">${esc(r.name)}</td>
+        <td style="${TD}color:#9ca3af;font-size:12px;">${esc(r.hostOwner || '—')}</td>
+        <td style="${TD}">${fmtDate(r.payDate1)}</td>
+        <td style="${TD}font-weight:600;">${fmtAmt(r.cycleAmount, r.currency)}</td>
       </tr>`).join('')}</tbody>
     </table>` : '';
 
   return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"/>
-<style>${STYLE}</style>
-</head>
-<body>
-<div class="wrap">
-  <h2>💰 Payment Follow-Up — Daily Report</h2>
-  <p class="sub">${esc(date)} · Generated at 12:00 PM IST · MITS Consulting Hub</p>
-  <span class="confidential">🔒 CONFIDENTIAL — Vaibhav, Samita &amp; Mitali only</span>
+<html><head><meta charset="UTF-8"/></head>
+<body style="font-family:'Helvetica Neue',Arial,sans-serif;background:#f4f4f5;margin:0;padding:0;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 0;">
+  <tr><td align="center">
+    <table width="780" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:10px;padding:32px;box-shadow:0 2px 8px rgba(0,0,0,0.09);">
+      <tr><td>
+        <h2 style="margin:0 0 4px;font-size:20px;color:#111827;">💰 Payment Follow-Up — Daily Report</h2>
+        <p style="font-size:12px;color:#9ca3af;margin:0 0 12px;">${esc(date)} · Generated at 12:00 PM IST · MITS Consulting Hub</p>
+        <div style="display:inline-block;background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;border-radius:4px;padding:3px 10px;margin-bottom:20px;letter-spacing:.3px;">🔒 CONFIDENTIAL — Vaibhav, Samita &amp; Mitali only</div>
 
-  ${summaryHtml}
-  ${overdueSection}
-  ${dueSoonSection}
-  ${upcomingSection}
-  ${noDateSection}
+        ${summaryHtml}
+        ${overdueSection}
+        ${dueSoonSection}
+        ${upcomingSection}
+        ${noDateSection}
 
-  <div class="footer">
-    Auto-sent daily at noon IST by MITS Hub · <a href="https://hub.mitssolution.com/follow-up-payments">View live sheet →</a><br/>
-    Covers Active + LeverageGranted clients managed by Mitali's team (Mitali / Bhavneet / Kashish / Muskan).
-  </div>
-</div>
+        <div style="margin-top:28px;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:12px;">
+          Auto-sent daily at noon IST by MITS Hub ·
+          <a href="https://hub.mitssolution.com/follow-up-payments" style="color:#6366f1;">View live sheet →</a><br/>
+          Covers Active + LeverageGranted clients managed by Mitali's team (Mitali / Bhavneet / Kashish / Muskan).
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
 </body></html>`;
 }
 
