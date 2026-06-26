@@ -15,7 +15,7 @@ export async function sendBhavneetDailySheet() {
   const today = todayIST();
 
   // Fetch all active regular trainings hosted by Bhavneet's team (Kashish)
-  const trainings = await prisma.regularTraining.findMany({
+  const trainings = await (prisma as any).regularTraining.findMany({
     where: {
       status: 'active',
       OR: [
@@ -23,13 +23,7 @@ export async function sendBhavneetDailySheet() {
         { temporaryHostId: 'u-kashish' },
       ],
     },
-    select: {
-      id: true,
-      defaultTimeIst: true,
-      scheduledTimeIST: true,
-      meetingMode: true,
-      lastSessionStatus: true,
-      lastSessionComment: true,
+    include: {
       client: { select: { name: true } },
       trainer: { select: { name: true } },
       hostedByDefault: { select: { name: true } },
@@ -47,15 +41,15 @@ export async function sendBhavneetDailySheet() {
     weekday: 'long', day: 'numeric', month: 'short', year: 'numeric',
   });
 
-  const tableRows = trainings.map((t, i) => {
+  const tableRows = trainings.map((t: any, i: number) => {
     const client = t.client?.name || '—';
     const trainer = t.trainer?.name || '—';
     const host = t.temporaryHost?.name || t.hostedByDefault?.name || '—';
-    const time = (t as any).scheduledTimeIST || t.defaultTimeIst || '—';
+    const time = t.scheduledTimeIST || t.defaultTimeIst || '—';
     const tool = t.meetingMode || '—';
     const status = t.lastSessionStatus || '—';
     const comment = t.lastSessionComment || '';
-    const bg = comment ? '#fff3f3' : (i % 2 === 0 ? '#fff' : '#f9fafb');
+    const bg: string = comment ? '#fff3f3' : (i % 2 === 0 ? '#fff' : '#f9fafb');
     return `<tr style="background:${bg}">
       <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-weight:600">${i + 1}. ${client}</td>
       <td style="padding:6px 10px;border-bottom:1px solid #e5e7eb">${trainer}</td>
