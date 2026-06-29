@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 
-const SESSION_LOG_READ  = ['founder', 'manager', 'lead', 'account_manager', 'accounts', 'payment_processor'];
-const SESSION_LOG_WRITE = ['founder', 'manager', 'lead', 'account_manager', 'payment_processor'];
+const SESSION_LOG_READ  = ['founder', 'manager', 'lead', 'staff', 'account_manager', 'accounts', 'payment_processor'];
+const SESSION_LOG_WRITE = ['founder', 'manager', 'lead', 'staff', 'account_manager', 'payment_processor'];
 import { audit } from '../lib/audit';
 
 export const sessionLogsRouter = Router();

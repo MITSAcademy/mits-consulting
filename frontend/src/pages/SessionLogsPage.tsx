@@ -11,7 +11,7 @@ import { todayISO, minPastDate, maxTodayDate, minFutureDate } from '@/lib/utils'
 import { useAuth } from '@/store/auth';
 import { Link } from 'react-router-dom';
 
-const LOG_ROLES = ['founder', 'manager', 'lead', 'account_manager', 'payment_processor'];
+const LOG_ROLES = ['founder', 'manager', 'lead', 'staff', 'account_manager', 'payment_processor'];
 const HOUR_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 const MINUTE_OPTIONS = [0, 15, 30, 45];
 function durationToDecimal(h: number, m: number) { return h + m / 60; }
