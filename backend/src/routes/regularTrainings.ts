@@ -453,10 +453,14 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
   if (!canRead(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const now = new Date();
   // account_manager sees only their own trainings (hostedByDefaultId = me).
-  // lead/founder/manager sees all — they manage across AMs.
+  // lead sees only Mitali's team clients (hostOwnerId scoped).
+  // founder/manager sees all.
   const isSelf = req.user!.role === 'account_manager';
+  const isLead = req.user!.role === 'lead';
+  const MITALI_TEAM = ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'];
   const where: any = { status: 'active' };
   if (isSelf) where.hostedByDefaultId = req.user!.id;
+  else if (isLead) where.client = { hostOwnerId: { in: MITALI_TEAM } };
   const trainings = await prisma.regularTraining.findMany({
     where,
     select: {

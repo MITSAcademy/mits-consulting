@@ -85,30 +85,30 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
 
   const today = todayISO();
   const rows = clients.map((c) => {
-    // Derive payDate1/payDate2 from stored fields or fall back to latest payments
-    const lastPayment = c.payments[0];
-    const payDate1 = c.payDate1 || lastPayment?.paymentDate || null;
+    // payDate1 = upcoming payment due date (what Mitali is chasing NOW)
+    // payDate2 = the payment after that (future reference)
+    const payDate1 = c.payDate1 || null;
     const payDate2 = c.payDate2 || null;
 
-    // How overdue is the next payment?
+    // Overdue/due-soon based on payDate1 (the current due date)
     let daysUntilDue: number | null = null;
-    if (payDate2) {
-      daysUntilDue = Math.floor((Date.parse(payDate2) - Date.parse(today)) / 86_400_000);
+    if (payDate1) {
+      daysUntilDue = Math.floor((Date.parse(payDate1) - Date.parse(today)) / 86_400_000);
     }
 
-    // Feedback gate: feedback must be taken within 3 days before payDate2
+    // Feedback gate: feedback must be taken within 3 days before payDate1
     let feedbackNeeded = false;
-    if (payDate2 && c.lastFeedbackTakenAt) {
+    if (payDate1 && c.lastFeedbackTakenAt) {
       const daysSinceFeedback = Math.floor((Date.parse(today) - Date.parse(c.lastFeedbackTakenAt)) / 86_400_000);
       feedbackNeeded = daysUntilDue !== null && daysUntilDue <= 3 && daysSinceFeedback > 3;
-    } else if (payDate2) {
+    } else if (payDate1) {
       feedbackNeeded = daysUntilDue !== null && daysUntilDue <= 3;
     }
 
     // Status derivation
     let status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'no_date' = 'no_date';
     if (c.paymentPendingVaibhav) status = 'pending_vaibhav';
-    else if (!payDate2)           status = 'no_date';
+    else if (!payDate1)           status = 'no_date';
     else if (daysUntilDue! < 0)  status = 'overdue';
     else if (daysUntilDue! <= 3) status = 'due_soon';
     else                          status = 'paid';
@@ -151,15 +151,14 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
     };
   });
 
-  // Sort by payDate1 ascending (most recent last-paid first = oldest due first).
-  // no_date rows (NA) always go last regardless.
+  // Sort by payDate1 ascending (soonest due first = most urgent at top).
+  // no_date rows (NA) always go last.
   rows.sort((a, b) => {
     const aIsNoDate = a.status === 'no_date';
     const bIsNoDate = b.status === 'no_date';
     if (aIsNoDate && !bIsNoDate) return 1;
     if (!aIsNoDate && bIsNoDate) return -1;
     if (aIsNoDate && bIsNoDate) return a.name.localeCompare(b.name);
-    // Both have a payDate1 — sort ascending by payDate1 (oldest paid first)
     const aD = a.payDate1 || '9999';
     const bD = b.payDate1 || '9999';
     return aD.localeCompare(bD);

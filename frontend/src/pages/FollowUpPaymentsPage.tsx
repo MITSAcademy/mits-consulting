@@ -564,18 +564,24 @@ function PayRow({ r }: { r: Row }) {
 
           {/* Pay Date 1 */}
           <div className="px-4 py-3" style={{ borderRight: '1px solid var(--brand-borderSoft)' }}>
-            <div className="text-[10px] uppercase tracking-wider muted mb-1">Last paid</div>
-            <div className="font-mono text-[13px] font-semibold">{fmtDate(r.payDate1)}</div>
-            {r.payDate1 && <div className="text-[10px] muted mt-0.5">{daysAgoLabel(r.payDate1)}</div>}
+            <div className="text-[10px] uppercase tracking-wider muted mb-1">Next due</div>
+            <div className={`font-mono text-[13px] font-bold ${
+              r.status === 'overdue' ? 'text-red-400' :
+              r.status === 'due_soon' ? 'text-amber-400' : ''}`}>
+              {fmtDate(r.payDate1)}
+            </div>
+            {r.payDate1 && r.daysUntilDue !== null && (
+              <div className="text-[10px] muted mt-0.5">
+                {r.daysUntilDue < 0 ? `${Math.abs(r.daysUntilDue)}d overdue` : r.daysUntilDue === 0 ? 'today' : `in ${r.daysUntilDue}d`}
+              </div>
+            )}
             {!r.payDate1 && <div className="text-[10px] muted mt-0.5">—</div>}
           </div>
 
           {/* Pay Date 2 */}
           <div className="px-4 py-3" style={{ borderRight: '1px solid var(--brand-borderSoft)' }}>
-            <div className="text-[10px] uppercase tracking-wider muted mb-1">Next due</div>
-            <div className={`font-mono text-[13px] font-bold ${
-              r.status === 'overdue' ? 'text-red-400' :
-              r.status === 'due_soon' ? 'text-amber-400' : ''}`}>
+            <div className="text-[10px] uppercase tracking-wider muted mb-1">After that</div>
+            <div className="font-mono text-[13px]">
               {fmtDate(r.payDate2)}
             </div>
             {r.leverageUntil && r.leverageUntil === r.payDate2 && (
@@ -807,8 +813,8 @@ function TableView({ rows }: { rows: Row[] }) {
             <tr>
               <th style={thStyle}>#</th>
               <th style={thStyle}>Client</th>
-              <th style={thStyle}>Pay Date 1</th>
-              <th style={thStyle}>Pay Date 2</th>
+              <th style={thStyle}>Pay Date 1 (Next Due)</th>
+              <th style={thStyle}>Pay Date 2 (After That)</th>
               <th style={thStyle}>Amount</th>
               <th style={thStyle}>Comments</th>
               <th style={thStyle}>Feedback / Notes</th>
@@ -859,16 +865,16 @@ function TableView({ rows }: { rows: Row[] }) {
                     {r.isEmployerCall && <span style={{ marginLeft: 4, fontSize: 10, background: 'rgba(249,168,212,0.3)', color: '#db2777', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>Employer</span>}
                   </td>
 
-                  {/* Pay Date 1 */}
-                  <td style={{ ...tdStyle, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                    {fmtDate(r.payDate1)}
-                  </td>
-
-                  {/* Pay Date 2 */}
+                  {/* Pay Date 1 (next due) */}
                   <td style={{ ...tdStyle, fontFamily: 'monospace', whiteSpace: 'nowrap',
                     color: isOverdue ? 'var(--status-red)' : isDueSoon ? 'var(--status-amber)' : 'var(--brand-text)',
                     fontWeight: isOverdue || isDueSoon ? 700 : 400 }}>
-                    {r.payDate2 ? fmtDate(r.payDate2) : <span style={{ color: 'var(--brand-textMuted)' }}>NA</span>}
+                    {r.payDate1 ? fmtDate(r.payDate1) : <span style={{ color: 'var(--brand-textMuted)' }}>NA</span>}
+                  </td>
+
+                  {/* Pay Date 2 (after that) */}
+                  <td style={{ ...tdStyle, fontFamily: 'monospace', whiteSpace: 'nowrap', color: 'var(--brand-textMuted)' }}>
+                    {r.payDate2 ? fmtDate(r.payDate2) : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
                   </td>
 
                   {/* Amount */}
