@@ -35,7 +35,7 @@ const TEAM_MEMBERS = [
 const VISIBLE_COLUMNS: Record<string, string[]> = {
   founder:         ['unassigned', 'u-bhavneet', 'u-kashish', 'u-muskan'],
   manager:         ['unassigned', 'u-bhavneet', 'u-kashish', 'u-muskan'],
-  lead:            ['u-bhavneet', 'u-kashish',  'u-muskan'],
+  lead:            ['unassigned', 'u-bhavneet', 'u-kashish',  'u-muskan'],
   account_manager: [], // dynamic — filled by user's own id
 };
 
