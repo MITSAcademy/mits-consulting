@@ -348,6 +348,21 @@ followUpPaymentsRouter.patch('/:id/amount', async (req: AuthedRequest, res) => {
 });
 
 // ─────────────────────────────────────────
+// PATCH /:id/account-name — update accountNameRaw; founder/manager only
+// Body: { accountName: string }
+// ─────────────────────────────────────────
+followUpPaymentsRouter.patch('/:id/account-name', async (req: AuthedRequest, res) => {
+  const ACCT_ROLES = ['founder', 'manager'];
+  if (!ACCT_ROLES.includes(req.user!.role)) return res.status(403).json({ error: 'Only founder/manager can edit account name' });
+  const accountName = typeof req.body?.accountName === 'string' ? req.body.accountName.trim() : '';
+  const c = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+  if (!c) return res.status(404).json({ error: 'Client not found' });
+  await prisma.client.update({ where: { id: c.id }, data: { accountNameRaw: accountName || null } });
+  await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${c.name}: accountName → ${accountName || '(cleared)'}`, { clientId: c.id });
+  res.json({ ok: true, accountName: accountName || null });
+});
+
+// ─────────────────────────────────────────
 // POST /:id/pending-vaibhav — founder only
 // ─────────────────────────────────────────
 followUpPaymentsRouter.post('/:id/pending-vaibhav', async (req: AuthedRequest, res) => {

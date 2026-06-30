@@ -429,6 +429,16 @@ function PayRow({ r }: { r: Row }) {
   const [amountReason, setAmountReason] = useState('');
   const [showEmployerDialog, setShowEmployerDialog] = useState(false);
   const [employerNameDraft, setEmployerNameDraft] = useState('');
+  const [editingAccount, setEditingAccount] = useState(false);
+  const [accountDraft, setAccountDraft] = useState('');
+
+  const canEditAmountAccount = ['founder', 'manager'].includes(user?.role || '');
+
+  const saveAccount = useMutation({
+    mutationFn: () => api.patch(`/follow-up-payments/${r.id}/account-name`, { accountName: accountDraft }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingAccount(false); showToast('Account name saved'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
 
   const saveAmount = useMutation({
     mutationFn: () => api.patch(`/follow-up-payments/${r.id}/amount`, { cycleAmount: Number(amountDraft), currency: currencyDraft, reason: amountReason }),
@@ -636,13 +646,13 @@ function PayRow({ r }: { r: Row }) {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 group/amt cursor-pointer"
-                onClick={() => { setAmountDraft(String(r.cycleAmount || '')); setCurrencyDraft(r.currency || 'INR'); setEditingAmount(true); }}>
+              <div className={`flex items-center gap-1.5 group/amt ${canEditAmountAccount ? 'cursor-pointer' : ''}`}
+                onClick={() => { if (!canEditAmountAccount) return; setAmountDraft(String(r.cycleAmount || '')); setCurrencyDraft(r.currency || 'INR'); setEditingAmount(true); }}>
                 {r.cycleAmount > 0
                   ? <span className="font-mono text-[13px] font-semibold">{r.currency} {r.cycleAmount.toLocaleString()}</span>
                   : <span className="text-[12px] muted italic">not set</span>
                 }
-                <span className="text-[10px] opacity-0 group-hover/amt:opacity-100 transition-opacity" style={{ color: 'var(--accent-gold)' }}>edit</span>
+                {canEditAmountAccount && <span className="text-[10px] opacity-0 group-hover/amt:opacity-100 transition-opacity" style={{ color: 'var(--accent-gold)' }}>edit</span>}
               </div>
             )}
             {!isManager && r.feedbackNeeded && (
@@ -728,7 +738,25 @@ function PayRow({ r }: { r: Row }) {
           </div>
           <div className="flex items-center gap-1.5 text-[11px]">
             <span className="muted">Account:</span>
-            <span style={{ color: 'var(--brand-text)' }}>{r.accountName || '—'}</span>
+            {editingAccount ? (
+              <div className="flex items-center gap-1">
+                <input autoFocus value={accountDraft} onChange={e => setAccountDraft(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveAccount.mutate(); if (e.key === 'Escape') setEditingAccount(false); }}
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', borderRadius: 4, padding: '1px 6px', fontSize: 11, width: 140 }}
+                />
+                <button onClick={() => saveAccount.mutate()} style={{ color: 'var(--status-green)', fontSize: 13 }}>✓</button>
+                <button onClick={() => setEditingAccount(false)} style={{ color: 'var(--brand-textMuted)', fontSize: 13 }}>✕</button>
+              </div>
+            ) : (
+              <span
+                style={{ color: 'var(--brand-text)', cursor: canEditAmountAccount ? 'pointer' : 'default' }}
+                className={canEditAmountAccount ? 'hover:underline' : ''}
+                onClick={() => { if (!canEditAmountAccount) return; setAccountDraft(r.accountName || ''); setEditingAccount(true); }}
+                title={canEditAmountAccount ? 'Click to edit account name' : undefined}
+              >
+                {r.accountName || <span className="muted italic">— {canEditAmountAccount ? 'click to add' : ''}</span>}
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -778,11 +806,31 @@ function PayRow({ r }: { r: Row }) {
 function TableView({ rows }: { rows: Row[] }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const user = useAuth((s) => s.user);
+  const canEditAmountAccount = ['founder', 'manager'].includes(user?.role || '');
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
+  const [editingAmount, setEditingAmount] = useState<string | null>(null);
+  const [amountDraft, setAmountDraft] = useState('');
+  const [currencyDraft, setCurrencyDraft] = useState('');
+  const [amountReason, setAmountReason] = useState('');
+  const [editingAccount, setEditingAccount] = useState<string | null>(null);
+  const [accountDraft, setAccountDraft] = useState('');
   const [showComments, setShowComments] = useState<string | null>(null);
   const [showAdvance, setShowAdvance] = useState<Row | null>(null);
   const [showEditDates, setShowEditDates] = useState<Row | null>(null);
+
+  const saveAmount = useMutation({
+    mutationFn: ({ id }: { id: string }) => api.patch(`/follow-up-payments/${id}/amount`, { cycleAmount: Number(amountDraft), currency: currencyDraft, reason: amountReason }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingAmount(null); setAmountReason(''); showToast('Amount saved'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const saveAccount = useMutation({
+    mutationFn: ({ id }: { id: string }) => api.patch(`/follow-up-payments/${id}/account-name`, { accountName: accountDraft }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingAccount(null); showToast('Account saved'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
 
   const saveNote = useMutation({
     mutationFn: ({ id, note }: { id: string; note: string }) =>
@@ -879,7 +927,34 @@ function TableView({ rows }: { rows: Row[] }) {
 
                   {/* Amount */}
                   <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 600 }}>
-                    {r.cycleAmount > 0 ? r.cycleAmount : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
+                    {editingAmount === r.id ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        <div style={{ display: 'flex', gap: 3 }}>
+                          <select value={currencyDraft} onChange={e => setCurrencyDraft(e.target.value)}
+                            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', borderRadius: 4, padding: '1px 2px', fontSize: 10, width: 44 }}>
+                            <option>INR</option><option>USD</option><option>GBP</option><option>AED</option>
+                          </select>
+                          <input type="text" value={amountDraft} onChange={e => setAmountDraft(e.target.value.replace(/[^0-9.]/g, ''))}
+                            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', borderRadius: 4, padding: '1px 4px', fontSize: 11, width: 60 }} autoFocus />
+                        </div>
+                        <input type="text" value={amountReason} onChange={e => setAmountReason(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter' && amountReason.trim()) saveAmount.mutate({ id: r.id }); if (e.key === 'Escape') setEditingAmount(null); }}
+                          placeholder="Reason (required)"
+                          style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', borderRadius: 4, padding: '1px 4px', fontSize: 10, width: 110 }} />
+                        <div style={{ display: 'flex', gap: 3 }}>
+                          <button onClick={() => saveAmount.mutate({ id: r.id })} disabled={!amountReason.trim()} style={{ color: 'var(--status-green)', fontSize: 12 }}>✓</button>
+                          <button onClick={() => setEditingAmount(null)} style={{ color: 'var(--brand-textMuted)', fontSize: 12 }}>✕</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <span
+                        onClick={() => { if (!canEditAmountAccount) return; setAmountDraft(String(r.cycleAmount || '')); setCurrencyDraft(r.currency || 'INR'); setAmountReason(''); setEditingAmount(r.id); }}
+                        style={{ cursor: canEditAmountAccount ? 'pointer' : 'default' }}
+                        title={canEditAmountAccount ? 'Click to edit' : undefined}
+                      >
+                        {r.cycleAmount > 0 ? `${r.currency} ${r.cycleAmount}` : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
+                      </span>
+                    )}
                   </td>
 
                   {/* Comments (latest comment body) */}
@@ -932,8 +1007,24 @@ function TableView({ rows }: { rows: Row[] }) {
                   </td>
 
                   {/* Account */}
-                  <td style={{ ...tdStyle, color: 'var(--brand-textMuted)', whiteSpace: 'nowrap', fontSize: 11 }}>
-                    {r.accountName || '—'}
+                  <td style={{ ...tdStyle, whiteSpace: 'nowrap', fontSize: 11 }}>
+                    {editingAccount === r.id ? (
+                      <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                        <input autoFocus value={accountDraft} onChange={e => setAccountDraft(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') saveAccount.mutate({ id: r.id }); if (e.key === 'Escape') setEditingAccount(null); }}
+                          style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', borderRadius: 4, padding: '1px 4px', fontSize: 11, width: 100 }} />
+                        <button onClick={() => saveAccount.mutate({ id: r.id })} style={{ color: 'var(--status-green)', fontSize: 12 }}>✓</button>
+                        <button onClick={() => setEditingAccount(null)} style={{ color: 'var(--brand-textMuted)', fontSize: 12 }}>✕</button>
+                      </div>
+                    ) : (
+                      <span
+                        onClick={() => { if (!canEditAmountAccount) return; setAccountDraft(r.accountName || ''); setEditingAccount(r.id); }}
+                        style={{ color: 'var(--brand-textMuted)', cursor: canEditAmountAccount ? 'pointer' : 'default' }}
+                        title={canEditAmountAccount ? 'Click to edit account name' : undefined}
+                      >
+                        {r.accountName || '—'}
+                      </span>
+                    )}
                   </td>
 
                   {/* Phone */}
