@@ -129,6 +129,8 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       lastFeedbackTakenAt: c.lastFeedbackTakenAt,
       lastLeverageAskedAt: c.lastLeverageAskedAt,
       paymentPendingVaibhav: c.paymentPendingVaibhav,
+      isEmployerCall: (c as any).isEmployerCall || false,
+      employerName: (c as any).employerName || null,
       clientEmail: (c as any).email || null,
       accountName: (c as any).accountNameRaw || null,
       hostOwner: c.hostOwner?.name || null,
@@ -149,9 +151,19 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
     };
   });
 
-  // Sort: overdue first, then due_soon, then pending_vaibhav, then rest
-  const ORDER = { overdue: 0, due_soon: 1, pending_vaibhav: 2, paid: 3, no_date: 4 };
-  rows.sort((a, b) => ORDER[a.status] - ORDER[b.status] || (a.daysUntilDue ?? 999) - (b.daysUntilDue ?? 999));
+  // Sort by payDate1 ascending (most recent last-paid first = oldest due first).
+  // no_date rows (NA) always go last regardless.
+  rows.sort((a, b) => {
+    const aIsNoDate = a.status === 'no_date';
+    const bIsNoDate = b.status === 'no_date';
+    if (aIsNoDate && !bIsNoDate) return 1;
+    if (!aIsNoDate && bIsNoDate) return -1;
+    if (aIsNoDate && bIsNoDate) return a.name.localeCompare(b.name);
+    // Both have a payDate1 — sort ascending by payDate1 (oldest paid first)
+    const aD = a.payDate1 || '9999';
+    const bD = b.payDate1 || '9999';
+    return aD.localeCompare(bD);
+  });
 
   res.json(rows);
 });
@@ -305,29 +317,42 @@ followUpPaymentsRouter.post('/:id/leverage-asked', async (req: AuthedRequest, re
 });
 
 // ─────────────────────────────────────────
-// PATCH /:id/amount — update cycleAmount + currency
-// Body: { cycleAmount: number, currency?: string }
+// PATCH /:id/amount — update cycleAmount + currency; requires a reason (logged as comment)
+// Body: { cycleAmount: number, currency?: string, reason: string }
+// Restricted to founder/manager only
 // ─────────────────────────────────────────
 followUpPaymentsRouter.patch('/:id/amount', async (req: AuthedRequest, res) => {
-  if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const AMOUNT_ROLES = ['founder', 'manager'];
+  if (!AMOUNT_ROLES.includes(req.user!.role)) return res.status(403).json({ error: 'Only founder/manager can edit amount' });
   const amount = Number(req.body?.cycleAmount);
   const currency = typeof req.body?.currency === 'string' ? req.body.currency.trim().toUpperCase() : undefined;
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
   if (isNaN(amount) || amount < 0) return res.status(400).json({ error: 'cycleAmount must be a non-negative number' });
-  const c = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+  if (!reason) return res.status(400).json({ error: 'reason is required when editing amount' });
+  const c = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, cycleAmount: true, currency: true } });
   if (!c) return res.status(404).json({ error: 'Client not found' });
   await prisma.client.update({
     where: { id: c.id },
     data: { cycleAmount: amount, ...(currency ? { currency } : {}) },
   });
-  await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${c.name}: cycleAmount → ${amount}${currency ? ' ' + currency : ''}`, { clientId: c.id });
+  // Log reason as a comment visible to all
+  await (prisma as any).comment.create({
+    data: {
+      clientId: c.id,
+      authorId: req.user!.id,
+      authorName: req.user!.name,
+      body: `Amount updated: ${c.cycleAmount} ${c.currency} → ${amount} ${currency || c.currency}. Reason: ${reason}`,
+    },
+  });
+  await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${c.name}: cycleAmount → ${amount}${currency ? ' ' + currency : ''} (${reason})`, { clientId: c.id });
   res.json({ ok: true, cycleAmount: amount, ...(currency ? { currency } : {}) });
 });
 
 // ─────────────────────────────────────────
-// POST /:id/pending-vaibhav
+// POST /:id/pending-vaibhav — founder only
 // ─────────────────────────────────────────
 followUpPaymentsRouter.post('/:id/pending-vaibhav', async (req: AuthedRequest, res) => {
-  if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Only founder can mark pending on Vaibhav' });
   const desired = !!req.body?.pending;
   const c = await prisma.client.update({
     where: { id: req.params.id },
@@ -336,4 +361,25 @@ followUpPaymentsRouter.post('/:id/pending-vaibhav', async (req: AuthedRequest, r
   });
   await audit(req.user!.id, req.user!.name, desired ? 'PENDING_VAIBHAV_ON' : 'PENDING_VAIBHAV_OFF', c.name, { clientId: c.id });
   res.json({ ok: true, paymentPendingVaibhav: desired });
+});
+
+// ─────────────────────────────────────────
+// POST /:id/employer-call — toggle employer call flag; requires employerName
+// Body: { isEmployerCall: boolean, employerName?: string }
+// Restricted to manager/founder
+// ─────────────────────────────────────────
+followUpPaymentsRouter.post('/:id/employer-call', async (req: AuthedRequest, res) => {
+  const EM_ROLES = ['founder', 'manager'];
+  if (!EM_ROLES.includes(req.user!.role)) return res.status(403).json({ error: 'Only manager/founder can mark employer calls' });
+  const desired = !!req.body?.isEmployerCall;
+  const employerName = typeof req.body?.employerName === 'string' ? req.body.employerName.trim() : '';
+  if (desired && !employerName) return res.status(400).json({ error: 'employerName is required when marking as employer call' });
+  const c = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+  if (!c) return res.status(404).json({ error: 'Client not found' });
+  await (prisma as any).client.update({
+    where: { id: c.id },
+    data: { isEmployerCall: desired, ...(desired ? { employerName } : {}) },
+  });
+  await audit(req.user!.id, req.user!.name, desired ? 'EMPLOYER_CALL_ON' : 'EMPLOYER_CALL_OFF', `${c.name}${desired ? ' · ' + employerName : ''}`, { clientId: c.id });
+  res.json({ ok: true, isEmployerCall: desired, employerName: desired ? employerName : null });
 });

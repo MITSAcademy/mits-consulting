@@ -48,6 +48,8 @@ interface Row {
   lastFeedbackTakenAt: string | null;
   lastLeverageAskedAt: string | null;
   paymentPendingVaibhav: boolean;
+  isEmployerCall: boolean;
+  employerName: string | null;
   hostOwner: string | null;
   clientPhone: string | null;
   clientEmail: string | null;
@@ -424,10 +426,19 @@ function PayRow({ r }: { r: Row }) {
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountDraft, setAmountDraft] = useState('');
   const [currencyDraft, setCurrencyDraft] = useState('');
+  const [amountReason, setAmountReason] = useState('');
+  const [showEmployerDialog, setShowEmployerDialog] = useState(false);
+  const [employerNameDraft, setEmployerNameDraft] = useState('');
 
   const saveAmount = useMutation({
-    mutationFn: () => api.patch(`/follow-up-payments/${r.id}/amount`, { cycleAmount: Number(amountDraft), currency: currencyDraft }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingAmount(false); showToast('Amount saved'); },
+    mutationFn: () => api.patch(`/follow-up-payments/${r.id}/amount`, { cycleAmount: Number(amountDraft), currency: currencyDraft, reason: amountReason }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingAmount(false); setAmountReason(''); showToast('Amount saved'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const toggleEmployer = useMutation({
+    mutationFn: (on: boolean) => api.post(`/follow-up-payments/${r.id}/employer-call`, { isEmployerCall: on, employerName: on ? employerNameDraft : '' }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setShowEmployerDialog(false); showToast('Updated'); },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
@@ -444,6 +455,7 @@ function PayRow({ r }: { r: Row }) {
   });
 
   const borderColor =
+    r.isEmployerCall ? '#f9a8d4' :
     r.status === 'overdue'  ? 'var(--status-red)' :
     r.status === 'due_soon' ? 'var(--status-amber)' :
     'var(--brand-borderSoft)';
@@ -451,16 +463,17 @@ function PayRow({ r }: { r: Row }) {
   return (
     <>
       <div className="rounded-xl mb-2" style={{
-        background: 'var(--bg-card)',
+        background: r.isEmployerCall ? 'rgba(249,168,212,0.08)' : r.status === 'no_date' ? 'rgba(34,197,94,0.05)' : 'var(--bg-card)',
         border: `1px solid ${borderColor}`,
         overflow: 'hidden',
       }}>
         {/* Top row: name + status badge + nav links */}
         <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
           <div className="flex items-center gap-3 min-w-0">
-            <Link to={`/clients/${r.id}`} className="font-bold text-[14px] hover:underline truncate" style={{ color: 'var(--brand-text)' }}>
-              {r.name}
+            <Link to={`/clients/${r.id}`} className="font-bold text-[14px] hover:underline truncate" style={{ color: r.isEmployerCall ? '#db2777' : 'var(--brand-text)' }}>
+              {r.name}{r.isEmployerCall && r.employerName ? ` + ${r.employerName}` : ''}
             </Link>
+            {r.isEmployerCall && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0" style={{ background: 'rgba(249,168,212,0.3)', color: '#db2777' }}>Employer</span>}
             <span className="text-[11px] muted shrink-0">{r.engagementType}</span>
             {r.hostOwner && <span className="text-[11px] shrink-0" style={{ color: 'var(--accent-gold)' }}>· {r.hostOwner}</span>}
           </div>
@@ -579,31 +592,42 @@ function PayRow({ r }: { r: Row }) {
           <div className="px-4 py-3" style={{ borderRight: '1px solid var(--brand-borderSoft)' }}>
             <div className="text-[10px] uppercase tracking-wider muted mb-1">Amount</div>
             {editingAmount ? (
-              <div className="flex items-center gap-1 mt-0.5">
-                <select
-                  value={currencyDraft}
-                  onChange={e => setCurrencyDraft(e.target.value)}
-                  className="rounded border px-1 py-0.5 text-[11px] h-7 w-16"
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}>
-                  <option value="INR">INR</option>
-                  <option value="USD">USD</option>
-                  <option value="GBP">GBP</option>
-                  <option value="AED">AED</option>
-                </select>
+              <div className="flex flex-col gap-1 mt-0.5">
+                <div className="flex items-center gap-1">
+                  <select
+                    value={currencyDraft}
+                    onChange={e => setCurrencyDraft(e.target.value)}
+                    className="rounded border px-1 py-0.5 text-[11px] h-7 w-16"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}>
+                    <option value="INR">INR</option>
+                    <option value="USD">USD</option>
+                    <option value="GBP">GBP</option>
+                    <option value="AED">AED</option>
+                  </select>
+                  <input
+                    type="text" inputMode="numeric" pattern="[0-9]*" min="0" value={amountDraft}
+                    onChange={e => setAmountDraft(e.target.value.replace(/[^0-9.]/g, ''))}
+                    className="rounded border px-2 py-0.5 text-[12px] font-mono h-7"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', width: 80 }}
+                    autoFocus
+                  />
+                </div>
                 <input
-                  type="text" inputMode="numeric" pattern="[0-9]*" min="0" value={amountDraft}
-                  onChange={e => setAmountDraft(e.target.value.replace(/[^0-9.]/g, ''))}
-                  onKeyDown={e => { if (e.key === 'Enter') saveAmount.mutate(); if (e.key === 'Escape') setEditingAmount(false); }}
-                  className="rounded border px-2 py-0.5 text-[12px] font-mono h-7"
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', width: 80 }}
-                  autoFocus
+                  type="text" value={amountReason}
+                  onChange={e => setAmountReason(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && amountReason.trim()) saveAmount.mutate(); if (e.key === 'Escape') setEditingAmount(false); }}
+                  placeholder="Reason for change (required)"
+                  className="rounded border px-2 py-0.5 text-[11px]"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', width: 180 }}
                 />
-                <button onClick={() => saveAmount.mutate()} disabled={saveAmount.isPending}
-                  className="text-[10px] px-2 py-0.5 rounded font-semibold"
-                  style={{ background: 'var(--brand-accent)', color: 'white' }}>✓</button>
-                <button onClick={() => setEditingAmount(false)}
-                  className="text-[10px] px-2 py-0.5 rounded"
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textMuted)' }}>✕</button>
+                <div className="flex gap-1">
+                  <button onClick={() => saveAmount.mutate()} disabled={saveAmount.isPending || !amountReason.trim()}
+                    className="text-[10px] px-2 py-0.5 rounded font-semibold"
+                    style={{ background: 'var(--brand-accent)', color: 'white', opacity: !amountReason.trim() ? 0.5 : 1 }}>✓ Save</button>
+                  <button onClick={() => { setEditingAmount(false); setAmountReason(''); }}
+                    className="text-[10px] px-2 py-0.5 rounded"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-textMuted)' }}>✕</button>
+                </div>
               </div>
             ) : (
               <div className="flex items-center gap-1.5 group/amt cursor-pointer"
@@ -646,9 +670,9 @@ function PayRow({ r }: { r: Row }) {
 
           {/* Actions */}
           <div className="px-4 py-3 flex flex-col gap-1.5 justify-center">
-            <Button size="sm" variant="primary" onClick={() => setShowAdvance(true)}
-              title="Mark payment collected — rolls date forward">
-              <CheckCircle2 size={11}/> Payment done
+            <Button size="sm" onClick={() => setShowEditDates(true)}
+              title="Edit pay dates">
+              ✏ Edit dates
             </Button>
             <Button size="sm"
               style={r.leverageUntil ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
@@ -656,22 +680,24 @@ function PayRow({ r }: { r: Row }) {
               title="Extend due date by max 3 days">
               ⟳ Leverage
             </Button>
-            {!isManager && (
-              <>
-                <Button size="sm"
-                  style={r.feedbackNeeded ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
-                  onClick={() => feedbackTaken.mutate()}
-                  title="Mark feedback taken today">
-                  <MessageSquare size={11}/> Feedback{r.feedbackNeeded ? ' ⚠' : ''}
-                </Button>
-                <Button size="sm"
-                  style={r.paymentPendingVaibhav ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
-                  onClick={() => togglePending.mutate()}
-                  title="Flag this payment as pending on Vaibhav">
-                  {r.paymentPendingVaibhav ? '✓ Pending V' : 'Pending V'}
-                </Button>
-              </>
+            <Button size="sm" variant="primary" onClick={() => setShowAdvance(true)}
+              title="Mark payment collected — rolls date forward">
+              <CheckCircle2 size={11}/> Payment done
+            </Button>
+            {isManager && (
+              <Button size="sm"
+                style={r.isEmployerCall ? { background: 'rgba(249,168,212,0.3)', color: '#db2777', border: '1px solid #f9a8d4' } : {}}
+                onClick={() => { setEmployerNameDraft(r.employerName || ''); setShowEmployerDialog(true); }}
+                title="Mark as employer call (bulk invoice)">
+                {r.isEmployerCall ? '🏢 Employer ✓' : '🏢 Employer'}
+              </Button>
             )}
+            <Button size="sm"
+              style={r.feedbackNeeded ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
+              onClick={() => feedbackTaken.mutate()}
+              title="Mark feedback taken today">
+              <MessageSquare size={11}/> Feedback{r.feedbackNeeded ? ' ⚠' : ''}
+            </Button>
           </div>
         </div>
         {/* Info strip: Phone | Email | Feedback Date | Account Name */}
@@ -705,6 +731,38 @@ function PayRow({ r }: { r: Row }) {
       {showAdvance   && <AdvancePaymentModal r={r} onClose={() => setShowAdvance(false)}/>}
       {showLeverage  && <LeverageModal r={r} onClose={() => setShowLeverage(false)}/>}
       {showEditDates && <EditDatesModal r={r} onClose={() => setShowEditDates(false)}/>}
+      {showEmployerDialog && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowEmployerDialog(false); }}>
+          <div className="rounded-2xl p-5 w-[340px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+            <div className="font-bold text-sm mb-3">
+              {r.isEmployerCall ? 'Remove employer call flag' : 'Mark as employer call'} — {r.name}
+            </div>
+            {!r.isEmployerCall && (
+              <div className="form-row mb-4">
+                <Label>Employer name (required)</Label>
+                <input
+                  type="text" value={employerNameDraft}
+                  onChange={e => setEmployerNameDraft(e.target.value)}
+                  placeholder="e.g. Infosys, TCS, Wipro…"
+                  className="input w-full"
+                  autoFocus
+                />
+                <div className="text-[11px] muted mt-1">Client will display as "{r.name} + {employerNameDraft || 'employer'}" in pink.</div>
+              </div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <Button onClick={() => setShowEmployerDialog(false)}>Cancel</Button>
+              {r.isEmployerCall
+                ? <Button variant="primary" onClick={() => toggleEmployer.mutate(false)} disabled={toggleEmployer.isPending}>Remove flag</Button>
+                : <Button variant="primary" disabled={!employerNameDraft.trim() || toggleEmployer.isPending} onClick={() => toggleEmployer.mutate(true)}
+                    style={{ background: '#db2777' }}>Mark as employer call</Button>
+              }
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }
@@ -766,15 +824,21 @@ function TableView({ rows }: { rows: Row[] }) {
               const isOverdue = r.status === 'overdue';
               const isDueSoon = r.status === 'due_soon';
 
-              const rowBg = isPendingV
+              const isNoDate = r.status === 'no_date';
+              const isEmployer = r.isEmployerCall;
+              const rowBg = isEmployer
+                ? 'rgba(249,168,212,0.1)'   // pink — employer call
+                : isPendingV
                 ? 'rgba(250,204,21,0.12)'   // yellow — pending Vaibhav
                 : isOverdue
                 ? 'rgba(239,68,68,0.08)'    // red tint — overdue
                 : isDueSoon
                 ? 'rgba(245,158,11,0.07)'   // amber tint — due soon
+                : isNoDate
+                ? 'rgba(34,197,94,0.07)'    // green tint — no date = all paid
                 : i % 2 === 0 ? 'var(--bg-card)' : 'rgba(255,255,255,0.02)';
 
-              const nameColor = isPendingV ? '#ca8a04' : isOverdue ? 'var(--status-red)' : 'var(--brand-text)';
+              const nameColor = isEmployer ? '#db2777' : isPendingV ? '#ca8a04' : isOverdue ? 'var(--status-red)' : 'var(--brand-text)';
 
               const tdStyle: React.CSSProperties = {
                 padding: '7px 10px',
@@ -789,7 +853,10 @@ function TableView({ rows }: { rows: Row[] }) {
 
                   {/* Client */}
                   <td style={{ ...tdStyle, fontWeight: 600, color: nameColor, whiteSpace: 'nowrap' }}>
-                    <Link to={`/clients/${r.id}`} className="hover:underline">{r.name}</Link>
+                    <Link to={`/clients/${r.id}`} className="hover:underline">
+                      {r.name}{r.isEmployerCall && r.employerName ? ` + ${r.employerName}` : ''}
+                    </Link>
+                    {r.isEmployerCall && <span style={{ marginLeft: 4, fontSize: 10, background: 'rgba(249,168,212,0.3)', color: '#db2777', borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>Employer</span>}
                   </td>
 
                   {/* Pay Date 1 */}
@@ -880,26 +947,10 @@ function TableView({ rows }: { rows: Row[] }) {
                   {/* Actions */}
                   <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => setShowAdvance(r)} title="Mark payment done"
-                        className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80"
-                        style={{ background: 'rgba(34,197,94,0.15)', color: 'var(--status-green)', border: '1px solid rgba(34,197,94,0.3)' }}>
-                        ✓ Done
-                      </button>
                       <button onClick={() => setShowEditDates(r)} title="Edit pay dates"
-                        className="px-2 py-0.5 rounded text-[10px] hover:opacity-80"
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80"
                         style={{ background: 'var(--bg-input)', color: 'var(--brand-textMuted)', border: '1px solid var(--brand-borderSoft)' }}>
-                        Dates
-                      </button>
-                      <button
-                        onClick={() => togglePending.mutate({ id: r.id, pending: !r.paymentPendingVaibhav })}
-                        title="Toggle pending on Vaibhav"
-                        className="px-2 py-0.5 rounded text-[10px] hover:opacity-80"
-                        style={{
-                          background: isPendingV ? 'rgba(250,204,21,0.2)' : 'var(--bg-input)',
-                          color: isPendingV ? '#ca8a04' : 'var(--brand-textMuted)',
-                          border: `1px solid ${isPendingV ? 'rgba(250,204,21,0.4)' : 'var(--brand-borderSoft)'}`,
-                        }}>
-                        {isPendingV ? '★ V' : '☆ V'}
+                        ✏ Dates
                       </button>
                     </div>
                   </td>

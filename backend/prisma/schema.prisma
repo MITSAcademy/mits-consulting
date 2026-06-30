@@ -440,6 +440,7 @@ model Client {
   // Payment date tracking for Mitali's follow-up sheet.
   // payDate1 = last paid date, payDate2 = next due date.
   // When a payment comes in: payDate1 ← payDate2, payDate2 ← new due date.
+  isEmployerCall             Boolean  @default(false)  // bulk-invoice employer call (pink highlight)
   payDate1                   String?  // ISO date — last payment date (= most recent collected)
   payDate2                   String?  // ISO date — next due date (the date Mitali is chasing)
   // When a client can't pay, Mitali grants leverage — extends payDate2 by max 3 days.
