@@ -59,6 +59,7 @@ const app = express();
 const PORT = Number(process.env.PORT) || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 
+app.set('trust proxy', 1); // Render sits behind a proxy — needed for rate-limit IP detection
 app.use(compression());  // gzip all JSON responses — cuts payload size ~60-70%
 app.use(
   cors({
