@@ -459,7 +459,10 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
   const isLead = req.user!.role === 'lead';
   const MITALI_TEAM = ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'];
   const where: any = { status: 'active' };
-  if (isSelf) where.hostedByDefaultId = req.user!.id;
+  if (isSelf) where.OR = [
+    { hostedByDefaultId: req.user!.id },
+    { client: { assignedAmId: req.user!.id } },
+  ];
   else if (isLead) where.OR = [
     { client: { hostOwnerId: { in: MITALI_TEAM } } },
     { hostedByDefaultId: null },
