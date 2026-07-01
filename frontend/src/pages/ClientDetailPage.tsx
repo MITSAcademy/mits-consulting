@@ -1339,6 +1339,10 @@ function RecordIntakeModal({ client, onClose }: any) {
   const [data, setData] = useState<Record<string, string>>({ ...((client.intakeData as any) || {}) });
   const [raw, setRaw] = useState('');
   const [lastFilled, setLastFilled] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<{ name: string; url: string }[]>(
+    ((client.intakeData as any)?.attachments as { name: string; url: string }[]) || []
+  );
+  const [uploading, setUploading] = useState(false);
 
   function applyAutoFill() {
     const parsed = parseIntakeMessage(raw);
@@ -1383,7 +1387,7 @@ function RecordIntakeModal({ client, onClose }: any) {
     mutationFn: async () => {
       // 1. Save workflow fields via PATCH ("workflow" category — Anjali/Taran allowed)
       await api.patch(`/clients/${client.id}`, {
-        intakeData: data,
+        intakeData: { ...data, attachments },
         intakeReceivedAt: todayISO(),
         intakeSkillHint: data.detailed_skill_set || client.intakeSkillHint,
       });
@@ -1491,9 +1495,55 @@ function RecordIntakeModal({ client, onClose }: any) {
           </div>
         )}
 
+        {/* Attachments */}
+        <div className="mt-3">
+          <Label>Attachments (documents, screenshots)</Label>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {attachments.map((a, i) => (
+              <div key={i} className="flex items-center gap-1.5 bg-bg-input border border-brand-border rounded px-2 py-1 text-xs">
+                <a href={a.url} target="_blank" rel="noreferrer" className="text-brand-blue underline max-w-[160px] truncate">{a.name}</a>
+                <button
+                  type="button"
+                  className="text-brand-red hover:opacity-70 font-bold leading-none"
+                  onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
+                  title="Remove"
+                >×</button>
+              </div>
+            ))}
+            <label className={`flex items-center gap-1.5 cursor-pointer text-xs px-2 py-1 rounded border border-dashed border-brand-border hover:border-brand-blue text-brand-blue ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+              {uploading ? 'Uploading…' : '+ Add file'}
+              <input
+                type="file"
+                className="hidden"
+                multiple
+                onChange={async (e) => {
+                  const files = Array.from(e.target.files || []);
+                  if (!files.length) return;
+                  setUploading(true);
+                  try {
+                    const uploaded: { name: string; url: string }[] = [];
+                    for (const file of files) {
+                      const fd = new FormData();
+                      fd.append('file', file);
+                      const r = await api.post('/uploads', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                      uploaded.push({ name: file.name, url: r.data.url });
+                    }
+                    setAttachments((prev) => [...prev, ...uploaded]);
+                  } catch {
+                    showToast('File upload failed', 'error');
+                  } finally {
+                    setUploading(false);
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!data.detailed_skill_set || save.isPending} onClick={() => save.mutate()}>
+          <Button variant="primary" disabled={!data.detailed_skill_set || save.isPending || uploading} onClick={() => save.mutate()}>
             {save.isPending ? 'Saving…' : 'Save replies'}
           </Button>
         </DialogFooter>
