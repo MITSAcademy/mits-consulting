@@ -9,10 +9,10 @@ import { Input, Label, Select } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { Pill } from '@/components/ui/pill';
-import { formatPhone, waLink, readAvailabilitySlots, formatAvailabilitySlots, fmtTrainerId } from '@/lib/utils';
+import { formatPhone, waLink, readAvailabilitySlots, formatAvailabilitySlots, fmtTrainerId, downloadVCard } from '@/lib/utils';
 import type { AvailabilitySlot } from '@/lib/utils';
 import { AvailabilitySlotsEditor } from '@/components/AvailabilitySlotsEditor';
-import { MessageCircle, ArrowUp, ArrowDown, Filter, X, UserSearch, Mail } from 'lucide-react';
+import { MessageCircle, ArrowUp, ArrowDown, Filter, X, UserSearch, Mail, UserPlus } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
 import { SendMessageModal } from '@/components/SendMessageModal';
 
@@ -532,6 +532,13 @@ export function TrainersPage() {
                             className="flex items-center justify-center w-7 h-7 rounded-lg hover:opacity-80"
                             style={{ background: 'rgba(37,211,102,0.15)', border: '1px solid rgba(37,211,102,0.35)' }}>
                             <MessageCircle size={12} style={{ color: '#25D366' }}/>
+                          </button>
+                        )}
+                        {t.phoneDigits && (
+                          <button title="Save to phone contacts (.vcf)" onClick={(e) => { e.stopPropagation(); downloadVCard(t.name, t.phoneCode, t.phoneDigits, t.email); }}
+                            className="flex items-center justify-center w-7 h-7 rounded-lg hover:opacity-80"
+                            style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)' }}>
+                            <UserPlus size={12} style={{ color: '#818cf8' }}/>
                           </button>
                         )}
                       </div>

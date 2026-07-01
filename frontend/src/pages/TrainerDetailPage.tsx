@@ -6,7 +6,7 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
-import { formatPhone, readAvailabilitySlots, formatAvailabilitySlots, fmtTrainerId } from '@/lib/utils';
+import { formatPhone, readAvailabilitySlots, formatAvailabilitySlots, fmtTrainerId, downloadVCard } from '@/lib/utils';
 import { AvailabilitySlotsEditor } from '@/components/AvailabilitySlotsEditor';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
@@ -15,7 +15,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 import { CommentSection } from '@/components/CommentSection';
 import { ActivityLog } from '@/components/ActivityLog';
-import { Mail, MessageCircle, ArrowLeft, ExternalLink } from 'lucide-react';
+import { Mail, MessageCircle, ArrowLeft, ExternalLink, UserPlus } from 'lucide-react';
 
 export function TrainerDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -82,6 +82,11 @@ export function TrainerDetailPage() {
                 style={{ background: '#25D366', color: 'white', borderColor: '#25D366' }}>
                 <MessageCircle size={14}/> WhatsApp
               </Button>
+              {t.phoneDigits && (
+                <Button size="sm" onClick={() => downloadVCard(t.name, t.phoneCode, t.phoneDigits, t.email)} title="Save to phone contacts">
+                  <UserPlus size={14}/> Save contact
+                </Button>
+              )}
               <Button onClick={() => { setForm({ ...t }); setEdit(true); }}>Edit</Button>
             </>
           )

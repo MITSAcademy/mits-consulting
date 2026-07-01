@@ -105,6 +105,27 @@ export function waLink(code?: string | null, digits?: string | null, message?: s
 
 export type AvailabilitySlot = { window?: string; fromIst?: string; toIst?: string };
 
+export function downloadVCard(name: string, phoneCode: string | null | undefined, phoneDigits: string | null | undefined, email?: string | null) {
+  const phone = `${phoneCode || ''}${phoneDigits || ''}`;
+  const lines = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `FN:${name}`,
+    `N:${name};;;;`,
+    phoneDigits ? `TEL;TYPE=CELL:${phone}` : '',
+    email ? `EMAIL:${email}` : '',
+    'ORG:MITS Solution',
+    'END:VCARD',
+  ].filter(Boolean).join('\r\n');
+  const blob = new Blob([lines], { type: 'text/vcard' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${name.replace(/\s+/g, '_')}.vcf`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /** Normalize whatever's stored (array, single legacy fields, null) into AvailabilitySlot[]. */
 export function readAvailabilitySlots(t: any): AvailabilitySlot[] {
   if (Array.isArray(t?.availabilitySlots) && t.availabilitySlots.length) {
