@@ -74,11 +74,11 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
   const isAM = user.role === 'account_manager';
   const [sessionHappened, setSessionHappened] = useState(true);
 
-  // For AM: clients already backend-scoped to their hostOwnerId; use paginated response
+  // For AM: use scope=team so clients are scoped by assignedAmId (all clients assigned to them)
   const { data: clientsResp } = useQuery({
-    queryKey: ['clients-active'],
+    queryKey: ['clients-active', isAM],
     queryFn: () =>
-      api.get('/clients', isAM ? {} : {}).then((r) => {
+      api.get('/clients', isAM ? { params: { scope: 'team' } } : {}).then((r) => {
         const arr = Array.isArray(r.data) ? r.data : (r.data?.data || []);
         return arr.filter((c: any) => ['Active', 'LeverageGranted'].includes(c.lifecycle))
                   .sort((a: any, b: any) => a.name.localeCompare(b.name));
@@ -86,14 +86,23 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
   });
   const clients = (clientsResp as any[]) || [];
 
-  // For AM: only show trainers linked to their clients as primaryTrainer
+  // For AM: also fetch regular trainings to include trainers assigned via training records
+  const { data: myTrainings } = useQuery({
+    queryKey: ['my-sessions-am'],
+    queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
+    enabled: isAM,
+  });
+
   const { data: allTrainers } = useQuery({
     queryKey: ['trainers-active'],
     queryFn: () => api.get('/trainers').then((r) => r.data.filter((t: any) => t.active)),
   });
   const trainers = isAM
     ? (() => {
-        const trainerIds = new Set(clients.map((c: any) => c.primaryTrainerId).filter(Boolean));
+        const trainerIds = new Set<string>([
+          ...clients.map((c: any) => c.primaryTrainerId).filter(Boolean),
+          ...((myTrainings || []) as any[]).map((t: any) => t.trainer?.id).filter(Boolean),
+        ]);
         return (allTrainers || []).filter((t: any) => trainerIds.has(t.id));
       })()
     : (allTrainers || []);
