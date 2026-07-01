@@ -12,6 +12,7 @@ import { homePathFor, HOME_ROLES } from '@/lib/utils';
 const HomePage = lazy(() => import('@/pages/HomePage').then((m) => ({ default: m.HomePage })));
 const PipelinePage = lazy(() => import('@/pages/PipelinePage').then((m) => ({ default: m.PipelinePage })));
 const MoneyFlowPage = lazy(() => import('@/pages/MoneyFlowPage').then((m) => ({ default: m.MoneyFlowPage })));
+const FinancePage = lazy(() => import('@/pages/FinancePage').then((m) => ({ default: m.FinancePage })));
 const VaibhavQueuePage = lazy(() => import('@/pages/VaibhavQueuePage').then((m) => ({ default: m.VaibhavQueuePage })));
 const ClientsPage = lazy(() => import('@/pages/ClientsPage').then((m) => ({ default: m.ClientsPage })));
 const ClientDetailPage = lazy(() => import('@/pages/ClientDetailPage').then((m) => ({ default: m.ClientDetailPage })));
@@ -111,6 +112,7 @@ export default function App() {
           <Route path="/" element={<HomeGate />} />
           <Route path="/pipeline" element={<PipelinePage />} />
           <Route path="/money-flow" element={<MoneyFlowPage />} />
+          <Route path="/finance" element={<FinancePage />} />
           <Route path="/vaibhav-queue" element={<VaibhavQueuePage />} />
           <Route path="/clients" element={<ClientsPage />} />
           <Route path="/clients/:id" element={<ClientDetailPage />} />

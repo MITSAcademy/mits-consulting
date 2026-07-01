@@ -39,6 +39,7 @@ const NAV: NavItem[] = [
   // ── Overview (founder + Samita demo ops) ──────────────────────────────
   { section: 'overview', page: '/', label: 'Home', icon: Home, roles: ['founder', 'demo_lead'] },
   { section: 'overview', page: '/money-flow', label: 'Money flow', icon: ArrowRightLeft, roles: ['founder', 'accounts'] },
+  { section: 'overview', page: '/finance', label: 'Finance dashboard', icon: BarChart3, roles: ['founder'] },
   { section: 'overview', page: '/vaibhav-queue', label: 'Vaibhav queue', icon: AlertCircle, roles: ['founder', 'accounts'] },
   { section: 'overview', page: '/pipeline', label: 'Pipeline overview', icon: Target, roles: ['founder', 'demo_lead'] },
   { section: 'overview', page: '/reports/demo-team', label: 'Demo team report', icon: ChartLine, roles: ['founder', 'demo_lead'] },
