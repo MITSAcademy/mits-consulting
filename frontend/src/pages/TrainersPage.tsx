@@ -63,6 +63,38 @@ export function TrainersPage() {
   const [msgTrainer, setMsgTrainer] = useState<any>(null);
   const [msgKind, setMsgKind] = useState<'Email' | 'WhatsApp'>('WhatsApp');
 
+  // AM: assign trainer to client flow
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignSearch, setAssignSearch] = useState('');
+  const [assignTrainer, setAssignTrainer] = useState<any>(null);
+  const [assignClientId, setAssignClientId] = useState('');
+
+  const assignMutation = useMutation({
+    mutationFn: () => api.patch(`/clients/${assignClientId}`, { primaryTrainerId: assignTrainer?.id }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['trainers'] });
+      qc.invalidateQueries({ queryKey: ['clients-active'] });
+      showToast(`${assignTrainer?.name} assigned as trainer`);
+      setAssignOpen(false);
+      setAssignTrainer(null);
+      setAssignSearch('');
+      setAssignClientId('');
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const assignSearchResults = useMemo(() => {
+    if (!assignSearch.trim() || !data) return [];
+    const q2 = assignSearch.toLowerCase();
+    return (data as any[])
+      .filter((t: any) => t.active && (
+        t.name.toLowerCase().includes(q2) ||
+        (t.phoneDigits && t.phoneDigits.includes(q2)) ||
+        (t.phoneCode && `${t.phoneCode}${t.phoneDigits}`.includes(q2))
+      ))
+      .slice(0, 10);
+  }, [assignSearch, data]);
+
   function addSkillChip() {
     const s = skillInput.trim();
     if (s && !skillChips.includes(s.toLowerCase())) {
@@ -180,6 +212,69 @@ export function TrainersPage() {
             <Button size="sm" variant={showInactive ? 'primary' : 'default'} onClick={() => setShowInactive(!showInactive)}>
               {showInactive ? 'Hiding inactive' : 'Show inactive'}
             </Button>
+            {isAM && (
+              <Dialog open={assignOpen} onOpenChange={(v) => { setAssignOpen(v); if (!v) { setAssignTrainer(null); setAssignSearch(''); setAssignClientId(''); } }}>
+                <DialogTrigger asChild>
+                  <Button variant="primary">🔗 Assign trainer to client</Button>
+                </DialogTrigger>
+                <DialogContent title="Assign trainer to client" description="Search the full trainer pool by name or phone number, then choose which client to assign them to.">
+                  <div className="form-row">
+                    <Label>Search trainer (name or phone)</Label>
+                    <Input
+                      placeholder="e.g. Kiran or 9876543210"
+                      value={assignSearch}
+                      onChange={(e) => { setAssignSearch(e.target.value); setAssignTrainer(null); }}
+                      autoComplete="off"
+                    />
+                    {assignSearch.trim() && !assignTrainer && (
+                      <div className="mt-1 border border-brand-border rounded bg-white shadow max-h-48 overflow-y-auto text-sm">
+                        {assignSearchResults.length === 0 ? (
+                          <div className="px-3 py-2 text-gray-400">No trainers found</div>
+                        ) : assignSearchResults.map((t: any) => (
+                          <div
+                            key={t.id}
+                            className="px-3 py-2 cursor-pointer hover:bg-blue-50"
+                            onClick={() => { setAssignTrainer(t); setAssignSearch(t.name); }}
+                          >
+                            <span className="font-medium">{t.name}</span>
+                            {t.phoneDigits && <span className="ml-2 text-xs text-gray-400 font-mono">{t.phoneCode}{t.phoneDigits}</span>}
+                            {t.skills && <span className="ml-2 text-xs text-gray-400">{t.skills}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {assignTrainer && (
+                      <div className="mt-1.5 flex items-center gap-2 text-sm">
+                        <span className="text-brand-green font-medium">✓ {assignTrainer.name}</span>
+                        {assignTrainer.phoneDigits && <span className="font-mono text-xs text-gray-400">{assignTrainer.phoneCode}{assignTrainer.phoneDigits}</span>}
+                        <button className="text-xs text-brand-red ml-auto" onClick={() => { setAssignTrainer(null); setAssignSearch(''); }}>Change</button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="form-row mt-3">
+                    <Label>Client to assign to</Label>
+                    <select className="input" value={assignClientId} onChange={(e) => setAssignClientId(e.target.value)}>
+                      <option value="">— select client —</option>
+                      {(myClients || []).map((c: any) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}{c.primaryTrainerId ? ' (trainer already set)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <DialogFooter>
+                    <Button onClick={() => setAssignOpen(false)}>Cancel</Button>
+                    <Button
+                      variant="primary"
+                      disabled={!assignTrainer || !assignClientId || assignMutation.isPending}
+                      onClick={() => assignMutation.mutate()}
+                    >
+                      {assignMutation.isPending ? 'Assigning…' : 'Assign trainer'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button variant="primary">+ Add trainer</Button>
