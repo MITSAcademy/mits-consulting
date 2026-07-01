@@ -154,6 +154,80 @@ app.use('/api/seed', seedRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/escalations', escalationsRouter);
 
+// One-time: send welcome emails to Areena and Mohini from Vaibhav
+app.post('/api/internal/send-welcome-staff', requireAuth, requireRole('founder'), async (_req, res) => {
+  try {
+    const { prisma: db } = await import('./lib/prisma');
+    const { safeBuildFromUser, sendEmail } = await import('./lib/mailer');
+    const vaibhav = await db.user.findUnique({ where: { id: 'u-vaibhav' }, select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true } });
+    if (!vaibhav?.gmailAddress || !vaibhav?.smtpAppPassword) return res.status(500).json({ error: 'Vaibhav SMTP not configured' });
+    const fromUser = safeBuildFromUser(vaibhav);
+    if (!fromUser) return res.status(500).json({ error: 'Could not build fromUser' });
+
+    const recipients = [
+      { name: 'Areena', email: 'areena.beri@mitssolution.com', role: 'full access (same as Vaibhav)', note: 'You have been given founder-level access to manage operations on my behalf.' },
+      { name: 'Mohini', email: 'mohini.behal@mitssolution.com', role: 'Sales (same as Roshni)', note: 'You have been set up in the Sales Closer role — same access as Roshni — to manage the sales pipeline and follow-ups.' },
+    ];
+
+    const results: any[] = [];
+    for (const r of recipients) {
+      const html = `
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+  <tr><td align="center">
+    <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+      <tr><td style="background:#1A1B1E;padding:28px 36px;">
+        <div style="font-size:20px;font-weight:700;color:#FBBF24;letter-spacing:0.5px;">MITS Consulting Hub</div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:4px;">by MITS Solution</div>
+      </td></tr>
+      <tr><td style="padding:36px;">
+        <p style="font-size:16px;font-weight:600;color:#1A1B1E;margin:0 0 16px;">Welcome aboard, ${r.name}! 👋</p>
+        <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
+          I'm excited to welcome you to the <strong>MITS Consulting Hub</strong> — our internal operations platform where our entire team manages clients, sessions, payments, trainers, and more.
+        </p>
+        <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
+          ${r.note}
+        </p>
+        <table cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin:20px 0;width:100%;">
+          <tr><td>
+            <div style="font-size:12px;color:#6b7280;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">Your access details</div>
+            <div style="font-size:14px;color:#111827;margin-bottom:6px;"><strong>Hub URL:</strong> <a href="https://mits-frontend.onrender.com" style="color:#2563eb;">mits-frontend.onrender.com</a></div>
+            <div style="font-size:14px;color:#111827;margin-bottom:6px;"><strong>Login:</strong> Use your <strong>@mitssolution.com</strong> Google account (SSO — no password needed)</div>
+            <div style="font-size:14px;color:#111827;"><strong>Role:</strong> ${r.role}</div>
+          </td></tr>
+        </table>
+        <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
+          Simply go to the Hub, click <strong>"Sign in with Google"</strong>, and you'll be in. If you face any issues logging in, reply to this email and I'll sort it out.
+        </p>
+        <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 24px;">
+          Looking forward to working with you!
+        </p>
+        <div style="font-size:14px;color:#1A1B1E;font-weight:600;">Vaibhav Aggarwal</div>
+        <div style="font-size:12px;color:#6b7280;">Founder, MITS Solution</div>
+      </td></tr>
+      <tr><td style="background:#f9fafb;padding:16px 36px;border-top:1px solid #e5e7eb;">
+        <div style="font-size:11px;color:#9ca3af;text-align:center;">MITS Solution · Internal staff communication · Not for external distribution</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
+
+      const result = await sendEmail({
+        fromUser,
+        to: [{ name: r.name, address: r.email }],
+        subject: `Welcome to MITS Consulting Hub, ${r.name}! 🎉`,
+        html,
+      });
+      results.push({ to: r.email, ok: result.ok, error: result.error });
+    }
+
+    res.json({ ok: true, results });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
 // Founder-only: manually trigger the payment follow-up email right now
 app.post('/api/internal/send-payment-report', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
