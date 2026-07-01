@@ -67,6 +67,8 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
   const [overrideAmount, setOverrideAmount] = useState(false);
   const [customAmount, setCustomAmount] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
+  const [trainerSearch, setTrainerSearch] = useState('');
+  const [trainerDropOpen, setTrainerDropOpen] = useState(false);
 
   const user = useAuth((s) => s.user)!;
   const isAM = user.role === 'account_manager';
@@ -188,21 +190,44 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
             </div>
           )}
         </div>
-        <div>
+        <div className="relative">
           <label className="label">Trainer *</label>
-          <select className="input" value={trainerId} onChange={(e) => { setTrainerId(e.target.value); setOverrideAmount(false); setCustomAmount(''); }}>
-            <option value="">— select trainer —</option>
-            {trainers.map((t: any) => {
-              const phone = t.phoneDigits ? `${t.phoneCode || ''}${t.phoneDigits}` : null;
-              const tag = t.seqId ? `#${t.seqId}` : null;
-              const suffix = [tag, phone].filter(Boolean).join(' · ');
-              return (
-                <option key={t.id} value={t.id}>
-                  {t.name}{suffix ? ` (${suffix})` : ''}{t.defaultRateInr ? ` · ₹${t.defaultRateInr}/session` : ''}
-                </option>
-              );
-            })}
-          </select>
+          <input
+            className="input"
+            placeholder="Type to search trainer…"
+            value={trainerDropOpen ? trainerSearch : (selectedTrainer ? selectedTrainer.name : '')}
+            onFocus={() => { setTrainerSearch(''); setTrainerDropOpen(true); }}
+            onChange={(e) => { setTrainerSearch(e.target.value); setTrainerDropOpen(true); }}
+            onBlur={() => setTimeout(() => setTrainerDropOpen(false), 150)}
+            autoComplete="off"
+          />
+          {trainerDropOpen && (
+            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-52 overflow-y-auto text-sm">
+              <div
+                className="px-3 py-2 text-gray-400 cursor-pointer hover:bg-gray-50"
+                onMouseDown={() => { setTrainerId(''); setTrainerSearch(''); setTrainerDropOpen(false); setOverrideAmount(false); setCustomAmount(''); }}
+              >— select trainer —</div>
+              {trainers
+                .filter((t: any) => {
+                  const q = trainerSearch.toLowerCase();
+                  return !q || t.name.toLowerCase().includes(q) || (t.seqId && String(t.seqId).includes(q)) || (t.phoneDigits && t.phoneDigits.includes(q));
+                })
+                .map((t: any) => {
+                  const phone = t.phoneDigits ? `${t.phoneCode || ''}${t.phoneDigits}` : null;
+                  const tag = t.seqId ? `#${t.seqId}` : null;
+                  const suffix = [tag, phone].filter(Boolean).join(' · ');
+                  return (
+                    <div
+                      key={t.id}
+                      className={`px-3 py-2 cursor-pointer hover:bg-blue-50 ${trainerId === t.id ? 'bg-blue-50 font-medium' : ''}`}
+                      onMouseDown={() => { setTrainerId(t.id); setTrainerSearch(''); setTrainerDropOpen(false); setOverrideAmount(false); setCustomAmount(''); }}
+                    >
+                      {t.name}{suffix ? ` (${suffix})` : ''}{t.defaultRateInr ? ` · ₹${t.defaultRateInr}/session` : ''}
+                    </div>
+                  );
+                })}
+            </div>
+          )}
           {selectedTrainer && (
             <div className="text-[11px] muted mt-0.5 flex gap-2">
               {selectedTrainer.seqId && <span>#{selectedTrainer.seqId}</span>}
