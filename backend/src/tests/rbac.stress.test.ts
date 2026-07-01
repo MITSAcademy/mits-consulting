@@ -78,7 +78,7 @@ const USERS = {
   accounts_areena: {
     email: 'areena.beri@mitssolution.com',
     id: 'u-areena',
-    role: 'accounts',
+    role: 'founder',
   },
   sales_closer_roshni: {
     email: 'roshni.seth@mitssolution.com',
