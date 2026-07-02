@@ -9,6 +9,7 @@ import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { ROLE_LABELS } from '@/lib/utils';
+import { Mail, ShieldCheck } from 'lucide-react';
 
 export function TeamAdminPage() {
   const qc = useQueryClient();
@@ -24,6 +25,18 @@ export function TeamAdminPage() {
   const setActive = useMutation({
     mutationFn: ({ id, active }: any) => api.patch(`/users/${id}`, { active }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+
+  const [smtpHealth, setSmtpHealth] = useState<any[] | null>(null);
+  const sendAdvisory = useMutation({
+    mutationFn: () => api.post('/internal/send-smtp-advisory', {}),
+    onSuccess: (r) => showToast(`Advisory sent to: ${r.data.sent.join(', ')}`),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+  const checkSmtp = useMutation({
+    mutationFn: () => api.get('/internal/smtp-health'),
+    onSuccess: (r) => setSmtpHealth(r.data.results),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
   return (
@@ -66,6 +79,64 @@ export function TeamAdminPage() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Admin actions */}
+        <div className="table-card" style={{ marginTop: 24 }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--brand-border)', fontWeight: 600, fontSize: 14 }}>Admin actions</div>
+          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* SMTP advisory */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Send App Password advisory</div>
+                <div style={{ fontSize: 13, color: 'var(--brand-textMuted)', maxWidth: 460 }}>
+                  Emails all SMTP-configured team members reminding them to re-enter their App Password after any Google password change.
+                </div>
+              </div>
+              <Button variant="default" onClick={() => sendAdvisory.mutate()} disabled={sendAdvisory.isPending}>
+                <Mail size={14} style={{ marginRight: 6 }} />{sendAdvisory.isPending ? 'Sending…' : 'Send advisory'}
+              </Button>
+            </div>
+
+            {/* SMTP health check */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Check SMTP health</div>
+                <div style={{ fontSize: 13, color: 'var(--brand-textMuted)', maxWidth: 460 }}>
+                  Live-tests every configured team member's Gmail App Password and shows who is broken.
+                </div>
+              </div>
+              <Button variant="default" onClick={() => checkSmtp.mutate()} disabled={checkSmtp.isPending}>
+                <ShieldCheck size={14} style={{ marginRight: 6 }} />{checkSmtp.isPending ? 'Checking…' : 'Check health'}
+              </Button>
+            </div>
+
+            {smtpHealth && (
+              <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse', marginTop: 4 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--brand-border)' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--brand-textMuted)', fontWeight: 500 }}>Name</th>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--brand-textMuted)', fontWeight: 500 }}>Email</th>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--brand-textMuted)', fontWeight: 500 }}>Status</th>
+                    <th style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--brand-textMuted)', fontWeight: 500 }}>Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {smtpHealth.map((r: any) => (
+                    <tr key={r.id} style={{ borderBottom: '1px solid var(--brand-border)' }}>
+                      <td style={{ padding: '8px 8px', fontWeight: 500 }}>{r.name}</td>
+                      <td style={{ padding: '8px 8px', color: 'var(--brand-textMuted)' }}>{r.email}</td>
+                      <td style={{ padding: '8px 8px' }}>
+                        <Pill color={r.ok ? 'green' : 'red'}>{r.ok ? 'OK' : 'Broken'}</Pill>
+                      </td>
+                      <td style={{ padding: '8px 8px', color: '#ef4444', fontSize: 12 }}>{r.error || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       </Page>
     </>
