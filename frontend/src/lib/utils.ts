@@ -105,15 +105,21 @@ export function waLink(code?: string | null, digits?: string | null, message?: s
 
 export type AvailabilitySlot = { window?: string; fromIst?: string; toIst?: string };
 
-export function downloadVCard(name: string, phoneCode: string | null | undefined, phoneDigits: string | null | undefined, email?: string | null) {
+export function downloadVCard(name: string, phoneCode: string | null | undefined, phoneDigits: string | null | undefined, email?: string | null, skills?: string | null) {
   const phone = `${phoneCode || ''}${phoneDigits || ''}`;
+  // Truncate skills to first 3 comma-separated items so the contact name stays readable
+  const skillSuffix = skills
+    ? ' - ' + skills.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 3).join(', ')
+    : '';
+  const displayName = `${name}${skillSuffix}`;
   const lines = [
     'BEGIN:VCARD',
     'VERSION:3.0',
-    `FN:${name}`,
+    `FN:${displayName}`,
     `N:${name};;;;`,
     phoneDigits ? `TEL;TYPE=CELL:${phone}` : '',
     email ? `EMAIL:${email}` : '',
+    skills ? `NOTE:Skills: ${skills}` : '',
     'ORG:MITS Solution',
     'END:VCARD',
   ].filter(Boolean).join('\r\n');
@@ -121,7 +127,7 @@ export function downloadVCard(name: string, phoneCode: string | null | undefined
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${name.replace(/\s+/g, '_')}.vcf`;
+  a.download = `${displayName.replace(/[^a-zA-Z0-9]/g, '_')}.vcf`;
   a.click();
   URL.revokeObjectURL(url);
 }

@@ -535,7 +535,7 @@ export function TrainersPage() {
                           </button>
                         )}
                         {t.phoneDigits && (
-                          <button title="Save to phone contacts (.vcf)" onClick={(e) => { e.stopPropagation(); downloadVCard(t.name, t.phoneCode, t.phoneDigits, t.email); }}
+                          <button title="Save to phone contacts (.vcf)" onClick={(e) => { e.stopPropagation(); downloadVCard(t.name, t.phoneCode, t.phoneDigits, t.email, t.skills); }}
                             className="flex items-center justify-center w-7 h-7 rounded-lg hover:opacity-80"
                             style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)' }}>
                             <UserPlus size={12} style={{ color: '#818cf8' }}/>

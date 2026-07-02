@@ -83,7 +83,7 @@ export function TrainerDetailPage() {
                 <MessageCircle size={14}/> WhatsApp
               </Button>
               {t.phoneDigits && (
-                <Button size="sm" onClick={() => downloadVCard(t.name, t.phoneCode, t.phoneDigits, t.email)} title="Save to phone contacts">
+                <Button size="sm" onClick={() => downloadVCard(t.name, t.phoneCode, t.phoneDigits, t.email, t.skills)} title="Save to phone contacts">
                   <UserPlus size={14}/> Save contact
                 </Button>
               )}
