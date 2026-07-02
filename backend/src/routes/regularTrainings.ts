@@ -465,6 +465,8 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
   ];
   else if (isLead) where.OR = [
     { client: { hostOwnerId: { in: MITALI_TEAM } } },
+    { hostedByDefaultId: { in: MITALI_TEAM } },
+    { temporaryHostId: { in: MITALI_TEAM } },
     { hostedByDefaultId: null },
   ];
   const trainings = await prisma.regularTraining.findMany({
