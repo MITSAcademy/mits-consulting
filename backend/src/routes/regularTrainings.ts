@@ -79,6 +79,7 @@ regularTrainingsRouter.post('/trainings', async (req: AuthedRequest, res) => {
       lastSessionComment:    b.lastSessionComment     || null,
       notes:                 b.notes                  || null,
       status:                b.status                 || 'active',
+      ownerTeam:             b.ownerTeam              || 'coordinator_team',
     },
   });
   await audit(req.user!.id, req.user!.name, 'REGULAR_TRAINING_CREATE', created.name);
@@ -453,23 +454,15 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
   if (!canRead(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const now = new Date();
   // account_manager sees only their own trainings (hostedByDefaultId = me).
-  // lead sees only Mitali's team clients (hostOwnerId scoped).
+  // lead (Bhavneet) sees all active trainings for assignment management.
   // founder/manager sees all.
   const isSelf = req.user!.role === 'account_manager';
-  const isLead = req.user!.role === 'lead';
-  const MITALI_TEAM = ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'];
   const where: any = { status: 'active' };
   if (isSelf) where.OR = [
     { hostedByDefaultId: req.user!.id },
     { client: { assignedAmId: req.user!.id } },
   ];
-  else if (isLead) where.OR = [
-    { client: { hostOwnerId: { in: MITALI_TEAM } } },
-    { hostedByDefaultId: { in: MITALI_TEAM } },
-    { temporaryHostId: { in: MITALI_TEAM } },
-    { ownerTeam: 'coordinator_team' },
-    { hostedByDefaultId: null },
-  ];
+  // lead (Bhavneet) sees all active trainings — she manages assignment for the whole team
   const trainings = await prisma.regularTraining.findMany({
     where,
     select: {
