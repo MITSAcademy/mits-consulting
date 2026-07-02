@@ -2,6 +2,23 @@ import { Router } from 'express';
 import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 import { prisma } from '../lib/prisma';
 import { audit } from '../lib/audit';
+import { sendEmail, safeBuildFromUser } from '../lib/mailer';
+
+async function getFromUser() {
+  const vaibhav = await prisma.user.findUnique({
+    where: { id: 'u-vaibhav' },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
+  });
+  return vaibhav ? safeBuildFromUser(vaibhav) : null;
+}
+
+async function getRecruiters(): Promise<{ email: string; name: string }[]> {
+  const users = await prisma.user.findMany({
+    where: { role: 'recruiter', active: true },
+    select: { email: true, gmailAddress: true, name: true },
+  });
+  return users.map((u: any) => ({ name: u.name, email: u.gmailAddress || u.email })).filter((u: any) => u.email);
+}
 
 export const freelanceRequirementsRouter = Router();
 freelanceRequirementsRouter.use(requireAuth);
@@ -57,6 +74,60 @@ freelanceRequirementsRouter.post('/', requireRole(...REGULAR_ROLES), async (req:
     include,
   });
   await audit(req.user!.id, req.user!.name, 'FREELANCE_REQ_CREATE', `${clientName} · ${skillRequired}`);
+
+  // Notify all recruiters about the new requirement
+  try {
+    const [fromUser, recruiters] = await Promise.all([getFromUser(), getRecruiters()]);
+    if (fromUser && recruiters.length) {
+      const rows = [
+        ['Client', clientName],
+        ['Skill required', skillRequired],
+        ['Current trainer', currentTrainer || '—'],
+        ['Client timings', clientTimings || '—'],
+        ['Trainers tried', trainersUsed || '—'],
+        ['Priority', priority || 'Medium'],
+        ['Flagged by', req.user!.name],
+      ];
+      const tableRows = rows.map(([k, v]) =>
+        `<tr><td style="padding:6px 12px;font-size:13px;color:#6b7280;white-space:nowrap;">${k}</td><td style="padding:6px 12px;font-size:13px;color:#111827;font-weight:500;">${v}</td></tr>`
+      ).join('');
+      const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e4e4e7;">
+      <tr><td style="background:#1A1B1E;padding:24px 32px;border-radius:12px 12px 0 0;">
+        <div style="font-size:18px;font-weight:700;color:#FBBF24;">MITS Consulting Hub</div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:2px;">New Freelance Trainer Requirement</div>
+      </td></tr>
+      <tr><td style="padding:28px 32px;">
+        <p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 16px;">A new trainer requirement has been raised</p>
+        <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;border-collapse:collapse;">
+          ${tableRows}
+        </table>
+        <p style="font-size:13px;color:#6b7280;margin:20px 0 0;">Please log in to the Hub to review and source a suitable trainer.</p>
+        <p style="margin:16px 0 0;"><a href="https://mits-frontend.onrender.com/freelance-requirements" style="display:inline-block;background:#FBBF24;color:#1A1B1E;font-weight:600;font-size:13px;padding:10px 20px;border-radius:6px;text-decoration:none;">View Requirements</a></p>
+      </td></tr>
+      <tr><td style="background:#f9fafb;padding:14px 32px;border-top:1px solid #e5e7eb;border-radius:0 0 12px 12px;">
+        <div style="font-size:11px;color:#9ca3af;text-align:center;">MITS Solution · Internal notification</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table></body></html>`;
+
+      for (const r of recruiters) {
+        await sendEmail({
+          fromUser,
+          to: r.email,
+          subject: `New trainer requirement: ${skillRequired} for ${clientName}`,
+          body: `New trainer requirement raised by ${req.user!.name}: ${skillRequired} for ${clientName}. Priority: ${priority || 'Medium'}.`,
+          htmlBody: html,
+        });
+      }
+    }
+  } catch (e: any) {
+    console.warn('[freelance-req-notify] email failed (non-fatal):', e?.message);
+  }
+
   res.status(201).json(item);
 });
 
