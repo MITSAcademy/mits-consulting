@@ -267,7 +267,7 @@ app.get('/api/internal/smtp-health', requireAuth, requireRole('founder'), async 
 // Founder-only: send App Password advisory email to all SMTP-configured users
 app.post('/api/internal/send-smtp-advisory', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
-    const { safeBuildFromUser, sendEmail } = await import('./lib/mailer');
+    const { safeBuildFromUser, sendEmail, decryptSecret, getUserTransporter } = await import('./lib/mailer');
     const vaibhav = await prisma.user.findUnique({
       where: { id: 'u-vaibhav' },
       select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
@@ -278,56 +278,84 @@ app.post('/api/internal/send-smtp-advisory', requireAuth, requireRole('founder')
 
     const users = await prisma.user.findMany({
       where: { smtpAppPassword: { not: null }, active: true },
-      select: { id: true, name: true, email: true, gmailAddress: true },
+      select: { id: true, name: true, email: true, gmailAddress: true, smtpAppPassword: true },
     });
 
-    const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
-  <tr><td align="center">
-    <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e4e4e7;">
-      <tr><td style="background:#1A1B1E;padding:24px 32px;border-radius:12px 12px 0 0;">
-        <div style="font-size:18px;font-weight:700;color:#FBBF24;">MITS Consulting Hub</div>
-        <div style="font-size:12px;color:#9ca3af;margin-top:2px;">Important: Gmail App Password — Action Required</div>
-      </td></tr>
-      <tr><td style="padding:32px;">
-        <p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 12px;">Your Hub email will stop working if you change your Google password</p>
-        <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
-          The Hub sends emails (session sheets, payment follow-ups, notifications) using a <strong>Gmail App Password</strong> linked to your Google account.
-          <strong>Every time you change your Google account password, your App Password is automatically revoked</strong> — and Hub emails will silently fail until you set it up again.
-        </p>
-        <table cellpadding="0" cellspacing="0" style="background:#fef9ec;border:1px solid #fcd34d;border-radius:8px;padding:20px;margin:0 0 20px;width:100%;">
-          <tr><td>
-            <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:10px;">What to do after changing your Google password:</div>
-            <ol style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
-              <li>Go to <a href="https://myaccount.google.com/apppasswords" style="color:#2563eb;">myaccount.google.com/apppasswords</a></li>
-              <li>Sign in with your <strong>@mitssolution.com</strong> Google account</li>
-              <li>Click <strong>"Create a new App Password"</strong> (or select App: Mail, Device: Other → MITS Hub)</li>
-              <li>Copy the 16-character password shown</li>
-              <li>Go to the Hub → click your avatar (top right) → <strong>Email settings</strong></li>
-              <li>Paste the new App Password and click <strong>Save</strong></li>
-            </ol>
-          </td></tr>
-        </table>
-        <p style="font-size:13px;color:#6b7280;line-height:1.7;margin:0 0 16px;">
-          You can test whether your email is working at any time from the Hub's Email settings page → <strong>"Send test email"</strong> button.
-        </p>
-        <p style="font-size:13px;color:#6b7280;margin:0;">If you're unsure whether yours is working, reply to this email and I'll check for you.</p>
-      </td></tr>
-      <tr><td style="background:#f9fafb;padding:14px 32px;border-top:1px solid #e5e7eb;border-radius:0 0 12px 12px;">
-        <div style="font-size:11px;color:#9ca3af;text-align:center;">MITS Solution · Internal staff communication</div>
-      </td></tr>
-    </table>
-  </td></tr>
-</table></body></html>`;
+    // Run health check for each user first
+    const health = await Promise.all(users.map(async (u: any) => {
+      try {
+        const pwd = decryptSecret(u.smtpAppPassword!);
+        const tx = getUserTransporter(u.id, u.gmailAddress!, pwd);
+        await tx.verify();
+        return { ...u, ok: true };
+      } catch {
+        return { ...u, ok: false };
+      }
+    }));
 
-    const sent: string[] = [];
-    for (const u of users) {
+    const steps = `
+<ol style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
+  <li>Go to <a href="https://myaccount.google.com/apppasswords" style="color:#2563eb;">myaccount.google.com/apppasswords</a></li>
+  <li>Sign in with your <strong>@mitssolution.com</strong> Google account</li>
+  <li>Click <strong>"Create a new App Password"</strong> → App: Mail, Device: Other → name it "MITS Hub"</li>
+  <li>Copy the 16-character password shown</li>
+  <li>Open the Hub → click your avatar (top right) → <strong>Email settings</strong></li>
+  <li>Paste the new App Password and click <strong>Save</strong></li>
+</ol>`;
+
+    const footer = `<tr><td style="background:#f9fafb;padding:14px 32px;border-top:1px solid #e5e7eb;border-radius:0 0 12px 12px;"><div style="font-size:11px;color:#9ca3af;text-align:center;">MITS Solution · Internal staff communication</div></td></tr>`;
+    const header = (sub: string) => `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;"><tr><td align="center"><table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e4e4e7;"><tr><td style="background:#1A1B1E;padding:24px 32px;border-radius:12px 12px 0 0;"><div style="font-size:18px;font-weight:700;color:#FBBF24;">MITS Consulting Hub</div><div style="font-size:12px;color:#9ca3af;margin-top:2px;">${sub}</div></td></tr><tr><td style="padding:32px;">`;
+    const closeTags = `</td></tr>${footer}</table></td></tr></table></body></html>`;
+
+    const sent: { name: string; status: string }[] = [];
+
+    for (const u of health) {
       const to = u.gmailAddress || u.email;
       if (!to) continue;
-      await sendEmail({ fromUser, to, subject: 'Action: Re-enter your App Password if you changed your Google password', body: 'The Hub sends emails using a Gmail App Password. Every time you change your Google password, the App Password is revoked. Please follow the steps in this email to re-configure it.', htmlBody: html });
-      sent.push(u.name);
+
+      let subject: string;
+      let html: string;
+
+      if (!u.ok) {
+        // Broken — urgent, personalised
+        subject = `⚠️ Action needed: Your Hub email is broken, ${u.name.split(' ')[0]}`;
+        html = header('Urgent: Your Gmail App Password has stopped working') +
+          `<p style="font-size:15px;font-weight:700;color:#dc2626;margin:0 0 12px;">Your Hub email is currently not working.</p>
+          <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
+            We ran a live check and your Gmail App Password is returning an <strong>Invalid login</strong> error. This means <strong>no emails are being sent from your account</strong> — session sheets, payment follow-ups, and notifications are all failing silently.
+          </p>
+          <table cellpadding="0" cellspacing="0" style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:20px;margin:0 0 20px;width:100%;">
+            <tr><td>
+              <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:10px;">Fix this now — takes 2 minutes:</div>
+              ${steps}
+            </td></tr>
+          </table>
+          <p style="font-size:13px;color:#6b7280;margin:0;">Once done, use the <strong>"Send test email"</strong> button in Hub → Email settings to confirm it's working. Reply to this email if you need help.</p>` +
+          closeTags;
+      } else {
+        // Working — general advisory
+        subject = 'Reminder: Re-enter your App Password if you ever change your Google password';
+        html = header('Gmail App Password — Good to know') +
+          `<p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 12px;">✅ Your Hub email is currently working fine.</p>
+          <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
+            Just a reminder — the Hub sends emails using a <strong>Gmail App Password</strong> linked to your Google account.
+            <strong>If you ever change your Google account password, your App Password is automatically revoked</strong> and Hub emails will stop working until you re-enter it.
+          </p>
+          <table cellpadding="0" cellspacing="0" style="background:#fef9ec;border:1px solid #fcd34d;border-radius:8px;padding:20px;margin:0 0 20px;width:100%;">
+            <tr><td>
+              <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:10px;">If you change your Google password in the future, do this:</div>
+              ${steps}
+            </td></tr>
+          </table>
+          <p style="font-size:13px;color:#6b7280;margin:0;">You can test your email any time from Hub → your avatar → Email settings → <strong>"Send test email"</strong>.</p>` +
+          closeTags;
+      }
+
+      await sendEmail({ fromUser, to, subject, body: subject, htmlBody: html });
+      sent.push({ name: u.name, status: u.ok ? 'ok' : 'broken' });
     }
-    res.json({ ok: true, sent });
+
+    res.json({ ok: true, sent, broken: sent.filter(s => s.status === 'broken').map(s => s.name) });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Failed' });
   }
