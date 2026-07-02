@@ -106,7 +106,7 @@ export function FinancePage() {
           <StatCard
             label="MRR (projected)"
             value={FMT_INR(snapshot.mrr)}
-            sub={`${snapshot.activeClients} active clients`}
+            sub={`${snapshot.activeClients} clients with active sessions`}
             tone="green"
             icon={DollarSign}
           />
@@ -134,7 +134,7 @@ export function FinancePage() {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <StatCard label="Active clients" value={String(snapshot.activeClients)} tone="blue" icon={Users} />
+          <StatCard label="Active clients" value={String(snapshot.activeClients)} sub={snapshot.activeClientsLifecycle !== snapshot.activeClients ? `${snapshot.activeClientsLifecycle} by lifecycle` : 'with active sessions'} tone="blue" icon={Users} />
           <StatCard label="In pipeline" value={String(snapshot.pipeline)} sub="potential revenue" tone="grey" icon={Target} />
           <StatCard label="Renewals due (30d)" value={String(snapshot.renewalsDueSoon)} tone={snapshot.renewalsDueSoon > 5 ? 'amber' : 'green'} icon={RefreshCw} />
           <StatCard label="3M avg revenue" value={FMT_INR(snapshot.avgRevenue3m)} sub="rolling average" tone="grey" icon={Minus} />

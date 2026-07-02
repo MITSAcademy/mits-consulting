@@ -267,7 +267,7 @@ metricsRouter.get('/finance', requireRole('founder'), async (req: AuthedRequest,
 
   // Fetch all data in parallel
   const firstMonth = months[0] + '-01';
-  const [allPayments, allSessions, allClients, allPayouts] = await Promise.all([
+  const [allPayments, allSessions, allClients, allPayouts, activeTrainingClientIds] = await Promise.all([
     prisma.payment.findMany({
       where: { paymentDate: { gte: firstMonth } },
       select: { amount: true, currency: true, paymentDate: true, kind: true },
@@ -288,6 +288,11 @@ metricsRouter.get('/finance', requireRole('founder'), async (req: AuthedRequest,
       where: { createdAt: { gte: new Date(firstMonth) } },
       select: { totalInr: true, status: true, weekStart: true, paidAt: true },
     }),
+    // Clients with at least one active RegularTraining — the true operational count
+    prisma.regularTraining.findMany({
+      where: { status: 'active', clientId: { not: null } },
+      select: { clientId: true },
+    }).then((rows) => new Set(rows.map((r) => r.clientId!))),
   ]);
 
   // ── Per-month buckets ─────────────────────────────────────────────────
@@ -343,7 +348,11 @@ metricsRouter.get('/finance', requireRole('founder'), async (req: AuthedRequest,
   });
 
   // ── Current business state ────────────────────────────────────────────
-  const activeClients = allClients.filter((c) => ['Active', 'LeverageGranted'].includes(c.lifecycle));
+  // Active = has a running RegularTraining AND lifecycle is Active/LeverageGranted
+  // This matches Bhavneet's Team Board count rather than raw lifecycle flags
+  const activeClients = allClients.filter((c) =>
+    ['Active', 'LeverageGranted'].includes(c.lifecycle) && activeTrainingClientIds.has(c.id)
+  );
   const churned = allClients.filter((c) => c.lifecycle === 'Churned');
   const pipeline = allClients.filter((c) =>
     ['Lead','IntakeSent','IntakeReceived','InternalSearch','WithRecruiters','VerificationPending','TrainerMatched','DemoScheduled','DemoDone','SaleClosing'].includes(c.lifecycle)
@@ -413,6 +422,7 @@ metricsRouter.get('/finance', requireRole('founder'), async (req: AuthedRequest,
     projections,
     snapshot: {
       activeClients: activeClients.length,
+      activeClientsLifecycle: allClients.filter((c) => ['Active', 'LeverageGranted'].includes(c.lifecycle)).length,
       churned: churned.length,
       pipeline: pipeline.length,
       mrr: Math.round(mrr),
