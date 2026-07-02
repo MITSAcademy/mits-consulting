@@ -211,9 +211,10 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
             autoComplete="off"
           />
           {trainerDropOpen && (
-            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-52 overflow-y-auto text-sm">
+            <div className="absolute z-50 w-full mt-1 rounded shadow-lg max-h-52 overflow-y-auto text-sm" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
               <div
-                className="px-3 py-2 text-gray-400 cursor-pointer hover:bg-gray-50"
+                className="px-3 py-2 cursor-pointer"
+                style={{ color: 'var(--brand-text-muted)' }}
                 onMouseDown={() => { setTrainerId(''); setTrainerSearch(''); setTrainerDropOpen(false); setOverrideAmount(false); setCustomAmount(''); }}
               >— select trainer —</div>
               {trainers
@@ -225,10 +226,18 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
                   const phone = t.phoneDigits ? `${t.phoneCode || ''}${t.phoneDigits}` : null;
                   const tag = t.seqId ? `#${t.seqId}` : null;
                   const suffix = [tag, phone].filter(Boolean).join(' · ');
+                  const isSelected = trainerId === t.id;
                   return (
                     <div
                       key={t.id}
-                      className={`px-3 py-2 cursor-pointer hover:bg-blue-50 ${trainerId === t.id ? 'bg-blue-50 font-medium' : ''}`}
+                      className="px-3 py-2 cursor-pointer"
+                      style={{
+                        background: isSelected ? 'var(--bg-input)' : undefined,
+                        color: 'var(--brand-text)',
+                        fontWeight: isSelected ? 600 : undefined,
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = isSelected ? 'var(--bg-input)' : '')}
                       onMouseDown={() => { setTrainerId(t.id); setTrainerSearch(''); setTrainerDropOpen(false); setOverrideAmount(false); setCustomAmount(''); }}
                     >
                       {t.name}{suffix ? ` (${suffix})` : ''}{t.defaultRateInr ? ` · ₹${t.defaultRateInr}/session` : ''}
