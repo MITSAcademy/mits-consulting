@@ -14,13 +14,15 @@ function todayIST(): string {
 export async function sendBhavneetDailySheet() {
   const today = todayIST();
 
-  // Fetch all active regular trainings hosted by Bhavneet's team (Kashish)
+  // Fetch all active regular trainings hosted by Kashish or Muskan
   const trainings = await (prisma as any).regularTraining.findMany({
     where: {
       status: 'active',
       OR: [
         { hostedByDefaultId: 'u-kashish' },
         { temporaryHostId: 'u-kashish' },
+        { hostedByDefaultId: 'u-muskan' },
+        { temporaryHostId: 'u-muskan' },
       ],
     },
     include: {
