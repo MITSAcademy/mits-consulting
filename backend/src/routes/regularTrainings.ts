@@ -467,6 +467,7 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
     { client: { hostOwnerId: { in: MITALI_TEAM } } },
     { hostedByDefaultId: { in: MITALI_TEAM } },
     { temporaryHostId: { in: MITALI_TEAM } },
+    { ownerTeam: 'coordinator_team' },
     { hostedByDefaultId: null },
   ];
   const trainings = await prisma.regularTraining.findMany({

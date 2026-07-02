@@ -213,13 +213,14 @@ app.post('/api/internal/send-welcome-staff', requireAuth, requireRole('founder')
 </table>
 </body></html>`;
 
-      const result = await sendEmail({
+      await sendEmail({
         fromUser,
-        to: [{ name: r.name, address: r.email }],
+        to: r.email,
         subject: `Welcome to MITS Consulting Hub, ${r.name}! 🎉`,
-        html,
+        body: `Welcome to MITS Consulting Hub, ${r.name}!`,
+        htmlBody: html,
       });
-      results.push({ to: r.email, ok: result.ok, error: result.error });
+      results.push({ to: r.email, ok: true });
     }
 
     res.json({ ok: true, results });
