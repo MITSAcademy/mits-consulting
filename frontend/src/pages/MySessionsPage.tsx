@@ -1217,7 +1217,7 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
                   </button>
 
                   {/* Flag Demo Team */}
-                  {t.ownerTeam === 'demo_team' && rowUser.role !== 'sales_closer' && (
+                  {['demo_team', 'coordinator_team'].includes(t.ownerTeam) && rowUser.role !== 'sales_closer' && (
                     <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.demoEscalationRequested ? '#f87171' : '#fbbf24', textAlign: 'left' }}
                       onClick={() => { api.post(`/regular-trainings/trainings/${t.id}/escalate`).then(() => { onChanged(); qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); }); setMenuOpen(false); }}>
