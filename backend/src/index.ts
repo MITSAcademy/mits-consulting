@@ -229,6 +229,30 @@ app.post('/api/internal/send-welcome-staff', requireAuth, requireRole('founder')
   }
 });
 
+// Founder-only: create missing RegularTraining stubs for all Active/LeverageGranted clients that don't have one
+app.post('/api/internal/backfill-training-stubs', requireAuth, requireRole('founder'), async (_req, res) => {
+  try {
+    const clients = await prisma.client.findMany({
+      where: { lifecycle: { in: ['Active', 'LeverageGranted'] } },
+      select: { id: true, name: true },
+    });
+    const existing = await prisma.regularTraining.findMany({
+      where: { clientId: { in: clients.map((c) => c.id) }, status: 'active' },
+      select: { clientId: true },
+    });
+    const hasStub = new Set(existing.map((t) => t.clientId));
+    const missing = clients.filter((c) => !hasStub.has(c.id));
+    for (const c of missing) {
+      await prisma.regularTraining.create({
+        data: { name: c.name, clientId: c.id, status: 'active', ownerTeam: 'coordinator_team', hostedByDefaultId: null },
+      });
+    }
+    res.json({ ok: true, created: missing.length, clients: missing.map((c) => c.name) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
 // Founder-only: manually trigger the payment follow-up email right now
 app.post('/api/internal/send-payment-report', requireAuth, requireRole('founder'), async (_req, res) => {
   try {

@@ -9,7 +9,7 @@ import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { ROLE_LABELS } from '@/lib/utils';
-import { Mail, ShieldCheck } from 'lucide-react';
+import { Mail, ShieldCheck, RefreshCw } from 'lucide-react';
 
 export function TeamAdminPage() {
   const qc = useQueryClient();
@@ -28,6 +28,12 @@ export function TeamAdminPage() {
   });
 
   const [smtpHealth, setSmtpHealth] = useState<any[] | null>(null);
+  const [stubResult, setStubResult] = useState<{ created: number; clients: string[] } | null>(null);
+  const backfillStubs = useMutation({
+    mutationFn: () => api.post('/internal/backfill-training-stubs', {}),
+    onSuccess: (r) => { setStubResult(r.data); showToast(`Created ${r.data.created} missing training stubs`); },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
   const sendAdvisory = useMutation({
     mutationFn: () => api.post('/internal/send-smtp-advisory', {}),
     onSuccess: (r) => showToast(`Advisory sent to: ${r.data.sent.join(', ')}`),
@@ -109,6 +115,24 @@ export function TeamAdminPage() {
               </div>
               <Button variant="default" onClick={() => checkSmtp.mutate()} disabled={checkSmtp.isPending}>
                 <ShieldCheck size={14} style={{ marginRight: 6 }} />{checkSmtp.isPending ? 'Checking…' : 'Check health'}
+              </Button>
+            </div>
+
+            {/* Backfill training stubs */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Fix missing training stubs</div>
+                <div style={{ fontSize: 13, color: 'var(--brand-textMuted)', maxWidth: 460 }}>
+                  Creates missing session stubs for all Active clients with no training record — fixes them appearing in Unassigned on the Team Board.
+                </div>
+                {stubResult && (
+                  <div style={{ marginTop: 8, fontSize: 13, color: stubResult.created > 0 ? '#16a34a' : 'var(--brand-textMuted)' }}>
+                    {stubResult.created === 0 ? 'All active clients already have stubs.' : `Created stubs for: ${stubResult.clients.join(', ')}`}
+                  </div>
+                )}
+              </div>
+              <Button variant="default" onClick={() => backfillStubs.mutate()} disabled={backfillStubs.isPending}>
+                <RefreshCw size={14} style={{ marginRight: 6 }} />{backfillStubs.isPending ? 'Running…' : 'Fix stubs'}
               </Button>
             </div>
 
