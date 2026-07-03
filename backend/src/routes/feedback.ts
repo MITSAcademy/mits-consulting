@@ -14,7 +14,16 @@ const include = {
 
 feedbackRouter.get('/', async (req: AuthedRequest, res) => {
   if (!await checkPermission('feedback.read', req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
-  const fb = await prisma.feedback.findMany({ include, orderBy: { weekStart: 'desc' } });
+  const fb = await (prisma as any).feedback.findMany({
+    include: {
+      ...include,
+      activities: {
+        orderBy: { loggedAt: 'desc' },
+        include: { loggedBy: { select: { id: true, name: true } } },
+      },
+    },
+    orderBy: { weekStart: 'desc' },
+  });
   res.json(fb);
 });
 
@@ -55,4 +64,37 @@ feedbackRouter.delete('/:id', async (req: AuthedRequest, res) => {
   if (!await checkPermission('feedback.delete', req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
   await prisma.feedback.delete({ where: { id: req.params.id } });
   res.json({ ok: true });
+});
+
+// ── Activity log ─────────────────────────────────────────────────────────────
+// POST /feedback/:id/activity — log a call/message/note against this feedback entry
+feedbackRouter.post('/:id/activity', async (req: AuthedRequest, res) => {
+  if (!await checkPermission('feedback.write', req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
+  const fb = await prisma.feedback.findUnique({ where: { id: req.params.id }, select: { id: true, clientId: true } });
+  if (!fb) return res.status(404).json({ error: 'Not found' });
+  const { type, note } = req.body;
+  if (!type) return res.status(400).json({ error: 'type required' });
+  const activity = await (prisma as any).feedbackActivity.create({
+    data: {
+      feedbackId: fb.id,
+      clientId: fb.clientId,
+      type,
+      note: note?.trim() || null,
+      loggedById: req.user!.id,
+    },
+    include: { loggedBy: { select: { id: true, name: true } } },
+  });
+  await audit(req.user!.id, req.user!.name, 'FEEDBACK_ACTIVITY', `${type}${note ? ': ' + note : ''}`);
+  res.status(201).json(activity);
+});
+
+// GET /feedback/client/:clientId/activities — all activities for a client (shown on client profile)
+feedbackRouter.get('/client/:clientId/activities', async (req: AuthedRequest, res) => {
+  if (!await checkPermission('feedback.read', req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
+  const activities = await (prisma as any).feedbackActivity.findMany({
+    where: { clientId: req.params.clientId },
+    orderBy: { loggedAt: 'desc' },
+    include: { loggedBy: { select: { id: true, name: true } } },
+  });
+  res.json(activities);
 });

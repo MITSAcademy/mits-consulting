@@ -20,6 +20,7 @@ import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 import { CallHistoryCard } from '@/components/CallHistoryCard';
 import { CommentSection } from '@/components/CommentSection';
 import { ActivityLog } from '@/components/ActivityLog';
+import { FeedbackActivityLog } from '@/components/FeedbackActivityLog';
 import { AMScheduleDialog } from '@/pages/MySessionsPage';
 
 const INTAKE_FIELDS = [
@@ -954,6 +955,7 @@ export function ClientDetailPage() {
 
             <CommentSection clientId={client.id} />
             <ActivityLog clientId={client.id} />
+            <FeedbackActivityLog clientId={client.id} />
             <DemoHistoryCard clientId={client.id} />
             <CallHistoryCard clientId={client.id} role={user.role} />
             <MessagesHistoryCard clientId={client.id} />
