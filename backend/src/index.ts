@@ -253,6 +253,83 @@ app.post('/api/internal/backfill-training-stubs', requireAuth, requireRole('foun
   }
 });
 
+// Founder-only: re-send freelance requirement notifications for all open (no trainer assigned) requirements
+app.post('/api/internal/retrigger-freelance-notifications', requireAuth, requireRole('founder'), async (_req, res) => {
+  try {
+    const { safeBuildFromUser, sendEmail } = await import('./lib/mailer');
+    const vaibhav = await prisma.user.findUnique({
+      where: { id: 'u-vaibhav' },
+      select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
+    });
+    if (!vaibhav?.gmailAddress || !vaibhav?.smtpAppPassword) return res.status(500).json({ error: 'Vaibhav SMTP not configured' });
+    const fromUser = safeBuildFromUser(vaibhav);
+    if (!fromUser) return res.status(500).json({ error: 'Could not build fromUser' });
+
+    const recruiters = await prisma.user.findMany({
+      where: { role: 'recruiter', active: true },
+      select: { name: true, email: true, gmailAddress: true },
+    });
+    const recipientEmails = recruiters.map((u: any) => u.gmailAddress || u.email).filter(Boolean);
+    if (!recipientEmails.length) return res.status(400).json({ error: 'No active recruiters found' });
+
+    const open = await (prisma as any).freelanceRequirement.findMany({
+      where: { trainerName: null, status: { not: 'Closed' } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!open.length) return res.json({ ok: true, sent: 0, message: 'No open requirements found' });
+
+    const rows = open.map((r: any) => [
+      ['Client', r.clientName],
+      ['Skill required', r.skillRequired],
+      ['Current trainer', r.currentTrainer || '—'],
+      ['Client timings', r.clientTimings || '—'],
+      ['Trainers tried', r.trainersUsed || '—'],
+      ['Priority', r.priority || 'Medium'],
+      ['Raised', new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' })],
+    ].map(([k, v]) =>
+      `<tr><td style="padding:5px 12px;font-size:13px;color:#6b7280;white-space:nowrap;">${k}</td><td style="padding:5px 12px;font-size:13px;color:#111827;font-weight:500;">${v}</td></tr>`
+    ).join(''));
+
+    const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+  <tr><td align="center">
+    <table width="580" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e4e4e7;">
+      <tr><td style="background:#1A1B1E;padding:24px 32px;border-radius:12px 12px 0 0;">
+        <div style="font-size:18px;font-weight:700;color:#FBBF24;">MITS Consulting Hub</div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:2px;">Open Freelance Trainer Requirements — ${open.length} pending</div>
+      </td></tr>
+      <tr><td style="padding:28px 32px;">
+        <p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 16px;">You have ${open.length} open requirement${open.length > 1 ? 's' : ''} pending a trainer</p>
+        ${open.map((r: any, i: number) => `
+        <div style="margin-bottom:20px;">
+          <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">#${i + 1}</div>
+          <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;border-collapse:collapse;">
+            ${rows[i]}
+          </table>
+        </div>`).join('')}
+        <p style="margin:20px 0 0;"><a href="https://mits-frontend.onrender.com/freelance-requirements" style="display:inline-block;background:#FBBF24;color:#1A1B1E;font-weight:600;font-size:13px;padding:10px 20px;border-radius:6px;text-decoration:none;">View & Update Requirements</a></p>
+      </td></tr>
+      <tr><td style="background:#f9fafb;padding:14px 32px;border-top:1px solid #e5e7eb;border-radius:0 0 12px 12px;">
+        <div style="font-size:11px;color:#9ca3af;text-align:center;">MITS Solution · Internal notification</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table></body></html>`;
+
+    for (const to of recipientEmails) {
+      await sendEmail({
+        fromUser, to,
+        subject: `${open.length} open trainer requirement${open.length > 1 ? 's' : ''} pending your action`,
+        body: `You have ${open.length} open freelance trainer requirements with no trainer assigned yet. Please log in to review.`,
+        htmlBody: html,
+      });
+    }
+    res.json({ ok: true, sent: recipientEmails.length, requirements: open.length, to: recipientEmails });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
 // Founder-only: manually trigger the payment follow-up email right now
 app.post('/api/internal/send-payment-report', requireAuth, requireRole('founder'), async (_req, res) => {
   try {

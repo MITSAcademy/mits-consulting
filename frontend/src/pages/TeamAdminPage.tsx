@@ -9,7 +9,7 @@ import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { ROLE_LABELS } from '@/lib/utils';
-import { Mail, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Mail, ShieldCheck, RefreshCw, BellRing } from 'lucide-react';
 
 export function TeamAdminPage() {
   const qc = useQueryClient();
@@ -28,6 +28,11 @@ export function TeamAdminPage() {
   });
 
   const [smtpHealth, setSmtpHealth] = useState<any[] | null>(null);
+  const retriggerFreelance = useMutation({
+    mutationFn: () => api.post('/internal/retrigger-freelance-notifications', {}),
+    onSuccess: (r) => showToast(`Sent ${r.data.requirements} open requirement${r.data.requirements !== 1 ? 's' : ''} to ${r.data.sent} recruiter${r.data.sent !== 1 ? 's' : ''}`),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
   const [stubResult, setStubResult] = useState<{ created: number; clients: string[] } | null>(null);
   const backfillStubs = useMutation({
     mutationFn: () => api.post('/internal/backfill-training-stubs', {}),
@@ -115,6 +120,19 @@ export function TeamAdminPage() {
               </div>
               <Button variant="default" onClick={() => checkSmtp.mutate()} disabled={checkSmtp.isPending}>
                 <ShieldCheck size={14} style={{ marginRight: 6 }} />{checkSmtp.isPending ? 'Checking…' : 'Check health'}
+              </Button>
+            </div>
+
+            {/* Retrigger freelance requirement notifications */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Re-notify recruiters of open requirements</div>
+                <div style={{ fontSize: 13, color: 'var(--brand-textMuted)', maxWidth: 460 }}>
+                  Sends all open (no trainer assigned) freelance requirements to Amandeep, Kanchan and any active recruiter.
+                </div>
+              </div>
+              <Button variant="default" onClick={() => retriggerFreelance.mutate()} disabled={retriggerFreelance.isPending}>
+                <BellRing size={14} style={{ marginRight: 6 }} />{retriggerFreelance.isPending ? 'Sending…' : 'Re-notify recruiters'}
               </Button>
             </div>
 
