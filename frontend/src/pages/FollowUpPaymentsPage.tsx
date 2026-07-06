@@ -1049,6 +1049,11 @@ function TableView({ rows }: { rows: Row[] }) {
                         style={{ background: 'var(--bg-input)', color: 'var(--brand-textMuted)', border: '1px solid var(--brand-borderSoft)' }}>
                         ✏ Dates
                       </button>
+                      <button onClick={() => setShowAdvance(r)} title="Record payment received"
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80"
+                        style={{ background: 'rgba(34,197,94,0.15)', color: 'var(--status-green)', border: '1px solid rgba(34,197,94,0.35)' }}>
+                        ✓ Record
+                      </button>
                     </div>
                   </td>
                 </tr>
