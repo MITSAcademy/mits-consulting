@@ -154,7 +154,7 @@ calendarRouter.get('/mine', async (req: AuthedRequest, res) => {
     },
   });
 
-  // Training sessions I host (or where I'm the default host)
+  // Training sessions I host (individual logged sessions)
   const trainingSessions = await prisma.trainingSession.findMany({
     where: {
       hostedById: me,
@@ -172,6 +172,63 @@ calendarRouter.get('/mine', async (req: AuthedRequest, res) => {
     },
     orderBy: { scheduledFor: 'asc' },
     take: 200,
+  });
+
+  // Regular trainings I'm assigned to (by AM or default host) — expand into weekly slots
+  const myTrainings = await prisma.regularTraining.findMany({
+    where: {
+      status: 'active',
+      OR: [
+        { hostedByDefaultId: me },
+        { client: { assignedAmId: me } },
+      ],
+    },
+    select: {
+      id: true, name: true, defaultTimeIst: true, scheduleDays: true,
+      client: { select: { id: true, name: true } },
+      trainer: { select: { id: true, name: true } },
+    },
+  });
+
+  // Expand each active training into one event per weekday (Mon–Fri) within [from, to].
+  // scheduleNotes is freeform text — no structured day list — so we default to Mon–Fri
+  // which covers the vast majority of daily client sessions.
+  const trainingEvents: any[] = [];
+  const fromDate = new Date(from + 'T00:00:00');
+  const toDate = new Date(to + 'T23:59:59');
+  for (const t of myTrainings) {
+    if (!t.defaultTimeIst) continue; // no scheduled time → skip
+    for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue; // skip weekends
+      const dateStr = d.toLocaleDateString('sv-SE'); // YYYY-MM-DD
+      trainingEvents.push({
+        id: `rt-${t.id}-${dateStr}`,
+        kind: 'training' as const,
+        title: t.name,
+        date: dateStr,
+        timeIst: t.defaultTimeIst,
+        clientId: t.client?.id,
+        clientName: t.client?.name,
+        trainerId: t.trainer?.id,
+        trainerName: t.trainer?.name,
+        status: 'Scheduled',
+        outcome: null,
+        link: t.client ? `/clients/${t.client.id}` : null,
+      });
+    }
+  }
+
+  // Dedupe: if a TrainingSession row already exists for a slot, prefer it over the recurring stub
+  const loggedSlotKeys = new Set(
+    trainingSessions.map((s) => {
+      const date = s.scheduledFor.toLocaleDateString('sv-SE', { timeZone: 'Asia/Kolkata' });
+      return `${s.regularTraining.id}-${date}`;
+    })
+  );
+  const filteredTrainingEvents = trainingEvents.filter((e) => {
+    const rtId = e.id.split('-')[1];
+    return !loggedSlotKeys.has(`${rtId}-${e.date}`);
   });
 
   const events = [
@@ -220,6 +277,7 @@ calendarRouter.get('/mine', async (req: AuthedRequest, res) => {
         link: s.regularTraining.client ? `/clients/${s.regularTraining.client.id}` : null,
       };
     }),
+    ...filteredTrainingEvents,
   ]
     .filter((e) => e.date)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.timeIst || '').localeCompare(b.timeIst || ''));
