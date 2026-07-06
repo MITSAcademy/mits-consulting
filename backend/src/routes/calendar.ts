@@ -184,7 +184,8 @@ calendarRouter.get('/mine', async (req: AuthedRequest, res) => {
       ],
     },
     select: {
-      id: true, name: true, defaultTimeIst: true, scheduleDays: true,
+      id: true, name: true, defaultTimeIst: true,
+      clientId: true, trainerId: true,
       client: { select: { id: true, name: true } },
       trainer: { select: { id: true, name: true } },
     },
