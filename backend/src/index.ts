@@ -233,7 +233,7 @@ app.post('/api/internal/send-welcome-staff', requireAuth, requireRole('founder')
 app.post('/api/internal/backfill-training-stubs', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
     const clients = await prisma.client.findMany({
-      where: { lifecycle: { in: ['Active', 'LeverageGranted'] } },
+      where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] } },
       select: { id: true, name: true },
     });
     const existing = await prisma.regularTraining.findMany({

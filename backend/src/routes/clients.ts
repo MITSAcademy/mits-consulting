@@ -685,6 +685,26 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
     }
   }
 
+  // Also create stub at SaleWon so Bhavneet can pre-assign before client goes Active
+  if (lifecycle === 'SaleWon' && current.lifecycle !== 'SaleWon' && current.lifecycle !== 'Active' && current.lifecycle !== 'LeverageGranted') {
+    try {
+      const existing = await prisma.regularTraining.findFirst({ where: { clientId: client.id, status: 'active' } });
+      if (!existing) {
+        await prisma.regularTraining.create({
+          data: {
+            name: client.name,
+            clientId: client.id,
+            status: 'active',
+            ownerTeam: 'coordinator_team',
+            hostedByDefaultId: null,
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('[auto-training-stub-salewon] failed (non-fatal):', (e as any)?.message);
+    }
+  }
+
   // ─── Sourcing side-effects ────────────────────────────────────────────────
   // When a client moves OUT of the recruiter flow (Dormant / Hold / pulled-back to
   // InternalSearch / Churned / back to Lead-stages), close any active sourcing
