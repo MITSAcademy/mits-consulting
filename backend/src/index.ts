@@ -257,12 +257,14 @@ app.post('/api/internal/backfill-training-stubs', requireAuth, requireRole('foun
 app.post('/api/internal/retrigger-freelance-notifications', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
     const { safeBuildFromUser, sendEmail } = await import('./lib/mailer');
-    const vaibhav = await prisma.user.findUnique({
-      where: { id: 'u-vaibhav' },
+    const senders = await prisma.user.findMany({
+      where: { smtpAppPassword: { not: null }, active: true },
       select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
+      orderBy: [{ id: 'asc' }],
     });
-    if (!vaibhav?.gmailAddress || !vaibhav?.smtpAppPassword) return res.status(500).json({ error: 'Vaibhav SMTP not configured' });
-    const fromUser = safeBuildFromUser(vaibhav);
+    const senderRaw = (senders as any[]).find((u: any) => u.id === 'u-vaibhav') || senders[0];
+    if (!senderRaw) return res.status(500).json({ error: 'No SMTP-configured user found' });
+    const fromUser = safeBuildFromUser(senderRaw);
     if (!fromUser) return res.status(500).json({ error: 'Could not build fromUser' });
 
     const recruiters = await prisma.user.findMany({

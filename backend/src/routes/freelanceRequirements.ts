@@ -5,11 +5,15 @@ import { audit } from '../lib/audit';
 import { sendEmail, safeBuildFromUser } from '../lib/mailer';
 
 async function getFromUser() {
-  const vaibhav = await prisma.user.findUnique({
-    where: { id: 'u-vaibhav' },
+  // Try Vaibhav first; if his SMTP isn't configured, fall back to any configured user
+  const users = await prisma.user.findMany({
+    where: { smtpAppPassword: { not: null }, active: true },
     select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
+    orderBy: [{ id: 'asc' }],
   });
-  return vaibhav ? safeBuildFromUser(vaibhav) : null;
+  // Prefer Vaibhav
+  const preferred = users.find((u: any) => u.id === 'u-vaibhav') || users[0];
+  return preferred ? safeBuildFromUser(preferred) : null;
 }
 
 async function getRecruiters(): Promise<{ email: string; name: string }[]> {
@@ -125,7 +129,7 @@ freelanceRequirementsRouter.post('/', requireRole(...REGULAR_ROLES), async (req:
       }
     }
   } catch (e: any) {
-    console.warn('[freelance-req-notify] email failed (non-fatal):', e?.message);
+    console.error('[freelance-req-notify] email failed (non-fatal):', e?.message, e?.stack);
   }
 
   res.status(201).json(item);
