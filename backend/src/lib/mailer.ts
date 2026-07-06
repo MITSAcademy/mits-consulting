@@ -10,7 +10,7 @@ import crypto from 'crypto';
 
 let systemTransporter: Transporter | null = null;
 // Per-user transporters cached by user id (reset when password changes)
-const userTransporters = new Map<string, { gmail: string; tx: Transporter }>();
+const userTransporters = new Map<string, { gmail: string; pwHash: string; tx: Transporter }>();
 
 export function smtpConfigured(): boolean {
   return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
@@ -34,18 +34,20 @@ export function getSystemTransporter(): Transporter {
 
 /** Per-user Gmail transporter using their stored App Password. */
 export function getUserTransporter(userId: string, gmail: string, plainAppPassword: string): Transporter {
+  const pass = plainAppPassword.replace(/\s+/g, '');
+  const pwHash = require('crypto').createHash('sha256').update(pass).digest('hex').slice(0, 16);
   const cached = userTransporters.get(userId);
-  if (cached && cached.gmail === gmail) return cached.tx;
+  if (cached && cached.gmail === gmail && cached.pwHash === pwHash) return cached.tx;
   const tx = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
     secure: true,
-    auth: { user: gmail, pass: plainAppPassword.replace(/\s+/g, '') },
+    auth: { user: gmail, pass },
     connectionTimeout: 30_000,
     greetingTimeout: 30_000,
     socketTimeout: 60_000,
   });
-  userTransporters.set(userId, { gmail, tx });
+  userTransporters.set(userId, { gmail, pwHash, tx });
   return tx;
 }
 
