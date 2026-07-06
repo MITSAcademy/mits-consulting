@@ -29,6 +29,7 @@ freelanceRequirementsRouter.use(requireAuth);
 
 // Regular team + management can read and write
 const REGULAR_ROLES = ['founder', 'manager', 'lead', 'account_manager'];
+const READ_ROLES = [...REGULAR_ROLES, 'recruiter'];
 
 const include = {
   flaggedBy: { select: { id: true, name: true } },
@@ -45,7 +46,7 @@ function shouldEscalate(req: any): boolean {
   return age >= 7;
 }
 
-freelanceRequirementsRouter.get('/', requireRole(...REGULAR_ROLES), async (_req, res) => {
+freelanceRequirementsRouter.get('/', requireRole(...READ_ROLES), async (_req, res) => {
   const items = await (prisma as any).freelanceRequirement.findMany({
     include,
     orderBy: { createdAt: 'desc' },
@@ -135,12 +136,15 @@ freelanceRequirementsRouter.post('/', requireRole(...REGULAR_ROLES), async (req:
   res.status(201).json(item);
 });
 
-freelanceRequirementsRouter.patch('/:id', requireRole(...REGULAR_ROLES), async (req: AuthedRequest, res) => {
+freelanceRequirementsRouter.patch('/:id', requireRole(...READ_ROLES), async (req: AuthedRequest, res) => {
   const REGULAR_FIELDS = ['clientName', 'skillRequired', 'currentTrainer', 'clientTimings', 'trainersUsed', 'status', 'priority', 'clientId'];
   const FREELANCE_FIELDS = ['trainerName', 'trainerRecording', 'trainerTimings', 'trainerPhone', 'trainerEmail'];
 
+  const isRecruiter = req.user!.role === 'recruiter';
+  const allowedFields = isRecruiter ? FREELANCE_FIELDS : [...REGULAR_FIELDS, ...FREELANCE_FIELDS];
+
   const data: any = { lastUpdatedById: req.user!.id };
-  for (const f of [...REGULAR_FIELDS, ...FREELANCE_FIELDS]) {
+  for (const f of allowedFields) {
     if (f in req.body) data[f] = req.body[f];
   }
 
@@ -159,7 +163,7 @@ freelanceRequirementsRouter.delete('/:id', requireRole('founder', 'manager', 'le
 });
 
 // Comments
-freelanceRequirementsRouter.post('/:id/comments', requireRole(...REGULAR_ROLES), async (req: AuthedRequest, res) => {
+freelanceRequirementsRouter.post('/:id/comments', requireRole(...READ_ROLES), async (req: AuthedRequest, res) => {
   const { body } = req.body || {};
   if (!body?.trim()) return res.status(400).json({ error: 'body required' });
   const comment = await (prisma as any).freelanceRequirementComment.create({
