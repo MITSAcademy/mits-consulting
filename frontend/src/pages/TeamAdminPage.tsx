@@ -9,7 +9,7 @@ import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { ROLE_LABELS } from '@/lib/utils';
-import { Mail, ShieldCheck, RefreshCw, BellRing } from 'lucide-react';
+import { Mail, ShieldCheck, RefreshCw, BellRing, FileText } from 'lucide-react';
 
 export function TeamAdminPage() {
   const qc = useQueryClient();
@@ -47,6 +47,11 @@ export function TeamAdminPage() {
   const checkSmtp = useMutation({
     mutationFn: () => api.get('/internal/smtp-health'),
     onSuccess: (r) => setSmtpHealth(r.data.results),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+  const sendPaymentReport = useMutation({
+    mutationFn: () => api.post('/internal/send-payment-report', { force: true }),
+    onSuccess: () => showToast('Payment follow-up report sent'),
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
@@ -120,6 +125,19 @@ export function TeamAdminPage() {
               </div>
               <Button variant="default" onClick={() => checkSmtp.mutate()} disabled={checkSmtp.isPending}>
                 <ShieldCheck size={14} style={{ marginRight: 6 }} />{checkSmtp.isPending ? 'Checking…' : 'Check health'}
+              </Button>
+            </div>
+
+            {/* Payment follow-up report */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Send payment follow-up report</div>
+                <div style={{ fontSize: 13, color: 'var(--brand-textMuted)', maxWidth: 460 }}>
+                  Sends the latest payment follow-up report to Vaibhav, Samita, Mitali and Areena right now (bypasses the daily lock).
+                </div>
+              </div>
+              <Button variant="default" onClick={() => sendPaymentReport.mutate()} disabled={sendPaymentReport.isPending}>
+                <FileText size={14} style={{ marginRight: 6 }} />{sendPaymentReport.isPending ? 'Sending…' : 'Send report now'}
               </Button>
             </div>
 
