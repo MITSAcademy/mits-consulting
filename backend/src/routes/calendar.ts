@@ -174,15 +174,18 @@ calendarRouter.get('/mine', async (req: AuthedRequest, res) => {
     take: 200,
   });
 
-  // Regular trainings I'm assigned to (by AM or default host) — expand into weekly slots
+  // Regular trainings visible to this user — expand into weekly slots
+  // lead/founder/manager sees ALL active trainings; AM sees only their own
+  const isAM = req.user!.role === 'account_manager';
+  const trainingWhere: any = { status: 'active' };
+  if (isAM) {
+    trainingWhere.OR = [
+      { hostedByDefaultId: me },
+      { client: { assignedAmId: me } },
+    ];
+  }
   const myTrainings = await prisma.regularTraining.findMany({
-    where: {
-      status: 'active',
-      OR: [
-        { hostedByDefaultId: me },
-        { client: { assignedAmId: me } },
-      ],
-    },
+    where: trainingWhere,
     select: {
       id: true, name: true, defaultTimeIst: true,
       clientId: true, trainerId: true,
