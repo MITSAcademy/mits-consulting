@@ -74,7 +74,8 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
   const isAM = user.role === 'account_manager';
   const [sessionHappened, setSessionHappened] = useState(true);
 
-  // For AM: use scope=team so clients are scoped by assignedAmId (all clients assigned to them)
+  // For AM: derive client list from my-sessions (training-based scope) so all hosted clients appear
+  // regardless of whether assignedAmId is set. For other roles fetch all active clients.
   const { data: clientsResp } = useQuery({
     queryKey: ['clients-active', isAM],
     queryFn: () =>
@@ -84,14 +85,28 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
                   .sort((a: any, b: any) => a.name.localeCompare(b.name));
       }),
   });
-  const clients = (clientsResp as any[]) || [];
 
-  // For AM: also fetch regular trainings to include trainers assigned via training records
+  // For AM: also fetch regular trainings — use these as the authoritative client list
   const { data: myTrainings } = useQuery({
     queryKey: ['my-sessions-am'],
     queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
     enabled: isAM,
   });
+
+  // Build client list: for AM use training records (broader scope); for others use clientsResp
+  const clients: any[] = (() => {
+    if (!isAM) return (clientsResp as any[]) || [];
+    const trainings = (myTrainings as any[]) || [];
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const t of trainings) {
+      if (t.client && !seen.has(t.client.id)) {
+        seen.add(t.client.id);
+        out.push(t.client);
+      }
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+  })();
 
   const { data: allTrainers } = useQuery({
     queryKey: ['trainers-active'],
@@ -346,15 +361,22 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
 /* ── My clients panel (left sidebar for account_manager) ──────────────────── */
 
 function MyClientsPanel({ onSelect }: { onSelect: (trainerId: string, clientId: string) => void }) {
-  const { data: clientsRaw } = useQuery({
-    queryKey: ['clients-active'],
-    queryFn: () => api.get('/clients').then((r) => {
-      const arr = Array.isArray(r.data) ? r.data : (r.data?.data || []);
-      return arr.filter((c: any) => ['Active', 'LeverageGranted'].includes(c.lifecycle))
-                .sort((a: any, b: any) => a.name.localeCompare(b.name));
-    }),
+  const { data: myTrainingsRaw } = useQuery({
+    queryKey: ['my-sessions-am'],
+    queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
   });
-  const clients = (clientsRaw as any[]) || [];
+  const clients: any[] = (() => {
+    const trainings = (myTrainingsRaw as any[]) || [];
+    const seen = new Set<string>();
+    const out: any[] = [];
+    for (const t of trainings) {
+      if (t.client && !seen.has(t.client.id)) {
+        seen.add(t.client.id);
+        out.push({ ...t.client, _trainerId: t.trainerId, _trainerName: t.trainer?.name });
+      }
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+  })();
 
   return (
     <div className="flex-shrink-0 rounded-xl border overflow-hidden" style={{ width: 220, background: 'var(--bg-card)', borderColor: 'var(--brand-border)' }}>
@@ -368,7 +390,7 @@ function MyClientsPanel({ onSelect }: { onSelect: (trainerId: string, clientId: 
         {clients.map((c: any) => (
           <button
             key={c.id}
-            onClick={() => c.primaryTrainerId && onSelect(c.primaryTrainerId, c.id)}
+            onClick={() => c._trainerId && onSelect(c._trainerId, c.id)}
             className="w-full text-left px-3 py-2 border-b transition-colors"
             style={{ borderColor: 'var(--brand-borderSoft)' }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-cardHover)'; }}
@@ -376,8 +398,8 @@ function MyClientsPanel({ onSelect }: { onSelect: (trainerId: string, clientId: 
           >
             <div className="font-medium text-xs truncate" style={{ color: 'var(--brand-text)' }}>{c.name}</div>
             <div className="text-[10px] muted truncate mt-0.5">
-              {c.primaryTrainer?.name
-                ? <span style={{ color: 'var(--accent-gold)' }}>{c.primaryTrainer.name}</span>
+              {c._trainerName
+                ? <span style={{ color: 'var(--accent-gold)' }}>{c._trainerName}</span>
                 : <span className="italic">No trainer assigned</span>}
             </div>
           </button>
