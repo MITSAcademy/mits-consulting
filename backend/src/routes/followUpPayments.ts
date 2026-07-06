@@ -180,21 +180,35 @@ followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, r
   }
   const c = await prisma.client.findUnique({
     where: { id: req.params.id },
-    select: { id: true, name: true, payDate2: true },
+    select: { id: true, name: true, payDate1: true, payDate2: true, cycleAmount: true, currency: true },
   });
   if (!c) return res.status(404).json({ error: 'Client not found' });
-  const oldDate2 = c.payDate2;
-  await prisma.client.update({
-    where: { id: c.id },
-    data: {
-      payDate1: oldDate2 || todayISO(), // move current date2 → date1
-      payDate2: newDate2,               // set next due date
-      leverageUntil: null,              // clear leverage on payment
-      leverageNote: null,
-    },
-  });
-  await audit(req.user!.id, req.user!.name, 'PAYMENT_ADVANCED', `${c.name}: date2 ${oldDate2} → ${newDate2}`, { clientId: c.id });
-  res.json({ ok: true, payDate1: oldDate2 || todayISO(), payDate2: newDate2 });
+  const collectedDate = c.payDate1 || todayISO(); // payDate1 is the due date being collected
+  const newDate1 = c.payDate2 || todayISO();       // next due = old payDate2
+  await prisma.$transaction([
+    prisma.client.update({
+      where: { id: c.id },
+      data: {
+        payDate1: newDate1,   // next upcoming due date
+        payDate2: newDate2,   // future installment
+        leverageUntil: null,
+        leverageNote: null,
+      },
+    }),
+    // Record the payment so it appears in Mitali's weekly section of the report
+    prisma.payment.create({
+      data: {
+        clientId: c.id,
+        kind: 'Renewal',
+        amount: c.cycleAmount || 0,
+        currency: (c.currency || 'INR') as any,
+        paymentDate: collectedDate,
+        receivedById: req.user!.id,
+      },
+    }),
+  ]);
+  await audit(req.user!.id, req.user!.name, 'PAYMENT_ADVANCED', `${c.name}: collected ${collectedDate}, next due ${newDate1} → ${newDate2}`, { clientId: c.id });
+  res.json({ ok: true, payDate1: newDate1, payDate2: newDate2 });
 });
 
 // ─────────────────────────────────────────

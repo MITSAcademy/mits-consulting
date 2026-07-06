@@ -151,8 +151,8 @@ function section(title: string, rows: Row[], pillClass: string, pillLabel: (r: R
       <thead><tr>
         <th style="${TH}">Client</th>
         <th style="${TH}">Host</th>
-        <th style="${TH}">Last Paid</th>
-        <th style="${TH}">Next Due</th>
+        <th style="${TH}">Next Due (Pay 1)</th>
+        <th style="${TH}">2nd Installment</th>
         <th style="${TH}">Days</th>
         <th style="${TH}">Amount</th>
         <th style="${TH}">Status</th>
@@ -371,18 +371,20 @@ async function fetchData(): Promise<Row[]> {
         select: { paymentDate: true },
       },
     },
-    orderBy: { payDate2: 'asc' },
+    orderBy: { payDate1: 'asc' },
   });
 
   return clients.map((c) => {
-    const payDate1 = c.payDate1 || c.payments[0]?.paymentDate || null;
-    const payDate2 = c.payDate2 || null;
-    const daysUntilDue = payDate2
-      ? Math.floor((Date.parse(payDate2) - Date.parse(today)) / 86_400_000)
+    const payDate1 = c.payDate1 || null; // Next due date (primary — what Mitali is chasing)
+    const payDate2 = c.payDate2 || null; // Second installment date
+    // Always use payDate1 as the reference date for overdue/due-soon calculation
+    const refDate = payDate1;
+    const daysUntilDue = refDate
+      ? Math.floor((Date.parse(refDate) - Date.parse(today)) / 86_400_000)
       : null;
 
     let feedbackNeeded = false;
-    if (payDate2 && daysUntilDue !== null && daysUntilDue <= 3) {
+    if (refDate && daysUntilDue !== null && daysUntilDue <= 3) {
       if (c.lastFeedbackTakenAt) {
         const daysSinceFeedback = Math.floor((Date.parse(today) - Date.parse(c.lastFeedbackTakenAt)) / 86_400_000);
         feedbackNeeded = daysSinceFeedback > 3;
