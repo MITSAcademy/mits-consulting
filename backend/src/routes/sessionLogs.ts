@@ -58,8 +58,16 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
   if (req.user!.role === 'account_manager' && clientId) {
     const client = await prisma.client.findUnique({ where: { id: clientId }, select: { hostOwnerId: true, assignedAmId: true } });
     if (!client) return res.status(404).json({ error: 'Client not found' });
-    if (client.hostOwnerId !== req.user!.id && client.assignedAmId !== req.user!.id) {
-      return res.status(403).json({ error: 'You can only log sessions for your assigned clients' });
+    const directlyAssigned = client.hostOwnerId === req.user!.id || client.assignedAmId === req.user!.id;
+    if (!directlyAssigned) {
+      // Also allow if they host an active RegularTraining for this client (covers backfilled stubs with null assignedAmId)
+      const training = await prisma.regularTraining.findFirst({
+        where: { clientId, status: 'active', hostedByDefaultId: req.user!.id },
+        select: { id: true },
+      });
+      if (!training) {
+        return res.status(403).json({ error: 'You can only log sessions for your assigned clients' });
+      }
     }
   }
 
