@@ -7,7 +7,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { MessageSquare, Plus, Trash2, AlertTriangle, Clock } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, AlertTriangle, Clock, Pencil } from 'lucide-react';
 
 interface Comment {
   id: string;
@@ -229,11 +229,16 @@ function ReqCard({ req }: { req: FreelanceReq }) {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  const isRecruiter = user?.role === 'recruiter';
+  const FREELANCE_OUTPUT_FIELDS = ['trainerName', 'trainerRecording', 'trainerTimings', 'trainerPhone', 'trainerEmail'];
+
   function InlineText({ field, value, placeholder, multiline }: { field: keyof FreelanceReq; value: string | null; placeholder: string; multiline?: boolean }) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(value || '');
+    // Recruiters can only edit the freelance output fields
+    const canEdit = isRecruiter ? FREELANCE_OUTPUT_FIELDS.includes(field as string) : true;
     function save() { patch.mutate({ [field]: draft || null } as any); setEditing(false); }
-    if (editing) {
+    if (editing && canEdit) {
       return (
         <div>
           {multiline
@@ -246,13 +251,22 @@ function ReqCard({ req }: { req: FreelanceReq }) {
         </div>
       );
     }
+    if (!canEdit) {
+      return (
+        <span style={{ color: value ? 'var(--brand-text)' : 'var(--brand-textSecondary)', fontStyle: value ? 'normal' : 'italic', fontSize: 12 }}>
+          {value || placeholder}
+        </span>
+      );
+    }
     return (
       <span
         onClick={() => setEditing(true)}
+        className="flex items-center gap-1 group"
         style={{ cursor: 'pointer', color: value ? 'var(--brand-text)' : 'var(--brand-textSecondary)', fontStyle: value ? 'normal' : 'italic', fontSize: 12 }}
         title="Click to edit"
       >
         {value || placeholder}
+        <Pencil size={10} style={{ opacity: 0.4, flexShrink: 0 }} className="group-hover:opacity-100" />
       </span>
     );
   }
@@ -324,22 +338,18 @@ function ReqCard({ req }: { req: FreelanceReq }) {
                 <InlineText field="trainersUsed" value={req.trainersUsed} placeholder="None yet" multiline />
               </Field>
               <Field label="Status">
-                <Select
-                  value={req.status}
-                  onChange={(e) => patch.mutate({ status: e.target.value } as any)}
-                  style={{ fontSize: 12, padding: '3px 8px', height: 30 }}
-                >
-                  {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                </Select>
+                {isRecruiter
+                  ? <span style={{ fontSize: 12 }}>{req.status}</span>
+                  : <Select value={req.status} onChange={(e) => patch.mutate({ status: e.target.value } as any)} style={{ fontSize: 12, padding: '3px 8px', height: 30 }}>
+                      {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </Select>}
               </Field>
               <Field label="Priority">
-                <Select
-                  value={req.priority}
-                  onChange={(e) => patch.mutate({ priority: e.target.value } as any)}
-                  style={{ fontSize: 12, padding: '3px 8px', height: 30 }}
-                >
-                  {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-                </Select>
+                {isRecruiter
+                  ? <span style={{ fontSize: 12 }}>{req.priority}</span>
+                  : <Select value={req.priority} onChange={(e) => patch.mutate({ priority: e.target.value } as any)} style={{ fontSize: 12, padding: '3px 8px', height: 30 }}>
+                      {PRIORITY_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </Select>}
               </Field>
             </div>
           </div>
