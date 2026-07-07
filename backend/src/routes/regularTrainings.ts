@@ -188,8 +188,8 @@ regularTrainingsRouter.post('/trainings/:id/escalate', async (req: AuthedRequest
     select: { id: true, name: true, ownerTeam: true, demoEscalationRequested: true },
   });
   if (!training) return res.status(404).json({ error: 'Not found' });
-  if (training.ownerTeam !== 'demo_team') {
-    return res.status(400).json({ error: 'Client already transferred to coordinator team — escalation not needed.' });
+  if (!['demo_team', 'coordinator_team'].includes(training.ownerTeam)) {
+    return res.status(400).json({ error: 'Escalation only available for demo or coordinator team clients.' });
   }
   const flag = !training.demoEscalationRequested;
   const escalateData: any = { demoEscalationRequested: flag };
