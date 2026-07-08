@@ -180,7 +180,7 @@ export function SalesClosingPage() {
   const items = all
     .filter((c: any) => {
       if (!BOARD_STAGES.includes(c.lifecycle)) return false;
-      if (user.role === 'sales_closer') return c.salesOwnerId === user.id;
+      // sales_closer sees all closing-stage clients (shared queue across the team)
       return true;
     })
     .filter((c: any) => !searchLower || c.name?.toLowerCase().includes(searchLower) || c.skills?.toLowerCase().includes(searchLower))

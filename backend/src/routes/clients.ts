@@ -163,8 +163,8 @@ clientsRouter.get('/roshni/renewals-approaching', async (req: AuthedRequest, res
   const today = new Date().toISOString().slice(0, 10);
   const horizon = new Date(); horizon.setDate(horizon.getDate() + 14);
   const horizonISO = horizon.toISOString().slice(0, 10);
-  // Roshni sees clients she owns; founder/manager see all
-  const ownerFilter = req.user!.role === 'sales_closer' ? { salesOwnerId: req.user!.id } : {};
+  // sales_closer sees all clients in the shared queue; founder/manager see all
+  const ownerFilter = {};
   // Include clients with NO nextRenewalDue at all (a real gap — Mitali's team
   // sometimes forgets to set the date when activating). They get a separate
   // "unscheduled" bucket so Roshni can chase down the missing date.
@@ -215,7 +215,7 @@ clientsRouter.get('/roshni/follow-ups', async (req: AuthedRequest, res) => {
     return res.status(403).json({ error: 'Only Roshni / managers / founder can view this queue.' });
   }
   const today = new Date().toISOString().slice(0, 10);
-  const ownerFilter = req.user!.role === 'sales_closer' ? { salesOwnerId: req.user!.id } : {};
+  const ownerFilter = {}; // all sales_closers share the same queue
   // Include null sub-status clients — these are fresh SaleClosing/SaleWon arrivals
   // (just handed off by Anjali/Samita on positive demo) that need triage. Without
   // this, new clients are invisible to Roshni until she remembers to manually set
