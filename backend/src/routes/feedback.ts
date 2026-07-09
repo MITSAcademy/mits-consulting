@@ -66,13 +66,32 @@ feedbackRouter.delete('/:id', async (req: AuthedRequest, res) => {
   res.json({ ok: true });
 });
 
+// POST /feedback/ensure-client/:clientId — get or create a feedback record for this client
+feedbackRouter.post('/ensure-client/:clientId', async (req: AuthedRequest, res) => {
+  if (!await checkPermission('feedback.write', req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
+  let fb = await prisma.feedback.findFirst({
+    where: { clientId: req.params.clientId },
+    orderBy: { weekStart: 'desc' },
+    include: { client: { select: { id: true, name: true, phoneCode: true, phoneDigits: true } }, trainer: { select: { id: true, name: true } }, activities: { orderBy: { loggedAt: 'desc' }, include: { loggedBy: { select: { id: true, name: true } } } } },
+  });
+  if (!fb) {
+    const client = await prisma.client.findUnique({ where: { id: req.params.clientId }, select: { id: true, name: true } });
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+    fb = await prisma.feedback.create({
+      data: { clientId: req.params.clientId, weekStart: new Date().toISOString().slice(0, 10), rating: 3 },
+      include: { client: { select: { id: true, name: true, phoneCode: true, phoneDigits: true } }, trainer: { select: { id: true, name: true } }, activities: { orderBy: { loggedAt: 'desc' }, include: { loggedBy: { select: { id: true, name: true } } } } },
+    });
+  }
+  res.json(fb);
+});
+
 // ── Activity log ─────────────────────────────────────────────────────────────
 // POST /feedback/:id/activity — log a call/message/note against this feedback entry
 feedbackRouter.post('/:id/activity', async (req: AuthedRequest, res) => {
   if (!await checkPermission('feedback.write', req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
   const fb = await prisma.feedback.findUnique({ where: { id: req.params.id }, select: { id: true, clientId: true } });
   if (!fb) return res.status(404).json({ error: 'Not found' });
-  const { type, note } = req.body;
+  const { type, note, loggedAt } = req.body;
   if (!type) return res.status(400).json({ error: 'type required' });
   const activity = await (prisma as any).feedbackActivity.create({
     data: {
@@ -81,6 +100,7 @@ feedbackRouter.post('/:id/activity', async (req: AuthedRequest, res) => {
       type,
       note: note?.trim() || null,
       loggedById: req.user!.id,
+      ...(loggedAt ? { loggedAt: new Date(loggedAt) } : {}),
     },
     include: { loggedBy: { select: { id: true, name: true } } },
   });

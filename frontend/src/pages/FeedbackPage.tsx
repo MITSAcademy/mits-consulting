@@ -2,12 +2,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Label, Select, Textarea, Input } from '@/components/ui/input';
 import { useState, useMemo } from 'react';
 import { useUI } from '@/store/ui';
 import { EmptyState } from '@/components/EmptyState';
-import { MessageSquare, Download, Phone, MessageCircle, Search, ClipboardList, Clock } from 'lucide-react';
+import { MessageSquare, Download, Phone, MessageCircle, Search } from 'lucide-react';
+import { useAuth } from '@/store/auth';
 import { todayISO } from '@/lib/utils';
 
 const COMM_STATUS_COLORS: Record<string, string> = {
@@ -30,27 +31,62 @@ function fmtDateTime(iso: string) {
 export function FeedbackPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const { data: fb } = useQuery({ queryKey: ['feedback'], queryFn: () => api.get('/feedback').then((r) => r.data) });
-  const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: () => api.get('/clients').then((r) => r.data) });
-  const { data: trainers } = useQuery({ queryKey: ['trainers'], queryFn: () => api.get('/trainers').then((r) => r.data) });
+  const user = useAuth((s) => s.user)!;
 
-  const [open, setOpen] = useState(false);
-  const [editRow, setEditRow] = useState<any>(null);
-  const [activityRow, setActivityRow] = useState<any>(null); // feedback row for Log Activity
-  const [activityType, setActivityType] = useState('Call');
-  const [activityNote, setActivityNote] = useState('');
-  const [f, setF] = useState({ clientId: '', weekStart: todayISO(), rating: 5, notes: '', communicationStatus: '', trainerId: '' });
+  // Fetch all feedback records (keyed by client)
+  const { data: fb } = useQuery({ queryKey: ['feedback'], queryFn: () => api.get('/feedback').then((r) => r.data) });
+
+  // Fetch all active trainings — same source as My Calls and Sessions
+  const { data: trainings } = useQuery({
+    queryKey: ['my-sessions-sheet'],
+    queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
+  });
+
+  // Build de-duped client list from trainings (same order as My Sessions sheet)
+  const trainingClients = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ id: string; name: string; phoneCode: string | null; phoneDigits: string | null; trainerId: string | null; trainerName: string | null }> = [];
+    for (const t of (trainings || []) as any[]) {
+      if (t.client && !seen.has(t.client.id)) {
+        seen.add(t.client.id);
+        out.push({
+          id: t.client.id,
+          name: t.client.name,
+          phoneCode: t.client.phoneCode || null,
+          phoneDigits: t.client.phoneDigits || null,
+          trainerId: t.trainer?.id || null,
+          trainerName: t.trainer?.name || null,
+        });
+      }
+    }
+    return out;
+  }, [trainings]);
+
+  // Map clientId → latest feedback record
+  const fbByClient = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const x of (fb || []) as any[]) {
+      if (!x.clientId) continue;
+      if (!map.has(x.clientId) || x.weekStart > map.get(x.clientId).weekStart) {
+        map.set(x.clientId, x);
+      }
+    }
+    return map;
+  }, [fb]);
+
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-
-  const create = useMutation({
-    mutationFn: () => api.post('/feedback', { ...f, rating: +f.rating, communicationStatus: f.communicationStatus || null, trainerId: f.trainerId || null }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['feedback'] }); setOpen(false); showToast('Logged'); },
-  });
+  const [editRow, setEditRow] = useState<any>(null);       // feedback record being edited
+  const [activityRow, setActivityRow] = useState<any>(null); // feedback record for Log Activity
+  const [activityType, setActivityType] = useState('Call');
+  const [activityNote, setActivityNote] = useState('');
+  const [activityDate, setActivityDate] = useState(todayISO());
+  const [activityTime, setActivityTime] = useState('');
 
   const update = useMutation({
     mutationFn: (data: any) => api.patch(`/feedback/${editRow.id}`, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['feedback'] }); setEditRow(null); showToast('Updated'); },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
   const del = useMutation({
@@ -58,82 +94,83 @@ export function FeedbackPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['feedback'] }); showToast('Deleted'); },
   });
 
+  // Ensure a feedback record exists for client, then open the Log Activity dialog
+  const ensureAndLog = useMutation({
+    mutationFn: (clientId: string) => api.post(`/feedback/ensure-client/${clientId}`, {}).then((r) => r.data),
+    onSuccess: (fbRecord) => {
+      setActivityRow(fbRecord);
+      setActivityType('Call');
+      setActivityNote('');
+      setActivityDate(todayISO());
+      setActivityTime('');
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
   const logActivity = useMutation({
-    mutationFn: () => api.post(`/feedback/${activityRow.id}/activity`, { type: activityType, note: activityNote }),
+    mutationFn: () => {
+      const loggedAt = activityDate
+        ? (activityTime ? `${activityDate}T${activityTime}:00` : `${activityDate}T12:00:00`)
+        : undefined;
+      return api.post(`/feedback/${activityRow.id}/activity`, { type: activityType, note: activityNote, loggedAt });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['feedback'] });
       setActivityRow(null);
       setActivityNote('');
-      setActivityType('Call');
       showToast('Activity logged');
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
   const filtered = useMemo(() => {
-    let xs = fb || [];
+    let xs = trainingClients;
     if (search.trim()) {
       const q = search.toLowerCase();
-      xs = xs.filter((x: any) =>
-        x.client?.name?.toLowerCase().includes(q) ||
-        (x.client?.phoneDigits || '').includes(q)
+      xs = xs.filter((c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.phoneDigits || '').includes(q)
       );
     }
-    if (filterStatus) xs = xs.filter((x: any) => x.communicationStatus === filterStatus);
+    if (filterStatus) {
+      xs = xs.filter((c) => {
+        const fbRec = fbByClient.get(c.id);
+        return fbRec?.communicationStatus === filterStatus;
+      });
+    }
     return xs;
-  }, [fb, search, filterStatus]);
+  }, [trainingClients, search, filterStatus, fbByClient]);
 
   function exportCSV() {
-    const rows = filtered as any[];
-    if (!rows.length) { showToast('Nothing to export', 'error'); return; }
-    const lines = ['Date,Client,Phone,Status,Notes'];
-    rows.forEach((x) => {
-      const esc = (v: string) => `"${(v || '').replace(/"/g, '""')}"`;
-      const phone = x.client?.phoneCode && x.client?.phoneDigits ? `${x.client.phoneCode}${x.client.phoneDigits}` : '';
-      lines.push([esc(x.weekStart), esc(x.client?.name), esc(phone), esc(COMM_STATUS_LABELS[x.communicationStatus] || x.communicationStatus || ''), esc(x.notes)].join(','));
+    if (!filtered.length) { showToast('Nothing to export', 'error'); return; }
+    const esc = (v: string) => `"${(v || '').replace(/"/g, '""')}"`;
+    const lines = ['Client,Phone,Status,Notes,Last Activity'];
+    filtered.forEach((c) => {
+      const fbRec = fbByClient.get(c.id);
+      const phone = c.phoneCode && c.phoneDigits ? `${c.phoneCode}${c.phoneDigits}` : '';
+      const status = COMM_STATUS_LABELS[fbRec?.communicationStatus] || '';
+      const lastAct = fbRec?.activities?.[0];
+      const actStr = lastAct ? `${lastAct.type} · ${fmtDateTime(lastAct.loggedAt)}` : '';
+      lines.push([esc(c.name), esc(phone), esc(status), esc(fbRec?.notes || ''), esc(actStr)].join(','));
     });
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `feedback-${todayISO()}.csv`; a.click();
+    const a = document.createElement('a'); a.href = url; a.download = `feedback-${todayISO()}.csv`; a.click();
     URL.revokeObjectURL(url);
     showToast('CSV exported');
   }
 
-  const activeClients = (clients || []).filter((c: any) => c.lifecycle === 'Active');
-
   return (
     <>
-      <Topbar title="Feedback" actions={
-        <>
-          <Button size="sm" onClick={exportCSV}><Download size={13} /> Export CSV</Button>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild><Button variant="primary">+ Log feedback</Button></DialogTrigger>
-            <DialogContent title="Log feedback">
-              <div className="space-y-2">
-                <div className="form-row"><Label>Client *</Label><Select value={f.clientId} onChange={(e) => setF({ ...f, clientId: e.target.value })}>
-                  <option value="">— Select —</option>{activeClients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </Select></div>
-                <div className="form-row"><Label>Trainer (optional)</Label><Select value={f.trainerId} onChange={(e) => setF({ ...f, trainerId: e.target.value })}>
-                  <option value="">— None —</option>{(trainers || []).filter((t: any) => t.active).map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </Select></div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="form-row"><Label>Feedback date *</Label><Input type="date" value={f.weekStart} onChange={(e) => setF({ ...f, weekStart: e.target.value })} /></div>
-                  <div className="form-row"><Label>Rating (1–5)</Label><Input type="number" min={1} max={5} value={f.rating} onChange={(e) => setF({ ...f, rating: +e.target.value })} /></div>
-                </div>
-                <div className="form-row"><Label>Status</Label><Select value={f.communicationStatus} onChange={(e) => setF({ ...f, communicationStatus: e.target.value })}>
-                  <option value="">— Select —</option>
-                  <option value="CallReceived">Picked</option>
-                  <option value="CallNotReceived">Not Picked</option>
-                  <option value="MessageSent">Message Sent</option>
-                </Select></div>
-                <div className="form-row"><Label>Notes</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
-              </div>
-              <DialogFooter><Button onClick={() => setOpen(false)}>Cancel</Button><Button variant="primary" disabled={!f.clientId} onClick={() => create.mutate()}>Save</Button></DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </>
-      } />
+      <Topbar
+        title="Feedback"
+        subtitle={`${filtered.length} clients`}
+        actions={
+          <div className="flex gap-2">
+            <Button size="sm" onClick={exportCSV}><Download size={13} /> Export CSV</Button>
+          </div>
+        }
+      />
       <Page>
         {/* Filters */}
         <div className="flex flex-wrap gap-2 mb-3">
@@ -162,26 +199,25 @@ export function FeedbackPage() {
           <table>
             <thead>
               <tr>
-                <th>Date</th>
                 <th>Client</th>
                 <th>Phone</th>
                 <th>Status</th>
                 <th>Notes</th>
-                <th>Activity log</th>
+                <th>Activity Log</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {(filtered as any[]).length === 0 ? (
-                <tr><td colSpan={7}><EmptyState icon={MessageSquare} tone="gold" title="No feedback yet" description="Log feedback using the button above." /></td></tr>
-              ) : (filtered as any[]).map((x: any) => {
-                const phone = x.client?.phoneCode && x.client?.phoneDigits ? `${x.client.phoneCode}${x.client.phoneDigits}` : null;
+              {filtered.length === 0 ? (
+                <tr><td colSpan={6}><EmptyState icon={MessageSquare} tone="gold" title="No clients yet" description="Clients appear here once assigned in My Sessions." /></td></tr>
+              ) : filtered.map((c) => {
+                const fbRec = fbByClient.get(c.id);
+                const phone = c.phoneCode && c.phoneDigits ? `${c.phoneCode}${c.phoneDigits}` : null;
                 const waPhone = phone?.replace(/[^0-9]/g, '');
-                const latestActivity = x.activities?.[0];
+                const latestActivity = fbRec?.activities?.[0];
                 return (
-                  <tr key={x.id}>
-                    <td className="mono text-[12px]">{x.weekStart}</td>
-                    <td className="font-medium">{x.client?.name || '—'}</td>
+                  <tr key={c.id}>
+                    <td className="font-medium text-[13px]">{c.name}</td>
                     <td className="mono text-[11px]">
                       <div className="flex items-center gap-1">
                         <span>{phone || '—'}</span>
@@ -192,12 +228,12 @@ export function FeedbackPage() {
                       </div>
                     </td>
                     <td>
-                      {x.communicationStatus
-                        ? <span className="text-[11px] font-semibold" style={{ color: COMM_STATUS_COLORS[x.communicationStatus] }}>{COMM_STATUS_LABELS[x.communicationStatus]}</span>
+                      {fbRec?.communicationStatus
+                        ? <span className="text-[11px] font-semibold" style={{ color: COMM_STATUS_COLORS[fbRec.communicationStatus] }}>{COMM_STATUS_LABELS[fbRec.communicationStatus]}</span>
                         : <span className="muted text-[11px]">—</span>}
                     </td>
-                    <td className="text-[12px] muted max-w-[180px] truncate">{x.notes || '—'}</td>
-                    <td style={{ minWidth: 180 }}>
+                    <td className="text-[12px] muted max-w-[180px] truncate">{fbRec?.notes || '—'}</td>
+                    <td style={{ minWidth: 200 }}>
                       {latestActivity ? (
                         <div style={{ fontSize: 11 }}>
                           <span className="font-medium" style={{ color: latestActivity.type === 'Call' ? 'var(--status-green)' : latestActivity.type === 'Message' ? 'var(--status-amber)' : 'var(--brand-textMuted)' }}>
@@ -205,18 +241,24 @@ export function FeedbackPage() {
                           </span>
                           <span className="muted"> · {latestActivity.loggedBy?.name} · </span>
                           <span className="muted" style={{ fontSize: 10 }}>{fmtDateTime(latestActivity.loggedAt)}</span>
-                          {latestActivity.note && <div className="muted truncate" style={{ maxWidth: 160, fontSize: 11 }}>{latestActivity.note}</div>}
-                          {x.activities.length > 1 && <span className="muted" style={{ fontSize: 10 }}> +{x.activities.length - 1} more</span>}
+                          {latestActivity.note && <div className="muted truncate" style={{ maxWidth: 180, fontSize: 11 }}>{latestActivity.note}</div>}
+                          {fbRec.activities.length > 1 && <span className="muted" style={{ fontSize: 10 }}> +{fbRec.activities.length - 1} more</span>}
                         </div>
-                      ) : <span className="muted text-[11px]">No activity</span>}
+                      ) : <span className="muted text-[11px]">No activity yet</span>}
                     </td>
                     <td>
                       <div className="flex gap-1 flex-wrap">
-                        <Button size="sm" onClick={() => setEditRow({ ...x, trainerId: x.trainer?.id || '', communicationStatus: x.communicationStatus || '' })}>Edit</Button>
-                        <Button size="sm" variant="danger" onClick={() => { if (confirm('Delete?')) del.mutate(x.id); }}>Del</Button>
-                        <Button size="sm" onClick={() => { setActivityRow(x); setActivityType('Call'); setActivityNote(''); }}
-                          style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)' }}>
-                          <ClipboardList size={11} style={{ marginRight: 4 }} />Log
+                        {fbRec && (
+                          <>
+                            <Button size="sm" onClick={() => setEditRow({ ...fbRec, trainerId: fbRec.trainer?.id || '', communicationStatus: fbRec.communicationStatus || '' })}>Edit</Button>
+                            <Button size="sm" variant="danger" onClick={() => { if (confirm('Delete this feedback record?')) del.mutate(fbRec.id); }}>Del</Button>
+                          </>
+                        )}
+                        <Button size="sm"
+                          style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)' }}
+                          disabled={ensureAndLog.isPending}
+                          onClick={() => ensureAndLog.mutate(c.id)}>
+                          Log
                         </Button>
                       </div>
                     </td>
@@ -230,27 +272,26 @@ export function FeedbackPage() {
         {/* Edit dialog */}
         {editRow && (
           <Dialog open onOpenChange={(v) => !v && setEditRow(null)}>
-            <DialogContent title="Edit feedback">
+            <DialogContent title={`Edit feedback — ${editRow.client?.name}`}>
               <div className="space-y-2">
-                <div className="text-sm font-medium mb-1">{editRow.client?.name}</div>
-                <div className="form-row"><Label>Trainer (optional)</Label><Select value={editRow.trainerId || ''} onChange={(e) => setEditRow({ ...editRow, trainerId: e.target.value })}>
-                  <option value="">— None —</option>{(trainers || []).filter((t: any) => t.active).map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </Select></div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="form-row"><Label>Feedback date</Label><Input type="date" value={editRow.weekStart} onChange={(e) => setEditRow({ ...editRow, weekStart: e.target.value })} /></div>
-                  <div className="form-row"><Label>Rating (1–5)</Label><Input type="number" min={1} max={5} value={editRow.rating} onChange={(e) => setEditRow({ ...editRow, rating: +e.target.value })} /></div>
+                <div className="form-row"><Label>Status</Label>
+                  <Select value={editRow.communicationStatus || ''} onChange={(e) => setEditRow({ ...editRow, communicationStatus: e.target.value })}>
+                    <option value="">— Select —</option>
+                    <option value="CallReceived">Picked</option>
+                    <option value="CallNotReceived">Not Picked</option>
+                    <option value="MessageSent">Message Sent</option>
+                  </Select>
                 </div>
-                <div className="form-row"><Label>Status</Label><Select value={editRow.communicationStatus || ''} onChange={(e) => setEditRow({ ...editRow, communicationStatus: e.target.value })}>
-                  <option value="">— Select —</option>
-                  <option value="CallReceived">Picked</option>
-                  <option value="CallNotReceived">Not Picked</option>
-                  <option value="MessageSent">Message Sent</option>
-                </Select></div>
-                <div className="form-row"><Label>Notes</Label><Textarea value={editRow.notes || ''} onChange={(e) => setEditRow({ ...editRow, notes: e.target.value })} /></div>
+                <div className="form-row"><Label>Notes</Label>
+                  <Textarea value={editRow.notes || ''} onChange={(e) => setEditRow({ ...editRow, notes: e.target.value })} />
+                </div>
               </div>
               <DialogFooter>
                 <Button onClick={() => setEditRow(null)}>Cancel</Button>
-                <Button variant="primary" disabled={update.isPending} onClick={() => update.mutate({ rating: editRow.rating, notes: editRow.notes, communicationStatus: editRow.communicationStatus || null, trainerId: editRow.trainerId || null, weekStart: editRow.weekStart })}>Save</Button>
+                <Button variant="primary" disabled={update.isPending}
+                  onClick={() => update.mutate({ notes: editRow.notes, communicationStatus: editRow.communicationStatus || null })}>
+                  Save
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -261,15 +302,20 @@ export function FeedbackPage() {
           <Dialog open onOpenChange={(v) => !v && setActivityRow(null)}>
             <DialogContent title={`Log activity — ${activityRow.client?.name}`}>
               <div className="space-y-3">
-                <div style={{ fontSize: 12, color: 'var(--brand-textMuted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Clock size={12} /> Timestamp will be recorded automatically
-                </div>
                 <div className="form-row"><Label>Activity type *</Label>
                   <Select value={activityType} onChange={(e) => setActivityType(e.target.value)}>
                     <option value="Call">Call</option>
                     <option value="Message">Message</option>
                     <option value="Note">Note</option>
                   </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="form-row"><Label>Date *</Label>
+                    <Input type="date" value={activityDate} onChange={(e) => setActivityDate(e.target.value)} />
+                  </div>
+                  <div className="form-row"><Label>Time (optional)</Label>
+                    <Input type="time" value={activityTime} onChange={(e) => setActivityTime(e.target.value)} />
+                  </div>
                 </div>
                 <div className="form-row"><Label>Note (optional)</Label>
                   <Textarea value={activityNote} onChange={(e) => setActivityNote(e.target.value)} placeholder="What happened? Any details…" />
@@ -278,11 +324,15 @@ export function FeedbackPage() {
                 {/* Previous activities */}
                 {activityRow.activities?.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--brand-textMuted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Previous activity</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--brand-textMuted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Previous activity
+                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 160, overflowY: 'auto' }}>
                       {activityRow.activities.map((a: any) => (
                         <div key={a.id} style={{ fontSize: 12, padding: '6px 10px', background: 'var(--bg-input)', borderRadius: 6, border: '1px solid var(--brand-borderSoft)' }}>
-                          <span className="font-medium" style={{ color: a.type === 'Call' ? 'var(--status-green)' : a.type === 'Message' ? 'var(--status-amber)' : 'var(--brand-text)' }}>{a.type}</span>
+                          <span className="font-medium" style={{ color: a.type === 'Call' ? 'var(--status-green)' : a.type === 'Message' ? 'var(--status-amber)' : 'var(--brand-text)' }}>
+                            {a.type}
+                          </span>
                           <span className="muted"> · {a.loggedBy?.name} · {fmtDateTime(a.loggedAt)}</span>
                           {a.note && <div className="muted" style={{ marginTop: 2 }}>{a.note}</div>}
                         </div>
@@ -293,7 +343,7 @@ export function FeedbackPage() {
               </div>
               <DialogFooter>
                 <Button onClick={() => setActivityRow(null)}>Cancel</Button>
-                <Button variant="primary" disabled={logActivity.isPending} onClick={() => logActivity.mutate()}>
+                <Button variant="primary" disabled={logActivity.isPending || !activityDate} onClick={() => logActivity.mutate()}>
                   {logActivity.isPending ? 'Saving…' : 'Log activity'}
                 </Button>
               </DialogFooter>
