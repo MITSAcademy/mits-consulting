@@ -237,7 +237,7 @@ const fields = [
 trainersRouter.post('/', async (req: AuthedRequest, res) => {
   // Trainer pool ops are owned by recruiters + leadership; demo_lead too
   // because Samita / Anjali quick-add trainers from Internal Search.
-  const ALLOWED = ['founder', 'manager', 'recruiter', 'demo_lead', 'demo_intake', 'account_manager'];
+  const ALLOWED = ['founder', 'manager', 'lead', 'recruiter', 'demo_lead', 'demo_intake', 'account_manager'];
   if (!ALLOWED.includes(req.user!.role)) {
     return res.status(403).json({ error: `Your role (${req.user!.role}) cannot add trainers.` });
   }
@@ -257,7 +257,7 @@ trainersRouter.post('/', async (req: AuthedRequest, res) => {
 trainersRouter.patch('/:id', async (req: AuthedRequest, res) => {
   // Same gate as POST. Without this any role could PATCH bank/UPI/rate which
   // is a finance-sensitive surface.
-  const ALLOWED = ['founder', 'manager', 'recruiter', 'demo_lead', 'demo_intake', 'account_manager'];
+  const ALLOWED = ['founder', 'manager', 'lead', 'recruiter', 'demo_lead', 'demo_intake', 'account_manager'];
   if (!ALLOWED.includes(req.user!.role)) {
     return res.status(403).json({ error: `Your role (${req.user!.role}) cannot edit trainers.` });
   }
