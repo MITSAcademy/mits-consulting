@@ -70,10 +70,12 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
         take: 1,
       },
       payments: {
+        where: { kind: { not: 'Fresh' } },  // only Renewal payments = follow-up collections
         select: { id: true, kind: true, amount: true, currency: true, paymentDate: true },
         orderBy: { paymentDate: 'desc' },
-        take: 4,
+        take: 10,
       },
+      lifecycle: true,
       comments: {
         orderBy: { createdAt: 'desc' },
         take: 1,
@@ -105,9 +107,14 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       feedbackNeeded = daysUntilDue !== null && daysUntilDue <= 3;
     }
 
+    // Deferred: client is in LeverageGranted lifecycle OR has an active leverageUntil in the future
+    const isDeferred = (c as any).lifecycle === 'LeverageGranted' ||
+      (c.leverageUntil != null && c.leverageUntil >= today);
+
     // Status derivation
-    let status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'no_date' = 'no_date';
+    let status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'no_date' | 'deferred' = 'no_date';
     if (c.paymentPendingVaibhav) status = 'pending_vaibhav';
+    else if (isDeferred)          status = 'deferred';
     else if (!payDate1)           status = 'no_date';
     else if (daysUntilDue! < 0)  status = 'overdue';
     else if (daysUntilDue! <= 3) status = 'due_soon';

@@ -62,7 +62,7 @@ interface Row {
   followupNoteAt: string | null;
   latestComment: LatestComment | null;
   feedbackNeeded: boolean;
-  status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'no_date';
+  status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'no_date' | 'deferred';
   paymentCount: number;
 }
 
@@ -139,6 +139,12 @@ function StatusBadge({ r }: { r: Row }) {
     <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
       style={{ background: 'rgba(245,158,11,0.12)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.3)' }}>
       <AlertTriangle size={10}/> Pending on Vaibhav
+    </span>
+  );
+  if (r.status === 'deferred') return (
+    <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full"
+      style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }}>
+      <Clock size={10}/> Deferred{r.leverageUntil ? ` until ${r.leverageUntil}` : ''}
     </span>
   );
   if (r.status === 'paid') return (
@@ -877,7 +883,7 @@ function TableView({ rows }: { rows: Row[] }) {
               const isPendingV = r.status === 'pending_vaibhav';
               const isOverdue = r.status === 'overdue';
               const isDueSoon = r.status === 'due_soon';
-
+              const isDeferred = r.status === 'deferred';
               const isNoDate = r.status === 'no_date';
               const isEmployer = r.isEmployerCall;
               const rowBg = isEmployer
@@ -888,6 +894,8 @@ function TableView({ rows }: { rows: Row[] }) {
                 ? 'rgba(239,68,68,0.08)'    // red tint — overdue
                 : isDueSoon
                 ? 'rgba(245,158,11,0.07)'   // amber tint — due soon
+                : isDeferred
+                ? 'rgba(139,92,246,0.07)'   // purple tint — deferred
                 : isNoDate
                 ? 'rgba(34,197,94,0.07)'    // green tint — no date = all paid
                 : i % 2 === 0 ? 'var(--bg-card)' : 'rgba(255,255,255,0.02)';
@@ -1072,7 +1080,7 @@ function TableView({ rows }: { rows: Row[] }) {
 
 export function FollowUpPaymentsPage() {
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'due_soon' | 'pending_vaibhav'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'due_soon' | 'pending_vaibhav' | 'deferred'>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
   const showToast = useUI((s) => s.showToast);
   const pageUser = useAuth((s) => s.user);
@@ -1099,12 +1107,13 @@ export function FollowUpPaymentsPage() {
   }, [data, search, statusFilter]);
 
   const counts = useMemo(() => {
-    const o = { all: 0, overdue: 0, due_soon: 0, pending_vaibhav: 0, feedback_needed: 0 };
+    const o = { all: 0, overdue: 0, due_soon: 0, pending_vaibhav: 0, feedback_needed: 0, deferred: 0 };
     for (const r of (data || [])) {
       o.all++;
       if (r.status === 'overdue')         o.overdue++;
       if (r.status === 'due_soon')        o.due_soon++;
       if (r.status === 'pending_vaibhav') o.pending_vaibhav++;
+      if (r.status === 'deferred')        o.deferred++;
       if (r.feedbackNeeded)               o.feedback_needed++;
     }
     return o;
@@ -1160,9 +1169,10 @@ export function FollowUpPaymentsPage() {
       <Page>
         {/* KPI bar */}
         {(data || []).length > 0 && (
-          <div className="card-hero mb-4 grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="card-hero mb-4 grid grid-cols-2 md:grid-cols-5 gap-6">
             <Stat label="Overdue"          value={counts.overdue}         color="var(--status-red)" />
             <Stat label="Due soon (≤3d)"   value={counts.due_soon}        color="var(--status-amber)" />
+            <Stat label="Deferred"         value={counts.deferred}        color="var(--status-amber)" />
             <Stat label="Pending Vaibhav"  value={counts.pending_vaibhav} color="var(--status-amber)" />
             <Stat label="Feedback needed"  value={counts.feedback_needed} color="var(--status-amber)" />
           </div>
@@ -1171,9 +1181,10 @@ export function FollowUpPaymentsPage() {
         {/* Filter chips */}
         <div className="flex flex-wrap gap-2 mb-3">
           {([
-            { k: 'all',             label: 'All',              n: counts.all },
-            { k: 'overdue',         label: 'Overdue',          n: counts.overdue },
-            { k: 'due_soon',        label: 'Due soon',         n: counts.due_soon },
+            { k: 'all',             label: 'All',                n: counts.all },
+            { k: 'overdue',         label: 'Overdue',            n: counts.overdue },
+            { k: 'due_soon',        label: 'Due soon',           n: counts.due_soon },
+            { k: 'deferred',        label: 'Deferred',           n: counts.deferred },
             { k: 'pending_vaibhav', label: 'Pending on Vaibhav', n: counts.pending_vaibhav },
           ] as const).map((f) => {
             const active = statusFilter === f.k;
