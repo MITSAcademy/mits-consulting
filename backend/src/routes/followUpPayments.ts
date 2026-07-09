@@ -22,9 +22,6 @@ followUpPaymentsRouter.use(requireAuth);
 
 const ALLOWED = ['founder', 'manager', 'accounts', 'demo_lead'];
 
-// No team scoping — manager sees all active clients in follow-up list
-const TEAM_SCOPE: Record<string, string[]> = {};
-
 function addDays(isoDate: string, n: number): string {
   const d = new Date(isoDate + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + n);
@@ -43,12 +40,8 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
     return res.status(403).json({ error: 'Not allowed' });
   }
 
-  const teamFilter = TEAM_SCOPE[req.user!.role]
-    ? { hostOwnerId: { in: TEAM_SCOPE[req.user!.role] } }
-    : {};
-
   const clients = await prisma.client.findMany({
-    where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] }, cycleAmount: { gt: 0 }, ...teamFilter },
+    where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] }, cycleAmount: { gt: 0 } },
     select: {
       id: true, name: true,
       currency: true, cycleAmount: true,
