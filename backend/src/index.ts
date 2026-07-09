@@ -233,21 +233,55 @@ app.post('/api/internal/send-welcome-staff', requireAuth, requireRole('founder')
 app.post('/api/internal/backfill-training-stubs', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
     const clients = await prisma.client.findMany({
-      where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] } },
+      where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon', 'Hold'] } },
       select: { id: true, name: true },
     });
-    const existing = await prisma.regularTraining.findMany({
-      where: { clientId: { in: clients.map((c) => c.id) }, status: 'active' },
+    const clientIds = clients.map((c) => c.id);
+
+    // Find which clients already have an active stub
+    const activeStubs = await prisma.regularTraining.findMany({
+      where: { clientId: { in: clientIds }, status: 'active' },
       select: { clientId: true },
     });
-    const hasStub = new Set(existing.map((t) => t.clientId));
-    const missing = clients.filter((c) => !hasStub.has(c.id));
-    for (const c of missing) {
+    const hasActive = new Set(activeStubs.map((t) => t.clientId));
+
+    // For clients without an active stub, check if they have an archived stub to reactivate
+    const needsStub = clients.filter((c) => !hasActive.has(c.id));
+    const archivedStubs = await prisma.regularTraining.findMany({
+      where: { clientId: { in: needsStub.map((c) => c.id) }, status: 'archived' },
+      select: { id: true, clientId: true },
+      orderBy: { id: 'desc' },
+    });
+    const hasArchived = new Map<string, string>(); // clientId → training id
+    for (const t of archivedStubs) {
+      if (t.clientId && !hasArchived.has(t.clientId)) hasArchived.set(t.clientId, t.id);
+    }
+
+    let reactivated = 0;
+    const reactivatedNames: string[] = [];
+    for (const c of needsStub) {
+      const archivedId = hasArchived.get(c.id);
+      if (archivedId) {
+        await prisma.regularTraining.update({ where: { id: archivedId }, data: { status: 'active' } });
+        reactivated++;
+        reactivatedNames.push(c.name);
+      }
+    }
+
+    const stillMissing = needsStub.filter((c) => !hasArchived.has(c.id));
+    for (const c of stillMissing) {
       await prisma.regularTraining.create({
         data: { name: c.name, clientId: c.id, status: 'active', ownerTeam: 'coordinator_team', hostedByDefaultId: null },
       });
     }
-    res.json({ ok: true, created: missing.length, clients: missing.map((c) => c.name) });
+
+    res.json({
+      ok: true,
+      created: stillMissing.length,
+      reactivated,
+      createdClients: stillMissing.map((c) => c.name),
+      reactivatedClients: reactivatedNames,
+    });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'Failed' });
   }

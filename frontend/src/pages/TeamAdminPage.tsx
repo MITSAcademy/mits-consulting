@@ -33,10 +33,10 @@ export function TeamAdminPage() {
     onSuccess: (r) => showToast(`Sent ${r.data.requirements} open requirement${r.data.requirements !== 1 ? 's' : ''} to ${r.data.sent} recruiter${r.data.sent !== 1 ? 's' : ''}`),
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
-  const [stubResult, setStubResult] = useState<{ created: number; clients: string[] } | null>(null);
+  const [stubResult, setStubResult] = useState<{ created: number; reactivated: number; createdClients: string[]; reactivatedClients: string[] } | null>(null);
   const backfillStubs = useMutation({
     mutationFn: () => api.post('/internal/backfill-training-stubs', {}),
-    onSuccess: (r) => { setStubResult(r.data); showToast(`Created ${r.data.created} missing training stubs`); },
+    onSuccess: (r) => { setStubResult(r.data); showToast(`Fixed ${r.data.created + r.data.reactivated} training stubs`); },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
   const sendAdvisory = useMutation({
@@ -162,8 +162,13 @@ export function TeamAdminPage() {
                   Creates missing session stubs for all Active clients with no training record — fixes them appearing in Unassigned on the Team Board.
                 </div>
                 {stubResult && (
-                  <div style={{ marginTop: 8, fontSize: 13, color: stubResult.created > 0 ? '#16a34a' : 'var(--brand-textMuted)' }}>
-                    {stubResult.created === 0 ? 'All active clients already have stubs.' : `Created stubs for: ${stubResult.clients.join(', ')}`}
+                  <div style={{ marginTop: 8, fontSize: 13, color: (stubResult.created + stubResult.reactivated) > 0 ? '#16a34a' : 'var(--brand-textMuted)' }}>
+                    {(stubResult.created + stubResult.reactivated) === 0
+                      ? 'All active clients already have stubs.'
+                      : [
+                          stubResult.created > 0 ? `Created: ${stubResult.createdClients.join(', ')}` : '',
+                          stubResult.reactivated > 0 ? `Reactivated: ${stubResult.reactivatedClients.join(', ')}` : '',
+                        ].filter(Boolean).join(' · ')}
                   </div>
                 )}
               </div>
