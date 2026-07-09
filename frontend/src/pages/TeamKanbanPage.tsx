@@ -49,7 +49,7 @@ interface Training {
   lastFeedbackTakenAt?: string | null;
   lastClientFeedback: string | null;
   lastSessionDate: string | null;
-  client: { id: string; name: string; whatsappGroupLink: string | null; phoneCode: string | null; phoneDigits: string | null } | null;
+  client: { id: string; name: string; whatsappGroupLink: string | null; phoneCode: string | null; phoneDigits: string | null; lastFeedbackTakenAt: string | null } | null;
   trainer: { id: string; name: string; skills: string[] } | null;
   hostedByDefault: { id: string; name: string } | null;
   temporaryHost: { id: string; name: string } | null;
@@ -334,7 +334,7 @@ function TrainingCard({ training, canReassignHost, isAllColumn = false }: {
   isAllColumn?: boolean;
 }) {
   const fbAge = daysAgo(training.lastSessionDate);
-  const feedbackWarn = training.lastClientFeedback === null;
+  const feedbackWarn = !training.client?.lastFeedbackTakenAt && training.lastClientFeedback === null;
   const host = training.hostedByDefault;
 
   // Fake RT shape for HostChip

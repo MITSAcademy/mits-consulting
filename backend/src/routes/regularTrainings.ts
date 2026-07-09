@@ -473,7 +473,7 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
       completedSessionCount: true, ownerTeam: true, demoEscalationRequested: true,
       hostedByDefault: { select: { id: true, name: true } },
       temporaryHost:   { select: { id: true, name: true } },
-      client:  { select: { id: true, name: true, whatsappGroupLink: true, phoneCode: true, phoneDigits: true } },
+      client:  { select: { id: true, name: true, whatsappGroupLink: true, phoneCode: true, phoneDigits: true, lastFeedbackTakenAt: true } },
       trainer: { select: { id: true, name: true, skills: true, phoneCode: true, phoneDigits: true } },
       sessions: {
         where: { status: { in: ['scheduled', 'in_progress'] }, scheduledFor: { gte: now } },
