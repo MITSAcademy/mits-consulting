@@ -22,10 +22,8 @@ followUpPaymentsRouter.use(requireAuth);
 
 const ALLOWED = ['founder', 'manager', 'accounts', 'demo_lead'];
 
-// Team scoping: manager sees only her team's clients in follow-up list
-const TEAM_SCOPE: Record<string, string[]> = {
-  manager: ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'],
-};
+// No team scoping — manager sees all active clients in follow-up list
+const TEAM_SCOPE: Record<string, string[]> = {};
 
 function addDays(isoDate: string, n: number): string {
   const d = new Date(isoDate + 'T00:00:00Z');
