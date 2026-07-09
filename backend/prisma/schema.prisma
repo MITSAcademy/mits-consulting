@@ -638,6 +638,7 @@ model SessionLog {
   comments         String?       // remarks/issues for payment processing
   loggedById       String?       // who logged this session
   sessionHappened  Boolean       @default(true)  // false = client no-show
+  cancelledBy      String?       // 'trainer' | 'client' — only set when sessionHappened=false
   createdAt        DateTime      @default(now())
 }
 

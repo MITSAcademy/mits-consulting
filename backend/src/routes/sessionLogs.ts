@@ -22,7 +22,7 @@ const include = {
   client: { select: { id: true, name: true } },
 };
 
-sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req, res) => {
+sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req: AuthedRequest, res) => {
   const { status, trainerId, clientId, from, to, weekStart } = req.query as any;
   const where: any = {};
   if (status) where.status = status;
@@ -34,6 +34,18 @@ sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req, res) =>
     end.setDate(end.getDate() + 6);
     where.date = { gte: weekStart, lte: end.toISOString().slice(0, 10) };
   }
+  // account_manager: scope to clients from their active RegularTrainings only
+  if (req.user!.role === 'account_manager') {
+    const myTrainings = await prisma.regularTraining.findMany({
+      where: {
+        status: 'active',
+        OR: [{ hostedByDefaultId: req.user!.id }, { client: { assignedAmId: req.user!.id } }],
+      },
+      select: { clientId: true },
+    });
+    const myClientIds = [...new Set(myTrainings.map((t) => t.clientId).filter(Boolean))] as string[];
+    where.clientId = clientId ? clientId : { in: myClientIds };
+  }
   const logs = await prisma.sessionLog.findMany({ where, include, orderBy: { date: 'desc' } });
   res.json(logs);
 });
@@ -41,7 +53,7 @@ sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req, res) =>
 const LEAD_TEAM_IDS = ['u-bhavneet', 'u-kashish', 'u-muskan'];
 
 sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
-  const { trainerId, clientId, date, hours, rateSnapshot, rateModel, notes, amountInr: amountOverride, feedback, sessionHappened } = req.body;
+  const { trainerId, clientId, date, hours, rateSnapshot, rateModel, notes, amountInr: amountOverride, feedback, sessionHappened, cancelledBy } = req.body;
   const didHappen = sessionHappened !== false && sessionHappened !== 'false';
   if (!trainerId || !date) return res.status(400).json({ error: 'trainerId and date required' });
   if (didHappen && !hours) return res.status(400).json({ error: 'hours required when session happened' });
@@ -83,6 +95,7 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
     rateModel: rateModel || 'per_session', amountInr: amount, status: 'Logged',
     notes: notes || null, feedback: feedback || null, loggedById: req.user!.id,
     sessionHappened: didHappen,
+    cancelledBy: !didHappen ? (cancelledBy || null) : null,
   };
   const log = await prisma.sessionLog.create({ data, include });
   const noShowNote = !didHappen ? ' · NO SHOW' : '';
@@ -95,7 +108,7 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
 sessionLogsRouter.patch('/:id', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const data: any = {};
   // Any authorized role can edit these operational fields
-  for (const f of ['hours', 'rateSnapshot', 'amountInr', 'notes', 'proceed', 'comments', 'sessionHappened']) {
+  for (const f of ['hours', 'rateSnapshot', 'amountInr', 'notes', 'proceed', 'comments', 'sessionHappened', 'cancelledBy']) {
     if (f in req.body) data[f] = req.body[f];
   }
   // Status (Paid/NotPaid) is restricted to demo_lead (Samita) and founder

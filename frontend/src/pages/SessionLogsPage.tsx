@@ -73,6 +73,7 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
   const user = useAuth((s) => s.user)!;
   const isAM = user.role === 'account_manager';
   const [sessionHappened, setSessionHappened] = useState(true);
+  const [cancelledBy, setCancelledBy] = useState<'trainer' | 'client' | ''>('');
 
   // For AM: derive client list from my-sessions (training-based scope) so all hosted clients appear
   // regardless of whether assignedAmId is set. For other roles fetch all active clients.
@@ -156,6 +157,7 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
         feedback: sessionHappened ? feedback : undefined,
         notes: finalNotes,
         sessionHappened,
+        cancelledBy: !sessionHappened ? (cancelledBy || undefined) : undefined,
       });
     },
     onSuccess: () => {
@@ -179,14 +181,14 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
         <div className="flex gap-1.5">
           {[true, false].map((val) => (
             <button key={String(val)} type="button"
-              onClick={() => setSessionHappened(val)}
+              onClick={() => { setSessionHappened(val); if (val) setCancelledBy(''); }}
               className="px-3 py-1 rounded-lg text-[12px] font-semibold border transition-all"
               style={{
                 background: sessionHappened === val ? (val ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.12)') : 'transparent',
                 borderColor: sessionHappened === val ? (val ? '#22c55e' : '#ef4444') : 'var(--brand-border)',
                 color: sessionHappened === val ? (val ? '#22c55e' : '#ef4444') : 'var(--brand-textMuted)',
               }}>
-              {val ? 'Yes' : 'No — client no-show'}
+              {val ? 'Yes' : 'No — cancelled'}
             </button>
           ))}
         </div>
@@ -296,6 +298,27 @@ function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }:
           </div>
         )}
       </div>
+
+      {/* Cancelled by — only when session did NOT happen */}
+      {!sessionHappened && (
+        <div className="mb-3">
+          <label className="label">Cancelled by</label>
+          <div className="flex gap-2">
+            {(['trainer', 'client'] as const).map((by) => (
+              <button key={by} type="button"
+                onClick={() => setCancelledBy(cancelledBy === by ? '' : by)}
+                className="px-3 py-1 rounded-lg text-[12px] font-semibold border transition-all capitalize"
+                style={{
+                  background: cancelledBy === by ? 'rgba(239,68,68,0.12)' : 'transparent',
+                  borderColor: cancelledBy === by ? '#ef4444' : 'var(--brand-border)',
+                  color: cancelledBy === by ? '#ef4444' : 'var(--brand-textMuted)',
+                }}>
+                {by}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Feedback — required only when session happened */}
       {sessionHappened && (
@@ -475,6 +498,8 @@ export function SessionLogsPage() {
   const user = useAuth((s) => s.user)!;
   const canLog = LOG_ROLES.includes(user.role);
   const isAM = user.role === 'account_manager';
+  const isLead = user.role === 'lead';
+  const showClientPanel = isAM || isLead;
   const [showForm, setShowForm] = useState(false);
   const [prefillTrainer, setPrefillTrainer] = useState('');
   const [prefillClient, setPrefillClient] = useState('');
@@ -512,8 +537,8 @@ export function SessionLogsPage() {
       />
       <Page>
         <div className="flex gap-4 items-start">
-          {/* Left panel — my clients (account_manager) */}
-          {isAM && (
+          {/* Left panel — my clients (account_manager / lead) */}
+          {showClientPanel && (
             <MyClientsPanel onSelect={(tid, cid) => openFormFor(tid, cid)} />
           )}
 
@@ -539,8 +564,10 @@ export function SessionLogsPage() {
                   <thead>
                     <tr>
                       <th>Date</th>
-                      <th>Trainer</th>
                       <th>Client</th>
+                      <th>Trainer</th>
+                      <th>Session</th>
+                      <th>Cancelled By</th>
                       <th>Duration</th>
                       <th>Rate</th>
                       <th>Amount</th>
@@ -552,21 +579,34 @@ export function SessionLogsPage() {
                     {(data || []).map((l: any) => (
                       <tr key={l.id}>
                         <td className="mono text-[12px]">{l.date}</td>
-                        <td className="font-medium">{l.trainer?.name}</td>
-                        <td className="muted">
+                        <td>
                           {l.client
-                            ? <Link to={`/clients/${l.client.id}`} className="hover:underline">{l.client.name}</Link>
-                            : '—'}
+                            ? <Link to={`/clients/${l.client.id}`} className="hover:underline font-medium">{l.client.name}</Link>
+                            : <span className="muted">—</span>}
                         </td>
-                        <td className="mono">
+                        <td className="muted text-[12px]">{l.trainer?.name}</td>
+                        <td>
                           {l.sessionHappened === false
-                            ? <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>No Show</span>
+                            ? <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>No</span>
+                            : <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>Yes</span>}
+                        </td>
+                        <td className="text-[12px] capitalize muted">{l.cancelledBy || '—'}</td>
+                        <td className="mono text-[12px]">
+                          {l.sessionHappened === false ? '—'
                             : (() => { const {h, m} = decimalToDuration(l.hours); return `${h}h${m > 0 ? ` ${m}m` : ''}`; })()}
                         </td>
                         <td className="mono text-[12px]">₹{l.rateSnapshot?.toLocaleString()}</td>
                         <td className="mono font-semibold">{l.sessionHappened === false ? <span className="muted text-[12px]">₹0</span> : `₹${l.amountInr?.toLocaleString()}`}</td>
                         <td><FeedbackBadge value={l.feedback} /></td>
-                        <td><Pill color={STATUS_COLOR[l.status] || 'grey'}>{l.status}</Pill></td>
+                        <td>
+                          <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
+                            style={{
+                              background: l.status === 'Paid' ? 'rgba(34,197,94,0.12)' : l.status === 'Logged' ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.12)',
+                              color: l.status === 'Paid' ? '#22c55e' : l.status === 'Logged' ? '#818cf8' : '#f59e0b',
+                            }}>
+                            {l.status}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
