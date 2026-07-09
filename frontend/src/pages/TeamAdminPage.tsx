@@ -34,9 +34,15 @@ export function TeamAdminPage() {
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
   const [stubResult, setStubResult] = useState<{ created: number; reactivated: number; createdClients: string[]; reactivatedClients: string[] } | null>(null);
+  const [debugStubs, setDebugStubs] = useState<{ total: number; nullClientStubs: any[]; wrongLifecycleStubs: any[]; okCount: number } | null>(null);
   const backfillStubs = useMutation({
     mutationFn: () => api.post('/internal/backfill-training-stubs', {}),
     onSuccess: (r) => { setStubResult(r.data); showToast(`Fixed ${r.data.created + r.data.reactivated} training stubs`); },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+  const debugTrainingStubs = useMutation({
+    mutationFn: () => api.get('/internal/debug-training-stubs'),
+    onSuccess: (r) => { setDebugStubs(r.data); },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
   const sendAdvisory = useMutation({
@@ -172,10 +178,33 @@ export function TeamAdminPage() {
                   </div>
                 )}
               </div>
-              <Button variant="default" onClick={() => backfillStubs.mutate()} disabled={backfillStubs.isPending}>
-                <RefreshCw size={14} style={{ marginRight: 6 }} />{backfillStubs.isPending ? 'Running…' : 'Fix stubs'}
-              </Button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button variant="default" onClick={() => backfillStubs.mutate()} disabled={backfillStubs.isPending}>
+                  <RefreshCw size={14} style={{ marginRight: 6 }} />{backfillStubs.isPending ? 'Running…' : 'Fix stubs'}
+                </Button>
+                <Button variant="default" onClick={() => debugTrainingStubs.mutate()} disabled={debugTrainingStubs.isPending}>
+                  {debugTrainingStubs.isPending ? 'Checking…' : 'Diagnose'}
+                </Button>
+              </div>
             </div>
+            {debugStubs && (
+              <div style={{ marginTop: 8, fontSize: 12, color: 'var(--brand-textMuted)', background: 'var(--bg-input)', borderRadius: 8, padding: '10px 14px' }}>
+                <div><b>Total active stubs:</b> {debugStubs.total} (ok: {debugStubs.okCount})</div>
+                {debugStubs.nullClientStubs.length > 0 && (
+                  <div style={{ color: 'var(--status-red)', marginTop: 4 }}>
+                    <b>Orphaned stubs (no client):</b> {debugStubs.nullClientStubs.map((t: any) => t.name).join(', ')}
+                  </div>
+                )}
+                {debugStubs.wrongLifecycleStubs.length > 0 && (
+                  <div style={{ color: 'var(--status-amber)', marginTop: 4 }}>
+                    <b>Wrong lifecycle:</b> {debugStubs.wrongLifecycleStubs.map((t: any) => `${t.name} (${t.lifecycle})`).join(', ')}
+                  </div>
+                )}
+                {debugStubs.nullClientStubs.length === 0 && debugStubs.wrongLifecycleStubs.length === 0 && (
+                  <div style={{ color: '#16a34a', marginTop: 4 }}>All stubs look healthy.</div>
+                )}
+              </div>
+            )}
 
             {smtpHealth && (
               <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse', marginTop: 4 }}>

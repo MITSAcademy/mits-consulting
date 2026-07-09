@@ -287,6 +287,30 @@ app.post('/api/internal/backfill-training-stubs', requireAuth, requireRole('foun
   }
 });
 
+// Founder-only: debug — find active RegularTrainings with null/missing clientId, or whose client is not Active/LeverageGranted/SaleWon/Hold
+app.get('/api/internal/debug-training-stubs', requireAuth, requireRole('founder'), async (_req, res) => {
+  try {
+    const allActive = await prisma.regularTraining.findMany({
+      where: { status: 'active' },
+      select: {
+        id: true, name: true, clientId: true,
+        client: { select: { id: true, name: true, lifecycle: true } },
+      },
+    });
+    const nullClient = allActive.filter((t) => !t.clientId || !t.client);
+    const wrongLifecycle = allActive.filter((t) => t.client && !['Active', 'LeverageGranted', 'SaleWon', 'Hold'].includes(t.client.lifecycle));
+    const ok = allActive.filter((t) => t.client && ['Active', 'LeverageGranted', 'SaleWon', 'Hold'].includes(t.client.lifecycle));
+    res.json({
+      total: allActive.length,
+      nullClientStubs: nullClient.map((t) => ({ id: t.id, name: t.name, clientId: t.clientId })),
+      wrongLifecycleStubs: wrongLifecycle.map((t) => ({ id: t.id, name: t.name, clientId: t.clientId, lifecycle: t.client?.lifecycle })),
+      okCount: ok.length,
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed' });
+  }
+});
+
 // Founder-only: re-send freelance requirement notifications for all open (no trainer assigned) requirements
 app.post('/api/internal/retrigger-freelance-notifications', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
