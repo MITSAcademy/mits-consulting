@@ -258,15 +258,17 @@ function ReqCard({ req }: { req: FreelanceReq }) {
         </span>
       );
     }
+    // Recruiter editing their own output fields — make affordance always visible
+    const alwaysShowPencil = isRecruiter && FREELANCE_OUTPUT_FIELDS.includes(field as string);
     return (
       <span
         onClick={() => setEditing(true)}
         className="flex items-center gap-1 group"
-        style={{ cursor: 'pointer', color: value ? 'var(--brand-text)' : 'var(--brand-textSecondary)', fontStyle: value ? 'normal' : 'italic', fontSize: 12 }}
-        title="Click to edit"
+        style={{ cursor: 'pointer', color: value ? 'var(--brand-text)' : 'var(--brand-accent)', fontStyle: value ? 'normal' : 'italic', fontSize: 12 }}
+        title="Click to fill in"
       >
-        {value || placeholder}
-        <Pencil size={10} style={{ opacity: 0.4, flexShrink: 0 }} className="group-hover:opacity-100" />
+        {value || (alwaysShowPencil ? <span style={{ color: 'var(--brand-accent)', fontSize: 11 }}>Click to fill in…</span> : placeholder)}
+        <Pencil size={10} style={{ opacity: alwaysShowPencil ? 0.7 : 0.4, flexShrink: 0, color: alwaysShowPencil ? 'var(--brand-accent)' : undefined }} className={alwaysShowPencil ? '' : 'group-hover:opacity-100'} />
       </span>
     );
   }
@@ -355,9 +357,9 @@ function ReqCard({ req }: { req: FreelanceReq }) {
           </div>
 
           {/* Right: Freelance Team Output */}
-          <div style={{ padding: '12px 16px' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--brand-textSecondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-              Freelance Team Output
+          <div style={{ padding: '12px 16px', background: isRecruiter ? 'rgba(99,102,241,0.04)' : undefined, borderRadius: isRecruiter ? 8 : undefined }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, color: isRecruiter ? 'var(--brand-accent)' : 'var(--brand-textSecondary)' }}>
+              {isRecruiter ? '✏️ Your section — Propose a trainer' : 'Freelance Team Output'}
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
               <Field label="Trainer Name">
