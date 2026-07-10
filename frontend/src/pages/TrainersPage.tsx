@@ -180,6 +180,7 @@ export function TrainersPage() {
       showToast('Trainer added');
       setOpen(false);
     },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed to add trainer', 'error'),
   });
   const toggleActive = useMutation({
     mutationFn: ({ id, active }: any) => api.patch(`/trainers/${id}`, { active }),
