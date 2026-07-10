@@ -1153,7 +1153,10 @@ model FreelanceRequirement {
   clientTimings     String?   // available timings for demo + sessions
   trainersUsed      String?   // comma-separated names already tried
 
-  // Filled by Freelance Team
+  // Filled by Freelance Team — multi-trainer proposals (JSON array)
+  // Each entry: { trainerName, trainerPhone, trainerEmail, trainerRecording, trainerTimings, notes }
+  proposals         Json?
+  // Legacy single-trainer fields (kept for backward compat, populated from proposals[0] if needed)
   trainerName       String?
   trainerRecording  String?
   trainerTimings    String?

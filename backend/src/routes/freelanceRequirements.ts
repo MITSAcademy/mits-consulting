@@ -156,6 +156,73 @@ freelanceRequirementsRouter.patch('/:id', requireRole(...READ_ROLES), async (req
   res.json({ ...item, isEscalated: shouldEscalate(item) });
 });
 
+// POST /:id/proposals — add/replace the full proposals array (recruiter or above)
+freelanceRequirementsRouter.post('/:id/proposals', requireRole(...READ_ROLES), async (req: AuthedRequest, res) => {
+  const { proposals } = req.body;
+  if (!Array.isArray(proposals)) return res.status(400).json({ error: 'proposals array required' });
+
+  // Each proposal: { trainerName, trainerPhone, trainerEmail, trainerRecording, trainerTimings, notes }
+  const clean = proposals.map((p: any) => ({
+    trainerName: p.trainerName?.trim() || null,
+    trainerPhone: p.trainerPhone?.trim() || null,
+    trainerEmail: p.trainerEmail?.trim() || null,
+    trainerRecording: p.trainerRecording?.trim() || null,
+    trainerTimings: p.trainerTimings?.trim() || null,
+    notes: p.notes?.trim() || null,
+    addedByName: req.user!.name,
+    addedAt: new Date().toISOString(),
+  }));
+
+  // Fetch existing to merge (append mode)
+  const existing = await (prisma as any).freelanceRequirement.findUnique({
+    where: { id: req.params.id }, select: { proposals: true },
+  });
+  const prev = Array.isArray(existing?.proposals) ? existing.proposals : [];
+  const merged = [...prev, ...clean];
+
+  const data: any = { proposals: merged, lastUpdatedById: req.user!.id };
+  // Mirror first trainer into legacy fields for backward compat
+  if (merged[0]?.trainerName) {
+    data.trainerName = merged[0].trainerName;
+    data.trainerPhone = merged[0].trainerPhone || null;
+    data.trainerEmail = merged[0].trainerEmail || null;
+    data.trainerRecording = merged[0].trainerRecording || null;
+    data.trainerTimings = merged[0].trainerTimings || null;
+  }
+
+  const item = await (prisma as any).freelanceRequirement.update({
+    where: { id: req.params.id }, data, include,
+  });
+  await audit(req.user!.id, req.user!.name, 'FREELANCE_PROPOSALS', `${req.params.id} · ${clean.length} added`);
+  res.json({ ...item, isEscalated: shouldEscalate(item) });
+});
+
+// DELETE /:id/proposals/:idx — remove one proposal by index
+freelanceRequirementsRouter.delete('/:id/proposals/:idx', requireRole(...READ_ROLES), async (req: AuthedRequest, res) => {
+  const idx = parseInt(req.params.idx, 10);
+  const existing = await (prisma as any).freelanceRequirement.findUnique({
+    where: { id: req.params.id }, select: { proposals: true },
+  });
+  const prev = Array.isArray(existing?.proposals) ? existing.proposals : [];
+  if (idx < 0 || idx >= prev.length) return res.status(400).json({ error: 'Invalid proposal index' });
+  const updated = prev.filter((_: any, i: number) => i !== idx);
+
+  const data: any = { proposals: updated, lastUpdatedById: req.user!.id };
+  if (updated.length === 0) {
+    data.trainerName = null; data.trainerPhone = null;
+    data.trainerEmail = null; data.trainerRecording = null; data.trainerTimings = null;
+  } else if (updated[0]?.trainerName) {
+    data.trainerName = updated[0].trainerName;
+    data.trainerPhone = updated[0].trainerPhone || null;
+    data.trainerEmail = updated[0].trainerEmail || null;
+  }
+
+  const item = await (prisma as any).freelanceRequirement.update({
+    where: { id: req.params.id }, data, include,
+  });
+  res.json({ ...item, isEscalated: shouldEscalate(item) });
+});
+
 freelanceRequirementsRouter.delete('/:id', requireRole('founder', 'manager', 'lead'), async (req: AuthedRequest, res) => {
   await (prisma as any).freelanceRequirement.delete({ where: { id: req.params.id } });
   await audit(req.user!.id, req.user!.name, 'FREELANCE_REQ_DELETE', req.params.id);
