@@ -232,17 +232,19 @@ export function TeamAdminPage() {
                 <Button variant="default" onClick={async () => {
                   if (!clientLookupQ.trim()) return;
                   try {
-                    const r = await api.get('/internal/client-lookup', { params: { q: clientLookupQ } });
+                    const r = await api.get('/internal/client-lookup', { params: { q: clientLookupQ.trim() } });
                     setClientLookupResult(r.data);
                   } catch (e: any) {
-                    setClientLookupResult([]);
+                    setClientLookupResult([{ _error: e.response?.data?.error || e.message || 'Network error' }]);
                   }
                 }}>Lookup</Button>
               </div>
               {clientLookupResult && (
                 <div style={{ marginTop: 8, fontSize: 12, background: 'var(--bg-input)', borderRadius: 8, padding: '10px 14px' }}>
-                  {clientLookupResult.length === 0
-                    ? <span style={{ color: 'var(--status-red)' }}>No client found with that name.</span>
+                  {clientLookupResult[0]?._error
+                    ? <span style={{ color: 'var(--status-red)' }}>Error: {clientLookupResult[0]._error}</span>
+                    : clientLookupResult.length === 0
+                    ? <span style={{ color: 'var(--status-red)' }}>No client found — try a shorter name (e.g. just first name or 3 letters).</span>
                     : clientLookupResult.map((c: any) => (
                       <div key={c.id} style={{ marginBottom: 4, display: 'flex', gap: 12, alignItems: 'center' }}>
                         <span style={{ fontWeight: 600, color: 'var(--brand-text)', minWidth: 140 }}>{c.name}</span>

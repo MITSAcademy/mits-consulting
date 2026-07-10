@@ -288,6 +288,29 @@ app.post('/api/internal/backfill-training-stubs', requireAuth, requireRole('foun
 });
 
 // Founder-only: debug — find active RegularTrainings with null/missing clientId, or whose client is not Active/LeverageGranted/SaleWon/Hold
+// Founder: look up clients by name fragment — shows lifecycle + stub status
+app.get('/api/internal/client-lookup', requireAuth, requireRole('founder'), async (req, res) => {
+  const q = (req.query.q as string || '').trim();
+  if (!q) return res.status(400).json({ error: 'q required' });
+  // Search each space-separated word as an AND condition so "Khush" matches "Khushwant Singh"
+  const words = q.split(/\s+/).filter(Boolean);
+  const where = words.length > 1
+    ? { AND: words.map((w) => ({ name: { contains: w, mode: 'insensitive' as const } })) }
+    : { name: { contains: q, mode: 'insensitive' as const } };
+  const clients = await prisma.client.findMany({
+    where,
+    select: {
+      id: true, name: true, lifecycle: true,
+      regularTrainings: { where: { status: 'active' }, select: { id: true, status: true } },
+    },
+    take: 15,
+  });
+  res.json(clients.map((c) => ({
+    id: c.id, name: c.name, lifecycle: c.lifecycle,
+    activeStubs: (c as any).regularTrainings.length,
+  })));
+});
+
 app.get('/api/internal/debug-training-stubs', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
     const allActive = await prisma.regularTraining.findMany({
