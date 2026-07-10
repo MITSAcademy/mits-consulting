@@ -93,6 +93,7 @@ feedbackRouter.post('/:id/activity', async (req: AuthedRequest, res) => {
   if (!fb) return res.status(404).json({ error: 'Not found' });
   const { type, note, loggedAt } = req.body;
   if (!type) return res.status(400).json({ error: 'type required' });
+  const activityLoggedAt = loggedAt ? new Date(loggedAt) : new Date();
   const activity = await (prisma as any).feedbackActivity.create({
     data: {
       feedbackId: fb.id,
@@ -100,10 +101,17 @@ feedbackRouter.post('/:id/activity', async (req: AuthedRequest, res) => {
       type,
       note: note?.trim() || null,
       loggedById: req.user!.id,
-      ...(loggedAt ? { loggedAt: new Date(loggedAt) } : {}),
+      loggedAt: activityLoggedAt,
     },
     include: { loggedBy: { select: { id: true, name: true } } },
   });
+  // Stamp lastFeedbackTakenAt on the client so Team Board feedback warning clears
+  if (fb.clientId) {
+    await prisma.client.update({
+      where: { id: fb.clientId },
+      data: { lastFeedbackTakenAt: activityLoggedAt.toISOString().slice(0, 10) },
+    });
+  }
   await audit(req.user!.id, req.user!.name, 'FEEDBACK_ACTIVITY', `${type}${note ? ': ' + note : ''}`);
   res.status(201).json(activity);
 });

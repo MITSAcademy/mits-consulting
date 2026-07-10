@@ -312,6 +312,27 @@ app.get('/api/internal/debug-training-stubs', requireAuth, requireRole('founder'
 });
 
 // Founder-only: re-send freelance requirement notifications for all open (no trainer assigned) requirements
+// One-time backfill: stamp lastFeedbackTakenAt on clients that already have feedback activities
+app.post('/api/internal/backfill-feedback-dates', requireAuth, requireRole('founder'), async (_req, res) => {
+  const activities = await (prisma as any).feedbackActivity.findMany({
+    select: { clientId: true, loggedAt: true },
+    orderBy: { loggedAt: 'desc' },
+  });
+  // For each client, find their most recent activity date
+  const latest = new Map<string, string>();
+  for (const a of activities) {
+    if (a.clientId && !latest.has(a.clientId)) {
+      latest.set(a.clientId, new Date(a.loggedAt).toISOString().slice(0, 10));
+    }
+  }
+  let updated = 0;
+  for (const [clientId, date] of latest.entries()) {
+    await prisma.client.update({ where: { id: clientId }, data: { lastFeedbackTakenAt: date } });
+    updated++;
+  }
+  res.json({ ok: true, updated });
+});
+
 app.post('/api/internal/retrigger-freelance-notifications', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
     const { safeBuildFromUser, sendEmail } = await import('./lib/mailer');

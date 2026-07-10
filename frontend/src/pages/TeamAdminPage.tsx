@@ -40,6 +40,11 @@ export function TeamAdminPage() {
     onSuccess: (r) => { setStubResult(r.data); showToast(`Fixed ${r.data.created + r.data.reactivated} training stubs`); },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
+  const backfillFeedbackDates = useMutation({
+    mutationFn: () => api.post('/internal/backfill-feedback-dates', {}),
+    onSuccess: (r) => showToast(`Stamped lastFeedbackTakenAt on ${r.data.updated} clients`),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
   const debugTrainingStubs = useMutation({
     mutationFn: () => api.get('/internal/debug-training-stubs'),
     onSuccess: (r) => { setDebugStubs(r.data); },
@@ -184,6 +189,10 @@ export function TeamAdminPage() {
                 </Button>
                 <Button variant="default" onClick={() => debugTrainingStubs.mutate()} disabled={debugTrainingStubs.isPending}>
                   {debugTrainingStubs.isPending ? 'Checking…' : 'Diagnose'}
+                </Button>
+                <Button variant="default" onClick={() => backfillFeedbackDates.mutate()} disabled={backfillFeedbackDates.isPending}
+                  title="Stamp lastFeedbackTakenAt on all clients that already have feedback activities logged">
+                  {backfillFeedbackDates.isPending ? 'Backfilling…' : 'Fix feedback dates'}
                 </Button>
               </div>
             </div>
