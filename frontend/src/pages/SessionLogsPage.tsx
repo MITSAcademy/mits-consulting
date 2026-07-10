@@ -492,10 +492,115 @@ function exportPdf(logs: any[]) {
   }
 }
 
+/* ── Edit dialog ─────────────────────────────────────────────────────────── */
+
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Label, Select, Input } from '@/components/ui/input';
+
+function EditLogDialog({ log, onClose }: { log: any; onClose: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [sessionHappened, setSessionHappened] = useState<boolean>(log.sessionHappened !== false);
+  const [cancelledBy, setCancelledBy] = useState<string>(log.cancelledBy || '');
+  const [durH, setDurH] = useState(() => decimalToDuration(log.hours || 0).h);
+  const [durM, setDurM] = useState(() => decimalToDuration(log.hours || 0).m);
+  const [feedback, setFeedback] = useState<Feedback | ''>(log.feedback || '');
+  const [date, setDate] = useState(log.date || todayISO());
+
+  const save = useMutation({
+    mutationFn: () => {
+      const hours = sessionHappened ? durationToDecimal(durH, durM) : 0;
+      return api.patch(`/session-logs/${log.id}`, {
+        sessionHappened,
+        cancelledBy: !sessionHappened ? (cancelledBy || null) : null,
+        hours,
+        feedback: sessionHappened ? (feedback || null) : null,
+        date,
+      });
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['session-logs'] }); showToast('Session updated'); onClose(); },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent title={`Edit session — ${log.client?.name || log.trainer?.name}`}>
+        <div className="space-y-3">
+          {/* Session happened */}
+          <div>
+            <Label>Session happened?</Label>
+            <div className="flex gap-2 mt-1">
+              {[true, false].map((val) => (
+                <button key={String(val)} type="button"
+                  onClick={() => { setSessionHappened(val); if (val) setCancelledBy(''); }}
+                  className="px-3 py-1 rounded-lg text-[12px] font-semibold border transition-all"
+                  style={{
+                    background: sessionHappened === val ? (val ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.12)') : 'transparent',
+                    borderColor: sessionHappened === val ? (val ? '#22c55e' : '#ef4444') : 'var(--brand-border)',
+                    color: sessionHappened === val ? (val ? '#22c55e' : '#ef4444') : 'var(--brand-textMuted)',
+                  }}>
+                  {val ? 'Yes' : 'No — cancelled'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Cancelled by */}
+          {!sessionHappened && (
+            <div>
+              <Label>Cancelled by</Label>
+              <Select value={cancelledBy} onChange={(e) => setCancelledBy(e.target.value)} style={{ marginTop: 4 }}>
+                <option value="">— select —</option>
+                <option value="trainer">Trainer</option>
+                <option value="client">Client</option>
+              </Select>
+            </div>
+          )}
+          {/* Date */}
+          <div>
+            <Label>Date</Label>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ marginTop: 4 }} />
+          </div>
+          {/* Duration */}
+          {sessionHappened && (
+            <div>
+              <Label>Duration</Label>
+              <div className="flex gap-2 mt-1">
+                <select className="input flex-1" value={durH} onChange={(e) => setDurH(Number(e.target.value))}>
+                  {HOUR_OPTIONS.map((h) => <option key={h} value={h}>{h}h</option>)}
+                </select>
+                <select className="input flex-1" value={durM} onChange={(e) => setDurM(Number(e.target.value))}>
+                  {MINUTE_OPTIONS.map((m) => <option key={m} value={m}>{String(m).padStart(2, '0')}m</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+          {/* Feedback */}
+          {sessionHappened && (
+            <div>
+              <Label>Session feedback</Label>
+              <div className="mt-1">
+                <FeedbackPicker value={feedback} onChange={setFeedback} />
+              </div>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>
+            {save.isPending ? 'Saving…' : 'Save changes'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 export function SessionLogsPage() {
   const user = useAuth((s) => s.user)!;
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
   const canLog = LOG_ROLES.includes(user.role);
   const isAM = user.role === 'account_manager';
   const isLead = user.role === 'lead';
@@ -503,10 +608,17 @@ export function SessionLogsPage() {
   const [showForm, setShowForm] = useState(false);
   const [prefillTrainer, setPrefillTrainer] = useState('');
   const [prefillClient, setPrefillClient] = useState('');
+  const [editLog, setEditLog] = useState<any>(null);
 
   const { data } = useQuery({
     queryKey: ['session-logs'],
     queryFn: () => api.get('/session-logs').then((r) => r.data),
+  });
+
+  const delLog = useMutation({
+    mutationFn: (id: string) => api.delete(`/session-logs/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['session-logs'] }); showToast('Session log deleted'); },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
   function openFormFor(trainerId: string, clientId: string) {
@@ -563,52 +675,66 @@ export function SessionLogsPage() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Client</th>
-                      <th>Trainer</th>
-                      <th>Session</th>
+                      <th>Client Name</th>
+                      <th>Trainer Name</th>
+                      <th>Assigned Coordinator</th>
+                      <th>Session Happened</th>
                       <th>Cancelled By</th>
-                      <th>Duration</th>
-                      <th>Rate</th>
-                      <th>Amount</th>
-                      <th>Feedback</th>
-                      <th>Status</th>
+                      <th>Date</th>
+                      <th>Duration (HH:MM)</th>
+                      <th>Session Feedback</th>
+                      <th>Session Logged</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(data || []).map((l: any) => (
-                      <tr key={l.id}>
-                        <td className="mono text-[12px]">{l.date}</td>
-                        <td>
-                          {l.client
-                            ? <Link to={`/clients/${l.client.id}`} className="hover:underline font-medium">{l.client.name}</Link>
-                            : <span className="muted">—</span>}
-                        </td>
-                        <td className="muted text-[12px]">{l.trainer?.name}</td>
-                        <td>
-                          {l.sessionHappened === false
-                            ? <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>No</span>
-                            : <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>Yes</span>}
-                        </td>
-                        <td className="text-[12px] capitalize muted">{l.cancelledBy || '—'}</td>
-                        <td className="mono text-[12px]">
-                          {l.sessionHappened === false ? '—'
-                            : (() => { const {h, m} = decimalToDuration(l.hours); return `${h}h${m > 0 ? ` ${m}m` : ''}`; })()}
-                        </td>
-                        <td className="mono text-[12px]">₹{l.rateSnapshot?.toLocaleString()}</td>
-                        <td className="mono font-semibold">{l.sessionHappened === false ? <span className="muted text-[12px]">₹0</span> : `₹${l.amountInr?.toLocaleString()}`}</td>
-                        <td><FeedbackBadge value={l.feedback} /></td>
-                        <td>
-                          <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
-                            style={{
-                              background: l.status === 'Paid' ? 'rgba(34,197,94,0.12)' : l.status === 'Logged' ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.12)',
-                              color: l.status === 'Paid' ? '#22c55e' : l.status === 'Logged' ? '#818cf8' : '#f59e0b',
-                            }}>
-                            {l.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {(data || []).map((l: any) => {
+                      const { h, m } = decimalToDuration(l.hours || 0);
+                      const dur = l.sessionHappened === false ? '—' : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                      const isLogged = !!l.id; // every row in the list is logged
+                      const coordinator = l.client?.hostOwner?.name || '—';
+                      return (
+                        <tr key={l.id}>
+                          <td>
+                            {l.client
+                              ? <Link to={`/clients/${l.client.id}`} className="hover:underline font-medium">{l.client.name}</Link>
+                              : <span className="muted">—</span>}
+                          </td>
+                          <td className="text-[12px]">{l.trainer?.name || '—'}</td>
+                          <td className="text-[12px] muted">{coordinator}</td>
+                          <td>
+                            {l.sessionHappened === false
+                              ? <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>No</span>
+                              : <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>Yes</span>}
+                          </td>
+                          <td className="text-[12px] capitalize muted">{l.cancelledBy || '—'}</td>
+                          <td className="mono text-[12px]">{l.date}</td>
+                          <td className="mono text-[12px]">{dur}</td>
+                          <td>
+                            {l.sessionHappened === false
+                              ? <span className="muted text-[11px]">—</span>
+                              : <FeedbackBadge value={l.feedback} />}
+                          </td>
+                          <td>
+                            <div className="flex items-center gap-1.5">
+                              <span style={{ fontSize: 16, lineHeight: 1 }}>{isLogged ? '🟢' : '🔴'}</span>
+                              <span className="text-[11px] font-semibold" style={{ color: isLogged ? '#22c55e' : '#ef4444' }}>
+                                {isLogged ? 'Logged' : 'Not Logged'}
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="flex gap-1">
+                              <Button size="sm" onClick={() => setEditLog(l)}>Edit</Button>
+                              <Button size="sm" variant="danger"
+                                onClick={() => { if (confirm('Delete this session log?')) delLog.mutate(l.id); }}>
+                                Delete
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -616,6 +742,8 @@ export function SessionLogsPage() {
           </div>
         </div>
       </Page>
+
+      {editLog && <EditLogDialog log={editLog} onClose={() => setEditLog(null)} />}
     </>
   );
 }

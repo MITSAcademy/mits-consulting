@@ -19,7 +19,7 @@ const include = {
       upiId: true, paymentMethod: true,
     },
   },
-  client: { select: { id: true, name: true } },
+  client: { select: { id: true, name: true, hostOwner: { select: { id: true, name: true } } } },
 };
 
 sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req: AuthedRequest, res) => {
@@ -45,6 +45,10 @@ sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req: AuthedR
     });
     const myClientIds = [...new Set(myTrainings.map((t) => t.clientId).filter(Boolean))] as string[];
     where.clientId = clientId ? clientId : { in: myClientIds };
+  }
+  // lead: scope to clients whose hostOwnerId is in the lead's team
+  if (req.user!.role === 'lead') {
+    where.client = { hostOwnerId: req.user!.id };
   }
   const logs = await prisma.sessionLog.findMany({ where, include, orderBy: { date: 'desc' } });
   res.json(logs);
@@ -108,7 +112,7 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
 sessionLogsRouter.patch('/:id', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const data: any = {};
   // Any authorized role can edit these operational fields
-  for (const f of ['hours', 'rateSnapshot', 'amountInr', 'notes', 'proceed', 'comments', 'sessionHappened', 'cancelledBy']) {
+  for (const f of ['hours', 'rateSnapshot', 'amountInr', 'notes', 'proceed', 'comments', 'sessionHappened', 'cancelledBy', 'feedback']) {
     if (f in req.body) data[f] = req.body[f];
   }
   // Status (Paid/NotPaid) is restricted to demo_lead (Samita) and founder
@@ -134,6 +138,23 @@ sessionLogsRouter.patch('/:id', requireRole(...SESSION_LOG_WRITE), async (req: A
 
   const log = await prisma.sessionLog.update({ where: { id: req.params.id }, data, include });
   res.json(log);
+});
+
+// Delete a single session log — write roles only; lead/AM can only delete their own team's logs
+sessionLogsRouter.delete('/:id', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
+  const log = await prisma.sessionLog.findUnique({ where: { id: req.params.id }, select: { id: true, trainerId: true, clientId: true, loggedById: true, client: { select: { hostOwnerId: true, assignedAmId: true } } } });
+  if (!log) return res.status(404).json({ error: 'Not found' });
+  // lead: can only delete logs for their team's clients
+  if (req.user!.role === 'lead' && log.client?.hostOwnerId !== req.user!.id) {
+    return res.status(403).json({ error: 'You can only delete session logs for your assigned clients' });
+  }
+  // account_manager: can only delete their own logged entries
+  if (req.user!.role === 'account_manager' && log.loggedById !== req.user!.id) {
+    return res.status(403).json({ error: 'You can only delete session logs you created' });
+  }
+  await prisma.sessionLog.delete({ where: { id: req.params.id } });
+  await audit(req.user!.id, req.user!.name, 'SESSION_LOG_DELETE', `log ${req.params.id}`);
+  res.json({ ok: true });
 });
 
 // Founder-only: delete all session logs before a given date (irreversible)
