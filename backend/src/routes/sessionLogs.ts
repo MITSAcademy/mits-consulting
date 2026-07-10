@@ -46,9 +46,9 @@ sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req: AuthedR
     const myClientIds = [...new Set(myTrainings.map((t) => t.clientId).filter(Boolean))] as string[];
     where.clientId = clientId ? clientId : { in: myClientIds };
   }
-  // lead: scope to clients whose hostOwnerId is in the lead's team
+  // lead: scope to clients whose hostOwnerId is any member of their coordinator team
   if (req.user!.role === 'lead') {
-    where.client = { hostOwnerId: req.user!.id };
+    where.client = { hostOwnerId: { in: LEAD_TEAM_IDS } };
   }
   const logs = await prisma.sessionLog.findMany({ where, include, orderBy: { date: 'desc' } });
   res.json(logs);
