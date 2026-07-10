@@ -3457,13 +3457,17 @@ function SubStatusModal({ client, onClose, initialTarget }: { client: any; onClo
       ]
     : current === 'CP'
     ? [
-        { key: 'C',  title: 'C · Letter sent, payment pending', desc: 'Letter shared — follow up daily until they pay. Drops out of RP queue.', tone: 'amber' },
-        { key: 'DP', title: 'DP · Dropped',                    desc: 'No response after follow-up. Move WA group to DP. No further follow-up.',  tone: 'danger' },
+        { key: 'C',                      title: 'C · Letter sent, payment pending',    desc: 'Letter shared — follow up daily until they pay. Drops out of RP queue.',    tone: 'amber' },
+        { key: 'JBT-EmployerLater',      title: 'JBT · Employer pays later',           desc: 'Employer committed to pay. Client starts JBT now, no direct payment.',       tone: 'success' },
+        { key: 'Training-EmployerLater', title: 'Training · Employer pays later',      desc: 'Employer committed to pay. Client starts Training now, no direct payment.',  tone: 'success' },
+        { key: 'DP',                     title: 'DP · Dropped',                        desc: 'No response after follow-up. Move WA group to DP. No further follow-up.',    tone: 'danger' },
       ]
     : /* RP or null */ [
-        { key: 'CP', title: 'CP · Called, went silent',         desc: 'Called but no pickup. Send no-pickup WA, revisit in 3 days.',              tone: 'amber' },
-        { key: 'C',  title: 'C · Letter sent, payment pending', desc: 'Letter shared — follow up daily until they pay. Drops out of RP queue.',   tone: 'amber' },
-        { key: 'DP', title: 'DP · Dropped',                     desc: 'No answer after multiple attempts. Move WA group to DP.',                  tone: 'danger' },
+        { key: 'CP',                     title: 'CP · Called, went silent',            desc: 'Called but no pickup. Send no-pickup WA, revisit in 3 days.',              tone: 'amber' },
+        { key: 'C',                      title: 'C · Letter sent, payment pending',    desc: 'Letter shared — follow up daily until they pay. Drops out of RP queue.',   tone: 'amber' },
+        { key: 'JBT-EmployerLater',      title: 'JBT · Employer pays later',           desc: 'Employer committed to pay. Client starts JBT now, no direct payment.',      tone: 'success' },
+        { key: 'Training-EmployerLater', title: 'Training · Employer pays later',      desc: 'Employer committed to pay. Client starts Training now, no direct payment.', tone: 'success' },
+        { key: 'DP',                     title: 'DP · Dropped',                        desc: 'No answer after multiple attempts. Move WA group to DP.',                  tone: 'danger' },
       ];
 
   // Default next call dates

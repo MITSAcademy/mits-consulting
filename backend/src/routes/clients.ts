@@ -1036,11 +1036,19 @@ clientsRouter.post('/:id/sub-status', async (req: AuthedRequest, res) => {
     });
   }
 
-  // Win outcomes only allowed from C (engagement letter sent, active follow-up)
-  if (isWinOutcome && currentSS !== 'C') {
+  // Paid outcomes require the engagement letter step (C) — the checklist and payment must follow that step.
+  // EmployerLater can be set directly from any active sub-status (RP, CP, C, null) —
+  // no direct payment is collected, so there's no payment-recording step to gate on.
+  if (isPaidOutcome && currentSS !== 'C') {
     return res.status(409).json({
-      error: `Win outcomes (Paid / EmployerLater) are only available once the client is at C (engagement letter sent). Current status: ${currentSS || 'RP'}.`,
+      error: `Paid outcomes (Training-Paid / JBT-Paid) are only available once the client is at C (engagement letter sent). Current status: ${currentSS || 'RP'}.`,
       code: 'WIN_REQUIRES_C',
+    });
+  }
+  if (isEmployerLater && !['RP', 'CP', 'C', null].includes(currentSS)) {
+    return res.status(409).json({
+      error: `Employer-later outcomes cannot be set from ${currentSS}.`,
+      code: 'EMPLOYER_LATER_INVALID_SOURCE',
     });
   }
   // DP allowed from any active sub-status (RP, CP, or C — client went silent despite follow-ups)
