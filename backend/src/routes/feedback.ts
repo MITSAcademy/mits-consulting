@@ -7,6 +7,17 @@ import { checkPermission } from '../lib/rolePermissions';
 export const feedbackRouter = Router();
 feedbackRouter.use(requireAuth);
 
+// Returns the Monday of the current week as YYYY-MM-DD (IST-aware via UTC+5:30 offset)
+function getWeekStart(): string {
+  const now = new Date();
+  // Shift to IST (UTC+5:30) so the week boundary flips at midnight IST, not UTC midnight
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000);
+  const day = ist.getUTCDay(); // 0=Sun … 6=Sat
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  ist.setUTCDate(ist.getUTCDate() + diffToMonday);
+  return ist.toISOString().slice(0, 10);
+}
+
 const include = {
   client: { select: { id: true, name: true, phoneCode: true, phoneDigits: true } },
   trainer: { select: { id: true, name: true } },
@@ -14,7 +25,10 @@ const include = {
 
 feedbackRouter.get('/', async (req: AuthedRequest, res) => {
   if (!await checkPermission('feedback.read', req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
+  const { weekStart } = req.query as any;
+  const where: any = weekStart ? { weekStart } : {};
   const fb = await (prisma as any).feedback.findMany({
+    where,
     include: {
       ...include,
       activities: {
@@ -66,20 +80,25 @@ feedbackRouter.delete('/:id', async (req: AuthedRequest, res) => {
   res.json({ ok: true });
 });
 
-// POST /feedback/ensure-client/:clientId — get or create a feedback record for this client
+// POST /feedback/ensure-client/:clientId — get or create a feedback record for THIS week
 feedbackRouter.post('/ensure-client/:clientId', async (req: AuthedRequest, res) => {
   if (!await checkPermission('feedback.write', req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
+  const currentWeekStart = getWeekStart();
+  const fbInclude = {
+    client: { select: { id: true, name: true, phoneCode: true, phoneDigits: true } },
+    trainer: { select: { id: true, name: true } },
+    activities: { orderBy: { loggedAt: 'desc' as const }, include: { loggedBy: { select: { id: true, name: true } } } },
+  };
   let fb = await prisma.feedback.findFirst({
-    where: { clientId: req.params.clientId },
-    orderBy: { weekStart: 'desc' },
-    include: { client: { select: { id: true, name: true, phoneCode: true, phoneDigits: true } }, trainer: { select: { id: true, name: true } }, activities: { orderBy: { loggedAt: 'desc' }, include: { loggedBy: { select: { id: true, name: true } } } } },
+    where: { clientId: req.params.clientId, weekStart: currentWeekStart },
+    include: fbInclude,
   });
   if (!fb) {
     const client = await prisma.client.findUnique({ where: { id: req.params.clientId }, select: { id: true, name: true } });
     if (!client) return res.status(404).json({ error: 'Client not found' });
     fb = await prisma.feedback.create({
-      data: { clientId: req.params.clientId, weekStart: new Date().toISOString().slice(0, 10), rating: 3 },
-      include: { client: { select: { id: true, name: true, phoneCode: true, phoneDigits: true } }, trainer: { select: { id: true, name: true } }, activities: { orderBy: { loggedAt: 'desc' }, include: { loggedBy: { select: { id: true, name: true } } } } },
+      data: { clientId: req.params.clientId, weekStart: currentWeekStart, rating: 3 },
+      include: fbInclude,
     });
   }
   res.json(fb);

@@ -7,9 +7,31 @@ import { Label, Select, Textarea, Input } from '@/components/ui/input';
 import { useState, useMemo } from 'react';
 import { useUI } from '@/store/ui';
 import { EmptyState } from '@/components/EmptyState';
-import { MessageSquare, Download, Phone, MessageCircle, Search } from 'lucide-react';
+import { MessageSquare, Download, Phone, MessageCircle, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { todayISO } from '@/lib/utils';
+
+// Returns the Monday of the week containing `date` as YYYY-MM-DD
+function getWeekStart(date?: Date): string {
+  const d = date ? new Date(date) : new Date();
+  const day = d.getDay(); // 0=Sun
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function addWeeks(weekStart: string, n: number): string {
+  const d = new Date(weekStart + 'T12:00:00');
+  d.setDate(d.getDate() + n * 7);
+  return getWeekStart(d);
+}
+
+function fmtWeekRange(weekStart: string): string {
+  const mon = new Date(weekStart + 'T12:00:00');
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const fmt = (d: Date) => d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+  return `${fmt(mon)} – ${fmt(sun)}`;
+}
 
 const COMM_STATUS_COLORS: Record<string, string> = {
   CallReceived:    'var(--status-green)',
@@ -33,8 +55,16 @@ export function FeedbackPage() {
   const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user)!;
 
-  // Fetch all feedback records (keyed by client)
-  const { data: fb } = useQuery({ queryKey: ['feedback'], queryFn: () => api.get('/feedback').then((r) => r.data) });
+  // Week navigation — defaults to current week
+  const currentWeek = getWeekStart();
+  const [selectedWeek, setSelectedWeek] = useState(currentWeek);
+  const isCurrentWeek = selectedWeek === currentWeek;
+
+  // Fetch feedback records for the selected week only
+  const { data: fb } = useQuery({
+    queryKey: ['feedback', selectedWeek],
+    queryFn: () => api.get('/feedback', { params: { weekStart: selectedWeek } }).then((r) => r.data),
+  });
 
   // Fetch all active trainings — same source as My Calls and Sessions
   const { data: trainings } = useQuery({
@@ -62,14 +92,12 @@ export function FeedbackPage() {
     return out;
   }, [trainings]);
 
-  // Map clientId → latest feedback record
+  // Map clientId → feedback record for selected week
   const fbByClient = useMemo(() => {
     const map = new Map<string, any>();
     for (const x of (fb || []) as any[]) {
       if (!x.clientId) continue;
-      if (!map.has(x.clientId) || x.weekStart > map.get(x.clientId).weekStart) {
-        map.set(x.clientId, x);
-      }
+      map.set(x.clientId, x);
     }
     return map;
   }, [fb]);
@@ -88,13 +116,13 @@ export function FeedbackPage() {
 
   const update = useMutation({
     mutationFn: (data: any) => api.patch(`/feedback/${editRow.id}`, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['feedback'] }); setEditRow(null); showToast('Updated'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['feedback', selectedWeek] }); setEditRow(null); showToast('Updated'); },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/feedback/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['feedback'] }); showToast('Deleted'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['feedback', selectedWeek] }); showToast('Deleted'); },
   });
 
   // Ensure a feedback record exists for client, then open the Log Activity dialog
@@ -118,7 +146,7 @@ export function FeedbackPage() {
       return api.post(`/feedback/${activityRow.id}/activity`, { type: activityType, note: activityNote, loggedAt });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['feedback'] });
+      qc.invalidateQueries({ queryKey: ['feedback', selectedWeek] });
       setActivityRow(null);
       setActivityNote('');
       showToast('Activity logged');
@@ -139,7 +167,7 @@ export function FeedbackPage() {
         const created = await api.post(`/feedback/ensure-client/${clientId}`, {}).then((r) => r.data);
         await api.patch(`/feedback/${created.id}`, { communicationStatus: edit.status || null, notes: edit.notes || null });
       }
-      qc.invalidateQueries({ queryKey: ['feedback'] });
+      qc.invalidateQueries({ queryKey: ['feedback', selectedWeek] });
       setInlineEdits((p) => { const n = { ...p }; delete n[clientId]; return n; });
       showToast('Saved');
     } catch (e: any) {
@@ -198,7 +226,7 @@ export function FeedbackPage() {
     <>
       <Topbar
         title="Feedback"
-        subtitle={`${filtered.length} clients`}
+        subtitle={`${filtered.length} clients · ${fmtWeekRange(selectedWeek)}`}
         actions={
           <div className="flex gap-2">
             <Button size="sm" onClick={exportCSV}><Download size={13} /> Export CSV</Button>
@@ -206,6 +234,32 @@ export function FeedbackPage() {
         }
       />
       <Page>
+        {/* Week navigator */}
+        <div className="flex items-center gap-2 mb-4" style={{ flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setSelectedWeek(w => addWeeks(w, -1))}
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: 'var(--brand-text)', display: 'flex', alignItems: 'center' }}
+          ><ChevronLeft size={14} /></button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 14px', borderRadius: 8, background: isCurrentWeek ? 'rgba(99,102,241,0.12)' : 'var(--bg-input)', border: `1px solid ${isCurrentWeek ? 'var(--brand-primary)' : 'var(--brand-borderSoft)'}`, fontSize: 13, fontWeight: 600, color: isCurrentWeek ? 'var(--brand-primary)' : 'var(--brand-text)' }}>
+            {isCurrentWeek && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--brand-primary)', display: 'inline-block' }} />}
+            {isCurrentWeek ? 'This week' : 'Past week'} · {fmtWeekRange(selectedWeek)}
+          </div>
+          <button
+            onClick={() => setSelectedWeek(w => addWeeks(w, 1))}
+            disabled={isCurrentWeek}
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', borderRadius: 8, padding: '5px 10px', cursor: isCurrentWeek ? 'not-allowed' : 'pointer', opacity: isCurrentWeek ? 0.35 : 1, color: 'var(--brand-text)', display: 'flex', alignItems: 'center' }}
+          ><ChevronRight size={14} /></button>
+          {!isCurrentWeek && (
+            <button
+              onClick={() => setSelectedWeek(currentWeek)}
+              style={{ fontSize: 12, padding: '5px 12px', borderRadius: 8, background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+            >Back to this week</button>
+          )}
+          {!isCurrentWeek && (
+            <span style={{ fontSize: 11, color: 'var(--brand-textMuted)' }}>Viewing history — read-only</span>
+          )}
+        </div>
+
         {/* Filters */}
         <div className="flex flex-wrap gap-2 mb-3">
           <div className="relative">
@@ -263,7 +317,7 @@ export function FeedbackPage() {
                     </td>
 
                     {/* Status — inline dropdown */}
-                    <td onClick={() => startInline(c.id, fbRec)} style={{ cursor: inlineEdits[c.id] ? 'default' : 'pointer', minWidth: 110 }}>
+                    <td onClick={() => isCurrentWeek && startInline(c.id, fbRec)} style={{ cursor: !isCurrentWeek ? 'default' : inlineEdits[c.id] ? 'default' : 'pointer', minWidth: 110 }}>
                       {inlineEdits[c.id] ? (
                         <select
                           autoFocus
@@ -287,7 +341,7 @@ export function FeedbackPage() {
                     </td>
 
                     {/* Notes — inline textarea */}
-                    <td onClick={() => startInline(c.id, fbRec)} style={{ cursor: inlineEdits[c.id] ? 'default' : 'pointer', minWidth: 180 }}>
+                    <td onClick={() => isCurrentWeek && startInline(c.id, fbRec)} style={{ cursor: !isCurrentWeek ? 'default' : inlineEdits[c.id] ? 'default' : 'pointer', minWidth: 180 }}>
                       {inlineEdits[c.id] ? (
                         <textarea
                           autoFocus={false}
@@ -329,18 +383,20 @@ export function FeedbackPage() {
                     {/* Actions */}
                     <td>
                       <div className="flex gap-1 flex-wrap">
-                        {fbRec && (
+                        {fbRec && isCurrentWeek && (
                           <>
                             <Button size="sm" onClick={() => setEditRow({ ...fbRec, trainerId: fbRec.trainer?.id || '', communicationStatus: fbRec.communicationStatus || '' })}>Edit</Button>
                             <Button size="sm" variant="danger" onClick={() => { if (confirm('Delete this feedback record?')) del.mutate(fbRec.id); }}>Del</Button>
                           </>
                         )}
-                        <Button size="sm"
-                          style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)' }}
-                          disabled={ensureAndLog.isPending}
-                          onClick={() => ensureAndLog.mutate(c.id)}>
-                          Log
-                        </Button>
+                        {isCurrentWeek && (
+                          <Button size="sm"
+                            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)' }}
+                            disabled={ensureAndLog.isPending}
+                            onClick={() => ensureAndLog.mutate(c.id)}>
+                            Log
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
