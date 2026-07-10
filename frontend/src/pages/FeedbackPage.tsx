@@ -82,6 +82,9 @@ export function FeedbackPage() {
   const [activityNote, setActivityNote] = useState('');
   const [activityDate, setActivityDate] = useState(todayISO());
   const [activityTime, setActivityTime] = useState('');
+  // Inline editing state: clientId → { status, notes }
+  const [inlineEdits, setInlineEdits] = useState<Record<string, { status: string; notes: string }>>({});
+  const [savingInline, setSavingInline] = useState<Record<string, boolean>>({});
 
   const update = useMutation({
     mutationFn: (data: any) => api.patch(`/feedback/${editRow.id}`, data),
@@ -122,6 +125,37 @@ export function FeedbackPage() {
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
+
+  // Save inline status/notes edit for a client
+  async function saveInline(clientId: string, fbRec: any) {
+    const edit = inlineEdits[clientId];
+    if (!edit) return;
+    setSavingInline((p) => ({ ...p, [clientId]: true }));
+    try {
+      if (fbRec) {
+        await api.patch(`/feedback/${fbRec.id}`, { communicationStatus: edit.status || null, notes: edit.notes || null });
+      } else {
+        // auto-create then patch
+        const created = await api.post(`/feedback/ensure-client/${clientId}`, {}).then((r) => r.data);
+        await api.patch(`/feedback/${created.id}`, { communicationStatus: edit.status || null, notes: edit.notes || null });
+      }
+      qc.invalidateQueries({ queryKey: ['feedback'] });
+      setInlineEdits((p) => { const n = { ...p }; delete n[clientId]; return n; });
+      showToast('Saved');
+    } catch (e: any) {
+      showToast(e.response?.data?.error || 'Failed to save', 'error');
+    } finally {
+      setSavingInline((p) => { const n = { ...p }; delete n[clientId]; return n; });
+    }
+  }
+
+  function startInline(clientId: string, fbRec: any) {
+    if (inlineEdits[clientId]) return; // already editing
+    setInlineEdits((p) => ({
+      ...p,
+      [clientId]: { status: fbRec?.communicationStatus || '', notes: fbRec?.notes || '' },
+    }));
+  }
 
   const filtered = useMemo(() => {
     let xs = trainingClients;
@@ -227,25 +261,72 @@ export function FeedbackPage() {
                         </>)}
                       </div>
                     </td>
-                    <td>
-                      {fbRec?.communicationStatus
-                        ? <span className="text-[11px] font-semibold" style={{ color: COMM_STATUS_COLORS[fbRec.communicationStatus] }}>{COMM_STATUS_LABELS[fbRec.communicationStatus]}</span>
-                        : <span className="muted text-[11px]">—</span>}
+
+                    {/* Status — inline dropdown */}
+                    <td onClick={() => startInline(c.id, fbRec)} style={{ cursor: inlineEdits[c.id] ? 'default' : 'pointer', minWidth: 110 }}>
+                      {inlineEdits[c.id] ? (
+                        <select
+                          autoFocus
+                          value={inlineEdits[c.id].status}
+                          onChange={(e) => setInlineEdits((p) => ({ ...p, [c.id]: { ...p[c.id], status: e.target.value } }))}
+                          onBlur={() => saveInline(c.id, fbRec)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') saveInline(c.id, fbRec); if (e.key === 'Escape') setInlineEdits((p) => { const n = { ...p }; delete n[c.id]; return n; }); }}
+                          style={{ fontSize: 11, padding: '2px 6px', borderRadius: 6, border: '1px solid var(--brand-border)', background: 'var(--bg-input)', color: 'var(--brand-text)', width: '100%' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <option value="">— None —</option>
+                          <option value="CallReceived">Picked</option>
+                          <option value="CallNotReceived">Not Picked</option>
+                          <option value="MessageSent">Message Sent</option>
+                        </select>
+                      ) : (
+                        fbRec?.communicationStatus
+                          ? <span className="text-[11px] font-semibold" style={{ color: COMM_STATUS_COLORS[fbRec.communicationStatus] }}>{COMM_STATUS_LABELS[fbRec.communicationStatus]}</span>
+                          : <span className="muted text-[11px]" style={{ borderBottom: '1px dashed var(--brand-borderSoft)' }}>—</span>
+                      )}
                     </td>
-                    <td className="text-[12px] muted max-w-[180px] truncate">{fbRec?.notes || '—'}</td>
-                    <td style={{ minWidth: 200 }}>
-                      {latestActivity ? (
-                        <div style={{ fontSize: 11 }}>
-                          <span className="font-medium" style={{ color: latestActivity.type === 'Call' ? 'var(--status-green)' : latestActivity.type === 'Message' ? 'var(--status-amber)' : 'var(--brand-textMuted)' }}>
-                            {latestActivity.type}
-                          </span>
-                          <span className="muted"> · {latestActivity.loggedBy?.name} · </span>
-                          <span className="muted" style={{ fontSize: 10 }}>{fmtDateTime(latestActivity.loggedAt)}</span>
-                          {latestActivity.note && <div className="muted truncate" style={{ maxWidth: 180, fontSize: 11 }}>{latestActivity.note}</div>}
-                          {fbRec.activities.length > 1 && <span className="muted" style={{ fontSize: 10 }}> +{fbRec.activities.length - 1} more</span>}
+
+                    {/* Notes — inline textarea */}
+                    <td onClick={() => startInline(c.id, fbRec)} style={{ cursor: inlineEdits[c.id] ? 'default' : 'pointer', minWidth: 180 }}>
+                      {inlineEdits[c.id] ? (
+                        <textarea
+                          autoFocus={false}
+                          value={inlineEdits[c.id].notes}
+                          onChange={(e) => setInlineEdits((p) => ({ ...p, [c.id]: { ...p[c.id], notes: e.target.value } }))}
+                          onBlur={() => saveInline(c.id, fbRec)}
+                          onKeyDown={(e) => { if (e.key === 'Escape') setInlineEdits((p) => { const n = { ...p }; delete n[c.id]; return n; }); }}
+                          rows={2}
+                          placeholder="Add notes…"
+                          style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--brand-border)', background: 'var(--bg-input)', color: 'var(--brand-text)', width: '100%', resize: 'none' }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span className="text-[12px] muted" style={{ display: 'block', maxWidth: 200, whiteSpace: 'pre-wrap', wordBreak: 'break-word', borderBottom: fbRec?.notes ? 'none' : '1px dashed var(--brand-borderSoft)' }}>
+                          {fbRec?.notes || '—'}
+                        </span>
+                      )}
+                      {savingInline[c.id] && <span className="muted text-[10px]">Saving…</span>}
+                    </td>
+
+                    {/* Activity Log — all entries */}
+                    <td style={{ minWidth: 220 }}>
+                      {fbRec?.activities?.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {(fbRec.activities as any[]).map((a: any) => (
+                            <div key={a.id} style={{ fontSize: 11 }}>
+                              <span className="font-medium" style={{ color: a.type === 'Call' ? 'var(--status-green)' : a.type === 'Message' ? 'var(--status-amber)' : 'var(--brand-textMuted)' }}>
+                                {a.type}
+                              </span>
+                              <span className="muted"> · {a.loggedBy?.name} · </span>
+                              <span className="muted" style={{ fontSize: 10 }}>{fmtDateTime(a.loggedAt)}</span>
+                              {a.note && <div className="muted" style={{ fontSize: 11, paddingLeft: 2 }}>{a.note}</div>}
+                            </div>
+                          ))}
                         </div>
                       ) : <span className="muted text-[11px]">No activity yet</span>}
                     </td>
+
+                    {/* Actions */}
                     <td>
                       <div className="flex gap-1 flex-wrap">
                         {fbRec && (
