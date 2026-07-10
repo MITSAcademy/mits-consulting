@@ -1,15 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
-import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/EmptyState';
-import { ClipboardList, Plus, X, Download, ThumbsUp, ThumbsDown, Minus } from 'lucide-react';
-import { useState } from 'react';
+import { ClipboardList, Download, ThumbsUp, ThumbsDown, Minus } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { useUI } from '@/store/ui';
-import { todayISO, minPastDate, maxTodayDate, minFutureDate } from '@/lib/utils';
+import { todayISO, minPastDate, maxTodayDate } from '@/lib/utils';
 import { useAuth } from '@/store/auth';
 import { Link } from 'react-router-dom';
+import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { Label, Select, Input } from '@/components/ui/input';
 
 const LOG_ROLES = ['founder', 'manager', 'lead', 'staff', 'account_manager', 'payment_processor'];
 const HOUR_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
@@ -24,479 +25,61 @@ const FEEDBACK_STYLE: Record<Feedback, { label: string; color: string; bg: strin
   negative: { label: 'Negative', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
 };
 
-function FeedbackPicker({ value, onChange }: { value: Feedback | ''; onChange: (v: Feedback) => void }) {
-  return (
-    <div className="flex gap-2">
-      {(Object.entries(FEEDBACK_STYLE) as [Feedback, typeof FEEDBACK_STYLE[Feedback]][]).map(([key, s]) => (
-        <button
-          key={key}
-          type="button"
-          onClick={() => onChange(key)}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all"
-          style={{
-            background: value === key ? s.bg : 'transparent',
-            borderColor: value === key ? s.color : 'var(--brand-border)',
-            color: value === key ? s.color : 'var(--brand-textMuted)',
-          }}
-        >
-          {key === 'positive' && <ThumbsUp size={11} />}
-          {key === 'neutral'  && <Minus size={11} />}
-          {key === 'negative' && <ThumbsDown size={11} />}
-          {s.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function LogSessionForm({ prefillTrainerId = '', prefillClientId = '', onDone }: {
-  prefillTrainerId?: string;
-  prefillClientId?: string;
-  onDone: () => void;
-}) {
-  const qc = useQueryClient();
-  const showToast = useUI((s) => s.showToast);
-  const [trainerId, setTrainerId] = useState(prefillTrainerId);
-  const [clientId, setClientId] = useState(prefillClientId);
-  const [date, setDate] = useState(todayISO());
-  const [durH, setDurH] = useState(1);
-  const [durM, setDurM] = useState(0);
-  const days = String(durationToDecimal(durH, durM));
-  const [notes, setNotes] = useState('');
-  const [feedback, setFeedback] = useState<Feedback | ''>('');
-  const [overrideAmount, setOverrideAmount] = useState(false);
-  const [customAmount, setCustomAmount] = useState('');
-  const [overrideReason, setOverrideReason] = useState('');
-  const [trainerSearch, setTrainerSearch] = useState('');
-  const [trainerDropOpen, setTrainerDropOpen] = useState(false);
-
-  const user = useAuth((s) => s.user)!;
-  const isAM = user.role === 'account_manager';
-  const [sessionHappened, setSessionHappened] = useState(true);
-  const [cancelledBy, setCancelledBy] = useState<'trainer' | 'client' | ''>('');
-
-  // For AM: derive client list from my-sessions (training-based scope) so all hosted clients appear
-  // regardless of whether assignedAmId is set. For other roles fetch all active clients.
-  const { data: clientsResp } = useQuery({
-    queryKey: ['clients-active', isAM],
-    queryFn: () =>
-      api.get('/clients', isAM ? { params: { scope: 'team' } } : {}).then((r) => {
-        const arr = Array.isArray(r.data) ? r.data : (r.data?.data || []);
-        return arr.filter((c: any) => ['Active', 'LeverageGranted'].includes(c.lifecycle))
-                  .sort((a: any, b: any) => a.name.localeCompare(b.name));
-      }),
-  });
-
-  // For AM: also fetch regular trainings — use these as the authoritative client list
-  const { data: myTrainings } = useQuery({
-    queryKey: ['my-sessions-am'],
-    queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
-    enabled: isAM,
-  });
-
-  // Build client list: for AM use training records (broader scope); for others use clientsResp
-  const clients: any[] = (() => {
-    if (!isAM) return (clientsResp as any[]) || [];
-    const trainings = (myTrainings as any[]) || [];
-    const seen = new Set<string>();
-    const out: any[] = [];
-    for (const t of trainings) {
-      if (t.client && !seen.has(t.client.id)) {
-        seen.add(t.client.id);
-        out.push(t.client);
-      }
-    }
-    return out.sort((a, b) => a.name.localeCompare(b.name));
-  })();
-
-  const { data: allTrainers } = useQuery({
-    queryKey: ['trainers-active'],
-    queryFn: () => api.get('/trainers').then((r) => r.data.filter((t: any) => t.active)),
-  });
-  const trainers = isAM
-    ? (() => {
-        const trainerIds = new Set<string>([
-          ...clients.map((c: any) => c.primaryTrainerId).filter(Boolean),
-          ...((myTrainings || []) as any[]).map((t: any) => t.trainer?.id).filter(Boolean),
-        ]);
-        return (allTrainers || []).filter((t: any) => trainerIds.has(t.id));
-      })()
-    : (allTrainers || []);
-
-  const selectedTrainer = trainers.find((t: any) => t.id === trainerId);
-  const selectedClient = clients.find((c: any) => c.id === clientId);
-  const defaultRate = selectedTrainer?.defaultRateInr || 0;
-  const rateModel = selectedTrainer?.rateModel || 'per_session';
-  const effectiveHourlyRate = rateModel === 'per_session' ? defaultRate / 2 : defaultRate;
-  const total = overrideAmount && customAmount
-    ? Math.round(parseFloat(customAmount) || 0)
-    : Math.round((parseFloat(days) || 0) * effectiveHourlyRate);
-
-  const canSubmit = !!trainerId && (sessionHappened ? (!!feedback && durationToDecimal(durH, durM) > 0) : true)
-    && (!overrideAmount || (!!customAmount && !!overrideReason.trim()));
-
-  const create = useMutation({
-    mutationFn: () => {
-      if (!trainerId) throw new Error('Select a trainer');
-      if (sessionHappened && !feedback) throw new Error('Select session feedback');
-      if (sessionHappened && overrideAmount && !overrideReason.trim()) throw new Error('Reason required for amount override');
-      const effectiveRate = overrideAmount && customAmount
-        ? Math.round(parseFloat(customAmount) / (parseFloat(days) || 1))
-        : defaultRate;
-      const finalNotes = overrideAmount && overrideReason
-        ? `[Override: ${overrideReason}]${notes ? ' · ' + notes : ''}`
-        : notes || undefined;
-      return api.post('/session-logs', {
-        trainerId,
-        clientId: clientId || undefined,
-        date,
-        hours: sessionHappened ? (parseFloat(days) || 0) : 0,
-        rateSnapshot: effectiveRate || defaultRate || 1200,
-        rateModel: selectedTrainer?.rateModel || 'per_session',
-        amountInr: sessionHappened && overrideAmount && customAmount ? Math.round(parseFloat(customAmount)) : undefined,
-        feedback: sessionHappened ? feedback : undefined,
-        notes: finalNotes,
-        sessionHappened,
-        cancelledBy: !sessionHappened ? (cancelledBy || undefined) : undefined,
-      });
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['session-logs'] });
-      showToast(sessionHappened ? 'Session logged' : 'No-show logged');
-      onDone();
-    },
-    onError: (e: any) => showToast(e.message || e.response?.data?.error || 'Failed', 'error'),
-  });
-
-  return (
-    <div className="card mb-4">
-      <div className="card-h mb-3">
-        <Plus size={14} />
-        <span className="font-bold">Log session</span>
-        <button className="ml-auto muted hover:text-white" onClick={onDone}><X size={14} /></button>
-      </div>
-      {/* Session Happened? */}
-      <div className="mb-3 flex items-center gap-3">
-        <span className="label mb-0">Session happened?</span>
-        <div className="flex gap-1.5">
-          {[true, false].map((val) => (
-            <button key={String(val)} type="button"
-              onClick={() => { setSessionHappened(val); if (val) setCancelledBy(''); }}
-              className="px-3 py-1 rounded-lg text-[12px] font-semibold border transition-all"
-              style={{
-                background: sessionHappened === val ? (val ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.12)') : 'transparent',
-                borderColor: sessionHappened === val ? (val ? '#22c55e' : '#ef4444') : 'var(--brand-border)',
-                color: sessionHappened === val ? (val ? '#22c55e' : '#ef4444') : 'var(--brand-textMuted)',
-              }}>
-              {val ? 'Yes' : 'No — cancelled'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div>
-          <label className="label">Client (optional)</label>
-          <select className="input" value={clientId} onChange={(e) => {
-            const cid = e.target.value;
-            setClientId(cid);
-            if (cid) {
-              const client = clients.find((c: any) => c.id === cid);
-              if (client?.primaryTrainerId && !trainerId) setTrainerId(client.primaryTrainerId);
-            }
-          }}>
-            <option value="">— no specific client —</option>
-            {clients.map((c: any) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          {selectedClient && selectedClient.phoneCode && selectedClient.phoneDigits && (
-            <div className="text-[11px] muted mt-0.5">
-              Client: <span className="mono">{selectedClient.phoneCode}{selectedClient.phoneDigits}</span>
-            </div>
-          )}
-        </div>
-        <div className="relative">
-          <label className="label">Trainer *</label>
-          <input
-            className="input"
-            placeholder="Type to search trainer…"
-            value={trainerDropOpen ? trainerSearch : (selectedTrainer ? selectedTrainer.name : '')}
-            onFocus={() => { setTrainerSearch(''); setTrainerDropOpen(true); }}
-            onChange={(e) => { setTrainerSearch(e.target.value); setTrainerDropOpen(true); }}
-            onBlur={() => setTimeout(() => setTrainerDropOpen(false), 150)}
-            autoComplete="off"
-          />
-          {trainerDropOpen && (
-            <div className="absolute z-50 w-full mt-1 rounded shadow-lg max-h-52 overflow-y-auto text-sm" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
-              <div
-                className="px-3 py-2 cursor-pointer"
-                style={{ color: 'var(--brand-text-muted)' }}
-                onMouseDown={() => { setTrainerId(''); setTrainerSearch(''); setTrainerDropOpen(false); setOverrideAmount(false); setCustomAmount(''); }}
-              >— select trainer —</div>
-              {trainers
-                .filter((t: any) => {
-                  const q = trainerSearch.toLowerCase();
-                  return !q || t.name.toLowerCase().includes(q) || (t.seqId && String(t.seqId).includes(q)) || (t.phoneDigits && t.phoneDigits.includes(q));
-                })
-                .map((t: any) => {
-                  const phone = t.phoneDigits ? `${t.phoneCode || ''}${t.phoneDigits}` : null;
-                  const tag = t.seqId ? `#${t.seqId}` : null;
-                  const suffix = [tag, phone].filter(Boolean).join(' · ');
-                  const isSelected = trainerId === t.id;
-                  return (
-                    <div
-                      key={t.id}
-                      className="px-3 py-2 cursor-pointer"
-                      style={{
-                        background: isSelected ? 'var(--bg-input)' : undefined,
-                        color: 'var(--brand-text)',
-                        fontWeight: isSelected ? 600 : undefined,
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-input)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = isSelected ? 'var(--bg-input)' : '')}
-                      onMouseDown={() => { setTrainerId(t.id); setTrainerSearch(''); setTrainerDropOpen(false); setOverrideAmount(false); setCustomAmount(''); }}
-                    >
-                      {t.name}{suffix ? ` (${suffix})` : ''}{t.defaultRateInr ? ` · ₹${t.defaultRateInr}/session` : ''}
-                    </div>
-                  );
-                })}
-            </div>
-          )}
-          {selectedTrainer && (
-            <div className="text-[11px] muted mt-0.5 flex gap-2">
-              {selectedTrainer.seqId && <span>#{selectedTrainer.seqId}</span>}
-              {selectedTrainer.phoneDigits && (
-                <span className="mono">{selectedTrainer.phoneCode}{selectedTrainer.phoneDigits}</span>
-              )}
-              {selectedTrainer.email && <span>{selectedTrainer.email}</span>}
-            </div>
-          )}
-        </div>
-        <div>
-          <label className="label">Date *</label>
-          <input type="date" className="input" value={date} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setDate(e.target.value)} />
-        </div>
-        {sessionHappened && (
-          <div>
-            <label className="label">Duration *</label>
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <select className="input" value={durH} onChange={(e) => setDurH(Number(e.target.value))}>
-                  {HOUR_OPTIONS.map((h) => <option key={h} value={h}>{h}h</option>)}
-                </select>
-              </div>
-              <div className="flex-1">
-                <select className="input" value={durM} onChange={(e) => setDurM(Number(e.target.value))}>
-                  {MINUTE_OPTIONS.map((m) => <option key={m} value={m}>{String(m).padStart(2,'0')}m</option>)}
-                </select>
-              </div>
-            </div>
-            {durationToDecimal(durH, durM) === 0 && (
-              <div className="text-[11px] mt-0.5" style={{ color: 'var(--status-amber)' }}>Set a duration greater than 0</div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Cancelled by — only when session did NOT happen */}
-      {!sessionHappened && (
-        <div className="mb-3">
-          <label className="label">Cancelled by</label>
-          <div className="flex gap-2">
-            {(['trainer', 'client'] as const).map((by) => (
-              <button key={by} type="button"
-                onClick={() => setCancelledBy(cancelledBy === by ? '' : by)}
-                className="px-3 py-1 rounded-lg text-[12px] font-semibold border transition-all capitalize"
-                style={{
-                  background: cancelledBy === by ? 'rgba(239,68,68,0.12)' : 'transparent',
-                  borderColor: cancelledBy === by ? '#ef4444' : 'var(--brand-border)',
-                  color: cancelledBy === by ? '#ef4444' : 'var(--brand-textMuted)',
-                }}>
-                {by}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Feedback — required only when session happened */}
-      {sessionHappened && (
-        <div className="mb-3">
-          <label className="label">Session feedback *</label>
-          <FeedbackPicker value={feedback} onChange={setFeedback} />
-          {!feedback && <div className="text-[11px] mt-1" style={{ color: 'var(--status-amber)' }}>Required before logging</div>}
-        </div>
-      )}
-
-      {/* Rate summary + override toggle — only when session happened */}
-      {sessionHappened && selectedTrainer && (
-        <div className="callout mb-3 text-xs flex items-center justify-between gap-3">
-          <span>
-            Rate: <strong>₹{defaultRate.toLocaleString()}</strong>/session ·
-            Duration: <strong>{durH}h {durM > 0 ? `${durM}m` : ''}</strong>{' '}
-            ({parseFloat(days) || 0} sessions) ·
-            Total: <strong>₹{total.toLocaleString()}</strong>
-            {overrideAmount && customAmount && (
-              <span className="ml-1" style={{ color: 'var(--status-amber)' }}>
-                {' '}(overridden from ₹{Math.round((parseFloat(days) || 0) * defaultRate).toLocaleString()})
-              </span>
-            )}
-          </span>
-          <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0" style={{ color: overrideAmount ? 'var(--status-amber)' : undefined }}>
-            <input type="checkbox" checked={overrideAmount}
-              onChange={(e) => { setOverrideAmount(e.target.checked); if (!e.target.checked) { setCustomAmount(''); setOverrideReason(''); } }} />
-            <span className="text-[11px]">Override amount</span>
-          </label>
-        </div>
-      )}
-
-      {sessionHappened && overrideAmount && (
-        <div className="grid grid-cols-2 gap-3 mb-3 p-3 rounded-lg" style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)' }}>
-          <div>
-            <label className="label" style={{ color: 'var(--status-amber)' }}>Custom total ₹ *</label>
-            <input type="number" className="input" placeholder={`Default: ₹${Math.round((parseFloat(days) || 0) * defaultRate)}`}
-              value={customAmount} onChange={(e) => setCustomAmount(e.target.value)} />
-          </div>
-          <div>
-            <label className="label" style={{ color: 'var(--status-amber)' }}>Reason *</label>
-            <input type="text" className="input" placeholder="e.g. partial session, negotiated rate"
-              value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
-          </div>
-        </div>
-      )}
-
-      <div className="mb-3">
-        <label className="label">Notes (optional)</label>
-        <input type="text" className="input" placeholder="e.g. mock interview, Java session"
-          value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button onClick={onDone}>Cancel</Button>
-        <Button variant="primary" disabled={!canSubmit || create.isPending} onClick={() => create.mutate()}>
-          {sessionHappened ? 'Log session' : 'Log no-show'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/* ── My clients panel (left sidebar for account_manager) ──────────────────── */
-
-function MyClientsPanel({ onSelect }: { onSelect: (trainerId: string, clientId: string) => void }) {
-  const { data: myTrainingsRaw } = useQuery({
-    queryKey: ['my-sessions-am'],
-    queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
-  });
-  const clients: any[] = (() => {
-    const trainings = (myTrainingsRaw as any[]) || [];
-    const seen = new Set<string>();
-    const out: any[] = [];
-    for (const t of trainings) {
-      if (t.client && !seen.has(t.client.id)) {
-        seen.add(t.client.id);
-        out.push({ ...t.client, _trainerId: t.trainerId, _trainerName: t.trainer?.name });
-      }
-    }
-    return out.sort((a, b) => a.name.localeCompare(b.name));
-  })();
-
-  return (
-    <div className="flex-shrink-0 rounded-xl border overflow-hidden" style={{ width: 220, background: 'var(--bg-card)', borderColor: 'var(--brand-border)' }}>
-      <div className="px-3 py-2 border-b text-xs font-bold uppercase tracking-wide" style={{ borderColor: 'var(--brand-border)', color: 'var(--brand-textMuted)' }}>
-        My clients
-      </div>
-      <div className="overflow-y-auto" style={{ maxHeight: 500 }}>
-        {clients.length === 0 && (
-          <div className="text-[11px] muted p-3">No active clients assigned yet.</div>
-        )}
-        {clients.map((c: any) => (
-          <button
-            key={c.id}
-            onClick={() => c._trainerId && onSelect(c._trainerId, c.id)}
-            className="w-full text-left px-3 py-2 border-b transition-colors"
-            style={{ borderColor: 'var(--brand-borderSoft)' }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-cardHover)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-          >
-            <div className="font-medium text-xs truncate" style={{ color: 'var(--brand-text)' }}>{c.name}</div>
-            <div className="text-[10px] muted truncate mt-0.5">
-              {c._trainerName
-                ? <span style={{ color: 'var(--accent-gold)' }}>{c._trainerName}</span>
-                : <span className="italic">No trainer assigned</span>}
-            </div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ── Status helpers ──────────────────────────────────────────────────────── */
-
-const STATUS_COLOR: Record<string, 'green' | 'blue' | 'amber' | 'grey'> = {
-  Paid: 'green', PaymentApproved: 'blue', ReadyForFinal: 'amber', Logged: 'grey',
-};
-
 function FeedbackBadge({ value }: { value?: string | null }) {
   if (!value) return null;
   const s = FEEDBACK_STYLE[value as Feedback];
   if (!s) return null;
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: s.bg, color: s.color }}>
-      {value}
+      {s.label}
     </span>
   );
 }
 
-/* ── PDF export ─────────────────────────────────────────────────────────── */
-
-function exportPdf(logs: any[]) {
-  const rows = logs.map((l) => `
-    <tr>
-      <td>${l.date}</td>
-      <td>${l.trainer?.name || '—'}</td>
-      <td>${l.client?.name || '—'}</td>
-      <td>${(() => { const h = Math.floor(l.hours); const m = Math.round((l.hours - h) * 60); return `${h}h${m > 0 ? ` ${m}m` : ''}`; })()}</td>
-      <td>₹${l.rateSnapshot?.toLocaleString()}</td>
-      <td>₹${l.amountInr?.toLocaleString()}</td>
-      <td>${l.feedback || '—'}</td>
-      <td>${l.status}</td>
-      <td>${l.notes || '—'}</td>
-    </tr>`).join('');
-
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-  <title>Session Logs — MITS</title>
-  <style>
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 20px; }
-    h1 { font-size: 16px; margin-bottom: 4px; }
-    p { font-size: 11px; color: #666; margin-bottom: 16px; }
-    table { width: 100%; border-collapse: collapse; }
-    th { background: #f3f4f6; text-align: left; padding: 6px 8px; font-size: 11px; border: 1px solid #e5e7eb; }
-    td { padding: 5px 8px; border: 1px solid #e5e7eb; font-size: 11px; }
-    tr:nth-child(even) td { background: #fafafa; }
-  </style></head><body>
-  <h1>MITS Consulting — Session Logs</h1>
-  <p>Exported ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ${logs.length} entries</p>
-  <table>
-    <thead><tr><th>Date</th><th>Trainer</th><th>Client</th><th>Duration</th><th>Rate</th><th>Amount</th><th>Feedback</th><th>Status</th><th>Notes</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-  </body></html>`;
-
-  const win = window.open('', '_blank');
-  if (win) {
-    win.document.write(html);
-    win.document.close();
-    win.print();
-  }
+/* ── Inline feedback picker (compact, 3 buttons) ─────────────────────────── */
+function FeedbackPicker({ value, onChange }: { value: Feedback | ''; onChange: (v: Feedback) => void }) {
+  return (
+    <div className="flex gap-1">
+      {(Object.entries(FEEDBACK_STYLE) as [Feedback, (typeof FEEDBACK_STYLE)[Feedback]][]).map(([key, s]) => (
+        <button
+          key={key} type="button" title={s.label}
+          onClick={() => onChange(key)}
+          className="flex items-center gap-0.5 px-1.5 py-1 rounded text-[10px] font-semibold border transition-all"
+          style={{
+            background: value === key ? s.bg : 'transparent',
+            borderColor: value === key ? s.color : 'var(--brand-border)',
+            color: value === key ? s.color : 'var(--brand-textMuted)',
+          }}
+        >
+          {key === 'positive' && <ThumbsUp size={9} />}
+          {key === 'neutral'  && <Minus size={9} />}
+          {key === 'negative' && <ThumbsDown size={9} />}
+        </button>
+      ))}
+    </div>
+  );
 }
 
-/* ── Edit dialog ─────────────────────────────────────────────────────────── */
+/* ── Inline log row state per training ──────────────────────────────────────
+   Each active training gets its own inline row in the "Log a session" table.
+   State is keyed by regularTraining id.
+────────────────────────────────────────────────────────────────────────────*/
+interface RowState {
+  sessionHappened: boolean;
+  cancelledBy: 'trainer' | 'client' | '';
+  date: string;
+  durH: number;
+  durM: number;
+  feedback: Feedback | '';
+  notes: string;
+  trainerId: string; // pre-filled from training, editable
+}
 
-import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
-import { Label, Select, Input } from '@/components/ui/input';
+function defaultRow(trainerId: string): RowState {
+  return { sessionHappened: true, cancelledBy: '', date: todayISO(), durH: 1, durM: 0, feedback: '', notes: '', trainerId };
+}
 
+/* ── Edit dialog for existing logs ─────────────────────────────────────────*/
 function EditLogDialog({ log, onClose }: { log: any; onClose: () => void }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
@@ -508,17 +91,19 @@ function EditLogDialog({ log, onClose }: { log: any; onClose: () => void }) {
   const [date, setDate] = useState(log.date || todayISO());
 
   const save = useMutation({
-    mutationFn: () => {
-      const hours = sessionHappened ? durationToDecimal(durH, durM) : 0;
-      return api.patch(`/session-logs/${log.id}`, {
+    mutationFn: () =>
+      api.patch(`/session-logs/${log.id}`, {
         sessionHappened,
         cancelledBy: !sessionHappened ? (cancelledBy || null) : null,
-        hours,
+        hours: sessionHappened ? durationToDecimal(durH, durM) : 0,
         feedback: sessionHappened ? (feedback || null) : null,
         date,
-      });
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['session-logs'] });
+      showToast('Session updated');
+      onClose();
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['session-logs'] }); showToast('Session updated'); onClose(); },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
@@ -526,7 +111,6 @@ function EditLogDialog({ log, onClose }: { log: any; onClose: () => void }) {
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent title={`Edit session — ${log.client?.name || log.trainer?.name}`}>
         <div className="space-y-3">
-          {/* Session happened */}
           <div>
             <Label>Session happened?</Label>
             <div className="flex gap-2 mt-1">
@@ -544,7 +128,6 @@ function EditLogDialog({ log, onClose }: { log: any; onClose: () => void }) {
               ))}
             </div>
           </div>
-          {/* Cancelled by */}
           {!sessionHappened && (
             <div>
               <Label>Cancelled by</Label>
@@ -555,12 +138,10 @@ function EditLogDialog({ log, onClose }: { log: any; onClose: () => void }) {
               </Select>
             </div>
           )}
-          {/* Date */}
           <div>
             <Label>Date</Label>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ marginTop: 4 }} />
           </div>
-          {/* Duration */}
           {sessionHappened && (
             <div>
               <Label>Duration</Label>
@@ -574,12 +155,25 @@ function EditLogDialog({ log, onClose }: { log: any; onClose: () => void }) {
               </div>
             </div>
           )}
-          {/* Feedback */}
           {sessionHappened && (
             <div>
               <Label>Session feedback</Label>
-              <div className="mt-1">
-                <FeedbackPicker value={feedback} onChange={setFeedback} />
+              <div className="mt-1 flex gap-2">
+                {(Object.entries(FEEDBACK_STYLE) as [Feedback, (typeof FEEDBACK_STYLE)[Feedback]][]).map(([key, s]) => (
+                  <button key={key} type="button"
+                    onClick={() => setFeedback(key)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all"
+                    style={{
+                      background: feedback === key ? s.bg : 'transparent',
+                      borderColor: feedback === key ? s.color : 'var(--brand-border)',
+                      color: feedback === key ? s.color : 'var(--brand-textMuted)',
+                    }}>
+                    {key === 'positive' && <ThumbsUp size={11} />}
+                    {key === 'neutral'  && <Minus size={11} />}
+                    {key === 'negative' && <ThumbsDown size={11} />}
+                    {s.label}
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -595,6 +189,47 @@ function EditLogDialog({ log, onClose }: { log: any; onClose: () => void }) {
   );
 }
 
+/* ── PDF export ─────────────────────────────────────────────────────────── */
+function exportPdf(logs: any[]) {
+  const rows = logs.map((l) => {
+    const { h, m } = decimalToDuration(l.hours || 0);
+    const dur = l.sessionHappened === false ? '—' : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    return `<tr>
+      <td>${l.client?.name || '—'}</td>
+      <td>${l.trainer?.name || '—'}</td>
+      <td>${l.client?.hostOwner?.name || '—'}</td>
+      <td>${l.sessionHappened === false ? 'No' : 'Yes'}</td>
+      <td>${l.cancelledBy || '—'}</td>
+      <td>${l.date}</td>
+      <td>${dur}</td>
+      <td>${l.feedback || '—'}</td>
+      <td>${l.status}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Session Logs — MITS</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 20px; }
+    h1 { font-size: 16px; margin-bottom: 4px; }
+    p { font-size: 11px; color: #666; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f3f4f6; text-align: left; padding: 6px 8px; font-size: 11px; border: 1px solid #e5e7eb; }
+    td { padding: 5px 8px; border: 1px solid #e5e7eb; font-size: 11px; }
+    tr:nth-child(even) td { background: #fafafa; }
+  </style></head><body>
+  <h1>MITS Consulting — Session Logs</h1>
+  <p>Exported ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} · ${logs.length} entries</p>
+  <table>
+    <thead><tr><th>Client</th><th>Trainer</th><th>Coordinator</th><th>Session</th><th>Cancelled By</th><th>Date</th><th>Duration</th><th>Feedback</th><th>Status</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  if (win) { win.document.write(html); win.document.close(); win.print(); }
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 export function SessionLogsPage() {
@@ -602,144 +237,325 @@ export function SessionLogsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const canLog = LOG_ROLES.includes(user.role);
-  const isAM = user.role === 'account_manager';
-  const isLead = user.role === 'lead';
-  const showClientPanel = isAM || isLead;
-  const [showForm, setShowForm] = useState(false);
-  const [prefillTrainer, setPrefillTrainer] = useState('');
-  const [prefillClient, setPrefillClient] = useState('');
-  const [editLog, setEditLog] = useState<any>(null);
 
-  const { data } = useQuery({
+  // Existing session logs
+  const { data: logs } = useQuery({
     queryKey: ['session-logs'],
     queryFn: () => api.get('/session-logs').then((r) => r.data),
   });
 
+  // Active trainings (same source as My Sessions) — used for the inline log table
+  const { data: trainings } = useQuery({
+    queryKey: ['my-sessions-sheet'],
+    queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
+    enabled: canLog,
+  });
+
+  // All active trainers for the trainer dropdown
+  const { data: allTrainers } = useQuery({
+    queryKey: ['trainers-active'],
+    queryFn: () => api.get('/trainers').then((r) => r.data.filter((t: any) => t.active)),
+    enabled: canLog,
+  });
+
+  // De-duped client rows from trainings — one per unique client, keeping trainer info
+  const clientRows = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ trainingId: string; clientId: string; clientName: string; trainerId: string; trainerName: string; coordinator: string }> = [];
+    for (const t of (trainings || []) as any[]) {
+      if (!t.client || seen.has(t.client.id)) continue;
+      seen.add(t.client.id);
+      out.push({
+        trainingId: t.id,
+        clientId: t.client.id,
+        clientName: t.client.name,
+        trainerId: t.trainer?.id || '',
+        trainerName: t.trainer?.name || '',
+        coordinator: t.hostedByDefault?.name || '',
+      });
+    }
+    return out;
+  }, [trainings]);
+
+  // Inline row state keyed by trainingId
+  const [rows, setRows] = useState<Record<string, RowState>>({});
+  const [submitting, setSubmitting] = useState<Record<string, boolean>>({});
+  const [editLog, setEditLog] = useState<any>(null);
+
   const delLog = useMutation({
     mutationFn: (id: string) => api.delete(`/session-logs/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['session-logs'] }); showToast('Session log deleted'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['session-logs'] }); showToast('Deleted'); },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
 
-  function openFormFor(trainerId: string, clientId: string) {
-    setPrefillTrainer(trainerId);
-    setPrefillClient(clientId);
-    setShowForm(true);
+  function getRow(trainingId: string, defaultTrainerId: string): RowState {
+    return rows[trainingId] ?? defaultRow(defaultTrainerId);
   }
+
+  function setRow(trainingId: string, patch: Partial<RowState>, defaultTrainerId: string) {
+    setRows((prev) => ({
+      ...prev,
+      [trainingId]: { ...getRow(trainingId, defaultTrainerId), ...patch },
+    }));
+  }
+
+  async function submitRow(cr: typeof clientRows[0]) {
+    const row = getRow(cr.trainingId, cr.trainerId);
+    if (!row.trainerId) { showToast('Select a trainer', 'error'); return; }
+    if (row.sessionHappened && !row.feedback) { showToast('Select session feedback', 'error'); return; }
+    if (row.sessionHappened && durationToDecimal(row.durH, row.durM) === 0) { showToast('Set a duration > 0', 'error'); return; }
+
+    setSubmitting((p) => ({ ...p, [cr.trainingId]: true }));
+    try {
+      const trainer = (allTrainers as any[] || []).find((t: any) => t.id === row.trainerId);
+      const defaultRate = trainer?.defaultRateInr || 0;
+      const rateModel = trainer?.rateModel || 'per_session';
+      const hours = row.sessionHappened ? durationToDecimal(row.durH, row.durM) : 0;
+      const effectiveHourlyRate = rateModel === 'per_session' ? defaultRate / 2 : defaultRate;
+      await api.post('/session-logs', {
+        trainerId: row.trainerId,
+        clientId: cr.clientId,
+        date: row.date,
+        hours,
+        rateSnapshot: defaultRate || 1200,
+        rateModel,
+        amountInr: undefined,
+        feedback: row.sessionHappened ? row.feedback : undefined,
+        notes: row.notes || undefined,
+        sessionHappened: row.sessionHappened,
+        cancelledBy: !row.sessionHappened ? (row.cancelledBy || undefined) : undefined,
+      });
+      qc.invalidateQueries({ queryKey: ['session-logs'] });
+      showToast(row.sessionHappened ? 'Session logged' : 'No-show logged');
+      // Reset this row to defaults
+      setRows((prev) => { const n = { ...prev }; delete n[cr.trainingId]; return n; });
+    } catch (e: any) {
+      showToast(e.response?.data?.error || 'Failed', 'error');
+    } finally {
+      setSubmitting((p) => { const n = { ...p }; delete n[cr.trainingId]; return n; });
+    }
+  }
+
+  const inlineSel: React.CSSProperties = {
+    fontSize: 11, padding: '3px 6px', borderRadius: 6,
+    border: '1px solid var(--brand-border)',
+    background: 'var(--bg-input)', color: 'var(--brand-text)',
+  };
 
   return (
     <>
       <Topbar
         title="Session logs"
-        subtitle={`${data?.length || 0}`}
+        subtitle={`${logs?.length || 0} entries`}
         actions={
           <div className="flex gap-2">
-            {data && data.length > 0 && (
-              <Button onClick={() => exportPdf(data)}>
+            {logs && logs.length > 0 && (
+              <Button onClick={() => exportPdf(logs)}>
                 <Download size={14} /> Export PDF
-              </Button>
-            )}
-            {canLog && !showForm && (
-              <Button variant="primary" onClick={() => { setPrefillTrainer(''); setPrefillClient(''); setShowForm(true); }}>
-                <Plus size={14} /> Log session
               </Button>
             )}
           </div>
         }
       />
       <Page>
-        <div className="flex gap-4 items-start">
-          {/* Left panel — my clients (account_manager / lead) */}
-          {showClientPanel && (
-            <MyClientsPanel onSelect={(tid, cid) => openFormFor(tid, cid)} />
-          )}
 
-          {/* Main content */}
-          <div className="flex-1 min-w-0">
-            {showForm && (
-              <LogSessionForm
-                prefillTrainerId={prefillTrainer}
-                prefillClientId={prefillClient}
-                onDone={() => setShowForm(false)}
-              />
-            )}
-            {(data || []).length === 0 ? (
-              <EmptyState
-                icon={ClipboardList}
-                tone="grey"
-                title="No session logs yet"
-                description="Use the Log session button above, or click a client on the left to pre-fill."
-              />
-            ) : (
-              <div className="table-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Client Name</th>
-                      <th>Trainer Name</th>
-                      <th>Assigned Coordinator</th>
-                      <th>Session Happened</th>
-                      <th>Cancelled By</th>
-                      <th>Date</th>
-                      <th>Duration (HH:MM)</th>
-                      <th>Session Feedback</th>
-                      <th>Session Logged</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data || []).map((l: any) => {
-                      const { h, m } = decimalToDuration(l.hours || 0);
-                      const dur = l.sessionHappened === false ? '—' : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-                      const isLogged = !!l.id; // every row in the list is logged
-                      const coordinator = l.client?.hostOwner?.name || '—';
-                      return (
-                        <tr key={l.id}>
-                          <td>
-                            {l.client
-                              ? <Link to={`/clients/${l.client.id}`} className="hover:underline font-medium">{l.client.name}</Link>
-                              : <span className="muted">—</span>}
-                          </td>
-                          <td className="text-[12px]">{l.trainer?.name || '—'}</td>
-                          <td className="text-[12px] muted">{coordinator}</td>
-                          <td>
-                            {l.sessionHappened === false
-                              ? <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>No</span>
-                              : <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>Yes</span>}
-                          </td>
-                          <td className="text-[12px] capitalize muted">{l.cancelledBy || '—'}</td>
-                          <td className="mono text-[12px]">{l.date}</td>
-                          <td className="mono text-[12px]">{dur}</td>
-                          <td>
-                            {l.sessionHappened === false
-                              ? <span className="muted text-[11px]">—</span>
-                              : <FeedbackBadge value={l.feedback} />}
-                          </td>
-                          <td>
-                            <div className="flex items-center gap-1.5">
-                              <span style={{ fontSize: 16, lineHeight: 1 }}>{isLogged ? '🟢' : '🔴'}</span>
-                              <span className="text-[11px] font-semibold" style={{ color: isLogged ? '#22c55e' : '#ef4444' }}>
-                                {isLogged ? 'Logged' : 'Not Logged'}
-                              </span>
+        {/* ── Section 1: Inline log table ─────────────────────────────────── */}
+        {canLog && clientRows.length > 0 && (
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--brand-textMuted)', marginBottom: 10 }}>
+              Log a session
+            </div>
+            <div className="table-card">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ minWidth: 130 }}>Client</th>
+                    <th style={{ minWidth: 130 }}>Trainer</th>
+                    <th style={{ minWidth: 90 }}>Coordinator</th>
+                    <th style={{ minWidth: 100 }}>Session Happened</th>
+                    <th style={{ minWidth: 100 }}>Cancelled By</th>
+                    <th style={{ minWidth: 110 }}>Date</th>
+                    <th style={{ minWidth: 120 }}>Duration</th>
+                    <th style={{ minWidth: 120 }}>Feedback</th>
+                    <th style={{ minWidth: 80 }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientRows.map((cr) => {
+                    const row = getRow(cr.trainingId, cr.trainerId);
+                    const busy = submitting[cr.trainingId];
+                    const canSubmit = !!row.trainerId &&
+                      (row.sessionHappened ? (!!row.feedback && durationToDecimal(row.durH, row.durM) > 0) : true);
+                    return (
+                      <tr key={cr.trainingId}>
+                        {/* Client */}
+                        <td>
+                          <Link to={`/clients/${cr.clientId}`} className="font-medium text-[12px] hover:underline">
+                            {cr.clientName}
+                          </Link>
+                        </td>
+
+                        {/* Trainer — dropdown */}
+                        <td>
+                          <select style={inlineSel} value={row.trainerId}
+                            onChange={(e) => setRow(cr.trainingId, { trainerId: e.target.value }, cr.trainerId)}>
+                            <option value="">— select —</option>
+                            {(allTrainers as any[] || []).map((t: any) => (
+                              <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                          </select>
+                        </td>
+
+                        {/* Coordinator */}
+                        <td className="text-[11px] muted">{cr.coordinator || '—'}</td>
+
+                        {/* Session Happened */}
+                        <td>
+                          <select style={inlineSel} value={row.sessionHappened ? 'yes' : 'no'}
+                            onChange={(e) => {
+                              const yes = e.target.value === 'yes';
+                              setRow(cr.trainingId, { sessionHappened: yes, cancelledBy: yes ? '' : row.cancelledBy }, cr.trainerId);
+                            }}>
+                            <option value="yes">Yes</option>
+                            <option value="no">No</option>
+                          </select>
+                        </td>
+
+                        {/* Cancelled By */}
+                        <td>
+                          {!row.sessionHappened ? (
+                            <select style={inlineSel} value={row.cancelledBy}
+                              onChange={(e) => setRow(cr.trainingId, { cancelledBy: e.target.value as any }, cr.trainerId)}>
+                              <option value="">— select —</option>
+                              <option value="trainer">Trainer</option>
+                              <option value="client">Client</option>
+                            </select>
+                          ) : <span className="muted text-[11px]">—</span>}
+                        </td>
+
+                        {/* Date */}
+                        <td>
+                          <input type="date" style={{ ...inlineSel, width: 110 }}
+                            value={row.date} min={minPastDate()} max={maxTodayDate()}
+                            onChange={(e) => setRow(cr.trainingId, { date: e.target.value }, cr.trainerId)} />
+                        </td>
+
+                        {/* Duration */}
+                        <td>
+                          {row.sessionHappened ? (
+                            <div className="flex gap-1 items-center">
+                              <select style={{ ...inlineSel, width: 52 }} value={row.durH}
+                                onChange={(e) => setRow(cr.trainingId, { durH: Number(e.target.value) }, cr.trainerId)}>
+                                {HOUR_OPTIONS.map((h) => <option key={h} value={h}>{h}h</option>)}
+                              </select>
+                              <select style={{ ...inlineSel, width: 56 }} value={row.durM}
+                                onChange={(e) => setRow(cr.trainingId, { durM: Number(e.target.value) }, cr.trainerId)}>
+                                {MINUTE_OPTIONS.map((m) => <option key={m} value={m}>{String(m).padStart(2,'0')}m</option>)}
+                              </select>
                             </div>
-                          </td>
-                          <td>
-                            <div className="flex gap-1">
-                              <Button size="sm" onClick={() => setEditLog(l)}>Edit</Button>
-                              <Button size="sm" variant="danger"
-                                onClick={() => { if (confirm('Delete this session log?')) delLog.mutate(l.id); }}>
-                                Delete
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                          ) : <span className="muted text-[11px]">—</span>}
+                        </td>
+
+                        {/* Feedback */}
+                        <td>
+                          {row.sessionHappened
+                            ? <FeedbackPicker value={row.feedback} onChange={(v) => setRow(cr.trainingId, { feedback: v }, cr.trainerId)} />
+                            : <span className="muted text-[11px]">—</span>}
+                        </td>
+
+                        {/* Log button */}
+                        <td>
+                          <Button size="sm" variant="primary"
+                            disabled={!canSubmit || busy}
+                            onClick={() => submitRow(cr)}>
+                            {busy ? '…' : 'Log'}
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
+        )}
+
+        {/* ── Section 2: Existing session logs ───────────────────────────── */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--brand-textMuted)', marginBottom: 10 }}>
+            Session history
+          </div>
+          {(logs || []).length === 0 ? (
+            <EmptyState icon={ClipboardList} tone="grey" title="No session logs yet"
+              description="Use the table above to log your first session." />
+          ) : (
+            <div className="table-card">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Client Name</th>
+                    <th>Trainer Name</th>
+                    <th>Assigned Coordinator</th>
+                    <th>Session Happened</th>
+                    <th>Cancelled By</th>
+                    <th>Date</th>
+                    <th>Duration (HH:MM)</th>
+                    <th>Session Feedback</th>
+                    <th>Session Logged</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(logs || []).map((l: any) => {
+                    const { h, m } = decimalToDuration(l.hours || 0);
+                    const dur = l.sessionHappened === false
+                      ? '—'
+                      : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                    const coordinator = l.client?.hostOwner?.name || '—';
+                    return (
+                      <tr key={l.id}>
+                        <td>
+                          {l.client
+                            ? <Link to={`/clients/${l.client.id}`} className="hover:underline font-medium text-[12px]">{l.client.name}</Link>
+                            : <span className="muted text-[12px]">—</span>}
+                        </td>
+                        <td className="text-[12px]">{l.trainer?.name || '—'}</td>
+                        <td className="text-[12px] muted">{coordinator}</td>
+                        <td>
+                          {l.sessionHappened === false
+                            ? <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>No</span>
+                            : <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>Yes</span>}
+                        </td>
+                        <td className="text-[12px] capitalize muted">{l.cancelledBy || '—'}</td>
+                        <td className="mono text-[12px]">{l.date}</td>
+                        <td className="mono text-[12px]">{dur}</td>
+                        <td>
+                          {l.sessionHappened === false
+                            ? <span className="muted text-[11px]">—</span>
+                            : <FeedbackBadge value={l.feedback} />}
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-1">
+                            <span style={{ fontSize: 14 }}>🟢</span>
+                            <span className="text-[11px] font-semibold" style={{ color: '#22c55e' }}>Logged</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="flex gap-1">
+                            <Button size="sm" onClick={() => setEditLog(l)}>Edit</Button>
+                            <Button size="sm" variant="danger"
+                              onClick={() => { if (confirm('Delete this session log?')) delLog.mutate(l.id); }}>
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </Page>
 
