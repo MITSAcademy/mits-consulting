@@ -35,6 +35,8 @@ export function TeamAdminPage() {
   });
   const [stubResult, setStubResult] = useState<{ created: number; reactivated: number; createdClients: string[]; reactivatedClients: string[] } | null>(null);
   const [debugStubs, setDebugStubs] = useState<{ total: number; nullClientStubs: any[]; wrongLifecycleStubs: any[]; okCount: number } | null>(null);
+  const [clientLookupQ, setClientLookupQ] = useState('');
+  const [clientLookupResult, setClientLookupResult] = useState<any[] | null>(null);
   const backfillStubs = useMutation({
     mutationFn: () => api.post('/internal/backfill-training-stubs', {}),
     onSuccess: (r) => { setStubResult(r.data); showToast(`Fixed ${r.data.created + r.data.reactivated} training stubs`); },
@@ -214,6 +216,54 @@ export function TeamAdminPage() {
                 )}
               </div>
             )}
+
+            {/* Client lookup — check lifecycle + stub status by name */}
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--brand-textMuted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                Client lookup (check lifecycle &amp; stub)
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  placeholder="e.g. Khushwant"
+                  value={clientLookupQ}
+                  onChange={(e) => setClientLookupQ(e.target.value)}
+                  style={{ fontSize: 13, padding: '5px 10px', borderRadius: 6, border: '1px solid var(--brand-border)', background: 'var(--bg-input)', color: 'var(--brand-text)', width: 220 }}
+                />
+                <Button variant="default" onClick={async () => {
+                  if (!clientLookupQ.trim()) return;
+                  try {
+                    const r = await api.get('/internal/client-lookup', { params: { q: clientLookupQ } });
+                    setClientLookupResult(r.data);
+                  } catch (e: any) {
+                    setClientLookupResult([]);
+                  }
+                }}>Lookup</Button>
+              </div>
+              {clientLookupResult && (
+                <div style={{ marginTop: 8, fontSize: 12, background: 'var(--bg-input)', borderRadius: 8, padding: '10px 14px' }}>
+                  {clientLookupResult.length === 0
+                    ? <span style={{ color: 'var(--status-red)' }}>No client found with that name.</span>
+                    : clientLookupResult.map((c: any) => (
+                      <div key={c.id} style={{ marginBottom: 4, display: 'flex', gap: 12, alignItems: 'center' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--brand-text)', minWidth: 140 }}>{c.name}</span>
+                        <span style={{ color: ['Active','LeverageGranted','SaleWon','Hold'].includes(c.lifecycle) ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                          {c.lifecycle}
+                        </span>
+                        <span style={{ color: c.activeStubs > 0 ? '#16a34a' : '#dc2626' }}>
+                          {c.activeStubs > 0 ? `✓ ${c.activeStubs} stub(s)` : '✗ No active stub'}
+                        </span>
+                        {!['Active','LeverageGranted','SaleWon','Hold'].includes(c.lifecycle) && (
+                          <span style={{ color: '#d97706', fontSize: 11 }}>→ Move to Active/SaleWon to appear on Team Board</span>
+                        )}
+                        {['Active','LeverageGranted','SaleWon','Hold'].includes(c.lifecycle) && c.activeStubs === 0 && (
+                          <span style={{ color: '#d97706', fontSize: 11 }}>→ Click "Fix stubs" above to create stub</span>
+                        )}
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+            </div>
 
             {smtpHealth && (
               <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse', marginTop: 4 }}>
