@@ -114,9 +114,11 @@
     /* Smooth theme swap — apply to every property that could change */
     transition: background-color 280ms ease, color 200ms ease;
   }
-  /* Per-element soft transition so the morning/evening swap feels alive */
-  *, *::before, *::after {
-    transition: background-color 200ms ease, border-color 200ms ease, color 150ms ease;
+  /* Soft color transition ONLY on theme-aware elements — not all DOM nodes.
+     Keeping this on * causes jank when large tables re-render (e.g. SessionLogs).
+     Individual interactive elements declare their own transitions below. */
+  :root, body, .sidebar, .topbar, .card, .table-card, .bg-card, .bg-input {
+    transition: background-color 220ms ease, border-color 220ms ease, color 180ms ease;
   }
   /* Reduce-motion users skip the animation entirely */
   @media (prefers-reduced-motion: reduce) {
@@ -561,6 +563,12 @@
   left: 100%;
 }
 
+/* Skeleton loading shimmer */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
 /* Subtle "breathing" pulse — for live status indicators */
 @keyframes mits-breathe {
   0%, 100% { opacity: 1;    transform: scale(1); }
@@ -704,3 +712,29 @@
   pointer-events: none;
 }
 .btn-shimmer:hover::before { left: 130%; }
+
+/* ── Mobile responsiveness ──────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Reduce page header font size */
+  .h-page { font-size: 15px; }
+
+  /* KPI grid: force 2-col on mobile */
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* Cards: reduce padding */
+  .card { padding: 12px 14px !important; }
+  .card-accent { padding: 12px 14px !important; }
+
+  /* Table cards: reduce internal cell padding */
+  .table-card th,
+  .table-card td { padding: 8px 10px !important; font-size: 11px !important; }
+
+  /* Filter / action row wrapping */
+  .topbar-actions { flex-wrap: wrap !important; gap: 6px !important; }
+
+  /* Page padding tightened further */
+  .px-4 { padding-left: 12px !important; padding-right: 12px !important; }
+}

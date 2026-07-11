@@ -1,4 +1,22 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, Component, ReactNode } from 'react';
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 12, padding: 32, textAlign: 'center' }}>
+          <div style={{ fontSize: 32 }}>⚠️</div>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>Something went wrong</div>
+          <div style={{ fontSize: 13, color: 'var(--brand-textMuted)', maxWidth: 400 }}>{(this.state.error as Error).message}</div>
+          <button onClick={() => window.location.reload()} style={{ marginTop: 8, padding: '8px 20px', borderRadius: 8, background: 'var(--brand-primary)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Reload page</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from '@/store/auth';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -99,6 +117,7 @@ export default function App() {
   }, [refresh]);
 
   return (
+    <ErrorBoundary>
     <Suspense fallback={null}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
@@ -174,5 +193,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 }

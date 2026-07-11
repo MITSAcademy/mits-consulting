@@ -61,7 +61,7 @@ export function FeedbackPage() {
   const isCurrentWeek = selectedWeek === currentWeek;
 
   // Fetch feedback records for the selected week only
-  const { data: fb } = useQuery({
+  const { data: fb, isLoading: fbLoading } = useQuery({
     queryKey: ['feedback', selectedWeek],
     queryFn: () => api.get('/feedback', { params: { weekStart: selectedWeek } }).then((r) => r.data),
   });
@@ -242,7 +242,7 @@ export function FeedbackPage() {
           ><ChevronLeft size={14} /></button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 14px', borderRadius: 8, background: isCurrentWeek ? 'rgba(99,102,241,0.12)' : 'var(--bg-input)', border: `1px solid ${isCurrentWeek ? 'var(--brand-primary)' : 'var(--brand-borderSoft)'}`, fontSize: 13, fontWeight: 600, color: isCurrentWeek ? 'var(--brand-primary)' : 'var(--brand-text)' }}>
             {isCurrentWeek && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--brand-primary)', display: 'inline-block' }} />}
-            {isCurrentWeek ? 'This week' : 'Past week'} · {fmtWeekRange(selectedWeek)}
+            {isCurrentWeek ? 'This week' : selectedWeek === addWeeks(currentWeek, -1) ? 'Last week' : 'Past'} · {fmtWeekRange(selectedWeek)}
           </div>
           <button
             onClick={() => setSelectedWeek(w => addWeeks(w, 1))}
@@ -283,6 +283,17 @@ export function FeedbackPage() {
           )}
         </div>
 
+        {fbLoading ? (
+          <div className="table-card" style={{ padding: '16px 20px' }}>
+            {[...Array(5)].map((_, i) => (
+              <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 14, alignItems: 'center' }}>
+                <div style={{ height: 20, borderRadius: 4, background: 'var(--bg-input)', flex: '0 0 140px', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                <div style={{ height: 20, borderRadius: 4, background: 'var(--bg-input)', flex: '0 0 100px', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                <div style={{ height: 20, borderRadius: 4, background: 'var(--bg-input)', flex: 1, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              </div>
+            ))}
+          </div>
+        ) : (
         <div className="table-card">
           <table>
             <thead>
@@ -297,7 +308,9 @@ export function FeedbackPage() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={6}><EmptyState icon={MessageSquare} tone="gold" title="No clients yet" description="Clients appear here once assigned in My Sessions." /></td></tr>
+                <tr><td colSpan={6}><EmptyState icon={MessageSquare} tone="gold"
+                  title={search || filterStatus ? 'No matching clients' : 'No clients yet'}
+                  description={search || filterStatus ? 'Try adjusting your search or filters.' : 'Clients appear here once assigned in My Sessions.'} /></td></tr>
               ) : filtered.map((c) => {
                 const fbRec = fbByClient.get(c.id);
                 const phone = c.phoneCode && c.phoneDigits ? `${c.phoneCode}${c.phoneDigits}` : null;
@@ -405,6 +418,7 @@ export function FeedbackPage() {
             </tbody>
           </table>
         </div>
+        )}
 
         {/* Edit dialog */}
         {editRow && (

@@ -240,13 +240,13 @@ export function SessionLogsPage() {
   const canLog = LOG_ROLES.includes(user.role);
 
   // Existing session logs
-  const { data: logs } = useQuery({
+  const { data: logs, isLoading: logsLoading } = useQuery({
     queryKey: ['session-logs'],
     queryFn: () => api.get('/session-logs').then((r) => r.data),
   });
 
   // Active trainings (same source as My Sessions) — used for the inline log table
-  const { data: trainings } = useQuery({
+  const { data: trainings, isLoading: trainingsLoading } = useQuery({
     queryKey: ['my-sessions-sheet'],
     queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
     enabled: canLog,
@@ -258,6 +258,13 @@ export function SessionLogsPage() {
     queryFn: () => api.get('/trainers').then((r) => r.data.filter((t: any) => t.active)),
     enabled: canLog,
   });
+
+  // History pagination
+  const [historyPage, setHistoryPage] = useState(1);
+  const HISTORY_PAGE_SIZE = 30;
+
+  // Delete confirmation state
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   // De-duped client rows from trainings — one per unique client, keeping trainer info
   const clientRows = useMemo(() => {
@@ -368,6 +375,26 @@ export function SessionLogsPage() {
         </datalist>
 
         {/* ── Section 1: Inline log table ─────────────────────────────────── */}
+        {canLog && trainingsLoading && (
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--brand-textMuted)', marginBottom: 10 }}>Log a session</div>
+            <div className="table-card" style={{ padding: '16px 20px' }}>
+              {[...Array(5)].map((_, i) => (
+                <div key={i} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
+                  <div style={{ height: 28, borderRadius: 6, background: 'var(--bg-input)', flex: '0 0 120px', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  <div style={{ height: 28, borderRadius: 6, background: 'var(--bg-input)', flex: '0 0 120px', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  <div style={{ height: 28, borderRadius: 6, background: 'var(--bg-input)', flex: 1, animation: 'pulse 1.5s ease-in-out infinite' }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {canLog && !trainingsLoading && clientRows.length === 0 && (
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--brand-textMuted)', marginBottom: 10 }}>Log a session</div>
+            <EmptyState icon={ClipboardList} tone="grey" title="No clients assigned" description="You don't have any active client trainings assigned yet. Contact your coordinator." />
+          </div>
+        )}
         {canLog && clientRows.length > 0 && (
           <div style={{ marginBottom: 32 }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--brand-textMuted)', marginBottom: 10 }}>
@@ -481,13 +508,27 @@ export function SessionLogsPage() {
                             : <span className="muted text-[11px]">—</span>}
                         </td>
 
-                        {/* Log button */}
-                        <td>
-                          <Button size="sm" variant="primary"
-                            disabled={!canSubmit || busy}
-                            onClick={() => submitRow(cr)}>
-                            {busy ? '…' : 'Log'}
-                          </Button>
+                        {/* Log button + validation hint */}
+                        <td style={{ minWidth: 90 }}>
+                          <div className="flex flex-col gap-1">
+                            <Button size="sm" variant="primary"
+                              disabled={!canSubmit || busy}
+                              title={!canSubmit && !busy ? (
+                                !row.trainerId ? 'Select a trainer first' :
+                                row.sessionHappened && durationToDecimal(row.durH, row.durM) === 0 ? 'Set session duration' :
+                                row.sessionHappened && !row.feedback ? 'Pick a feedback rating' : ''
+                              ) : ''}
+                              onClick={() => submitRow(cr)}>
+                              {busy ? '…' : 'Log'}
+                            </Button>
+                            {!canSubmit && !busy && (
+                              <span style={{ fontSize: 10, color: 'var(--brand-textMuted)', lineHeight: 1.3 }}>
+                                {!row.trainerId ? 'Select trainer' :
+                                 row.sessionHappened && durationToDecimal(row.durH, row.durM) === 0 ? 'Set duration' :
+                                 row.sessionHappened && !row.feedback ? 'Pick feedback' : ''}
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -500,79 +541,110 @@ export function SessionLogsPage() {
 
         {/* ── Section 2: Existing session logs ───────────────────────────── */}
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--brand-textMuted)', marginBottom: 10 }}>
-            Session history
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--brand-textMuted)' }}>
+              Session history {(logs || []).length > 0 && <span style={{ fontWeight: 400 }}>· {(logs || []).length} entries</span>}
+            </div>
           </div>
-          {(logs || []).length === 0 ? (
+          {logsLoading ? (
+            <div className="table-card" style={{ padding: '16px 20px' }}>
+              {[...Array(6)].map((_, i) => (
+                <div key={i} style={{ display: 'flex', gap: 16, marginBottom: 12, alignItems: 'center' }}>
+                  <div style={{ height: 20, borderRadius: 4, background: 'var(--bg-input)', flex: '0 0 100px', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  <div style={{ height: 20, borderRadius: 4, background: 'var(--bg-input)', flex: '0 0 80px', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  <div style={{ height: 20, borderRadius: 4, background: 'var(--bg-input)', flex: 1, animation: 'pulse 1.5s ease-in-out infinite' }} />
+                  <div style={{ height: 20, borderRadius: 4, background: 'var(--bg-input)', flex: '0 0 60px', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                </div>
+              ))}
+            </div>
+          ) : (logs || []).length === 0 ? (
             <EmptyState icon={ClipboardList} tone="grey" title="No session logs yet"
               description="Use the table above to log your first session." />
           ) : (
-            <div className="table-card">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Client Name</th>
-                    <th>Trainer Name</th>
-                    <th>Assigned Coordinator</th>
-                    <th>Session Happened</th>
-                    <th>Cancelled By</th>
-                    <th>Date</th>
-                    <th>Duration (HH:MM)</th>
-                    <th>Session Feedback</th>
-                    <th>Session Logged</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(logs || []).map((l: any) => {
-                    const { h, m } = decimalToDuration(l.hours || 0);
-                    const dur = l.sessionHappened === false
-                      ? '—'
-                      : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-                    const coordinator = l.client?.hostOwner?.name || '—';
-                    return (
-                      <tr key={l.id}>
-                        <td>
-                          {l.client
-                            ? <Link to={`/clients/${l.client.id}`} className="hover:underline font-medium text-[12px]">{l.client.name}</Link>
-                            : <span className="muted text-[12px]">—</span>}
-                        </td>
-                        <td className="text-[12px]">{l.trainer?.name || '—'}</td>
-                        <td className="text-[12px] muted">{coordinator}</td>
-                        <td>
-                          {l.sessionHappened === false
-                            ? <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>No</span>
-                            : <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>Yes</span>}
-                        </td>
-                        <td className="text-[12px] capitalize muted">{l.cancelledBy || '—'}</td>
-                        <td className="mono text-[12px]">{l.date}</td>
-                        <td className="mono text-[12px]">{dur}</td>
-                        <td>
-                          {l.sessionHappened === false
-                            ? <span className="muted text-[11px]">—</span>
-                            : <FeedbackBadge value={l.feedback} />}
-                        </td>
-                        <td>
-                          <div className="flex items-center gap-1">
-                            <span style={{ fontSize: 14 }}>🟢</span>
-                            <span className="text-[11px] font-semibold" style={{ color: '#22c55e' }}>Logged</span>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="flex gap-1">
-                            <Button size="sm" onClick={() => setEditLog(l)}>Edit</Button>
-                            <Button size="sm" variant="danger"
-                              onClick={() => { if (confirm('Delete this session log?')) delLog.mutate(l.id); }}>
-                              Delete
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="table-card" style={{ overflowX: 'auto' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Client Name</th>
+                      <th>Trainer Name</th>
+                      <th>Assigned Coordinator</th>
+                      <th>Session Happened</th>
+                      <th>Cancelled By</th>
+                      <th>Date</th>
+                      <th>Duration (HH:MM)</th>
+                      <th>Session Feedback</th>
+                      <th>Session Logged</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(logs || []).slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE).map((l: any) => {
+                      const { h, m } = decimalToDuration(l.hours || 0);
+                      const dur = l.sessionHappened === false
+                        ? '—'
+                        : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                      const coordinator = l.client?.hostOwner?.name || '—';
+                      const isDeleting = deleteConfirm === l.id;
+                      return (
+                        <tr key={l.id} style={isDeleting ? { background: 'rgba(239,68,68,0.06)' } : undefined}>
+                          <td>
+                            {l.client
+                              ? <Link to={`/clients/${l.client.id}`} className="hover:underline font-medium text-[12px]">{l.client.name}</Link>
+                              : <span className="muted text-[12px]">—</span>}
+                          </td>
+                          <td className="text-[12px]">{l.trainer?.name || '—'}</td>
+                          <td className="text-[12px] muted">{coordinator}</td>
+                          <td>
+                            {l.sessionHappened === false
+                              ? <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(239,68,68,0.12)', color: '#ef4444' }}>No</span>
+                              : <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e' }}>Yes</span>}
+                          </td>
+                          <td className="text-[12px] capitalize muted">{l.cancelledBy || '—'}</td>
+                          <td className="mono text-[12px]">{l.date}</td>
+                          <td className="mono text-[12px]">{dur}</td>
+                          <td>
+                            {l.sessionHappened === false
+                              ? <span className="muted text-[11px]">—</span>
+                              : <FeedbackBadge value={l.feedback} />}
+                          </td>
+                          <td>
+                            <div className="flex items-center gap-1">
+                              <span style={{ fontSize: 14 }}>🟢</span>
+                              <span className="text-[11px] font-semibold" style={{ color: '#22c55e' }}>Logged</span>
+                            </div>
+                          </td>
+                          <td>
+                            {isDeleting ? (
+                              <div className="flex items-center gap-1">
+                                <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 600, whiteSpace: 'nowrap' }}>Delete?</span>
+                                <Button size="sm" variant="danger" onClick={() => { setDeleteConfirm(null); delLog.mutate(l.id); }}>Yes</Button>
+                                <Button size="sm" onClick={() => setDeleteConfirm(null)}>No</Button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1">
+                                <Button size="sm" onClick={() => setEditLog(l)}>Edit</Button>
+                                <Button size="sm" variant="danger" onClick={() => setDeleteConfirm(l.id)}>Delete</Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {/* Pagination */}
+              {(logs || []).length > HISTORY_PAGE_SIZE && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 }}>
+                  <Button size="sm" variant="ghost" onClick={() => setHistoryPage(p => Math.max(1, p - 1))} disabled={historyPage === 1}>← Prev</Button>
+                  <span style={{ fontSize: 12, color: 'var(--brand-textMuted)' }}>
+                    Page {historyPage} of {Math.ceil((logs || []).length / HISTORY_PAGE_SIZE)}
+                  </span>
+                  <Button size="sm" variant="ghost" onClick={() => setHistoryPage(p => Math.min(Math.ceil((logs || []).length / HISTORY_PAGE_SIZE), p + 1))} disabled={historyPage >= Math.ceil((logs || []).length / HISTORY_PAGE_SIZE)}>Next →</Button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </Page>
