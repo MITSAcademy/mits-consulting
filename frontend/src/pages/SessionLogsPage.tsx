@@ -65,6 +65,7 @@ function FeedbackPicker({ value, onChange }: { value: Feedback | ''; onChange: (
    State is keyed by regularTraining id.
 ────────────────────────────────────────────────────────────────────────────*/
 interface RowState {
+  _trainerSearch?: string;
   sessionHappened: boolean;
   cancelledBy: 'trainer' | 'client' | '';
   date: string;
@@ -359,6 +360,13 @@ export function SessionLogsPage() {
       />
       <Page>
 
+        {/* Shared trainer datalist — rendered once, shared by all inline rows */}
+        <datalist id="trainer-datalist">
+          {(allTrainers as any[] || []).map((t: any) => (
+            <option key={t.id} value={t.name} />
+          ))}
+        </datalist>
+
         {/* ── Section 1: Inline log table ─────────────────────────────────── */}
         {canLog && clientRows.length > 0 && (
           <div style={{ marginBottom: 32 }}>
@@ -395,15 +403,25 @@ export function SessionLogsPage() {
                           </Link>
                         </td>
 
-                        {/* Trainer — dropdown */}
+                        {/* Trainer — typeahead backed by shared datalist (avoids N×M DOM nodes) */}
                         <td>
-                          <select style={inlineSel} value={row.trainerId}
-                            onChange={(e) => setRow(cr.trainingId, { trainerId: e.target.value }, cr.trainerId)}>
-                            <option value="">— select —</option>
-                            {(allTrainers as any[] || []).map((t: any) => (
-                              <option key={t.id} value={t.id}>{t.name}</option>
-                            ))}
-                          </select>
+                          {(() => {
+                            const trainers = (allTrainers as any[] || []);
+                            const picked = trainers.find((t: any) => t.id === row.trainerId);
+                            return (
+                              <input
+                                list="trainer-datalist"
+                                style={inlineSel}
+                                placeholder="— select —"
+                                value={picked ? picked.name : (row._trainerSearch ?? '')}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const match = trainers.find((t: any) => t.name === val);
+                                  setRow(cr.trainingId, { trainerId: match ? match.id : '', _trainerSearch: val } as any, cr.trainerId);
+                                }}
+                              />
+                            );
+                          })()}
                         </td>
 
                         {/* Coordinator */}
