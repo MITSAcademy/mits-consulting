@@ -154,6 +154,14 @@ export function MySessionsPage() {
     enabled: isAM,
   });
 
+  const { data: amUsers } = useQuery({
+    queryKey: ['users', 'account_managers'],
+    queryFn: () => api.get('/users').then((r) => r.data),
+    select: (data: any[]) => data.filter((u) => u.role === 'account_manager'),
+    enabled: isAM,
+  });
+  const AM_HOSTS_DIALOG = amUsers || [];
+
   const todayTasks = (tasks || []).filter((t: any) => t.dueDate === today && t.status !== 'Done');
   const overdueTasks = (tasks || []).filter((t: any) => t.dueDate && t.dueDate < today && t.status !== 'Done');
 
@@ -392,8 +400,8 @@ export function MySessionsPage() {
           <DialogContent title="Send daily session sheet" description="This will email today's session sheet to the team. This action is logged.">
             <div className="rounded-lg px-4 py-3 text-[12px]" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
               <div className="font-semibold mb-1" style={{ color: 'var(--brand-text)' }}>Recipients</div>
-              <div className="muted">To: Kashish, Muskan</div>
-              <div className="muted">CC: Samita, Vaibhav, Mitali, Kashish, Muskan</div>
+              <div className="muted">To: {AM_HOSTS_DIALOG.map((u: any) => u.name).join(', ') || 'Account managers'}</div>
+              <div className="muted">CC: Team leads</div>
               <div className="mt-2 font-semibold" style={{ color: 'var(--brand-text)' }}>{(mySessions || []).length} sessions will be included</div>
             </div>
             <DialogFooter>
@@ -802,10 +810,6 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
   );
 }
 
-const AM_HOSTS = [
-  { id: 'u-kashish', name: 'Kashish' },
-  { id: 'u-muskan',  name: 'Muskan'  },
-];
 
 function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: () => void; coordinatorTrainers?: any[] }) {
   const qc = useQueryClient();
@@ -813,6 +817,13 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
   const rowUser = useAuth((s) => s.user)!;
   const hasComment = !!(t.lastSessionComment && t.lastSessionComment.trim());
   const isUnassigned = !t.hostedByDefault;
+
+  const { data: amUsersRow } = useQuery({
+    queryKey: ['users', 'account_managers'],
+    queryFn: () => api.get('/users').then((r) => r.data),
+    select: (data: any[]) => data.filter((u) => u.role === 'account_manager'),
+  });
+  const AM_HOSTS = amUsersRow || [];
 
   const rowBg = isUnassigned ? 'rgba(251,191,36,0.07)' : hasComment ? 'rgba(200,30,30,0.82)' : 'var(--bg-card)';
   const rowColor = hasComment ? '#fff' : 'var(--brand-text)';

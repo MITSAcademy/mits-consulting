@@ -34,7 +34,7 @@ export function ClientsPage() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 60;
 
-  const { data: clientsResp } = useQuery({
+  const { data: clientsResp, isLoading: clientsLoading } = useQuery({
     queryKey: ['clients', search, page],
     queryFn: () => api.get('/clients', { params: { search, page, pageSize: PAGE_SIZE } }).then((r) => r.data),
     placeholderData: (prev) => prev,
@@ -43,6 +43,15 @@ export function ClientsPage() {
     queryKey: ['sources'],
     queryFn: () => api.get('/sources').then((r) => r.data),
   });
+  const { data: users } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api.get('/users').then((r) => r.data),
+  });
+  const staffUserIds = new Set(
+    (users || [])
+      .filter((u: any) => ['staff', 'account_manager'].includes(u.role))
+      .map((u: any) => u.id)
+  );
 
   const [form, setForm] = useState({
     name: '', phoneCode: '+1', phoneDigits: '', email: '',
@@ -83,7 +92,7 @@ export function ClientsPage() {
       return (c.sourcingRequests || []).some((r: any) => r.sentToId === user.id);
     }
     if (user.role === 'sales_closer') return c.salesOwnerId === user.id;
-    if (user.role === 'lead') return ['u-bhavneet', 'u-kashish', 'u-muskan'].includes(c.hostOwnerId);
+    if (user.role === 'lead') return staffUserIds.has(c.hostOwnerId);
     if (user.role === 'staff') return c.hostOwnerId === user.id;
     return true;
   };
@@ -214,7 +223,12 @@ export function ClientsPage() {
               </tr>
             </thead>
             <tbody>
-              {list.map((c: any) => (
+              {clientsLoading && (
+                <tr>
+                  <td colSpan={showAmt ? 7 : 6} className="text-center py-8 muted text-[13px]">Loading…</td>
+                </tr>
+              )}
+              {!clientsLoading && list.map((c: any) => (
                 <tr key={c.id} className="clickable">
                   <td>
                     <Link to={`/clients/${c.id}`}>
@@ -254,7 +268,7 @@ export function ClientsPage() {
                   </td>
                 </tr>
               ))}
-              {list.length === 0 && (
+              {!clientsLoading && list.length === 0 && (
                 <tr>
                   <td colSpan={showAmt ? 7 : 6}>
                     <EmptyState
