@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from './prisma';
+import { recordForbidden } from './rbacLog';
 
 // Hard refuse to boot in production with the dev fallback — accidentally
 // running without JWT_SECRET in prod would issue tokens any GitHub stalker
@@ -75,7 +76,16 @@ export async function verifyAndGetUser(token: string) {
 export function requireRole(...roles: string[]) {
   return (req: AuthedRequest, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
-    if (!roles.includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+    if (!roles.includes(req.user.role)) {
+      recordForbidden({
+        method: req.method,
+        path: req.path,
+        role: req.user.role,
+        userId: req.user.id,
+        userName: req.user.name,
+      });
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     next();
   };
 }

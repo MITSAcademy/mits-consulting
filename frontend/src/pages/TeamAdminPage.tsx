@@ -9,7 +9,7 @@ import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { ROLE_LABELS } from '@/lib/utils';
-import { Mail, ShieldCheck, RefreshCw, BellRing, FileText } from 'lucide-react';
+import { Mail, ShieldCheck, RefreshCw, BellRing, FileText, Activity } from 'lucide-react';
 
 export function TeamAdminPage() {
   const qc = useQueryClient();
@@ -28,6 +28,12 @@ export function TeamAdminPage() {
   });
 
   const [smtpHealth, setSmtpHealth] = useState<any[] | null>(null);
+  const [rbacHealth, setRbacHealth] = useState<{ summary: any[]; recentCount: number } | null>(null);
+  const checkRbac = useMutation({
+    mutationFn: () => api.get('/internal/rbac-health'),
+    onSuccess: (r) => setRbacHealth(r.data),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+  });
   const retriggerFreelance = useMutation({
     mutationFn: () => api.post('/internal/retrigger-freelance-notifications', {}),
     onSuccess: (r) => showToast(`Sent ${r.data.requirements} open requirement${r.data.requirements !== 1 ? 's' : ''} to ${r.data.sent} recruiter${r.data.sent !== 1 ? 's' : ''}`),
@@ -290,6 +296,52 @@ export function TeamAdminPage() {
                   ))}
                 </tbody>
               </table>
+            )}
+
+            {/* RBAC health check */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', borderTop: '1px solid var(--brand-border)', paddingTop: 20 }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Permission error log (last 24h)</div>
+                <div style={{ fontSize: 13, color: 'var(--brand-textMuted)', maxWidth: 460 }}>
+                  Shows which roles are hitting 403 Forbidden errors — surfaces missing permissions before users report them.
+                </div>
+              </div>
+              <Button variant="default" onClick={() => checkRbac.mutate()} disabled={checkRbac.isPending} loading={checkRbac.isPending}>
+                <Activity size={14} style={{ marginRight: 6 }} />Check permission log
+              </Button>
+            </div>
+            {rbacHealth && (
+              <div style={{ marginTop: 4, fontSize: 12, background: 'var(--bg-input)', borderRadius: 8, padding: '12px 16px' }}>
+                {rbacHealth.summary.length === 0 ? (
+                  <div style={{ color: 'var(--status-green)', fontWeight: 600 }}>✓ No permission errors in the last 24 hours.</div>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: 8, color: 'var(--status-amber)', fontWeight: 600 }}>
+                      {rbacHealth.summary.length} unique role/route combinations hit 403 in the last 24h ({rbacHealth.recentCount} in last hour):
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          {['Count', 'Role', 'Method', 'Path', 'Last seen'].map((h) => (
+                            <th key={h} style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--brand-textMuted)', fontWeight: 500, borderBottom: '1px solid var(--brand-border)', fontSize: 11 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rbacHealth.summary.map((row: any, i: number) => (
+                          <tr key={i} style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
+                            <td style={{ padding: '5px 8px', fontWeight: 700, color: row.count > 5 ? 'var(--status-red)' : 'var(--status-amber)' }}>{row.count}</td>
+                            <td style={{ padding: '5px 8px', fontFamily: 'monospace', fontSize: 11 }}>{row.role}</td>
+                            <td style={{ padding: '5px 8px', fontFamily: 'monospace', fontSize: 11, color: 'var(--brand-textMuted)' }}>{row.method}</td>
+                            <td style={{ padding: '5px 8px', fontFamily: 'monospace', fontSize: 11 }}>{row.path}</td>
+                            <td style={{ padding: '5px 8px', color: 'var(--brand-textMuted)', fontSize: 11 }}>{new Date(row.lastSeen).toLocaleTimeString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>

@@ -12,8 +12,91 @@ import {
   Notebook, ChartLine, Upload, Inbox, Edit, UsersRound, Mail, Tag, LockKeyhole,
   Building2, History, Settings, LogOut, Moon, Calendar, ChevronsLeft, ChevronsRight,
   TableProperties, CalendarDays, AlertTriangle, Link, BarChart2, BarChart3, ToggleRight,
+  Sparkles, X,
   type LucideIcon,
 } from 'lucide-react';
+
+/* ── What's New changelog entries — newest first ─────────────────────────── */
+const CHANGELOG = [
+  { date: 'Jul 12', text: 'Duplicate client/trainer prevention — 409 warning on create' },
+  { date: 'Jul 12', text: 'RBAC health check — 403 errors now tracked in Admin panel' },
+  { date: 'Jul 12', text: 'Toast queue — up to 4 alerts stack, now with info/warning types' },
+  { date: 'Jul 11', text: 'Session Logs: inline delete confirm, pagination, loading skeleton' },
+  { date: 'Jul 11', text: 'Homepage KPIs: sparklines, number counter, click-through drill-downs' },
+  { date: 'Jul 11', text: 'Button loading spinner — see progress on every save action' },
+  { date: 'Jul 10', text: 'Feedback sheet: week navigator, read-only history, loading state' },
+  { date: 'Jul 10', text: 'Freelance Requirements: unlimited trainer proposals per requirement' },
+  { date: 'Jul 10', text: 'Direct stage change to JBT/Training Employer Pays Later from RP/CP' },
+];
+
+const CHANGELOG_KEY = 'mits_changelog_seen';
+
+function WhatsNew({ collapsed }: { collapsed: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [hasNew, setHasNew] = useState(false);
+
+  useEffect(() => {
+    const seen = localStorage.getItem(CHANGELOG_KEY);
+    setHasNew(seen !== CHANGELOG[0].date + CHANGELOG[0].text);
+  }, []);
+
+  function markSeen() {
+    localStorage.setItem(CHANGELOG_KEY, CHANGELOG[0].date + CHANGELOG[0].text);
+    setHasNew(false);
+  }
+
+  if (collapsed) return null;
+
+  return (
+    <div className="mx-2 mb-2 flex-shrink-0">
+      <button
+        onClick={() => { setOpen((o) => !o); if (!open) markSeen(); }}
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors"
+        style={{
+          background: open ? 'rgba(229,178,76,0.12)' : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${open ? 'rgba(229,178,76,0.25)' : 'rgba(255,255,255,0.07)'}`,
+          color: 'rgba(232,226,211,0.75)',
+        }}
+      >
+        <Sparkles size={12} style={{ color: hasNew ? '#E5B24C' : 'rgba(229,178,76,0.5)', flexShrink: 0 }} />
+        <span className="flex-1 text-left">What's new</span>
+        {hasNew && (
+          <span
+            className="text-[9px] px-1.5 py-px rounded-full font-bold"
+            style={{ background: '#E5B24C', color: '#0F1115' }}
+          >
+            NEW
+          </span>
+        )}
+      </button>
+      {open && (
+        <div
+          className="mt-1.5 rounded-lg overflow-hidden"
+          style={{
+            background: 'rgba(8,9,15,0.8)',
+            border: '1px solid rgba(229,178,76,0.18)',
+            animation: 'fadeUp 180ms cubic-bezier(0.2,0.9,0.25,1) both',
+          }}
+        >
+          <div className="flex items-center justify-between px-3 py-2" style={{ borderBottom: '1px solid rgba(229,178,76,0.1)' }}>
+            <span className="text-[10px] font-bold uppercase tracking-[0.1em]" style={{ color: 'rgba(229,178,76,0.7)' }}>Recent updates</span>
+            <button onClick={() => setOpen(false)} style={{ color: 'rgba(232,226,211,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+              <X size={11} />
+            </button>
+          </div>
+          <div className="py-1" style={{ maxHeight: 220, overflowY: 'auto' }}>
+            {CHANGELOG.map((entry, i) => (
+              <div key={i} className="flex gap-2 px-3 py-1.5" style={{ borderBottom: i < CHANGELOG.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+                <span className="text-[9px] font-bold flex-shrink-0 mt-0.5" style={{ color: 'rgba(229,178,76,0.55)', minWidth: 36 }}>{entry.date}</span>
+                <span className="text-[11px] leading-snug" style={{ color: 'rgba(232,226,211,0.65)' }}>{entry.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface NavItem {
   section: string;
@@ -388,6 +471,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
             )}
           </div>
         )}
+
+        <WhatsNew collapsed={collapsed} />
 
         {/* User footer */}
         <div

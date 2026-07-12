@@ -444,6 +444,13 @@ app.post('/api/internal/send-payment-report', requireAuth, requireRole('founder'
   }
 });
 
+app.get('/api/internal/rbac-health', requireAuth, requireRole('founder', 'manager'), (_req, res) => {
+  const { getForbiddenSummary, getRecentForbidden } = require('./lib/rbacLog');
+  const summary = getForbiddenSummary(24);
+  const recent = getRecentForbidden(1);
+  res.json({ summary, recentCount: recent.length, windowHours: 24 });
+});
+
 // Founder-only: check SMTP health for all configured users (verify transporter auth)
 app.get('/api/internal/smtp-health', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
