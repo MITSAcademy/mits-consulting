@@ -4,8 +4,9 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Avatar } from '@/components/ui/avatar';
 
 export function ReportsDashboardPage() {
-  const { data: reports } = useQuery({ queryKey: ['reports'], queryFn: () => api.get('/reports').then((r) => r.data) });
-  const { data: users } = useQuery({ queryKey: ['users'], queryFn: () => api.get('/users').then((r) => r.data) });
+  const { data: reports, isLoading: reportsLoading } = useQuery({ queryKey: ['reports'], queryFn: () => api.get('/reports').then((r) => r.data) });
+  const { data: users, isLoading: usersLoading } = useQuery({ queryKey: ['users'], queryFn: () => api.get('/users').then((r) => r.data) });
+  const isLoading = reportsLoading || usersLoading;
 
   const byUser: Record<string, any[]> = {};
   (reports || []).forEach((r: any) => {
@@ -16,6 +17,10 @@ export function ReportsDashboardPage() {
     <>
       <Topbar title="Reports dashboard" subtitle={`${reports?.length || 0} total reports`} />
       <Page>
+        {isLoading && <div className="muted text-sm py-8 text-center">Loading reports…</div>}
+        {!isLoading && (users || []).filter((u: any) => u.active).length === 0 && (
+          <div className="muted text-sm p-4 text-center">No active users found.</div>
+        )}
         <div className="grid md:grid-cols-2 gap-3">
           {(users || []).filter((u: any) => u.active).map((u: any) => {
             const list = byUser[u.id] || [];

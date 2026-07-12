@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { RefreshCw } from 'lucide-react';
 
 export function RenewalsPage() {
-  const { data } = useQuery({ queryKey: ['clients'], queryFn: () => api.get('/clients').then((r) => r.data) });
+  const { data, isLoading } = useQuery({ queryKey: ['clients'], queryFn: () => api.get('/clients').then((r) => r.data) });
   const today = todayISO();
   const active = (data || []).filter((c: any) => c.lifecycle === 'Active' && c.nextRenewalDue);
   const sorted = [...active].sort((a, b) => (a.nextRenewalDue || '').localeCompare(b.nextRenewalDue || ''));
@@ -24,6 +24,7 @@ export function RenewalsPage() {
     <>
       <Topbar title="Renewals" subtitle={`${active.length} active · ${overdue} overdue · ${dueWeek} this week`} />
       <Page>
+        {isLoading && <div className="muted text-sm py-8 text-center">Loading clients…</div>}
         <div className="table-card">
           <table>
             <thead><tr><th>Client</th><th>Next due</th><th>Sessions</th><th>Risk</th><th>Amount</th><th>Trainer</th></tr></thead>

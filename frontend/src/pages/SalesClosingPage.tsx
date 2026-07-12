@@ -172,7 +172,7 @@ function TileBoard({ items }: { items: any[] }) {
 
 export function SalesClosingPage() {
   const user = useAuth((s) => s.user)!;
-  const { data } = useQuery({ queryKey: ['clients'], queryFn: () => api.get('/clients').then((r) => r.data) });
+  const { data, isLoading } = useQuery({ queryKey: ['clients'], queryFn: () => api.get('/clients').then((r) => r.data) });
   const [search, setSearch] = useState('');
 
   const all = (data || []) as any[];
@@ -205,6 +205,7 @@ export function SalesClosingPage() {
         }
       />
       <Page>
+        {isLoading && <div className="muted text-sm py-8 text-center">Loading clients…</div>}
 
 
         {items.length === 0 ? (

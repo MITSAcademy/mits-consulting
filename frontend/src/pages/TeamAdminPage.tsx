@@ -4,7 +4,7 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
@@ -14,9 +14,10 @@ import { Mail, ShieldCheck, RefreshCw, BellRing, FileText, Activity, Send } from
 export function TeamAdminPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const { data } = useQuery({ queryKey: ['users'], queryFn: () => api.get('/users').then((r) => r.data) });
+  const { data, isLoading } = useQuery({ queryKey: ['users'], queryFn: () => api.get('/users').then((r) => r.data) });
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ name: '', email: '', password: '', role: 'staff', reportsToId: '' });
+  useEffect(() => { if (!open) setF({ name: '', email: '', password: '', role: 'staff', reportsToId: '' }); }, [open]);
   const create = useMutation({
     mutationFn: () => api.post('/users', f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); setOpen(false); showToast('Added'); },
@@ -25,6 +26,7 @@ export function TeamAdminPage() {
   const setActive = useMutation({
     mutationFn: ({ id, active }: any) => api.patch(`/users/${id}`, { active }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+    onError: () => showToast('Failed to update user', 'error'),
   });
 
   const [smtpHealth, setSmtpHealth] = useState<any[] | null>(null);
@@ -93,11 +95,12 @@ export function TeamAdminPage() {
               <div className="form-row"><Label>Role</Label><Select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>{Object.entries(ROLE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></div>
               <div className="form-row md:col-span-2"><Label>Reports to</Label><Select value={f.reportsToId} onChange={(e) => setF({ ...f, reportsToId: e.target.value })}><option value="">— None —</option>{(data || []).map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select></div>
             </div>
-            <DialogFooter><Button onClick={() => setOpen(false)}>Cancel</Button><Button variant="primary" disabled={!f.name || !f.email || !f.password} onClick={() => create.mutate()}>Create</Button></DialogFooter>
+            <DialogFooter><Button onClick={() => setOpen(false)}>Cancel</Button><Button variant="primary" disabled={!f.name || !f.email || !f.password || create.isPending} onClick={() => create.mutate()}>Create</Button></DialogFooter>
           </DialogContent>
         </Dialog>
       } />
       <Page>
+        {isLoading && <div className="muted text-sm py-8 text-center">Loading users…</div>}
         <div className="table-card">
           <table>
             <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Reports to</th><th>Active</th></tr></thead>

@@ -63,7 +63,7 @@ interface FollowUpsResponse {
 export function RoshniFollowUpsPage() {
   const currentUser = useAuth((s: any) => s.user);
   const isSalesCloser = currentUser?.role === 'sales_closer';
-  const { data } = useQuery<FollowUpsResponse>({
+  const { data, isLoading } = useQuery<FollowUpsResponse>({
     queryKey: ['roshni-follow-ups'],
     queryFn: () => api.get('/clients/roshni/follow-ups').then((r) => r.data),
   });
@@ -91,6 +91,7 @@ export function RoshniFollowUpsPage() {
         subtitle={`${items.length} client${items.length === 1 ? '' : 's'} · ${overdue.length} overdue · ${today.length} due today`}
       />
       <Page>
+        {isLoading && <div className="muted text-sm py-8 text-center">Loading follow-ups…</div>}
         <div className="callout mb-3">
           <Clock size={14} className="inline mr-1"/>
           New clients land at <strong>RP</strong> (Ready for Payment). Your job: call them and move to <strong>CP</strong> (silent), <strong>C</strong> (lost), <strong>JBT</strong> (employer pays later), or <strong>Training</strong> (paid). C / JBT / Training drop out of this queue.

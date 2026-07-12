@@ -6,12 +6,28 @@ import { LIFECYCLE, stageLabel } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 
 export function PipelinePage() {
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['metrics/pipeline'],
     queryFn: () => api.get('/metrics/pipeline').then((r) => r.data),
   });
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  if (isLoading) return (
+    <>
+      <Topbar title="Pipeline overview" />
+      <Page>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))' }}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="card" style={{ padding: '12px', minHeight: 200, animation: `fadeUp 300ms ${i*40}ms both` }}>
+              <div className="h-3 w-20 rounded mb-3" style={{ background: 'var(--bg-cardHover)' }} />
+              <div className="h-4 w-12 rounded" style={{ background: 'var(--bg-cardHover)' }} />
+            </div>
+          ))}
+        </div>
+      </Page>
+    </>
+  );
 
   return (
     <>

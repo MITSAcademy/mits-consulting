@@ -118,7 +118,7 @@ export function DemoIntakePage() {
   const [mineOnly, setMineOnly] = useState(isDemoIntake || isRecruiter);
   const [search, setSearch] = useState('');
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['clients'],
     queryFn: () => api.get('/clients').then((r) => r.data),
   });
@@ -191,6 +191,7 @@ export function DemoIntakePage() {
         }
       />
       <Page>
+        {isLoading && <div className="muted text-sm py-8 text-center">Loading clients…</div>}
         {!isRecruiter && (
           <div className="callout">
             Anyone punches in a lead. Team 2 takes it through:{' '}

@@ -11,11 +11,12 @@ import { Inbox } from 'lucide-react';
 export function RawLeadsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const { data } = useQuery({ queryKey: ['raw-leads'], queryFn: () => api.get('/raw-leads').then((r) => r.data) });
+  const { data, isLoading } = useQuery({ queryKey: ['raw-leads'], queryFn: () => api.get('/raw-leads').then((r) => r.data) });
 
   const upd = useMutation({
     mutationFn: ({ id, ...rest }: any) => api.patch(`/raw-leads/${id}`, rest),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['raw-leads'] }),
+    onError: () => showToast('Failed to update lead', 'error'),
   });
   const promote = useMutation({
     mutationFn: (id: string) => api.post(`/raw-leads/${id}/promote`),
@@ -27,6 +28,7 @@ export function RawLeadsPage() {
     <>
       <Topbar title="Raw leads inbox" subtitle={`${data?.length || 0}`} />
       <Page>
+        {isLoading && <div className="muted text-sm py-8 text-center">Loading raw leads…</div>}
         <div className="callout">Clean each row (name, phone, skill) then promote to a Client.</div>
         {(data || []).length === 0 ? (
           <EmptyState

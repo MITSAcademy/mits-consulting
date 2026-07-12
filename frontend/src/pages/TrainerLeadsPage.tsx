@@ -5,7 +5,7 @@ import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUI } from '@/store/ui';
 import { Search } from 'lucide-react';
 
@@ -14,7 +14,7 @@ const STAGES = ['New', 'Contacted', 'Vetting', 'Approved', 'Rejected'];
 export function TrainerLeadsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const { data } = useQuery({ queryKey: ['trainer-leads'], queryFn: () => api.get('/trainer-leads').then((r) => r.data) });
+  const { data, isLoading } = useQuery({ queryKey: ['trainer-leads'], queryFn: () => api.get('/trainer-leads').then((r) => r.data) });
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({ name: '', skills: '', source: '', expectedRateInr: 0, stage: 'New', notes: '' });
@@ -24,13 +24,16 @@ export function TrainerLeadsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['trainer-leads'] });
       showToast('Lead added');
+      setForm({ name: '', skills: '', source: '', expectedRateInr: 0, stage: 'New', notes: '' });
       setOpen(false);
     },
+    onError: () => showToast('Failed to add trainer lead', 'error'),
   });
 
   const setStage = useMutation({
     mutationFn: ({ id, stage }: any) => api.patch(`/trainer-leads/${id}`, { stage }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['trainer-leads'] }),
+    onError: () => showToast('Failed to update stage', 'error'),
   });
 
   return (
@@ -62,7 +65,7 @@ export function TrainerLeadsPage() {
               </div>
               <DialogFooter>
                 <Button onClick={() => setOpen(false)}>Cancel</Button>
-                <Button variant="primary" disabled={!form.name} onClick={() => create.mutate()}>Create</Button>
+                <Button variant="primary" disabled={!form.name || create.isPending} onClick={() => create.mutate()}>Create</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -70,6 +73,7 @@ export function TrainerLeadsPage() {
         }
       />
       <Page>
+        {isLoading && <div className="muted text-sm py-8 text-center">Loading trainer leads…</div>}
         <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
           {STAGES.map((s) => {
             const searchLower = search.trim().toLowerCase();

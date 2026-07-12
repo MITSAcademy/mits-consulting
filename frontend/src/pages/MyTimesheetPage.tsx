@@ -5,6 +5,7 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/store/auth';
+import { useUI } from '@/store/ui';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Edit2, Send, Check, X } from 'lucide-react';
 
 function todayISO() {
@@ -50,6 +51,7 @@ function StatusBadge({ status }: { status: string }) {
 export function MyTimesheetPage() {
   const user = useAuth((s) => s.user);
   const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
   const [date, setDate] = useState(todayISO());
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ jobCodeId: '', hours: '', description: '' });
@@ -86,18 +88,22 @@ export function MyTimesheetPage() {
       setShowAdd(false);
       setAddForm({ jobCodeId: '', hours: '', description: '' });
     },
+    onError: () => showToast('Failed to log time entry', 'error'),
   });
   const editMut = useMutation({
     mutationFn: ({ id, data }: any) => api.patch(`/timesheet/entries/${id}`, data).then((r) => r.data),
     onSuccess: () => { inv(); setEditId(null); },
+    onError: () => showToast('Failed to update entry', 'error'),
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => api.delete(`/timesheet/entries/${id}`).then((r) => r.data),
     onSuccess: () => inv(),
+    onError: () => showToast('Failed to delete entry', 'error'),
   });
   const submitMut = useMutation({
     mutationFn: (id: string) => api.post(`/timesheet/entries/${id}/submit`).then((r) => r.data),
     onSuccess: () => inv(),
+    onError: () => showToast('Failed to submit timesheet', 'error'),
   });
 
   const activeJobCodes = jobCodes.filter((jc: any) => jc.active);

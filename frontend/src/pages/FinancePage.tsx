@@ -163,6 +163,9 @@ export function FinancePage() {
               </tr>
             </thead>
             <tbody>
+              {byMonth.length === 0 && (
+                <tr><td colSpan={11} className="text-center py-8 muted text-sm">No monthly data available.</td></tr>
+              )}
               {[...byMonth].reverse().map((m: any, i: number, arr: any[]) => {
                 const prev = arr[i + 1];
                 const isCurrentMonth = m.month === new Date().toISOString().slice(0, 7);

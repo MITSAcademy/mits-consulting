@@ -94,6 +94,7 @@ export function TimesheetReportPage() {
       setShowNewCode(false);
       setCodeForm({ code: '', name: '', description: '', maxHoursPerDay: '' });
     },
+    onError: () => showToast('Failed to create code', 'error'),
   });
   const patchCodeMut = useMutation({
     mutationFn: ({ id, data }: any) => api.patch(`/timesheet/job-codes/${id}`, data).then((r) => r.data),
@@ -102,6 +103,7 @@ export function TimesheetReportPage() {
       qc.invalidateQueries({ queryKey: ['job-codes-all'] });
       qc.invalidateQueries({ queryKey: ['job-codes'] });
     },
+    onError: () => showToast('Failed to update code', 'error'),
   });
   const editCodeMut = useMutation({
     mutationFn: () => {
@@ -120,14 +122,17 @@ export function TimesheetReportPage() {
       setEditCode(null);
       showToast('Job code updated');
     },
+    onError: () => showToast('Failed to edit entry', 'error'),
   });
   const approveMut = useMutation({
     mutationFn: (id: string) => api.post(`/timesheet/entries/${id}/approve`).then((r) => r.data),
     onSuccess: () => inv(),
+    onError: () => showToast('Failed to approve', 'error'),
   });
   const rejectMut = useMutation({
     mutationFn: ({ id, note }: any) => api.post(`/timesheet/entries/${id}/reject`, { note }).then((r) => r.data),
     onSuccess: () => { inv(); setRejectId(null); setRejectNote(''); },
+    onError: () => showToast('Failed to reject', 'error'),
   });
   const bulkMut = useMutation({
     mutationFn: ({ action, rejectionNote }: { action: 'approve' | 'reject'; rejectionNote?: string }) =>
@@ -139,6 +144,7 @@ export function TimesheetReportPage() {
       setShowBulkReject(false);
       showToast(`${data.updated} entr${data.updated === 1 ? 'y' : 'ies'} ${bulkMut.variables?.action === 'reject' ? 'rejected' : 'approved'}`);
     },
+    onError: () => showToast('Failed to bulk action', 'error'),
   });
 
   const canApprove = user?.role === 'manager';

@@ -25,7 +25,7 @@ export function TrainersPage() {
   // lead (Bhavneet) sees all trainers like manager/founder; account_manager sees only their own clients' trainers
   const isAM = user.role === 'account_manager';
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['trainers'],
     queryFn: () => api.get('/trainers').then((r) => r.data),
   });
@@ -178,6 +178,7 @@ export function TrainersPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['trainers'] });
       showToast('Trainer added');
+      setForm({ name: '', email: '', phoneCode: '+91', phoneDigits: '', skills: '', defaultRateInr: 1000, rateModel: 'hourly', experienceYears: 0, paymentMethod: 'UPI', upiId: '', whatsappGroupLink: '', availabilitySlots: [] });
       setOpen(false);
     },
     onError: (err: any) => {
@@ -345,7 +346,7 @@ export function TrainersPage() {
                 </div>
                 <DialogFooter>
                   <Button onClick={() => setOpen(false)}>Cancel</Button>
-                  <Button variant="primary" disabled={!form.name} onClick={() => create.mutate()}>Create</Button>
+                  <Button variant="primary" disabled={!form.name || create.isPending} onClick={() => create.mutate()}>Create</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -448,6 +449,7 @@ export function TrainersPage() {
           </div>
         )}
 
+        {isLoading && <div className="muted text-sm py-8 text-center">Loading trainers…</div>}
         <div className="table-card">
           <table>
             <thead>

@@ -225,6 +225,8 @@ export default function CoordinatorDashboardPage() {
 
         {isLoading ? (
           <div className="muted text-[13px] py-12 text-center">Loading team data…</div>
+        ) : !data?.team || data.team.length === 0 ? (
+          <div className="muted text-sm p-4 text-center">No team data available.</div>
         ) : (
           <div className="space-y-6">
             {(data?.team || []).map((entry) => {

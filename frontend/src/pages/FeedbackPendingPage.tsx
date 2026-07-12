@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/EmptyState';
  * From here Samita clicks into each client and records Positive / Negative / NeedTime.
  */
 export function FeedbackPendingPage() {
-  const { data: clients } = useQuery({
+  const { data: clients, isLoading } = useQuery({
     queryKey: ['clients'],
     queryFn: () => api.get('/clients').then((r) => r.data),
   });
@@ -55,6 +55,7 @@ export function FeedbackPendingPage() {
         subtitle={`${pending.length} awaiting Samita's feedback${stuck.length ? ` · ${stuck.length} still in DemoDone (legacy)` : ''}`}
       />
       <Page>
+        {isLoading && <div className="muted text-sm py-8 text-center">Loading clients…</div>}
         <div className="callout">
           After Anjali marks a demo as <em>done</em>, the client lands here for Samita to record the client's post-demo response.
           The feedback choice auto-routes the client: <strong>Positive → Roshni · Negative → recruiters · Need time → Hold (3-day reminder)</strong>.
