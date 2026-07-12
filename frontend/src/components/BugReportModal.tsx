@@ -5,33 +5,41 @@ import { useUI } from '@/store/ui';
 import { X, Bug, Camera, Loader2 } from 'lucide-react';
 
 async function captureScreenshot(): Promise<string | null> {
-  try {
-    // Use native Screen Capture API — works on all modern browsers, no CORS issues
-    const stream = await (navigator.mediaDevices as any).getDisplayMedia({
-      video: { displaySurface: 'browser' },
-      preferCurrentTab: true,
-    });
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    await video.play();
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.round(video.videoWidth * 0.5);
-    canvas.height = Math.round(video.videoHeight * 0.5);
-    canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height);
-    stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
-    return canvas.toDataURL('image/png');
-  } catch {
-    // User denied permission or browser unsupported — fall back to html2canvas
+  const canUseDisplayMedia = typeof navigator !== 'undefined'
+    && !!navigator.mediaDevices
+    && typeof (navigator.mediaDevices as any).getDisplayMedia === 'function';
+
+  if (canUseDisplayMedia) {
     try {
-      const html2canvas = (await import('html2canvas')).default;
-      const canvas = await html2canvas(document.body, {
-        scale: 0.5, useCORS: true, logging: false,
-        ignoreElements: (el) => el.classList.contains('bug-report-modal'),
+      // Use native Screen Capture API — works on all modern browsers, no CORS issues
+      const stream = await (navigator.mediaDevices as any).getDisplayMedia({
+        video: { displaySurface: 'browser' },
+        preferCurrentTab: true,
       });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      await video.play();
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(video.videoWidth * 0.5);
+      canvas.height = Math.round(video.videoHeight * 0.5);
+      canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height);
+      stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
       return canvas.toDataURL('image/png');
     } catch {
-      return null;
+      // User denied permission — fall through to html2canvas below
     }
+  }
+
+  // Browser lacks Screen Capture API (e.g. Safari/iOS, non-secure context) or user denied it
+  try {
+    const html2canvas = (await import('html2canvas')).default;
+    const canvas = await html2canvas(document.body, {
+      scale: 0.5, useCORS: true, logging: false,
+      ignoreElements: (el) => el.classList.contains('bug-report-modal'),
+    });
+    return canvas.toDataURL('image/png');
+  } catch {
+    return null;
   }
 }
 
