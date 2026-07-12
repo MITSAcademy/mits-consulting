@@ -402,9 +402,23 @@ clientsRouter.post('/', async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of allowedFields) if (f in req.body) data[f] = req.body[f];
   if (!data.name) return res.status(400).json({ error: 'Name required' });
+  // Soft duplicate check — warn if same name+phone already exists
   if (data.phoneDigits) {
-    const existing = await prisma.client.findFirst({ where: { phoneDigits: data.phoneDigits } });
-    if (existing) return res.status(409).json({ error: `Phone ${data.phoneDigits} already belongs to client "${existing.name}".` });
+    const existing = await (prisma as any).client.findFirst({
+      where: {
+        phoneDigits: data.phoneDigits,
+        name: { equals: data.name?.trim(), mode: 'insensitive' },
+        lifecycle: { notIn: ['Closed', 'Rejected'] },
+      },
+      select: { id: true, name: true, seqId: true, lifecycle: true },
+    });
+    if (existing) {
+      return res.status(409).json({
+        error: `Client already exists: ${existing.name} (C-${existing.seqId || existing.id}) — lifecycle: ${existing.lifecycle}`,
+        code: 'CLIENT_DUPLICATE',
+        existingId: existing.id,
+      });
+    }
   }
   if (!data.leadOwnerId) data.leadOwnerId = req.user!.id;
   const client = await prisma.client.create({ data, include });

@@ -244,9 +244,23 @@ trainersRouter.post('/', async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of fields) if (f in req.body) data[f] = req.body[f];
   if (!data.name) return res.status(400).json({ error: 'Name required' });
+  // Soft duplicate check — warn if same name+phone already exists
   if (data.phoneDigits) {
-    const existing = await prisma.trainer.findFirst({ where: { phoneDigits: data.phoneDigits } });
-    if (existing) return res.status(409).json({ error: `Phone ${data.phoneDigits} already belongs to trainer "${existing.name}".` });
+    const existing = await (prisma as any).trainer.findFirst({
+      where: {
+        phoneDigits: data.phoneDigits,
+        name: { equals: data.name?.trim(), mode: 'insensitive' },
+        active: true,
+      },
+      select: { id: true, name: true, seqId: true },
+    });
+    if (existing) {
+      return res.status(409).json({
+        error: `Trainer already exists: ${existing.name} (T-${existing.seqId || existing.id})`,
+        code: 'TRAINER_DUPLICATE',
+        existingId: existing.id,
+      });
+    }
   }
   if (!data.recruitedById) data.recruitedById = req.user!.id;
   const t = await prisma.trainer.create({ data, include });

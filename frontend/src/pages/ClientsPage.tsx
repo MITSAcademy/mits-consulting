@@ -6,7 +6,7 @@ import { Pill } from '@/components/ui/pill';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Users } from 'lucide-react';
 import { EmptyState } from '@/components/EmptyState';
 import { stageColor, stageLabel, fmtClientId } from '@/lib/utils';
@@ -27,6 +27,7 @@ export function ClientsPage() {
   const isAM = user.role === 'account_manager' || user.role === 'lead';
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [mineOnly, setMineOnly] = useState(SHOW_MINE_FILTER_ROLES.includes(user.role));
@@ -59,7 +60,15 @@ export function ClientsPage() {
       setOpen(false);
       setForm({ name: '', phoneCode: '+1', phoneDigits: '', email: '', whatsappGroupName: '', whatsappGroupLink: '', engagementType: 'Support', currency: 'USD', source: '', intakeSkillHint: '', notes: '' });
     },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+    onError: (err: any) => {
+      const data = err?.response?.data;
+      if (data?.code === 'CLIENT_DUPLICATE') {
+        showToast(data.error, 'warning');
+        navigate(`/clients/${data.existingId}`);
+      } else {
+        showToast(data?.error || 'Failed to create client', 'error');
+      }
+    },
   });
 
   const showAmt = canSeeFinancial(user.role);
