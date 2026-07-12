@@ -34,6 +34,7 @@ export function TrainerPayPage() {
       showToast('Batch created');
       setSelected([]);
     },
+    onError: () => showToast('Failed to create batch', 'error'),
   });
 
   const eligible = (logs || []).filter((l: any) => l.status === 'Logged');
@@ -48,7 +49,7 @@ export function TrainerPayPage() {
         <>
           <input type="date" value={weekStart} onChange={(e) => setWeekStart(e.target.value)} className="input !w-auto" />
           <Button onClick={all}>Select all</Button>
-          <Button variant="primary" disabled={selected.length === 0} onClick={() => create.mutate()}>
+          <Button variant="primary" disabled={selected.length === 0 || create.isPending} onClick={() => create.mutate()}>
             Create batch · ₹{total.toLocaleString()}
           </Button>
         </>
@@ -60,7 +61,7 @@ export function TrainerPayPage() {
             style={{ borderColor: 'var(--accent-gold)', background: 'var(--accent-goldSoft)' }}
           >
             <span><strong>{selected.length}</strong> sessions selected · total <strong className="mono">₹{total.toLocaleString()}</strong></span>
-            <Button variant="primary" onClick={() => create.mutate()}>Create payout batch →</Button>
+            <Button variant="primary" disabled={create.isPending} onClick={() => create.mutate()}>Create payout batch →</Button>
           </div>
         )}
         {(logs || []).length === 0 ? (

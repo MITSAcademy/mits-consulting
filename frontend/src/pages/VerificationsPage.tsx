@@ -109,6 +109,7 @@ export function VerificationsPage() {
       showToast('Proposal failed');
       setFailingProposal(null);
     },
+    onError: () => showToast('Failed to mark failed', 'error'),
   });
 
   const sendBack = useMutation({
@@ -121,6 +122,7 @@ export function VerificationsPage() {
       qc.invalidateQueries({ queryKey: ['clients'] });
       showToast('Sent back to recruiters');
     },
+    onError: () => showToast('Failed to send back', 'error'),
   });
 
   const toggleVer = useMutation({
@@ -352,6 +354,7 @@ export function VerificationsPage() {
         {failingProposal && (
           <FailReasonModal
             trainerName={failingProposal.trainerName}
+            isPending={fail.isPending}
             onClose={() => setFailingProposal(null)}
             onConfirm={(reason) => fail.mutate({ proposalId: failingProposal.proposalId, reason })}
           />
@@ -361,7 +364,7 @@ export function VerificationsPage() {
   );
 }
 
-function FailReasonModal({ trainerName, onClose, onConfirm }: { trainerName: string; onClose: () => void; onConfirm: (reason: string) => void }) {
+function FailReasonModal({ trainerName, isPending, onClose, onConfirm }: { trainerName: string; isPending: boolean; onClose: () => void; onConfirm: (reason: string) => void }) {
   const [reason, setReason] = useState('');
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -373,7 +376,7 @@ function FailReasonModal({ trainerName, onClose, onConfirm }: { trainerName: str
         </div>
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="danger" disabled={!reason.trim()} onClick={() => onConfirm(reason.trim())}>
+          <Button variant="danger" disabled={!reason.trim() || isPending} onClick={() => onConfirm(reason.trim())}>
             <X size={14}/> Fail this proposal
           </Button>
         </DialogFooter>

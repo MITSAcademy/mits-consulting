@@ -169,7 +169,10 @@ export function TasksPage() {
       qc.invalidateQueries({ queryKey: ['clients'] });
       showToast('Done');
     },
+    onError: () => showToast('Failed to complete task', 'error'),
   });
+
+  if (!clients || !rawTasks) return <Page><div className="muted text-sm p-6">Loading...</div></Page>;
 
   const workflow = deriveWorkflowTasks(clients || [], user, today);
   const byBucket: Record<string, WorkRow[]> = {};
@@ -235,7 +238,7 @@ export function TasksPage() {
                     <td>{t.client?.name || '—'}</td>
                     <td>{t.trainer?.name || '—'}</td>
                     <td><Pill color={t.priority === 'High' ? 'red' : 'grey'}>{t.priority}</Pill></td>
-                    <td><Button size="sm" variant="success" onClick={() => complete.mutate(t.id)}>Complete</Button></td>
+                    <td><Button size="sm" variant="success" disabled={complete.isPending} onClick={() => complete.mutate(t.id)}>Complete</Button></td>
                   </tr>
                 ))}
               </tbody>

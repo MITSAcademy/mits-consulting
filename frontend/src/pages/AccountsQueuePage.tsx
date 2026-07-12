@@ -11,11 +11,14 @@ const STATUSES = ['Pending', 'InvoiceSent', 'ReceiptSent', 'Booked', 'Done'];
 export function AccountsQueuePage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const { data } = useQuery({ queryKey: ['accounts-queue'], queryFn: () => api.get('/accounts-queue').then((r) => r.data) });
+  const { data, isLoading } = useQuery({ queryKey: ['accounts-queue'], queryFn: () => api.get('/accounts-queue').then((r) => r.data) });
   const upd = useMutation({
     mutationFn: ({ id, status }: any) => api.patch(`/accounts-queue/${id}`, { status }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['accounts-queue'] }); showToast('Updated'); },
+    onError: () => showToast('Failed to update stage', 'error'),
   });
+
+  if (isLoading) return <Page><div className="muted text-sm p-6">Loading...</div></Page>;
 
   return (
     <>
@@ -42,7 +45,7 @@ export function AccountsQueuePage() {
                   </td>
                   <td className="mono">{q.client.currency} {q.client.cycleAmount}</td>
                   <td>
-                    <Select className="!w-auto !py-1 !text-xs" value={q.status} onChange={(e) => upd.mutate({ id: q.id, status: e.target.value })}>
+                    <Select className="!w-auto !py-1 !text-xs" value={q.status} disabled={upd.isPending} onChange={(e) => upd.mutate({ id: q.id, status: e.target.value })}>
                       {STATUSES.map((s) => <option key={s}>{s}</option>)}
                     </Select>
                   </td>

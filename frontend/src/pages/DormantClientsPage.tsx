@@ -20,7 +20,7 @@ export function DormantClientsPage() {
   const today = todayISO();
   const [q, setQ] = useState('');
 
-  const { data: clients } = useQuery({
+  const { data: clients, isLoading } = useQuery({
     queryKey: ['clients'],
     queryFn: () => api.get('/clients').then((r) => r.data),
   });
@@ -72,8 +72,10 @@ export function DormantClientsPage() {
       qc.invalidateQueries({ queryKey: ['nav-badges'] });
       showToast('Resumed');
     },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+    onError: () => showToast('Failed to resume client', 'error'),
   });
+
+  if (isLoading) return <Page><div className="muted text-sm p-6">Loading...</div></Page>;
 
   function row(c: any) {
     const phoneWA = c.phoneDigits ? waLink(c.phoneCode, c.phoneDigits) : '';
@@ -120,7 +122,7 @@ export function DormantClientsPage() {
                 <MessageCircle size={12}/> WA
               </a>
             )}
-            <Button size="sm" variant="success" onClick={() => resumePartial.mutate({ id: c.id, lifecycle: c.dormantResumeFromStage || 'IntakeReceived' })}>
+            <Button size="sm" variant="success" disabled={resumePartial.isPending} onClick={() => resumePartial.mutate({ id: c.id, lifecycle: c.dormantResumeFromStage || 'IntakeReceived' })}>
               <Play size={12}/> Resume
             </Button>
             <Link to={`/clients/${c.id}`} className="btn btn-sm">Open</Link>

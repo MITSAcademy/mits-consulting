@@ -11,7 +11,7 @@ import { CheckCircle2 } from 'lucide-react';
 export function VaibhavQueuePage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['clients'],
     queryFn: () => api.get('/clients').then((r) => r.data),
   });
@@ -26,7 +26,10 @@ export function VaibhavQueuePage() {
       qc.invalidateQueries({ queryKey: ['nav-badges'] });
       showToast('Unflagged');
     },
+    onError: () => showToast('Failed to unflag', 'error'),
   });
+
+  if (isLoading) return <Page><div className="muted text-sm p-6">Loading...</div></Page>;
 
   return (
     <>
@@ -78,7 +81,7 @@ export function VaibhavQueuePage() {
                     </td>
                     <td className="mono text-brand-amber">{c.pendingVaibhavSince || '—'}</td>
                     <td>
-                      <Button size="sm" onClick={() => unflag.mutate(c.id)}>
+                      <Button size="sm" disabled={unflag.isPending} onClick={() => unflag.mutate(c.id)}>
                         Unflag
                       </Button>
                     </td>

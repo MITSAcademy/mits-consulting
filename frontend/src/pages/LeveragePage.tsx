@@ -13,11 +13,14 @@ export function LeveragePage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user);
-  const { data } = useQuery({ queryKey: ['leverage'], queryFn: () => api.get('/leverage').then((r) => r.data) });
+  const { data, isLoading } = useQuery({ queryKey: ['leverage'], queryFn: () => api.get('/leverage').then((r) => r.data) });
   const decide = useMutation({
     mutationFn: ({ id, decision }: any) => api.post(`/leverage/${id}/decision`, { decision }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['leverage'] }); qc.invalidateQueries({ queryKey: ['nav-badges'] }); showToast('Decided'); },
+    onError: () => showToast('Failed to update', 'error'),
   });
+
+  if (isLoading) return <Page><div className="muted text-sm p-6">Loading...</div></Page>;
 
   return (
     <>
@@ -46,8 +49,8 @@ export function LeveragePage() {
                   <td>
                     {l.status === 'PendingVaibhav' && user?.role === 'founder' && (
                       <div className="space-x-1">
-                        <Button size="sm" variant="success" onClick={() => decide.mutate({ id: l.id, decision: 'Approved' })}>Approve</Button>
-                        <Button size="sm" variant="danger" onClick={() => decide.mutate({ id: l.id, decision: 'Rejected' })}>Reject</Button>
+                        <Button size="sm" variant="success" disabled={decide.isPending} onClick={() => decide.mutate({ id: l.id, decision: 'Approved' })}>Approve</Button>
+                        <Button size="sm" variant="danger" disabled={decide.isPending} onClick={() => decide.mutate({ id: l.id, decision: 'Rejected' })}>Reject</Button>
                       </div>
                     )}
                   </td>

@@ -10,14 +10,15 @@ import { Wallet } from 'lucide-react';
 export function PayoutBatchesPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const { data } = useQuery({ queryKey: ['payouts'], queryFn: () => api.get('/payouts').then((r) => r.data) });
-  const approve = useMutation({ mutationFn: (id: string) => api.post(`/payouts/${id}/approve`), onSuccess: () => { qc.invalidateQueries({ queryKey: ['payouts'] }); showToast('Approved'); } });
-  const pay = useMutation({ mutationFn: (id: string) => api.post(`/payouts/${id}/pay`), onSuccess: () => { qc.invalidateQueries({ queryKey: ['payouts'] }); showToast('Paid'); } });
+  const { data, isLoading } = useQuery({ queryKey: ['payouts'], queryFn: () => api.get('/payouts').then((r) => r.data) });
+  const approve = useMutation({ mutationFn: (id: string) => api.post(`/payouts/${id}/approve`), onSuccess: () => { qc.invalidateQueries({ queryKey: ['payouts'] }); showToast('Approved'); }, onError: () => showToast('Failed to approve', 'error') });
+  const pay = useMutation({ mutationFn: (id: string) => api.post(`/payouts/${id}/pay`), onSuccess: () => { qc.invalidateQueries({ queryKey: ['payouts'] }); showToast('Paid'); }, onError: () => showToast('Failed to mark paid', 'error') });
 
   return (
     <>
       <Topbar title="Payout batches" subtitle={`${data?.length || 0}`} />
       <Page>
+        {isLoading && <div className="muted text-sm p-6">Loading...</div>}
         {(data || []).length === 0 ? (
           <EmptyState
             icon={Wallet}
@@ -37,8 +38,8 @@ export function PayoutBatchesPage() {
                   <td className="mono font-semibold">₹{b.totalInr.toLocaleString()}</td>
                   <td><Pill color={b.status === 'Paid' ? 'green' : b.status === 'Approved' ? 'blue' : 'amber'}>{b.status}</Pill></td>
                   <td className="space-x-1">
-                    {b.status === 'Pending' && <Button size="sm" variant="success" onClick={() => approve.mutate(b.id)}>Approve</Button>}
-                    {b.status === 'Approved' && <Button size="sm" variant="primary" onClick={() => pay.mutate(b.id)}>Mark paid</Button>}
+                    {b.status === 'Pending' && <Button size="sm" variant="success" disabled={approve.isPending || pay.isPending} onClick={() => approve.mutate(b.id)}>Approve</Button>}
+                    {b.status === 'Approved' && <Button size="sm" variant="primary" disabled={approve.isPending || pay.isPending} onClick={() => pay.mutate(b.id)}>Mark paid</Button>}
                   </td>
                 </tr>
               ))}

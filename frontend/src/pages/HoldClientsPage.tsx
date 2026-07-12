@@ -21,7 +21,7 @@ export function HoldClientsPage() {
   // For sales_closer: CP+C clients from /clients (default)
   // For manager/lead/AM: explicitly fetch Hold lifecycle (backend default excludes it)
   const needsExplicitHold = !isSalesCloser;
-  const { data: clients } = useQuery({
+  const { data: clients, isLoading } = useQuery({
     queryKey: ['clients', needsExplicitHold ? 'hold' : 'default'],
     queryFn: () =>
       api.get(needsExplicitHold ? '/clients?lifecycle=Hold' : '/clients').then((r) => r.data),
@@ -53,7 +53,7 @@ export function HoldClientsPage() {
       qc.invalidateQueries({ queryKey: ['nav-badges'] });
       showToast('Moved to Sale closing');
     },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+    onError: () => showToast('Failed to move client', 'error'),
   });
 
   const moveBackToActive = useMutation({
@@ -64,7 +64,7 @@ export function HoldClientsPage() {
       qc.invalidateQueries({ queryKey: ['nav-badges'] });
       showToast('Moved back to Active');
     },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+    onError: () => showToast('Failed to move client back to Active', 'error'),
   });
 
   const markDormant = useMutation({
@@ -74,7 +74,7 @@ export function HoldClientsPage() {
       qc.invalidateQueries({ queryKey: ['nav-badges'] });
       showToast('Marked dormant');
     },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+    onError: () => showToast('Failed to mark dormant', 'error'),
   });
 
   function row(c: any) {
@@ -119,17 +119,17 @@ export function HoldClientsPage() {
               </a>
             )}
             {isManager ? (
-              <Button size="sm" variant="success"
+              <Button size="sm" variant="success" disabled={moveBackToActive.isPending}
                 onClick={() => moveBackToActive.mutate({ id: c.id, resumeStage: c.holdResumeFromStage || 'Active' })}>
                 <ArrowRight size={12}/> Back to Active
               </Button>
             ) : (
-              <Button size="sm" variant="success" onClick={() => sendToSale.mutate(c.id)}>
+              <Button size="sm" variant="success" disabled={sendToSale.isPending} onClick={() => sendToSale.mutate(c.id)}>
                 <Wallet size={12}/> Client ready · close
               </Button>
             )}
             {!isSalesCloser && (
-              <Button size="sm" onClick={() => markDormant.mutate(c.id)}>
+              <Button size="sm" disabled={markDormant.isPending} onClick={() => markDormant.mutate(c.id)}>
                 <Play size={12}/> Mark dormant
               </Button>
             )}
@@ -139,6 +139,8 @@ export function HoldClientsPage() {
       </div>
     );
   }
+
+  if (isLoading) return <Page><div className="muted text-sm p-6">Loading...</div></Page>;
 
   return (
     <>

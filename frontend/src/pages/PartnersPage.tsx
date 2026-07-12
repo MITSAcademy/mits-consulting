@@ -11,12 +11,13 @@ import { Pill } from '@/components/ui/pill';
 export function PartnersPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const { data } = useQuery({ queryKey: ['partners'], queryFn: () => api.get('/partners').then((r) => r.data) });
+  const { data, isLoading } = useQuery({ queryKey: ['partners'], queryFn: () => api.get('/partners').then((r) => r.data) });
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ name: '', contact: '', email: '', phone: '', billingCycle: '', paymentTerms: '', notes: '' });
   const create = useMutation({
     mutationFn: () => api.post('/partners', f),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['partners'] }); setOpen(false); showToast('Partner added'); },
+    onError: () => showToast('Failed to add partner', 'error'),
   });
 
   return (
@@ -34,15 +35,19 @@ export function PartnersPage() {
               <div className="form-row md:col-span-2"><Label>Payment terms</Label><Input value={f.paymentTerms} onChange={(e) => setF({ ...f, paymentTerms: e.target.value })} /></div>
               <div className="form-row md:col-span-2"><Label>Notes</Label><Textarea value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></div>
             </div>
-            <DialogFooter><Button onClick={() => setOpen(false)}>Cancel</Button><Button variant="primary" disabled={!f.name} onClick={() => create.mutate()}>Create</Button></DialogFooter>
+            <DialogFooter><Button onClick={() => setOpen(false)}>Cancel</Button><Button variant="primary" disabled={!f.name || create.isPending} onClick={() => create.mutate()}>Create</Button></DialogFooter>
           </DialogContent>
         </Dialog>
       } />
       <Page>
+        {isLoading && <div className="muted text-sm p-6">Loading...</div>}
         <div className="table-card">
           <table>
             <thead><tr><th>Name</th><th>Contact</th><th>Billing</th><th>Terms</th><th>Status</th></tr></thead>
             <tbody>
+              {!isLoading && (!data || data.length === 0) && (
+                <tr><td colSpan={5}><div className="muted text-sm p-4">No partners added yet.</div></td></tr>
+              )}
               {(data || []).map((p: any) => (
                 <tr key={p.id} className="clickable">
                   <td className="font-medium">{p.name}</td>

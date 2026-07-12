@@ -26,7 +26,7 @@ export function FreshPaymentsPage() {
   const [mineOnly, setMineOnly] = useState<boolean>(false);
   const [page, setPage] = useState(0);
 
-  const { data: payments } = useQuery({ queryKey: ['payments'], queryFn: () => api.get('/payments').then((r) => r.data) });
+  const { data: payments, isLoading } = useQuery({ queryKey: ['payments'], queryFn: () => api.get('/payments').then((r) => r.data) });
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: () => api.get('/clients').then((r) => r.data) });
   const { data: banks } = useQuery({ queryKey: ['banks'], queryFn: () => api.get('/banks').then((r) => r.data) });
 
@@ -121,12 +121,13 @@ export function FreshPaymentsPage() {
                 <div className="form-row md:col-span-2"><Label>Bank account</Label><Select value={f.bankAccountId} onChange={(e) => setF({ ...f, bankAccountId: e.target.value })}><option value="">— Select —</option>{(banks || []).map((b: any) => <option key={b.id} value={b.id}>{b.label}</option>)}</Select></div>
                 <div className="form-row md:col-span-2"><Label>Mode</Label><Select value={f.paymentMode} onChange={(e) => setF({ ...f, paymentMode: e.target.value })}><option>Bank</option><option>UPI</option><option>Zelle</option><option>Cash</option><option>Wire</option></Select></div>
               </div>
-              <DialogFooter><Button onClick={() => setOpen(false)}>Cancel</Button><Button variant="primary" disabled={!f.clientId || !f.amount} onClick={() => create.mutate()}>Record</Button></DialogFooter>
+              <DialogFooter><Button onClick={() => setOpen(false)}>Cancel</Button><Button variant="primary" disabled={!f.clientId || !f.amount || create.isPending} onClick={() => create.mutate()}>Record</Button></DialogFooter>
             </DialogContent>
           </Dialog>
         </>
       } />
       <Page>
+        {(isLoading || !payments || !clients || !banks) && <div className="muted text-sm p-6">Loading...</div>}
         <div className="table-card">
           <table>
             <thead><tr><th>Date</th><th>Client</th><th>Kind</th><th>Amount</th><th>Bank</th><th>Received by</th></tr></thead>

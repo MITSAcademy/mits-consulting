@@ -38,7 +38,7 @@ export function DemosPage() {
   const today = todayISO();
   const [mineOnly, setMineOnly] = useState(['demo_intake'].includes(user.role));
 
-  const { data: clients } = useQuery({
+  const { data: clients, isLoading } = useQuery({
     queryKey: ['clients'],
     queryFn: () => api.get('/clients').then((r) => r.data),
   });
@@ -68,8 +68,10 @@ export function DemosPage() {
       const count = incrementCount('demos_done');
       checkMilestone('demos_done', count, showToast);
     },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed to mark demo done', 'error'),
   });
+
+  if (isLoading) return <Page><div className="muted text-sm p-6">Loading...</div></Page>;
 
   return (
     <>
@@ -166,7 +168,7 @@ export function DemosPage() {
                             </a>
                           )}
                           <Link to={`/clients/${c.id}`} className="btn btn-sm">Open / Reschedule</Link>
-                          <Button size="sm" variant="success" onClick={() => markDone.mutate(c.id)}>
+                          <Button size="sm" variant="success" disabled={markDone.isPending} onClick={() => markDone.mutate(c.id)}>
                             <Check size={12}/> Demo done
                           </Button>
                         </div>

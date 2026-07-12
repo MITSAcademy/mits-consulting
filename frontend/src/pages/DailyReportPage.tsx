@@ -136,7 +136,7 @@ export function DailyReportPage() {
               placeholder="What did you ship/move today? Use the buttons above to auto-pull from system activity." />
           </div>
 
-          <Button variant="primary" disabled={!content.trim()} onClick={() => submit.mutate()}>Submit</Button>
+          <Button variant="primary" disabled={!content.trim() || submit.isPending} onClick={() => submit.mutate()}>Submit</Button>
         </div>
 
         {/* Live audit-trail preview so users can see what's tracked */}
