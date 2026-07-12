@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { useState, createContext, useContext, Suspense, useEffect } from 'react';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
+import { HelpPanel } from '@/components/HelpPanel';
 import { Menu, Search } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Toaster } from '@/components/ui/toast';
@@ -13,6 +14,7 @@ import { IdleGame } from '@/components/IdleGame';
 import { useAuth } from '@/store/auth';
 import { GlobalSearch, openGlobalSearch } from '@/components/GlobalSearch';
 import { StreakBanner } from '@/components/StreakBanner';
+import { BugReportModal } from '@/components/BugReportModal';
 
 /** Context lets the Topbar open the off-canvas sidebar without lifting state
  *  through every page. */
@@ -26,6 +28,18 @@ export function AppLayout() {
     const handler = () => setMobileOpen(true);
     window.addEventListener('mits:open-sidebar', handler);
     return () => window.removeEventListener('mits:open-sidebar', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+      if (e.key === '?') {
+        window.dispatchEvent(new CustomEvent('mits:open-help'));
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, []);
 
   return (
@@ -44,7 +58,9 @@ export function AppLayout() {
       <CelebrationLayer />
       <IdleGame />
       <GlobalSearch />
+      <HelpPanel />
       <MobileBottomNav />
+      <BugReportModal />
     </MobileNavCtx.Provider>
   );
 }
@@ -124,6 +140,15 @@ export function Topbar({
           <Search size={13} />
           <span>Search</span>
           <kbd className="text-[10px] px-1 py-0.5 rounded ml-1" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-borderSoft)' }}>⌘K</kbd>
+        </button>
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('mits:open-help'))}
+          className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] transition-colors"
+          style={{ background: 'var(--bg-input)', color: 'var(--brand-textMuted)', border: '1px solid var(--brand-borderSoft)' }}
+          title="Help (press ?)"
+          aria-label="Help"
+        >
+          <span style={{ fontSize: 14 }}>?</span>
         </button>
         <AskAIButton />
         <ThemeToggle />

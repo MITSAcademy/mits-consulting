@@ -53,6 +53,7 @@ import { rolePermissionsRouter } from './routes/rolePermissions';
 import { seedRouter } from './routes/seed';
 import { searchRouter } from './routes/search';
 import { escalationsRouter } from './routes/escalations';
+import { bugReportsRouter } from './routes/bugReports';
 import { prisma } from './lib/prisma';
 
 const app = express();
@@ -153,6 +154,7 @@ app.use('/api/role-permissions', rolePermissionsRouter);
 app.use('/api/seed', seedRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/escalations', escalationsRouter);
+app.use('/api/bug-reports', bugReportsRouter);
 
 // One-time: send welcome emails to Areena and Mohini from Vaibhav
 app.post('/api/internal/send-welcome-staff', requireAuth, requireRole('founder'), async (_req, res) => {

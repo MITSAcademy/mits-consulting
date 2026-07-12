@@ -195,6 +195,7 @@ model User {
   rolePermissionsUpdated RolePermission[] @relation("RolePermissionUpdatedBy")
   freelanceFlagged       FreelanceRequirement[] @relation("FreelanceRequirementFlagged")
   freelanceUpdated       FreelanceRequirement[] @relation("FreelanceRequirementUpdated")
+  bugReports             BugReport[]            @relation("BugReports")
 }
 
 // -------- NOTIFICATIONS --------
@@ -1192,4 +1193,22 @@ model FreelanceRequirementComment {
   authorName    String
   body          String
   createdAt     DateTime @default(now())
+}
+
+model BugReport {
+  id           String   @id @default(cuid())
+  reportedById String
+  reportedBy   User     @relation("BugReports", fields: [reportedById], references: [id], onDelete: Cascade)
+  url          String
+  role         String
+  description  String
+  screenshot   String?  @db.Text  // base64 PNG
+  status       String   @default("open") // open | fixing | fixed
+  fixCommit    String?
+  issueId      String?  // linked IssueTracker id
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+  @@index([reportedById])
 }
