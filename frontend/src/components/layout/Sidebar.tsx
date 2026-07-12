@@ -12,7 +12,7 @@ import {
   Notebook, ChartLine, Upload, Inbox, Edit, UsersRound, Mail, Tag, LockKeyhole,
   Building2, History, Settings, LogOut, Moon, Calendar, ChevronsLeft, ChevronsRight,
   TableProperties, CalendarDays, AlertTriangle, Link, BarChart2, BarChart3, ToggleRight,
-  Sparkles, X,
+  Sparkles, X, Bug,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -469,6 +469,24 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
         )}
 
         <WhatsNew collapsed={collapsed} />
+
+        {/* Report bug */}
+        <div className="mx-2 mb-2 flex-shrink-0">
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('mits:open-bug-report'))}
+            title={collapsed ? 'Report bug' : undefined}
+            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors"
+            style={{
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.07)',
+              color: 'rgba(232,226,211,0.75)',
+              justifyContent: collapsed ? 'center' : undefined,
+            }}
+          >
+            <Bug size={12} style={{ flexShrink: 0 }} />
+            {!collapsed && <span className="flex-1 text-left">Report bug</span>}
+          </button>
+        </div>
 
         {/* User footer */}
         <div
