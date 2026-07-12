@@ -1,10 +1,12 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { useUI } from '@/store/ui';
+import { Loader2 } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'default' | 'primary' | 'success' | 'amber' | 'danger' | 'ghost';
   size?: 'sm' | 'md';
+  loading?: boolean;
   /**
    * Optional human-readable reason explaining why this button can't be clicked yet
    * (e.g. "Pick a target stage" / "Fill the Reason field").
@@ -21,15 +23,13 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'default', size = 'md', disabledReason, onClick, title, disabled, ...props }, ref) => {
+  ({ className, variant = 'default', size = 'md', disabledReason, onClick, title, disabled, loading, children, ...props }, ref) => {
     const showToast = useUI((s) => s.showToast);
-    const blocked = !disabled && !!disabledReason;
-    const hardDisabled = disabled === true;
+    const blocked = !disabled && !loading && !!disabledReason;
+    const hardDisabled = disabled === true || loading === true;
     return (
       <button
         ref={ref}
-        // Hard disabled (e.g. loading) → real disabled. Soft-blocked → looks disabled
-        // but stays clickable so the toast can fire.
         disabled={hardDisabled}
         aria-disabled={hardDisabled || blocked || undefined}
         title={blocked ? disabledReason || undefined : title}
@@ -50,12 +50,19 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           variant === 'danger' && 'btn-danger',
           variant === 'ghost' && 'bg-transparent border-transparent hover:bg-bg-cardHover',
           size === 'sm' && 'btn-sm',
-          // Soft-blocked styling — visually matches disabled but stays interactive
           blocked && 'opacity-50 cursor-not-allowed',
+          loading && 'opacity-70 cursor-wait',
           className,
         )}
         {...props}
-      />
+      >
+        {loading ? (
+          <span className="flex items-center gap-1.5">
+            <Loader2 size={size === 'sm' ? 11 : 13} className="animate-spin" />
+            {children}
+          </span>
+        ) : children}
+      </button>
     );
   },
 );

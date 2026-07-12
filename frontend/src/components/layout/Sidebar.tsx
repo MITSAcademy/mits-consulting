@@ -297,28 +297,11 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
                       to={n.page}
                       onClick={() => onMobileClose?.()}
                       title={collapsed ? n.label : undefined}
-                      className="flex items-center gap-2.5 py-2 text-[13px] cursor-pointer relative group"
+                      className={`sidebar-nav-item flex items-center gap-2.5 py-2 text-[13px] cursor-pointer relative group${isActive ? ' sidebar-nav-active' : ''}`}
                       style={{
                         paddingLeft: collapsed ? 0 : 12,
                         paddingRight: collapsed ? 0 : 12,
                         justifyContent: collapsed ? 'center' : undefined,
-                        color: isActive ? '#FAF5E7' : 'rgba(232,226,211,0.78)',
-                        background: isActive
-                          ? 'linear-gradient(90deg, rgba(229,178,76,0.18) 0%, rgba(229,178,76,0.04) 100%)'
-                          : 'transparent',
-                        transition: 'background-color 150ms ease, color 150ms ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                          e.currentTarget.style.color = '#FAF5E7';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.background = 'transparent';
-                          e.currentTarget.style.color = 'rgba(232,226,211,0.78)';
-                        }
                       }}
                     >
                       {isActive && (

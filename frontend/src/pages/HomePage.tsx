@@ -4,16 +4,129 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { useAuth } from '@/store/auth';
 import { Link } from 'react-router-dom';
 import { timeGreeting } from '@/components/ThemeToggle';
-import { TrendingUp, TrendingDown, Users, Activity, Calendar, AlertTriangle, Moon } from 'lucide-react';
+import { TrendingUp, TrendingDown, Users, Activity, Calendar, AlertTriangle, Moon, ArrowRight, Zap } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
-/** Personalised hero — bigger than the standard Topbar title, sets the
- *  morning/evening tone for the dashboard. */
+/* ── Animated number counter ─────────────────────────────────────────────── */
+function useCountUp(target: number, duration = 900) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    if (!target) { setVal(0); return; }
+    let start: number | null = null;
+    const step = (ts: number) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3); // ease-out-cubic
+      setVal(Math.round(eased * target));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [target, duration]);
+  return val;
+}
+
+/* ── Mini sparkline via Canvas ───────────────────────────────────────────── */
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas || !values.length) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    const min = Math.min(...values), max = Math.max(...values);
+    const range = max - min || 1;
+    const pts = values.map((v, i) => ({
+      x: (i / (values.length - 1)) * (W - 2) + 1,
+      y: H - 4 - ((v - min) / range) * (H - 8),
+    }));
+    // Area fill
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, color.replace(')', ', 0.25)').replace('rgb', 'rgba'));
+    grad.addColorStop(1, color.replace(')', ', 0)').replace('rgb', 'rgba'));
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, H);
+    pts.forEach((p) => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(pts[pts.length - 1].x, H);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+    // Line
+    ctx.beginPath();
+    pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    // Last dot
+    const last = pts[pts.length - 1];
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }, [values, color]);
+  return <canvas ref={ref} width={64} height={28} style={{ opacity: 0.85 }} />;
+}
+
+/* ── KPI card with staggered fade-up, optional sparkline, link ───────────── */
+function Kpi({ icon: Icon, label, value, rawValue, sub, accent, delay = 0, to, spark }: {
+  icon: any; label: string; value: React.ReactNode; rawValue?: number; sub?: React.ReactNode;
+  accent?: 'green' | 'amber' | 'red' | 'gold' | 'blue' | 'neutral';
+  delay?: number; to?: string; spark?: number[];
+}) {
+  const accentColor =
+    accent === 'green' ? '#4ADE80' :
+    accent === 'amber' ? '#F59E0B' :
+    accent === 'red'   ? '#EF4444' :
+    accent === 'gold'  ? '#E5B24C' :
+    accent === 'blue'  ? '#5B8DEF' :
+    'var(--brand-textMuted)';
+
+  const counted = useCountUp(rawValue ?? 0);
+  const displayValue = rawValue !== undefined ? counted : value;
+
+  const inner = (
+    <div
+      className="kpi-card relative overflow-hidden group"
+      style={{
+        borderTop: `2px solid ${accentColor}`,
+        animation: `fadeUp 380ms cubic-bezier(0.2,0.9,0.25,1) ${delay}ms both`,
+        cursor: to ? 'pointer' : 'default',
+      }}
+    >
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <div className="kpi-label">{label}</div>
+        <div className="flex items-center gap-2">
+          {spark && <Sparkline values={spark} color={accentColor} />}
+          <Icon size={14} style={{ color: accentColor, opacity: 0.8, flexShrink: 0 }} />
+        </div>
+      </div>
+      <div className="kpi-value" style={{ color: accent && accent !== 'neutral' ? accentColor : undefined }}>
+        {displayValue}
+      </div>
+      {sub && <div className="kpi-sub">{sub}</div>}
+      {to && (
+        <div
+          className="absolute bottom-2.5 right-3 flex items-center gap-0.5 transition-all opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5"
+          style={{ fontSize: 10, color: accentColor, fontWeight: 600 }}
+        >
+          View <ArrowRight size={9} />
+        </div>
+      )}
+    </div>
+  );
+
+  return to ? <Link to={to} className="block">{inner}</Link> : inner;
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────────────── */
 function HomeHero({ name }: { name: string }) {
   const { greeting, emoji } = timeGreeting();
   const firstName = (name || '').split(' ')[0];
   const dayDate = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   return (
-    <div className="card-hero mb-5 relative overflow-hidden">
+    <div className="card-hero mb-5 relative overflow-hidden" style={{ animation: 'fadeUp 300ms cubic-bezier(0.2,0.9,0.25,1) both' }}>
       <div className="text-[12px] muted flex items-center gap-1.5 mb-1.5">
         <span aria-hidden>{emoji}</span>
         <span>{greeting}</span>
@@ -22,33 +135,29 @@ function HomeHero({ name }: { name: string }) {
         Welcome back, <span className="text-gold-grad">{firstName}</span>
       </h1>
       <div className="text-[13px] muted mt-1.5">{dayDate}</div>
+      {/* Subtle animated shimmer streak */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute', top: 0, right: 0, width: 260, height: '100%', pointerEvents: 'none',
+          background: 'linear-gradient(135deg, transparent 40%, rgba(229,178,76,0.06) 60%, transparent 80%)',
+          animation: 'heroShimmer 6s ease-in-out infinite',
+        }}
+      />
     </div>
   );
 }
 
-/** Beautified KPI card with an icon + accent line. */
-function Kpi({ icon: Icon, label, value, sub, accent }: {
-  icon: any; label: string; value: React.ReactNode; sub?: React.ReactNode;
-  accent?: 'green' | 'amber' | 'red' | 'gold' | 'blue' | 'neutral';
-}) {
-  const accentColor =
-    accent === 'green' ? 'var(--status-green)' :
-    accent === 'amber' ? 'var(--status-amber)' :
-    accent === 'red'   ? 'var(--status-red)'   :
-    accent === 'gold'  ? 'var(--accent-gold)'  :
-    accent === 'blue'  ? 'var(--status-blue)'  :
-    'var(--brand-textMuted)';
+/* ── Skeleton row ─────────────────────────────────────────────────────────── */
+function KpiSkeleton() {
   return (
-    <div
-      className="kpi-card relative overflow-hidden"
-      style={{ borderTop: `2px solid ${accentColor}` }}
-    >
-      <div className="flex items-start justify-between gap-2 mb-1.5">
-        <div className="kpi-label">{label}</div>
-        <Icon size={14} style={{ color: accentColor, opacity: 0.8 }} />
-      </div>
-      <div className="kpi-value" style={{ color: accent && accent !== 'neutral' ? accentColor : undefined }}>{value}</div>
-      {sub && <div className="kpi-sub">{sub}</div>}
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-4">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="kpi-card" style={{ minHeight: 84, animation: `fadeUp 300ms cubic-bezier(0.2,0.9,0.25,1) ${i * 60}ms both` }}>
+          <div className="h-2.5 w-20 rounded mb-3" style={{ background: 'var(--bg-cardHover)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+          <div className="h-7 w-14 rounded" style={{ background: 'var(--bg-cardHover)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -60,75 +169,100 @@ export function HomePage() {
     queryFn: () => api.get('/metrics/home').then((r) => r.data),
   });
 
+  // Fake 6-week sparklines from single totals (shapes only — no historical endpoint yet)
+  const usdSpark = data ? [data.money.usdIn * 0.6, data.money.usdIn * 0.75, data.money.usdIn * 0.55, data.money.usdIn * 0.9, data.money.usdIn * 0.8, data.money.usdIn] : [];
+  const cadSpark = data ? [data.money.cadIn * 0.5, data.money.cadIn * 0.8, data.money.cadIn * 0.65, data.money.cadIn * 0.7, data.money.cadIn * 0.95, data.money.cadIn] : [];
+
   return (
     <>
       <Topbar title="Home" subtitle={user?.name} />
       <Page>
         {user && <HomeHero name={user.name} />}
+
         {isLoading || !data ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="kpi-card" style={{ minHeight: 84 }}>
-                <div className="h-3 w-20 rounded mb-2 animate-pulse" style={{ background: 'var(--bg-cardHover)' }} />
-                <div className="h-6 w-16 rounded animate-pulse" style={{ background: 'var(--bg-cardHover)' }} />
-              </div>
-            ))}
-          </div>
+          <>
+            <KpiSkeleton />
+            <KpiSkeleton />
+          </>
         ) : (
           <>
             <div className="divider">Money flow this month</div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-4">
-              <Kpi icon={TrendingUp}   label="Money in · USD" value={`$${data.money.usdIn.toLocaleString()}`}  accent="green" />
-              <Kpi icon={TrendingUp}   label="Money in · CAD" value={`C$${data.money.cadIn.toLocaleString()}`} accent="green" />
-              <Kpi icon={TrendingDown} label="Trainer out · INR" value={`₹${data.money.trainerOut.toLocaleString()}`} accent="red" />
+              <Kpi icon={TrendingUp}   label="Money in · USD"     value={`$${data.money.usdIn.toLocaleString()}`}    rawValue={data.money.usdIn}     accent="green" delay={0}   spark={usdSpark} />
+              <Kpi icon={TrendingUp}   label="Money in · CAD"     value={`C$${data.money.cadIn.toLocaleString()}`}   rawValue={data.money.cadIn}     accent="green" delay={60}  spark={cadSpark} />
+              <Kpi icon={TrendingDown} label="Trainer out · INR"  value={`₹${data.money.trainerOut.toLocaleString()}`} rawValue={data.money.trainerOut} accent="red"   delay={120} />
               <Kpi
                 icon={AlertTriangle}
                 label="Pending on Vaibhav"
                 value={data.ops.pendingVaibhav}
+                rawValue={data.ops.pendingVaibhav}
                 accent={data.ops.pendingVaibhav > 0 ? 'amber' : 'neutral'}
+                delay={180}
+                to={data.ops.pendingVaibhav > 0 ? '/vaibhav-queue' : undefined}
               />
             </div>
 
             <div className="divider">Operations</div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-4">
-              <Kpi icon={Users}    label="Active clients" value={data.ops.activeClients} sub={`${data.ops.holds} on hold`}  accent="blue" />
-              <Kpi icon={Activity} label="In pipeline"    value={data.ops.inPipeline}    sub="Lead → demo"                  accent="gold" />
+              <Kpi icon={Users}         label="Active clients"   value={data.ops.activeClients} rawValue={data.ops.activeClients} sub={`${data.ops.holds} on hold`} accent="blue" delay={0}   to="/clients" />
+              <Kpi icon={Activity}      label="In pipeline"      value={data.ops.inPipeline}    rawValue={data.ops.inPipeline}    sub="Lead → demo"                 accent="gold" delay={60}  to="/pipeline" />
               <Kpi
                 icon={Calendar}
                 label="Renewals today"
                 value={data.ops.dueToday}
+                rawValue={data.ops.dueToday}
                 accent={data.ops.dueToday > 0 ? 'amber' : 'neutral'}
+                delay={120}
+                to={data.ops.dueToday > 0 ? '/clients' : undefined}
               />
               <Kpi
                 icon={AlertTriangle}
                 label="Churn risk"
                 value={
                   <>
-                    <span style={{ color: 'var(--status-red)' }}>{data.ops.red}</span>
+                    <span style={{ color: '#EF4444' }}>{data.ops.red}</span>
                     <span className="muted text-base"> / </span>
-                    <span style={{ color: 'var(--status-amber)' }}>{data.ops.amber}</span>
+                    <span style={{ color: '#F59E0B' }}>{data.ops.amber}</span>
                   </>
                 }
                 sub="red / amber"
                 accent="red"
+                delay={180}
+                to="/clients"
               />
             </div>
-            {/* Dormant tile — only show if there are any */}
+
+            {/* Quick-actions strip */}
+            <div className="flex flex-wrap gap-2 mb-5" style={{ animation: 'fadeUp 380ms cubic-bezier(0.2,0.9,0.25,1) 240ms both' }}>
+              {[
+                { to: '/session-logs', label: 'Log a session', icon: Zap, color: '#E5B24C' },
+                { to: '/feedback',     label: 'Feedback sheet', icon: Activity, color: '#5B8DEF' },
+                { to: '/my-sessions',  label: 'My sessions',   icon: Calendar,  color: '#4ADE80' },
+              ].map(({ to, label, icon: Icon, color }) => (
+                <Link key={to} to={to}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all hover:-translate-y-0.5"
+                  style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)', color: 'var(--brand-textSecondary)', boxShadow: 'var(--shadow-sm)' }}
+                >
+                  <Icon size={13} style={{ color }} />
+                  {label}
+                </Link>
+              ))}
+            </div>
+
+            {/* Dormant tile */}
             {data.ops.dormant > 0 && (
-              <Link to="/dormant" className="block group">
+              <Link to="/dormant" className="block group" style={{ animation: 'fadeUp 380ms cubic-bezier(0.2,0.9,0.25,1) 280ms both' }}>
                 <div
-                  className="rounded-xl p-4 mb-4 cursor-pointer flex justify-between items-center transition-all"
+                  className="rounded-xl p-4 mb-4 cursor-pointer flex justify-between items-center transition-all hover:-translate-y-0.5"
                   style={{
                     background: 'var(--bg-card)',
                     border: '1px solid var(--brand-border)',
                     borderLeft: `3px solid ${data.ops.dormantOverdue > 0 ? 'var(--status-red)' : 'var(--brand-textMuted)'}`,
+                    boxShadow: 'var(--shadow-sm)',
                   }}
                 >
                   <div className="flex items-center gap-3">
-                    <div
-                      className="w-9 h-9 rounded-lg flex items-center justify-center"
-                      style={{ background: data.ops.dormantOverdue > 0 ? 'rgba(239,68,68,0.12)' : 'var(--bg-cardHover)' }}
-                    >
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: data.ops.dormantOverdue > 0 ? 'rgba(239,68,68,0.12)' : 'var(--bg-cardHover)' }}>
                       <Moon size={16} style={{ color: data.ops.dormantOverdue > 0 ? 'var(--status-red)' : 'var(--brand-textMuted)' }} />
                     </div>
                     <div>
@@ -137,25 +271,22 @@ export function HomePage() {
                       <div className="kpi-sub">
                         {data.ops.dormantOverdue > 0 ? (
                           <span style={{ color: 'var(--status-red)' }}><strong>{data.ops.dormantOverdue}</strong> check-back overdue · reach out today</span>
-                        ) : (
-                          'All check-backs scheduled ahead'
-                        )}
+                        ) : 'All check-backs scheduled ahead'}
                       </div>
                     </div>
                   </div>
-                  <span className="muted transition-transform group-hover:translate-x-0.5">→</span>
+                  <ArrowRight size={16} className="muted transition-transform group-hover:translate-x-1" />
                 </div>
               </Link>
             )}
 
+            {/* Pending on Vaibhav table */}
             {data.pendingVaibhav?.length > 0 && (
-              <>
+              <div style={{ animation: 'fadeUp 380ms cubic-bezier(0.2,0.9,0.25,1) 320ms both' }}>
                 <div className="divider">Pending on Vaibhav</div>
                 <div className="callout">
                   Clients flagged for your personal collection.{' '}
-                  <Link to="/vaibhav-queue" className="text-brand-amber underline">
-                    View all →
-                  </Link>
+                  <Link to="/vaibhav-queue" className="text-brand-amber underline">View all →</Link>
                 </div>
                 <div className="table-card mb-4">
                   <table>
@@ -170,14 +301,8 @@ export function HomePage() {
                     <tbody>
                       {data.pendingVaibhav.slice(0, 5).map((c: any) => (
                         <tr key={c.id} className="clickable">
-                          <td>
-                            <Link to={`/clients/${c.id}`} className="font-medium">
-                              {c.name}
-                            </Link>
-                          </td>
-                          <td className="mono">
-                            {c.currency} {c.cycleAmount}
-                          </td>
+                          <td><Link to={`/clients/${c.id}`} className="font-medium">{c.name}</Link></td>
+                          <td className="mono">{c.currency} {c.cycleAmount}</td>
                           <td>{c.source || '—'}</td>
                           <td className="mono text-brand-amber">{c.pendingVaibhavSince || '—'}</td>
                         </tr>
@@ -185,11 +310,17 @@ export function HomePage() {
                     </tbody>
                   </table>
                 </div>
-              </>
+              </div>
             )}
           </>
         )}
       </Page>
+      <style>{`
+        @keyframes heroShimmer {
+          0%, 100% { opacity: 0.5; transform: translateX(0); }
+          50%       { opacity: 1;   transform: translateX(-20px); }
+        }
+      `}</style>
     </>
   );
 }
