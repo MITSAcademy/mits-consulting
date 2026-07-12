@@ -624,25 +624,34 @@ export function IdleGame() {
   const [showToast, setShowToast] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showModalRef = useRef(false); // stable ref so resetTimer never needs showModal in deps
+
+  // Keep ref in sync with state
+  useEffect(() => { showModalRef.current = showModal; }, [showModal]);
 
   const resetTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (showModal) return; // don't reset while game is open
-    setShowToast(false);
+    if (showModalRef.current) return; // game open — don't interfere
     timerRef.current = setTimeout(() => {
       setShowToast(true);
     }, IDLE_MS);
-  }, [showModal]);
+  }, []); // stable — no deps needed now
 
   useEffect(() => {
     const events = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
-    events.forEach((e) => window.addEventListener(e, resetTimer, { passive: true }));
-    resetTimer();
+    // User activity: clear toast (they're back) then restart timer
+    const onActivity = () => {
+      if (showModalRef.current) return;
+      setShowToast(false);
+      resetTimer();
+    };
+    events.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
+    resetTimer(); // start on mount
     return () => {
-      events.forEach((e) => window.removeEventListener(e, resetTimer));
+      events.forEach((e) => window.removeEventListener(e, onActivity));
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [resetTimer]);
+  }, [resetTimer]); // resetTimer is stable so this runs once
 
   function openGame() {
     setShowToast(false);
@@ -656,8 +665,8 @@ export function IdleGame() {
 
   function dismiss() {
     setShowToast(false);
-    // Don't show again for 30 minutes
     if (timerRef.current) clearTimeout(timerRef.current);
+    // Don't show again for 30 minutes
     timerRef.current = setTimeout(() => setShowToast(true), 30 * 60 * 1000);
   }
 
