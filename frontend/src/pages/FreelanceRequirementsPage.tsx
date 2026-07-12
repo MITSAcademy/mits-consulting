@@ -297,6 +297,7 @@ function ReqCard({ req }: { req: FreelanceReq }) {
   const isRecruiter = user?.role === 'recruiter';
   const [showComments, setShowComments] = useState(false);
   const [showPropose, setShowPropose] = useState(false);
+  const [removeConfirm, setRemoveConfirm] = useState<number | null>(null);
 
   const patch = useMutation({
     mutationFn: (data: Partial<FreelanceReq>) => api.patch(`/freelance-requirements/${req.id}`, data),
@@ -414,11 +415,19 @@ function ReqCard({ req }: { req: FreelanceReq }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {p.addedByName && <span style={{ fontSize: 10, color: 'var(--brand-textMuted)' }}>by {p.addedByName}</span>}
                         {!isRecruiter && (
-                          <button
-                            onClick={() => { if (confirm('Remove this proposal?')) removeProposal.mutate(i); }}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-red)', padding: 2 }}
-                            title="Remove proposal"
-                          ><X size={12} /></button>
+                          removeConfirm === i ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                              Remove?{' '}
+                              <button onClick={() => { removeProposal.mutate(removeConfirm!); setRemoveConfirm(null); }} style={{ color: 'var(--status-red)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Yes</button>
+                              <button onClick={() => setRemoveConfirm(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-textMuted)' }}>No</button>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setRemoveConfirm(i)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-red)', padding: 2 }}
+                              title="Remove proposal"
+                            ><X size={12} /></button>
+                          )
                         )}
                       </div>
                     </div>

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useUI } from '@/store/ui';
+import { Topbar, Page } from '@/components/layout/AppLayout';
 
 const FLAG_LABELS: Record<string, string> = {
   regularCalls: 'Regular Calls',
@@ -94,14 +95,9 @@ export default function FeatureFlagsPage() {
   const envDef = envDefaults || {};
 
   return (
-    <div className="p-6 max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold" style={{ color: '#F5EFE0' }}>Feature Flags</h1>
-        <p className="text-sm mt-1" style={{ color: 'rgba(232,226,211,0.55)' }}>
-          Per-user overrides for feature flags. Greyed toggles inherit the env default; bright toggles have an explicit override.
-        </p>
-      </div>
-
+    <>
+      <Topbar title="Feature flags" />
+      <Page>
       <div
         className="rounded-xl overflow-auto"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}
@@ -235,6 +231,7 @@ export default function FeatureFlagsPage() {
           </tbody>
         </table>
       </div>
-    </div>
+      </Page>
+    </>
   );
 }

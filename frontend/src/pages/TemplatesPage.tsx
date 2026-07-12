@@ -4,7 +4,7 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { EmptyState } from '@/components/EmptyState';
@@ -16,13 +16,19 @@ export function TemplatesPage() {
   const { data } = useQuery({ queryKey: ['templates'], queryFn: () => api.get('/templates').then((r) => r.data) });
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ id: '', kind: 'Email', stage: '', name: '', subject: '', body: '' });
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  useEffect(() => { if (!open) setF({ id: '', name: '', body: '', kind: 'Email', stage: '', subject: '' }); }, [open]);
+
   const create = useMutation({
     mutationFn: () => api.post('/templates', { ...f, variables: extractVars(f.body + ' ' + f.subject) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['templates'] }); setOpen(false); showToast('Saved'); },
+    onError: () => showToast('Failed to save template', 'error'),
   });
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/templates/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['templates'] }),
+    onError: () => showToast('Failed to delete template', 'error'),
   });
 
   return (
@@ -39,7 +45,7 @@ export function TemplatesPage() {
               <div className="form-row md:col-span-2"><Label>Subject</Label><Input value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} /></div>
               <div className="form-row md:col-span-2"><Label>Body — use {`{{var}}`} placeholders</Label><Textarea rows={10} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} /></div>
             </div>
-            <DialogFooter><Button onClick={() => setOpen(false)}>Cancel</Button><Button variant="primary" disabled={!f.id || !f.name} onClick={() => create.mutate()}>Save</Button></DialogFooter>
+            <DialogFooter><Button onClick={() => setOpen(false)}>Cancel</Button><Button variant="primary" disabled={!f.id || !f.name || create.isPending} onClick={() => create.mutate()}>Save</Button></DialogFooter>
           </DialogContent>
         </Dialog>
       } />
@@ -57,7 +63,15 @@ export function TemplatesPage() {
             <div key={t.id} className="card">
               <div className="card-h">
                 <span>{t.name} <Pill color={t.kind === 'WhatsApp' ? 'green' : 'blue'}>{t.kind}</Pill> {t.stage && <Pill color="grey">{t.stage}</Pill>}</span>
-                <Button size="sm" variant="danger" onClick={() => { if (confirm('Delete?')) del.mutate(t.id); }}>Delete</Button>
+                {deleteConfirm === t.id ? (
+                  <span className="flex items-center gap-1 text-[11px]">
+                    Delete?{' '}
+                    <Button size="sm" variant="danger" onClick={() => { del.mutate(deleteConfirm!); setDeleteConfirm(null); }}>Yes</Button>
+                    <Button size="sm" onClick={() => setDeleteConfirm(null)}>No</Button>
+                  </span>
+                ) : (
+                  <Button size="sm" variant="danger" onClick={() => setDeleteConfirm(t.id)}>Delete</Button>
+                )}
               </div>
               {t.subject && <div className="text-xs mb-1.5 muted"><strong>Subject:</strong> {t.subject}</div>}
               <pre className="text-xs whitespace-pre-wrap bg-bg-input p-3 rounded">{t.body}</pre>

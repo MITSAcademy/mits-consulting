@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
@@ -34,6 +34,10 @@ function LinkFormDialog({
   const showToast = useUI((s) => s.showToast);
   const blank = { label: '', platform: 'Zoom', url: '' };
   const [f, setF] = useState(existing ? { label: existing.label, platform: existing.platform, url: existing.url } : blank);
+
+  useEffect(() => {
+    setF(existing ? { label: existing.label, url: existing.url, platform: existing.platform } : { label: '', url: '', platform: '' });
+  }, [existing]);
 
   const save = useMutation({
     mutationFn: () =>
@@ -98,6 +102,7 @@ export default function MeetingLinksPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   function copyUrl(id: string, url: string) {
     navigator.clipboard.writeText(url);
@@ -207,15 +212,21 @@ export default function MeetingLinksPage() {
                             existing={link}
                             trigger={<button className="p-1 rounded hover:bg-white/5"><Pencil size={12} /></button>}
                           />
-                          <button
-                            className="p-1 rounded hover:bg-white/5"
-                            style={{ color: 'var(--status-red)' }}
-                            onClick={() => {
-                              if (confirm(`Delete "${link.label}"?`)) remove.mutate(link.id);
-                            }}
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                          {deleteConfirm === link.id ? (
+                            <span className="flex items-center gap-1 text-[11px]">
+                              Delete?{' '}
+                              <button className="font-bold" style={{ color: 'var(--status-red)', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => { remove.mutate(deleteConfirm!); setDeleteConfirm(null); }}>Yes</button>
+                              <button className="muted" style={{ background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setDeleteConfirm(null)}>No</button>
+                            </span>
+                          ) : (
+                            <button
+                              className="p-1 rounded hover:bg-white/5"
+                              style={{ color: 'var(--status-red)' }}
+                              onClick={() => setDeleteConfirm(link.id)}
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>

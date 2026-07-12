@@ -1,4 +1,12 @@
 import { useEffect, useState } from 'react';
+
+function useConfirm() {
+  const [pending, setPending] = useState<(() => void) | null>(null);
+  const ask = (fn: () => void) => setPending(() => fn);
+  const yes = () => { pending?.(); setPending(null); }
+  const no = () => setPending(null);
+  return { asking: pending !== null, ask, yes, no };
+}
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { useAuth } from '@/store/auth';
@@ -81,6 +89,7 @@ interface SmtpStatus {
 function MyEmailSection() {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
+  const clearConfirm = useConfirm();
   const { data: smtp } = useQuery<SmtpStatus>({
     queryKey: ['my-smtp'],
     queryFn: () => api.get('/users/me/smtp').then((r) => r.data),
@@ -182,11 +191,17 @@ function MyEmailSection() {
               <Button size="sm" onClick={() => test.mutate()} disabled={test.isPending}>
                 <Send size={12}/> {test.isPending ? 'Sending…' : 'Send test'}
               </Button>
-              <Button size="sm" onClick={() => {
-                if (confirm('Clear your SMTP config? Outbound emails will fall back to the system sender.')) clear.mutate();
-              }} disabled={clear.isPending}>
-                <Trash2 size={12}/> Clear
-              </Button>
+              {clearConfirm.asking ? (
+                <span className="flex items-center gap-1 text-[11px]">
+                  Clear SMTP?{' '}
+                  <Button size="sm" variant="danger" onClick={clearConfirm.yes}>Yes</Button>
+                  <Button size="sm" onClick={clearConfirm.no}>No</Button>
+                </span>
+              ) : (
+                <Button size="sm" onClick={() => clearConfirm.ask(() => clear.mutate())} disabled={clear.isPending}>
+                  <Trash2 size={12}/> Clear
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -243,6 +258,8 @@ export function SettingsPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['flags'] }); showToast('Flags reset to defaults'); },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
+
+  const resetConfirm = useConfirm();
 
   return (
     <>
@@ -384,14 +401,17 @@ export function SettingsPage() {
             </div>
 
             <div style={{ marginTop: 16 }}>
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (confirm('Reset all feature flags to defaults?')) reset.mutate();
-                }}
-              >
-                Reset flags to defaults
-              </Button>
+              {resetConfirm.asking ? (
+                <span className="flex items-center gap-1 text-[11px]">
+                  Reset all flags?{' '}
+                  <Button size="sm" variant="danger" onClick={resetConfirm.yes}>Yes</Button>
+                  <Button size="sm" onClick={resetConfirm.no}>No</Button>
+                </span>
+              ) : (
+                <Button size="sm" onClick={() => resetConfirm.ask(() => reset.mutate())}>
+                  Reset flags to defaults
+                </Button>
+              )}
             </div>
           </>
         )}
@@ -415,6 +435,7 @@ function InfoCell({ label, value }: { label: string; value: React.ReactNode }) {
 function CleanupSeedButton() {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
+  const cleanupConfirm = useConfirm();
   const cleanup = useMutation({
     mutationFn: () => api.post('/seed/cleanup'),
     onSuccess: (r: any) => {
@@ -425,16 +446,21 @@ function CleanupSeedButton() {
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Cleanup failed', 'error'),
   });
+  if (cleanupConfirm.asking) {
+    return (
+      <span className="flex items-center gap-1 text-[11px]">
+        Archive old clients?{' '}
+        <Button size="sm" variant="danger" onClick={cleanupConfirm.yes}>Yes</Button>
+        <Button size="sm" onClick={cleanupConfirm.no}>No</Button>
+      </span>
+    );
+  }
   return (
     <Button
       size="sm"
       variant="ghost"
       disabled={cleanup.isPending}
-      onClick={() => {
-        if (confirm('Retire clients not in the active PDF sheet? They will be set Inactive and logged to Retrospective. Run BEFORE re-seeding.')) {
-          cleanup.mutate();
-        }
-      }}
+      onClick={() => cleanupConfirm.ask(() => cleanup.mutate())}
     >
       {cleanup.isPending ? 'Archiving…' : '🗂 Archive old seeded clients'}
     </Button>
@@ -444,6 +470,7 @@ function CleanupSeedButton() {
 function DedupButton() {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
+  const dedupConfirm = useConfirm();
   const dedup = useMutation({
     mutationFn: () => api.post('/seed/dedup'),
     onSuccess: (r: any) => {
@@ -454,16 +481,21 @@ function DedupButton() {
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Dedup failed', 'error'),
   });
+  if (dedupConfirm.asking) {
+    return (
+      <span className="flex items-center gap-1 text-[11px]">
+        Permanently fix duplicates?{' '}
+        <Button size="sm" variant="danger" onClick={dedupConfirm.yes}>Yes</Button>
+        <Button size="sm" onClick={dedupConfirm.no}>No</Button>
+      </span>
+    );
+  }
   return (
     <Button
       size="sm"
       variant="danger"
       disabled={dedup.isPending}
-      onClick={() => {
-        if (confirm('This will permanently delete duplicate session rows and fix client names in the live database. Continue?')) {
-          dedup.mutate();
-        }
-      }}
+      onClick={() => dedupConfirm.ask(() => dedup.mutate())}
     >
       {dedup.isPending ? 'Fixing…' : '🧹 Fix duplicates'}
     </Button>
@@ -521,7 +553,6 @@ function SyncPaymentSheetButton() {
       qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
       const unmatched = r.data?.unmatched || [];
       showToast(`Synced ${r.data?.matched} clients ✓${unmatched.length ? ` · ${unmatched.length} unmatched` : ''}`);
-      if (unmatched.length) console.warn('Unmatched clients:', unmatched);
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Sync failed', 'error'),
   });
@@ -570,6 +601,7 @@ function SeedRegularTrainingsButton() {
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
   const [preview, setPreview] = useState<string[] | null>(null);
+  const seedConfirm = useConfirm();
 
   const dryRun = useMutation({
     mutationFn: () => api.post('/seed/regular-trainings?dry=true'),
@@ -595,18 +627,22 @@ function SeedRegularTrainingsButton() {
         <Button size="sm" variant="default" disabled={dryRun.isPending || seed.isPending} onClick={() => dryRun.mutate()}>
           {dryRun.isPending ? 'Previewing…' : '🔍 Preview changes'}
         </Button>
-        <Button
-          size="sm"
-          variant="primary"
-          disabled={seed.isPending || dryRun.isPending}
-          onClick={() => {
-            if (confirm('This will write to the live database. Run "Preview changes" first to see exactly what will happen. Continue?')) {
-              seed.mutate();
-            }
-          }}
-        >
-          {seed.isPending ? 'Seeding…' : '↺ Apply to database'}
-        </Button>
+        {seedConfirm.asking ? (
+          <span className="flex items-center gap-1 text-[11px]">
+            Write to live DB?{' '}
+            <Button size="sm" variant="danger" onClick={seedConfirm.yes}>Yes</Button>
+            <Button size="sm" onClick={seedConfirm.no}>No</Button>
+          </span>
+        ) : (
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={seed.isPending || dryRun.isPending}
+            onClick={() => seedConfirm.ask(() => seed.mutate())}
+          >
+            {seed.isPending ? 'Seeding…' : '↺ Apply to database'}
+          </Button>
+        )}
       </div>
       {preview && (
         <div className="w-full mt-2 rounded border text-[11px] font-mono p-3 max-h-64 overflow-y-auto" style={{ background: 'var(--brand-surface)', borderColor: 'var(--brand-borderSoft)' }}>

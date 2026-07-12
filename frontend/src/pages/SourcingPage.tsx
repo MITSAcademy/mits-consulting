@@ -760,6 +760,7 @@ function AddTrainerInlineModal({ qc, showToast, onClose }: any) {
 function ProposalRowWithOutreach({ proposal }: { proposal: any }) {
   const [open, setOpen] = useState(false);
   const [alreadyOpen, setAlreadyOpen] = useState(false);
+  const [removeConfirm, setRemoveConfirm] = useState(false);
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
   const hasEmail = !!(proposal.trainer?.email || proposal.trainerEmail);
@@ -785,12 +786,20 @@ function ProposalRowWithOutreach({ proposal }: { proposal: any }) {
         <div className="flex items-center gap-1.5">
           <Pill color={proposal.verification === 'Pass' ? 'green' : proposal.verification === 'Fail' ? 'red' : 'amber'}>{proposal.verification}</Pill>
           {!isPassed && (
-            <button
-              onClick={() => { if (confirm('Remove this trainer proposal?')) removeMut.mutate(); }}
-              disabled={removeMut.isPending}
-              title="Remove this proposal"
-              style={{ color: 'var(--status-red)', fontSize: 13, lineHeight: 1, padding: '0 4px', opacity: removeMut.isPending ? 0.4 : 1, cursor: 'pointer', background: 'none', border: 'none' }}
-            >✕</button>
+            removeConfirm ? (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }}>
+                Remove?{' '}
+                <button onClick={() => { removeMut.mutate(); setRemoveConfirm(false); }} style={{ color: 'var(--status-red)', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer' }}>Yes</button>
+                <button onClick={() => setRemoveConfirm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-textMuted)' }}>No</button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setRemoveConfirm(true)}
+                disabled={removeMut.isPending}
+                title="Remove this proposal"
+                style={{ color: 'var(--status-red)', fontSize: 13, lineHeight: 1, padding: '0 4px', opacity: removeMut.isPending ? 0.4 : 1, cursor: 'pointer', background: 'none', border: 'none' }}
+              >✕</button>
+            )
           )}
         </div>
       </div>

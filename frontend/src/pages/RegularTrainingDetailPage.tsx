@@ -117,6 +117,8 @@ export function RegularTrainingDetailPage() {
     refetchInterval: 5 * 60_000,
   });
 
+  const [archiveConfirm, setArchiveConfirm] = useState(false);
+
   const archive = useMutation({
     mutationFn: () => api.delete(`/regular-trainings/trainings/${id}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['regular-trainings'] }); qc.invalidateQueries({ queryKey: ['regular-training', id] }); showToast('Training archived'); },
@@ -149,9 +151,17 @@ export function RegularTrainingDetailPage() {
           <>
             <ScheduleSessionButton trainingId={data.id} defaultHostId={data.hostedByDefault?.id} />
             <EditTrainingButton training={data} />
-            <Button variant="danger" onClick={() => { if (confirm(`Archive "${data.name}"?`)) archive.mutate(); }}>
-              <Archive size={12}/> Archive
-            </Button>
+            {archiveConfirm ? (
+              <span className="flex items-center gap-1 text-[12px]">
+                Confirm archive?{' '}
+                <Button variant="danger" onClick={() => { archive.mutate(); setArchiveConfirm(false); }}>Yes, archive</Button>
+                <Button onClick={() => setArchiveConfirm(false)}>Cancel</Button>
+              </span>
+            ) : (
+              <Button variant="danger" onClick={() => setArchiveConfirm(true)}>
+                <Archive size={12}/> Archive
+              </Button>
+            )}
           </>
         }
       />
@@ -463,6 +473,21 @@ function EditTrainingButton({ training }: { training: TrainingDetail }) {
     trainerId:             training.trainer?.id            || '',
     trainerReplacementReason: '',
   });
+
+  useEffect(() => {
+    setForm({
+      name: training.name,
+      status: training.status,
+      recordingAccountEmail: training.recordingAccountEmail || '',
+      recordingAccountLabel: training.recordingAccountLabel || '',
+      recordingFolderUrl:    training.recordingFolderUrl    || '',
+      scheduleNotes:         training.scheduleNotes         || '',
+      notes:                 training.notes                 || '',
+      hostedByDefaultId:     training.hostedByDefault?.id   || '',
+      trainerId:             training.trainer?.id            || '',
+      trainerReplacementReason: '',
+    });
+  }, [training]);
 
   const originalTrainerId = training.trainer?.id || '';
   const trainerChanged = form.trainerId !== originalTrainerId && originalTrainerId !== '';

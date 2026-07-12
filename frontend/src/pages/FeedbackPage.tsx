@@ -113,6 +113,7 @@ export function FeedbackPage() {
   // Inline editing state: clientId → { status, notes }
   const [inlineEdits, setInlineEdits] = useState<Record<string, { status: string; notes: string }>>({});
   const [savingInline, setSavingInline] = useState<Record<string, boolean>>({});
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const update = useMutation({
     mutationFn: (data: any) => api.patch(`/feedback/${editRow.id}`, data),
@@ -123,6 +124,7 @@ export function FeedbackPage() {
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/feedback/${id}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['feedback', selectedWeek] }); showToast('Deleted'); },
+    onError: () => showToast('Failed to delete feedback', 'error'),
   });
 
   // Ensure a feedback record exists for client, then open the Log Activity dialog
@@ -399,7 +401,15 @@ export function FeedbackPage() {
                         {fbRec && isCurrentWeek && (
                           <>
                             <Button size="sm" onClick={() => setEditRow({ ...fbRec, trainerId: fbRec.trainer?.id || '', communicationStatus: fbRec.communicationStatus || '' })}>Edit</Button>
-                            <Button size="sm" variant="danger" onClick={() => { if (confirm('Delete this feedback record?')) del.mutate(fbRec.id); }}>Del</Button>
+                            {deleteConfirm === fbRec.id ? (
+                              <span className="flex items-center gap-1 text-[11px]">
+                                Delete?{' '}
+                                <Button size="sm" variant="danger" onClick={() => { del.mutate(deleteConfirm!); setDeleteConfirm(null); }}>Yes</Button>
+                                <Button size="sm" onClick={() => setDeleteConfirm(null)}>No</Button>
+                              </span>
+                            ) : (
+                              <Button size="sm" variant="danger" onClick={() => setDeleteConfirm(fbRec.id)}>Del</Button>
+                            )}
                           </>
                         )}
                         {isCurrentWeek && (
