@@ -76,6 +76,18 @@ const GUIDES: GuideSection[] = [
         ],
       },
       {
+        title: 'Understand the Pipeline overview page',
+        keywords: ['pipeline overview', 'pipeline page', 'funnel', 'stage counts', 'doubts', 'help'],
+        roles: [],
+        steps: [
+          "Go to the Pipeline page from the sidebar",
+          'Each column shows a lifecycle stage and the clients currently in it',
+          'Click a client card to jump to their detail page and update their stage',
+          'Use this page as your at-a-glance view of where every client stands',
+          "If anything here is unclear, use this Help panel first — search a keyword or ask your manager",
+        ],
+      },
+      {
         title: 'Put a client on hold',
         keywords: ['hold', 'pause', 'resume', 'inactive'],
         roles: ['founder', 'manager', 'lead'],
