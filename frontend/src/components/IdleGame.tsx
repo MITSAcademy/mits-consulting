@@ -598,13 +598,13 @@ function IdleToast({ onPlay, onDismiss }: { onPlay: () => void; onDismiss: () =>
         <div style={{ fontSize: 11.5, color: 'var(--brand-textMuted)' }}>Take a 30-second break</div>
       </div>
       <button
-        onClick={onPlay}
+        onClick={(e) => { e.stopPropagation(); onPlay(); }}
         style={{ padding: '7px 14px', borderRadius: 9, background: 'var(--accent-gold)', color: '#0F1115', fontWeight: 700, fontSize: 12, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
       >
         Play a game
       </button>
       <button
-        onClick={onDismiss}
+        onClick={(e) => { e.stopPropagation(); onDismiss(); }}
         style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-textMuted)', fontSize: 18, padding: '2px 4px', lineHeight: 1, flexShrink: 0 }}
         title="Dismiss"
       >×</button>
