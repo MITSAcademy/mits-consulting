@@ -5,6 +5,7 @@ import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Textarea, Label } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
+import { Info } from 'lucide-react';
 
 export function BulkUploadPage() {
   const qc = useQueryClient();
@@ -126,6 +127,23 @@ export function BulkUploadPage() {
           <div className="card">
             <div className="card-h">Structured CSV → Clients</div>
             <Label>First row = headers. Supported: name, phoneCode, phoneDigits, email, engagementType, currency, source, skill</Label>
+            <div
+              className="flex gap-2 rounded-lg px-3 py-2.5 text-[12px]"
+              style={{
+                background: 'var(--bg-input)',
+                border: '1px solid var(--brand-borderSoft)',
+                color: 'var(--brand-textMuted)',
+              }}
+            >
+              <Info size={13} className="shrink-0 mt-0.5" />
+              <div className="space-y-0.5">
+                <div className="font-medium">Expected CSV columns (in order):</div>
+                <div>Name · Phone Code · Phone Number · Email · Skill · Source</div>
+                <div style={{ color: 'var(--brand-textMuted)', opacity: 0.75 }}>
+                  Example: John Smith · +91 · 9876543210 · john@email.com · Python · LinkedIn
+                </div>
+              </div>
+            </div>
             <Textarea rows={10} value={csv} onChange={(e) => setCsv(e.target.value)} placeholder={`name,phoneCode,phoneDigits,email,engagementType,currency,source,skill\nKarthik,+1,5125550101,k@x.com,Support,USD,LinkedIn,Java`} />
             <Button variant="primary" className="mt-2" onClick={() => importCsv.mutate()} disabled={!csv.trim()}>
               Import as clients

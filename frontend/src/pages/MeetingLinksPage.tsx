@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components
 import { Input, Label, Select } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
-import { Link, Pencil, Trash2, ExternalLink, Plus } from 'lucide-react';
+import { Link, Pencil, Trash2, ExternalLink, Plus, Copy } from 'lucide-react';
 
 const PLATFORMS = ['Zoom', 'Google Meet', 'Teams', 'Webex', 'Other'];
 
@@ -97,6 +97,13 @@ export default function MeetingLinksPage() {
   const user = useAuth((s) => s.user)!;
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  function copyUrl(id: string, url: string) {
+    navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  }
 
   const { data: links, isLoading } = useQuery<MeetingLink[]>({
     queryKey: ['meeting-links'],
@@ -170,17 +177,27 @@ export default function MeetingLinksPage() {
                       </span>
                     </td>
                     <td>
-                      <a
-                        href={link.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[12px] hover:underline flex items-center gap-1 max-w-xs truncate"
-                        style={{ color: 'var(--accent-gold)' }}
-                      >
-                        <Link size={10} />
-                        {link.url.replace(/^https?:\/\//, '').slice(0, 48)}
-                        <ExternalLink size={9} />
-                      </a>
+                      <div className="flex items-center gap-1.5">
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[12px] hover:underline flex items-center gap-1 max-w-xs truncate"
+                          style={{ color: 'var(--accent-gold)' }}
+                        >
+                          <Link size={10} />
+                          {link.url.replace(/^https?:\/\//, '').slice(0, 48)}
+                          <ExternalLink size={9} />
+                        </a>
+                        <button
+                          className="p-1 rounded hover:bg-white/5 shrink-0"
+                          title={copiedId === link.id ? 'Copied!' : 'Copy URL'}
+                          onClick={() => copyUrl(link.id, link.url)}
+                          style={{ color: copiedId === link.id ? 'var(--status-green)' : 'var(--brand-textMuted)' }}
+                        >
+                          <Copy size={11} />
+                        </button>
+                      </div>
                     </td>
                     <td className="text-[12px] muted">{link.owner?.name || '—'}</td>
                     <td>
