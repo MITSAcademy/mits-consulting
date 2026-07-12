@@ -6,17 +6,32 @@ import { X, Bug, Camera, Loader2 } from 'lucide-react';
 
 async function captureScreenshot(): Promise<string | null> {
   try {
-    // Use html2canvas if available, otherwise skip
-    const html2canvas = (await import('html2canvas')).default;
-    const canvas = await html2canvas(document.body, {
-      scale: 0.5,
-      useCORS: true,
-      logging: false,
-      ignoreElements: (el) => el.classList.contains('bug-report-modal'),
+    // Use native Screen Capture API — works on all modern browsers, no CORS issues
+    const stream = await (navigator.mediaDevices as any).getDisplayMedia({
+      video: { displaySurface: 'browser' },
+      preferCurrentTab: true,
     });
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    await video.play();
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(video.videoWidth * 0.5);
+    canvas.height = Math.round(video.videoHeight * 0.5);
+    canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height);
+    stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
     return canvas.toDataURL('image/png');
   } catch {
-    return null;
+    // User denied permission or browser unsupported — fall back to html2canvas
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const canvas = await html2canvas(document.body, {
+        scale: 0.5, useCORS: true, logging: false,
+        ignoreElements: (el) => el.classList.contains('bug-report-modal'),
+      });
+      return canvas.toDataURL('image/png');
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -33,18 +48,12 @@ export function BugReportModal() {
     return () => window.removeEventListener('mits:open-bug-report', handler);
   }, []);
 
-  // Auto-capture screenshot when modal opens
-  useEffect(() => {
-    if (!open) return;
+  async function takeScreenshot() {
     setCapturing(true);
-    // Small delay so the modal itself doesn't appear in the screenshot
-    const t = setTimeout(async () => {
-      const shot = await captureScreenshot();
-      setScreenshot(shot);
-      setCapturing(false);
-    }, 100);
-    return () => clearTimeout(t);
-  }, [open]);
+    const shot = await captureScreenshot();
+    setScreenshot(shot);
+    setCapturing(false);
+  }
 
   const submit = useMutation({
     mutationFn: () => api.post('/bug-reports', {
@@ -113,23 +122,30 @@ export function BugReportModal() {
           onBlur={(e) => { e.target.style.borderColor = 'var(--brand-border)'; }}
         />
 
-        {/* Screenshot preview */}
+        {/* Screenshot */}
         <div className="mt-3 mb-4">
           {capturing ? (
             <div className="flex items-center gap-2 text-[11px] muted">
-              <Loader2 size={12} className="animate-spin" /> Capturing screenshot...
+              <Loader2 size={12} className="animate-spin" /> Capturing — select this tab in the picker...
             </div>
           ) : screenshot ? (
             <div>
-              <div className="flex items-center gap-1.5 mb-1.5 text-[11px]" style={{ color: 'var(--status-green)' }}>
-                <Camera size={11} /> Screenshot captured
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] flex items-center gap-1" style={{ color: 'var(--status-green)' }}>
+                  <Camera size={11} /> Screenshot attached
+                </span>
+                <button onClick={() => setScreenshot(null)} className="text-[10px] muted hover:text-red-400 transition-colors">Remove</button>
               </div>
               <img src={screenshot} alt="Screenshot" style={{ width: '100%', borderRadius: 8, border: '1px solid var(--brand-borderSoft)', maxHeight: 120, objectFit: 'cover', objectPosition: 'top' }} />
             </div>
           ) : (
-            <div className="text-[11px] muted flex items-center gap-1.5">
-              <Camera size={11} /> No screenshot (html2canvas not available)
-            </div>
+            <button
+              onClick={takeScreenshot}
+              className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-lg transition-colors"
+              style={{ border: '1px dashed var(--brand-border)', color: 'var(--brand-textMuted)', background: 'var(--bg-input)', width: '100%', justifyContent: 'center' }}
+            >
+              <Camera size={12} /> Attach screenshot (optional)
+            </button>
           )}
         </div>
 
