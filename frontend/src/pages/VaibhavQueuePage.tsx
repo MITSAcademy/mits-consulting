@@ -39,8 +39,8 @@ export function VaibhavQueuePage() {
           <EmptyState
             icon={CheckCircle2}
             tone="green"
-            title="Queue is clear"
-            description="Nothing waiting on you right now. Nice work."
+            title="Queue is clear — you're on top of it 🙌"
+            description="No clients are flagged for your attention right now. The team appreciates you staying on it!"
           />
         ) : (
           <div className="table-card">

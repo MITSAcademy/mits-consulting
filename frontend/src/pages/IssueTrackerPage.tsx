@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { checkMilestone, incrementCount } from '@/lib/milestones';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
@@ -345,7 +346,15 @@ function UpdateIssueModal({ issue }: { issue: Issue }) {
 
   const update = useMutation({
     mutationFn: () => api.patch(`/issue-tracker/${issue.id}`, { status: f.status, resolutionNotes: f.resolutionNotes || undefined }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['issue-tracker'] }); setOpen(false); showToast('Issue updated'); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['issue-tracker'] });
+      setOpen(false);
+      showToast('Issue updated');
+      if (f.status === 'Resolved' || f.status === 'Closed') {
+        const count = incrementCount('issues_resolved');
+        checkMilestone('issues_resolved', count, showToast);
+      }
+    },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed to update', 'error'),
   });
 

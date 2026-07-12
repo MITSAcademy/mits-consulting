@@ -211,8 +211,8 @@ export function SalesClosingPage() {
           <EmptyState
             icon={LayoutGrid}
             tone="gold"
-            title="No clients in your pipeline"
-            description="Clients appear here once they reach Demo Done and move through closing to Active."
+            title="Your pipeline is clear 🎯"
+            description="Clients in the 'Sale Closing' stage appear here. Great work if you've moved them all through!"
           />
         ) : (
           <TileBoard items={items} />

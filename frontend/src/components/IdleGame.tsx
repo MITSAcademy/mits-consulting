@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { celebrate } from './CelebrationLayer';
+import { playTick, isSoundEnabled, setSoundEnabled } from '@/lib/sounds';
 
 const IDLE_MS = 5 * 60 * 1000;   // 5 min
 const GRID    = 16;                // 4×4
@@ -61,6 +62,7 @@ function GoldRush({ onDone }: { onDone: (score: number) => void }) {
   const done      = useRef(false);
 
   const tap = useCallback((cell: number) => {
+    playTick();
     const current = coinsRef.current[cell];
     if (!current) return;
     const newCoins = [...coinsRef.current];
@@ -449,6 +451,27 @@ function GamePicker({ onPick }: { onPick: (id: string) => void }) {
   );
 }
 
+// ── Sound toggle ──────────────────────────────────────────────────────────────
+function SoundToggle() {
+  const [on, setOn] = useState(() => isSoundEnabled());
+  function toggle() {
+    const next = !on;
+    setSoundEnabled(next);
+    setOn(next);
+  }
+  return (
+    <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+      <button
+        onClick={toggle}
+        style={{ fontSize: 11, color: 'var(--brand-textMuted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        title={on ? 'Mute sounds' : 'Enable sounds'}
+      >
+        {on ? '🔊' : '🔇'} Sound {on ? 'on' : 'off'}
+      </button>
+    </div>
+  );
+}
+
 // ── Modal shell ───────────────────────────────────────────────────────────────
 function GameModal({ onClose }: { onClose: () => void }) {
   const [screen, setScreen] = useState<'pick' | 'goldrush' | 'breathe' | 'trivia' | 'score'>('pick');
@@ -531,6 +554,9 @@ function GameModal({ onClose }: { onClose: () => void }) {
             ← Choose different game
           </button>
         )}
+
+        {/* Sound toggle — always visible in modal */}
+        <SoundToggle />
       </div>
 
       <style>{`

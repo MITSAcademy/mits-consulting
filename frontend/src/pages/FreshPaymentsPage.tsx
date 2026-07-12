@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { checkMilestone, incrementCount } from '@/lib/milestones';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
@@ -11,6 +12,7 @@ import { todayISO, minPastDate, maxTodayDate, minFutureDate } from '@/lib/utils'
 import { EmptyState } from '@/components/EmptyState';
 import { Wallet, ChevronLeft, ChevronRight } from 'lucide-react';
 import { celebrate } from '@/components/CelebrationLayer';
+import { playChime } from '@/lib/sounds';
 
 const PAGE_SIZE = 20;
 
@@ -68,6 +70,9 @@ export function FreshPaymentsPage() {
       setPage(0);
       showToast('🎉 Payment recorded — great work!');
       celebrate();
+      playChime();
+      const count = incrementCount('payments_recorded');
+      checkMilestone('payments_recorded', count, showToast);
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
@@ -142,8 +147,8 @@ export function FreshPaymentsPage() {
                     <EmptyState
                       icon={Wallet}
                       tone="gold"
-                      title="No payments recorded yet"
-                      description="Once a client pays, log it here so accounts can reconcile and the client moves to Sale Won."
+                      title="All clear — no pending payments"
+                      description="When clients are billed, they'll appear here. Record payments as they come in to keep the tracker accurate."
                     />
                   </td>
                 </tr>

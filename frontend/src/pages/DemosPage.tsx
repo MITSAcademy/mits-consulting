@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { checkMilestone, incrementCount } from '@/lib/milestones';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/store/ui';
@@ -64,6 +65,8 @@ export function DemosPage() {
       qc.invalidateQueries({ queryKey: ['clients'] });
       qc.invalidateQueries({ queryKey: ['nav-badges'] });
       showToast('Demo done → moved to sale closing queue');
+      const count = incrementCount('demos_done');
+      checkMilestone('demos_done', count, showToast);
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });

@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react';
 import { useUI, ToastKind } from '@/store/ui';
 import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from 'lucide-react';
+import { playPop, playError } from '@/lib/sounds';
 
 const TOAST_STYLES: Record<ToastKind, { border: string; left: string; color: string; Icon: any }> = {
   success: { border: 'rgba(74,222,128,0.40)',  left: 'var(--status-green)',  color: 'var(--status-green)',  Icon: CheckCircle2 },
@@ -11,6 +13,16 @@ const TOAST_STYLES: Record<ToastKind, { border: string; left: string; color: str
 export function Toaster() {
   const toasts = useUI((s) => s.toasts);
   const clearToast = useUI((s) => s.clearToast);
+  const prevLengthRef = useRef(toasts.length);
+
+  useEffect(() => {
+    if (toasts.length > prevLengthRef.current) {
+      const newest = toasts[toasts.length - 1];
+      if (newest?.kind === 'success') playPop();
+      else if (newest?.kind === 'error') playError();
+    }
+    prevLengthRef.current = toasts.length;
+  }, [toasts.length]);
 
   if (!toasts.length) return null;
 

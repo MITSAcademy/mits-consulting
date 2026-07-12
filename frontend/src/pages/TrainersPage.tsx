@@ -473,7 +473,7 @@ export function TrainersPage() {
                     title={q || activeFilterCount ? 'No trainers match your filters' : 'No trainers in pool yet'}
                     description={q || activeFilterCount
                       ? 'Try clearing the search or filters above to see the full pool.'
-                      : 'Click + Add trainer above to add the first trainer.'
+                      : 'Add your first trainer to get matching started.'
                     }
                   />
                 </td></tr>

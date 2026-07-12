@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { checkMilestone, incrementCount } from '@/lib/milestones';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/EmptyState';
@@ -335,6 +336,10 @@ export function SessionLogsPage() {
       });
       qc.invalidateQueries({ queryKey: ['session-logs'] });
       showToast(row.sessionHappened ? 'Session logged' : 'No-show logged');
+      if (row.sessionHappened) {
+        const count = incrementCount('sessions_logged');
+        checkMilestone('sessions_logged', count, showToast);
+      }
       // Reset this row to defaults
       setRows((prev) => { const n = { ...prev }; delete n[cr.trainingId]; return n; });
     } catch (e: any) {
@@ -558,8 +563,8 @@ export function SessionLogsPage() {
               ))}
             </div>
           ) : (logs || []).length === 0 ? (
-            <EmptyState icon={ClipboardList} tone="grey" title="No session logs yet"
-              description="Use the table above to log your first session." />
+            <EmptyState icon={ClipboardList} tone="grey" title="Ready to log your first session?"
+              description="Pick a client from the table above and tap 'Log session' — it takes under 30 seconds." />
           ) : (
             <>
               <div className="table-card" style={{ overflowX: 'auto' }}>

@@ -5,7 +5,8 @@ import { useAuth } from '@/store/auth';
 import { Link } from 'react-router-dom';
 import { timeGreeting } from '@/components/ThemeToggle';
 import { TrendingUp, TrendingDown, Users, Activity, Calendar, AlertTriangle, Moon, ArrowRight, Zap } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { getCount } from '@/lib/milestones';
 
 /* ── Animated number counter ─────────────────────────────────────────────── */
 function useCountUp(target: number, duration = 900) {
@@ -120,6 +121,61 @@ function Kpi({ icon: Icon, label, value, rawValue, sub, accent, delay = 0, to, s
   return to ? <Link to={to} className="block">{inner}</Link> : inner;
 }
 
+/* ── Personal stat card ──────────────────────────────────────────────────── */
+const STAT_DEFS: { key: Parameters<typeof getCount>[0]; label: string; emoji: string; roles?: string[] }[] = [
+  { key: 'sessions_logged',  label: 'sessions logged',   emoji: '🎯' },
+  { key: 'payments_recorded', label: 'payments recorded', emoji: '💰' },
+  { key: 'demos_done',       label: 'demos completed',   emoji: '🎤' },
+  { key: 'issues_resolved',  label: 'issues resolved',   emoji: '✅' },
+  { key: 'clients_closed',   label: 'clients closed',    emoji: '🏆' },
+];
+
+function PersonalStats({ role }: { role?: string }) {
+  const month = new Date().toLocaleString(undefined, { month: 'long' });
+  const stats = useMemo(
+    () => STAT_DEFS.map((d) => ({ ...d, count: getCount(d.key) })).filter((s) => s.count > 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  if (stats.length === 0) return null;
+  return (
+    <div
+      className="card mb-5"
+      style={{
+        padding: '14px 16px',
+        animation: 'fadeUp 360ms cubic-bezier(0.2,0.9,0.25,1) 80ms both',
+        background: 'linear-gradient(135deg, color-mix(in srgb, var(--accent-gold) 4%, var(--bg-card)), var(--bg-card))',
+        borderTop: '2px solid var(--accent-gold)',
+      }}
+    >
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <span className="text-[11px] font-semibold tracking-wide uppercase" style={{ color: 'var(--accent-gold)', letterSpacing: '0.07em' }}>
+          Your {month}
+        </span>
+        <span className="text-[10px] muted">This month's activity</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {stats.map((s, i) => (
+          <div
+            key={s.key}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+            style={{
+              background: 'var(--bg-input)',
+              border: '1px solid var(--brand-borderSoft)',
+              animation: `fadeUp 300ms cubic-bezier(0.2,0.9,0.25,1) ${100 + i * 60}ms both`,
+              fontSize: 12,
+            }}
+          >
+            <span aria-hidden style={{ fontSize: 13 }}>{s.emoji}</span>
+            <span className="font-bold" style={{ color: 'var(--accent-gold)', fontVariantNumeric: 'tabular-nums' }}>{s.count}</span>
+            <span style={{ color: 'var(--brand-textSecondary)' }}>{s.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ── Hero ─────────────────────────────────────────────────────────────────── */
 function HomeHero({ name }: { name: string }) {
   const { greeting, emoji } = timeGreeting();
@@ -175,6 +231,7 @@ export function HomePage() {
       <Topbar title="Home" subtitle={user?.name} />
       <Page>
         {user && <HomeHero name={user.name} />}
+        {user && <PersonalStats role={user.role} />}
 
         {isLoading || !data ? (
           <>

@@ -11,6 +11,7 @@ import { CelebrationLayer } from '@/components/CelebrationLayer';
 import { IdleGame } from '@/components/IdleGame';
 import { useAuth } from '@/store/auth';
 import { GlobalSearch, openGlobalSearch } from '@/components/GlobalSearch';
+import { StreakBanner } from '@/components/StreakBanner';
 
 /** Context lets the Topbar open the off-canvas sidebar without lifting state
  *  through every page. */
@@ -18,6 +19,7 @@ const MobileNavCtx = createContext<{ open: () => void }>({ open: () => {} });
 
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const user = useAuth((s) => s.user);
   return (
     <MobileNavCtx.Provider value={{ open: () => setMobileOpen(true) }}>
       <div className="flex min-h-screen">
@@ -29,6 +31,7 @@ export function AppLayout() {
         </main>
       </div>
       <Toaster />
+      <StreakBanner userName={user?.name || ''} />
       <SetupAppPasswordModal />
       <CelebrationLayer />
       <IdleGame />
