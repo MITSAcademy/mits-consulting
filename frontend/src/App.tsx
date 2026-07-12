@@ -87,7 +87,6 @@ const TimesheetReportPage = lazy(() => import('@/pages/TimesheetReportPage').the
 const FeatureFlagsPage = lazy(() => import('@/pages/FeatureFlagsPage'));
 const RolePermissionsPage = lazy(() => import('@/pages/RolePermissionsPage').then((m) => ({ default: m.RolePermissionsPage })));
 const MonthlyReportPage = lazy(() => import('@/pages/MonthlyReportPage').then((m) => ({ default: m.MonthlyReportPage })));
-const EscalationInboxPage = lazy(() => import('@/pages/EscalationInboxPage'));
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const user = useAuth((s) => s.user);
@@ -153,7 +152,7 @@ export default function App() {
           <Route path="/meeting-links" element={<MeetingLinksPage />} />
           <Route path="/coordinator-dashboard" element={<CoordinatorDashboardGate />} />
           <Route path="/team-board" element={<TeamKanbanPage />} />
-          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/calendar" element={<Navigate to="/my-calendar" replace />} />
           <Route path="/renewals" element={<RenewalsPage />} />
           <Route path="/dormant" element={<DormantClientsPage />} />
           <Route path="/feedback" element={<FeedbackPage />} />
@@ -188,7 +187,7 @@ export default function App() {
           <Route path="/feature-flags" element={<FeatureFlagsPage />} />
           <Route path="/role-permissions" element={<RolePermissionsPage />} />
           <Route path="/reports/monthly" element={<MonthlyReportPage />} />
-          <Route path="/escalations" element={<EscalationInboxPage />} />
+          <Route path="/escalations" element={<Navigate to="/issues" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -9,7 +9,7 @@ import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { ROLE_LABELS } from '@/lib/utils';
-import { Mail, ShieldCheck, RefreshCw, BellRing, FileText, Activity } from 'lucide-react';
+import { Mail, ShieldCheck, RefreshCw, BellRing, FileText, Activity, Send } from 'lucide-react';
 
 export function TeamAdminPage() {
   const qc = useQueryClient();
@@ -29,6 +29,12 @@ export function TeamAdminPage() {
 
   const [smtpHealth, setSmtpHealth] = useState<any[] | null>(null);
   const [rbacHealth, setRbacHealth] = useState<{ summary: any[]; recentCount: number } | null>(null);
+  const sendBriefing = useMutation({
+    mutationFn: ({ team, shift }: { team: string; shift: string }) =>
+      api.post('/briefing/trigger', { team, shift }),
+    onSuccess: (_r, { team }) => showToast(`${team === 'team1' ? 'Team 1 (Aman/Kanchan)' : 'Team 2 (Anjali/Taran)'} briefing sent`),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed to send briefing', 'error'),
+  });
   const checkRbac = useMutation({
     mutationFn: () => api.get('/internal/rbac-health'),
     onSuccess: (r) => setRbacHealth(r.data),

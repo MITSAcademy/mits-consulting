@@ -169,9 +169,6 @@ export function HomePage() {
     queryFn: () => api.get('/metrics/home').then((r) => r.data),
   });
 
-  // Fake 6-week sparklines from single totals (shapes only — no historical endpoint yet)
-  const usdSpark = data ? [data.money.usdIn * 0.6, data.money.usdIn * 0.75, data.money.usdIn * 0.55, data.money.usdIn * 0.9, data.money.usdIn * 0.8, data.money.usdIn] : [];
-  const cadSpark = data ? [data.money.cadIn * 0.5, data.money.cadIn * 0.8, data.money.cadIn * 0.65, data.money.cadIn * 0.7, data.money.cadIn * 0.95, data.money.cadIn] : [];
 
   return (
     <>
@@ -188,8 +185,8 @@ export function HomePage() {
           <>
             <div className="divider">Money flow this month</div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-4">
-              <Kpi icon={TrendingUp}   label="Money in · USD"     value={`$${data.money.usdIn.toLocaleString()}`}    rawValue={data.money.usdIn}     accent="green" delay={0}   spark={usdSpark} />
-              <Kpi icon={TrendingUp}   label="Money in · CAD"     value={`C$${data.money.cadIn.toLocaleString()}`}   rawValue={data.money.cadIn}     accent="green" delay={60}  spark={cadSpark} />
+              <Kpi icon={TrendingUp}   label="Money in · USD"     value={`$${data.money.usdIn.toLocaleString()}`}    rawValue={data.money.usdIn}     accent="green" delay={0}   />
+              <Kpi icon={TrendingUp}   label="Money in · CAD"     value={`C$${data.money.cadIn.toLocaleString()}`}   rawValue={data.money.cadIn}     accent="green" delay={60}  />
               <Kpi icon={TrendingDown} label="Trainer out · INR"  value={`₹${data.money.trainerOut.toLocaleString()}`} rawValue={data.money.trainerOut} accent="red"   delay={120} />
               <Kpi
                 icon={AlertTriangle}
@@ -232,22 +229,31 @@ export function HomePage() {
               />
             </div>
 
-            {/* Quick-actions strip */}
-            <div className="flex flex-wrap gap-2 mb-5" style={{ animation: 'fadeUp 380ms cubic-bezier(0.2,0.9,0.25,1) 240ms both' }}>
-              {[
-                { to: '/session-logs', label: 'Log a session', icon: Zap, color: '#E5B24C' },
-                { to: '/feedback',     label: 'Feedback sheet', icon: Activity, color: '#5B8DEF' },
-                { to: '/my-sessions',  label: 'My sessions',   icon: Calendar,  color: '#4ADE80' },
-              ].map(({ to, label, icon: Icon, color }) => (
-                <Link key={to} to={to}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all hover:-translate-y-0.5"
-                  style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)', color: 'var(--brand-textSecondary)', boxShadow: 'var(--shadow-sm)' }}
-                >
-                  <Icon size={13} style={{ color }} />
-                  {label}
-                </Link>
-              ))}
-            </div>
+            {/* Quick-actions strip — role-aware */}
+            {(() => {
+              const role = user?.role;
+              const links = [
+                { to: '/my-calendar',   label: 'My calendar',   icon: Calendar,  color: '#A78BFA', roles: ['founder','manager','lead','account_manager','staff','sales_closer','demo_lead','demo_intake'] },
+                { to: '/my-sessions',   label: 'My sessions',   icon: Activity,  color: '#4ADE80', roles: ['founder','manager','lead','account_manager'] },
+                { to: '/session-logs',  label: 'Log a session', icon: Zap,       color: '#E5B24C', roles: ['founder','manager','lead','account_manager','staff','payment_processor'] },
+                { to: '/feedback',      label: 'Feedback sheet',icon: Calendar,  color: '#5B8DEF', roles: ['founder','manager','lead','account_manager'] },
+                { to: '/follow-up-payments', label: 'Payment follow-up', icon: Zap, color: '#F59E0B', roles: ['founder','manager','accounts','demo_lead'] },
+                { to: '/sourcing',      label: 'Sourcing',      icon: Activity,  color: '#14B8A6', roles: ['founder','demo_lead','demo_intake','recruiter'] },
+              ].filter(l => !role || l.roles.includes(role)).slice(0, 4);
+              return links.length > 0 ? (
+                <div className="flex flex-wrap gap-2 mb-5" style={{ animation: 'fadeUp 380ms cubic-bezier(0.2,0.9,0.25,1) 240ms both' }}>
+                  {links.map(({ to, label, icon: Icon, color }) => (
+                    <Link key={to} to={to}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all hover:-translate-y-0.5"
+                      style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)', color: 'var(--brand-textSecondary)', boxShadow: 'var(--shadow-sm)' }}
+                    >
+                      <Icon size={13} style={{ color }} />
+                      {label}
+                    </Link>
+                  ))}
+                </div>
+              ) : null;
+            })()}
 
             {/* Dormant tile */}
             {data.ops.dormant > 0 && (

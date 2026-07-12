@@ -148,24 +148,21 @@ const NAV: NavItem[] = [
   // ── Client success (team-scoped for manager/lead/AM) ─────────────────
   // Payment follow-up: Mitali's primary job + accounts; Bhavneet needs it to export her team's payments
   { section: 'clients', page: '/follow-up-payments', label: 'Payment follow-up', icon: Receipt, roles: ['founder', 'manager', 'accounts', 'demo_lead'] },
-  { section: 'clients', page: '/calendar', label: 'Work calendar', icon: LayoutGrid, roles: ['founder', 'lead', 'staff'] },
   // Clients: scoped by backend per role (AM=own, lead=team, manager=team)
   { section: 'clients', page: '/clients', label: 'Clients', icon: Users, roles: ['founder', 'manager', 'lead', 'accounts', 'demo_lead', 'demo_intake', 'account_manager'] },
   // Hold: Mitali needs to see clients on hold (leverage / missed payments) within her team
   { section: 'clients', page: '/hold', label: 'On hold', icon: Clock, roles: ['founder', 'manager', 'demo_lead', 'sales_closer'] },
   { section: 'clients', page: '/trainers', label: 'My trainers', icon: UserCog, roles: ['account_manager'] },
-  { section: 'clients', page: '/renewals', label: 'Renewals', icon: RefreshCw, roles: ['founder'] },
   { section: 'clients', page: '/dormant', label: 'Dormant clients', icon: Moon, roles: ['founder', 'demo_lead', 'demo_intake', 'sales_closer'] },
   { section: 'clients', page: '/feedback', label: 'Feedback', icon: MessageCircle, roles: ['founder', 'manager', 'lead', 'account_manager'] },
-  { section: 'partners', page: '/partners', label: 'Partners', icon: Building, roles: ['founder', 'accounts'] },
 
   // ── Coordinator work (Mitali + Bhavneet + AMs) ───────────────────────
   { section: 'work', page: '/team-board', label: 'Client assignment', icon: UsersRound, roles: ['founder', 'manager', 'lead', 'account_manager'] },
   { section: 'work', page: '/coordinator-dashboard', label: 'Team dashboard', icon: UsersRound, roles: ['founder', 'manager', 'lead'] },
-  { section: 'work', page: '/escalations', label: 'Escalation inbox', icon: AlertCircle, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake'] },
+  { section: 'work', page: '/my-calendar', label: 'My calendar', icon: Calendar, roles: ['founder', 'manager', 'lead', 'account_manager', 'staff', 'sales_closer', 'demo_lead', 'demo_intake'] },
   { section: 'work', page: '/my-sessions', label: 'My calls & sessions', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager'] },
-  { section: 'work', page: '/sessions', label: 'Sessions', icon: CalendarDays, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'] },
-  { section: 'work', page: '/issues', label: 'Issues', icon: AlertTriangle, roles: ['founder', 'manager', 'lead', 'account_manager'] },
+  { section: 'work', page: '/sessions', label: 'Team sessions', icon: CalendarDays, roles: ['founder', 'manager', 'lead'] },
+  { section: 'work', page: '/issues', label: 'Issues & escalations', icon: AlertTriangle, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'demo_intake'] },
   { section: 'work', page: '/freelance-requirements', label: 'Freelance Requirements', icon: Briefcase, roles: ['founder', 'manager', 'lead', 'account_manager', 'recruiter'] },
   { section: 'clients', page: '/regular-trainings', label: 'Regular trainings', icon: Video, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
   { section: 'clients', page: '/meeting-links', label: 'Meeting links', icon: Link, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
@@ -183,7 +180,6 @@ const NAV: NavItem[] = [
   { section: 'work', page: '/leverage', label: 'Leverage', icon: Clock, roles: ['founder', 'demo_lead'] },
   { section: 'work', page: '/accounts-queue', label: 'Accounts queue', icon: Receipt, roles: ['founder', 'accounts'] },
   { section: 'work', page: '/daily-report', label: 'Daily report', icon: Notebook, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
-  { section: 'work', page: '/my-calendar', label: 'My calendar', icon: Calendar, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
   { section: 'team', page: '/timesheet', label: 'My timesheet', icon: ClipboardList, roles: ['manager', 'lead', 'staff', 'accounts', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'payment_processor', 'account_manager'] },
   { section: 'team', page: '/timesheet/report', label: 'Timesheet report', icon: BarChart2, roles: ['founder', 'manager', 'demo_lead'] },
 
@@ -272,7 +268,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
     if (page === '/roshni/follow-ups') return metrics.followUpsDue;
     if (page === '/renewals') return metrics.renewalsDue;
     if (page === '/follow-up-payments') return metrics.followUpActiveTotal;
-    if (page === '/escalations') return metrics.escalationCount || 0;
+    if (page === '/issues') return metrics.escalationCount || 0;
     return 0;
   };
 

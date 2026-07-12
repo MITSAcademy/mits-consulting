@@ -25,19 +25,15 @@ import { Textarea, Label } from '@/components/ui/input';
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const TEAM_MEMBERS = [
-  { id: 'u-bhavneet', name: 'Bhavneet', role: 'Lead',            color: 'var(--accent-gold)' },
-  { id: 'u-kashish',  name: 'Kashish',  role: 'Account manager', color: '#60a5fa' },
-  { id: 'u-muskan',   name: 'Muskan',   role: 'Account manager', color: '#a78bfa' },
+// Member colors assigned by index so new users get a consistent colour
+const MEMBER_COLORS = [
+  'var(--accent-gold)',
+  '#60a5fa',
+  '#a78bfa',
+  '#34d399',
+  '#f87171',
+  '#fb923c',
 ];
-
-// Which columns each role can see
-const VISIBLE_COLUMNS: Record<string, string[]> = {
-  founder:         ['unassigned', 'u-bhavneet', 'u-kashish', 'u-muskan'],
-  manager:         ['unassigned', 'u-bhavneet', 'u-kashish', 'u-muskan'],
-  lead:            ['unassigned', 'u-bhavneet', 'u-kashish',  'u-muskan'],
-  account_manager: [], // dynamic — filled by user's own id
-};
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -95,7 +91,9 @@ function daysAgo(iso: string | null): number | null {
 
 // ─── assign modal ─────────────────────────────────────────────────────────────
 
-function AssignModal({ client, onClose }: { client: Client; onClose: () => void }) {
+type TeamMember = { id: string; name: string; role: string; color: string };
+
+function AssignModal({ client, onClose, teamMembers }: { client: Client; onClose: () => void; teamMembers: TeamMember[] }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const [amId, setAmId] = useState(client.assignedAmId || '');
@@ -104,7 +102,7 @@ function AssignModal({ client, onClose }: { client: Client; onClose: () => void 
     mutationFn: () => api.patch(`/clients/${client.id}`, { assignedAmId: amId || null }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clients', 'team-kanban'] });
-      const who = TEAM_MEMBERS.find(t => t.id === amId)?.name;
+      const who = teamMembers.find(t => t.id === amId)?.name;
       showToast(who ? `Assigned to ${who}` : 'Unassigned');
       onClose();
     },
@@ -142,7 +140,7 @@ function AssignModal({ client, onClose }: { client: Client; onClose: () => void 
             </div>}
           </button>
 
-          {TEAM_MEMBERS.map(t => {
+          {teamMembers.map(t => {
             const selected = amId === t.id;
             const ini = t.name.split(' ').map((p: string) => p[0]).join('').toUpperCase().slice(0, 2);
             return (
@@ -189,7 +187,7 @@ function initials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
 }
 
-function HostChip({ training, canReassign }: { training: Client['regularTrainings'][0]; canReassign: boolean }) {
+function HostChip({ training, canReassign, teamMembers }: { training: Client['regularTrainings'][0]; canReassign: boolean; teamMembers: TeamMember[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
@@ -209,7 +207,7 @@ function HostChip({ training, canReassign }: { training: Client['regularTraining
       api.patch(`/regular-trainings/trainings/${training.id}`, { hostedByDefaultId: userId }),
     onSuccess: (_data, userId) => {
       qc.invalidateQueries({ queryKey: ['clients', 'team-kanban'] });
-      const who = TEAM_MEMBERS.find(t => t.id === userId)?.name;
+      const who = teamMembers.find(t => t.id === userId)?.name;
       showToast(who ? `Host set to ${who}` : 'Host cleared');
       setOpen(false);
     },
@@ -240,7 +238,7 @@ function HostChip({ training, canReassign }: { training: Client['regularTraining
           style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)', minWidth: 130, boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
           onClick={e => e.stopPropagation()}>
           <div className="text-[10px] font-semibold uppercase tracking-wide px-2.5 pt-2 pb-1" style={{ color: 'var(--brand-textMuted)' }}>Set host</div>
-          {TEAM_MEMBERS.map(m => (
+          {teamMembers.map(m => (
             <button
               key={m.id}
               disabled={reassign.isPending}
@@ -328,10 +326,11 @@ function CallLogModal({ client, onClose }: { client: Client; onClose: () => void
 
 // ─── training card ────────────────────────────────────────────────────────────
 
-function TrainingCard({ training, canReassignHost, isAllColumn = false }: {
+function TrainingCard({ training, canReassignHost, isAllColumn = false, teamMembers }: {
   training: Training;
   canReassignHost: boolean;
   isAllColumn?: boolean;
+  teamMembers: TeamMember[];
 }) {
   const fbAge = daysAgo(training.lastSessionDate);
   const feedbackWarn = !training.client?.lastFeedbackTakenAt && training.lastClientFeedback === null;
@@ -372,12 +371,12 @@ function TrainingCard({ training, canReassignHost, isAllColumn = false }: {
       {/* Host chip */}
       <div className="flex items-center gap-1 mt-1.5">
         <span className="text-[10px] muted">Host</span>
-        <HostChip training={rtForChip} canReassign={canReassignHost} />
+        <HostChip training={rtForChip} canReassign={canReassignHost} teamMembers={teamMembers} />
       </div>
 
       {/* In All column — show which AM this belongs to */}
       {isAllColumn && host && (
-        <div className="mt-1 text-[10px]" style={{ color: TEAM_MEMBERS.find(t => t.id === host.id)?.color || 'var(--accent-gold)' }}>
+        <div className="mt-1 text-[10px]" style={{ color: teamMembers.find(t => t.id === host.id)?.color || 'var(--accent-gold)' }}>
           👤 {host.name}
         </div>
       )}
@@ -388,7 +387,7 @@ function TrainingCard({ training, canReassignHost, isAllColumn = false }: {
 // ─── column ───────────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  title, subtitle, color, clients, canReassignHost, isAllColumn,
+  title, subtitle, color, clients, canReassignHost, isAllColumn, teamMembers,
 }: {
   title: string;
   subtitle: string;
@@ -400,6 +399,7 @@ function KanbanColumn({
   canLogCall?: boolean;
   isUnassigned?: boolean;
   isAllColumn?: boolean;
+  teamMembers: TeamMember[];
 }) {
   const overdue = 0;
   const dueSoon = 0;
@@ -438,7 +438,7 @@ function KanbanColumn({
         {clients.length === 0 ? (
           <div className="text-[11px] muted text-center py-8">No active clients</div>
         ) : (
-          clients.map(t => <TrainingCard key={t.id} training={t} canReassignHost={canReassignHost} isAllColumn={isAllColumn}/>)
+          clients.map(t => <TrainingCard key={t.id} training={t} canReassignHost={canReassignHost} isAllColumn={isAllColumn} teamMembers={teamMembers}/>)
         )}
       </div>
     </div>
@@ -451,10 +451,29 @@ export function TeamKanbanPage() {
   const user = useAuth((s) => s.user);
   const [search, setSearch] = useState('');
 
-  const { data: allTrainings = [], isLoading } = useQuery<Training[]>({
+  const { data: allTrainings = [], isLoading: trainingsLoading } = useQuery<Training[]>({
     queryKey: ['trainings', 'team-kanban'],
     queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
   });
+
+  const { data: usersData = [], isLoading: usersLoading } = useQuery<any[]>({
+    queryKey: ['users'],
+    queryFn: () => api.get('/users').then((r) => r.data),
+  });
+
+  const isLoading = trainingsLoading || usersLoading;
+
+  // Build TEAM_MEMBERS dynamically from active account_manager and lead users
+  const TEAM_MEMBERS = useMemo(() => {
+    return usersData
+      .filter((u: any) => u.active && (u.role === 'account_manager' || u.role === 'lead'))
+      .map((u: any, i: number) => ({
+        id: u.id,
+        name: u.name,
+        role: u.role === 'lead' ? 'Lead' : 'Account manager',
+        color: MEMBER_COLORS[i % MEMBER_COLORS.length],
+      }));
+  }, [usersData]);
 
   const trainings = useMemo(() => {
     const q = search.toLowerCase().trim();
@@ -485,7 +504,7 @@ export function TeamKanbanPage() {
       ];
     }
 
-    // lead / manager / founder: All | Unassigned | Bhavneet | Kashish | Muskan
+    // lead / manager / founder: All | Unassigned | one column per team member
     return [
       {
         id: 'all',
@@ -509,7 +528,7 @@ export function TeamKanbanPage() {
         clients: trainings.filter(tr => tr.hostedByDefault?.id === t.id),
       })),
     ];
-  }, [trainings, role, user?.id]);
+  }, [trainings, role, user?.id, TEAM_MEMBERS]);
 
   const total = allTrainings.length;
   const assigned = allTrainings.filter(t => t.hostedByDefault).length;
@@ -537,7 +556,19 @@ export function TeamKanbanPage() {
       />
       <Page>
         {isLoading ? (
-          <div className="muted text-sm">Loading…</div>
+          <div className="flex gap-3 overflow-x-auto pb-6" style={{ alignItems: 'flex-start', minHeight: '60vh' }}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="rounded-2xl flex-shrink-0" style={{
+                minWidth: 240, maxWidth: 280, flex: '1 1 0',
+                background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)',
+                height: 300, opacity: 0.5,
+              }}>
+                <div className="px-3 py-3" style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
+                  <div className="rounded-full h-3 w-24" style={{ background: 'var(--bg-card)' }}/>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-6" style={{ alignItems: 'flex-start', minHeight: '60vh' }}>
             {columns.map(col => (
@@ -549,6 +580,7 @@ export function TeamKanbanPage() {
                 clients={col.clients}
                 canReassignHost={canReassignHost}
                 isAllColumn={col.id === 'all'}
+                teamMembers={TEAM_MEMBERS}
               />
             ))}
           </div>
