@@ -220,7 +220,7 @@ function KpiSkeleton() {
 
 export function HomePage() {
   const user = useAuth((s) => s.user);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['metrics/home'],
     queryFn: () => api.get('/metrics/home').then((r) => r.data),
   });
@@ -233,7 +233,11 @@ export function HomePage() {
         {user && <HomeHero name={user.name} />}
         {user && <PersonalStats role={user.role} />}
 
-        {isLoading || !data ? (
+        {isError ? (
+          <div className="callout" style={{ borderColor: 'var(--status-red)' }}>
+            Couldn't load your dashboard metrics. Please refresh the page.
+          </div>
+        ) : isLoading || !data ? (
           <>
             <KpiSkeleton />
             <KpiSkeleton />
