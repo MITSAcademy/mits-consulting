@@ -27,15 +27,17 @@ export function Toaster() {
           return (
             <div
               key={toast.id}
-              className="flex items-start gap-2.5 px-3.5 py-2.5 rounded-xl text-[13px] font-medium max-w-[380px]"
+              className="flex items-start gap-3 px-4 py-3 rounded-xl text-[13px] font-medium max-w-[400px]"
               style={{
                 pointerEvents: 'auto',
-                background: 'var(--bg-card)',
+                background: 'color-mix(in srgb, var(--bg-card) 94%, transparent)',
+                backdropFilter: 'blur(12px) saturate(160%)',
+                WebkitBackdropFilter: 'blur(12px) saturate(160%)',
                 color: 'var(--brand-text)',
                 border: `1px solid ${s.border}`,
                 borderLeft: `3px solid ${s.left}`,
-                boxShadow: '0 12px 32px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.02)',
-                animation: 'toastSlideIn 280ms cubic-bezier(0.18, 0.89, 0.32, 1.28) both',
+                boxShadow: `0 16px 40px rgba(0,0,0,0.32), 0 0 0 1px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.04)`,
+                animation: 'toastSlideIn 300ms cubic-bezier(0.18, 0.89, 0.32, 1.28) both',
               }}
               role="status"
             >

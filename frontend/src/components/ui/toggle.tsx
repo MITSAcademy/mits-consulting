@@ -29,9 +29,12 @@ export function Toggle({ checked, onChange, disabled }: ToggleProps) {
         style={{
           position: 'absolute',
           inset: 0,
-          background: checked ? '#4ADE80' : '#3a3b3f',
+          background: checked
+            ? 'linear-gradient(135deg, #4ADE80, #22C55E)'
+            : 'var(--brand-border, #2A2F3A)',
           borderRadius: 24,
-          transition: '0.2s',
+          transition: 'background 200ms ease',
+          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.20)',
         }}
       >
         <span
@@ -44,8 +47,9 @@ export function Toggle({ checked, onChange, disabled }: ToggleProps) {
             bottom: 3,
             background: 'white',
             borderRadius: '50%',
-            transition: '0.2s',
+            transition: 'transform 200ms cubic-bezier(0.2,0.9,0.25,1)',
             transform: checked ? 'translateX(18px)' : 'none',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
           }}
         />
       </span>

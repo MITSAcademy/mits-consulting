@@ -30,8 +30,12 @@ export function EmptyState({ icon: Icon, title, description, action, tone = 'gol
   const t = TONES[tone];
   return (
     <div
-      className={`flex flex-col items-center justify-center text-center py-12 px-6 ${className || ''}`}
-      style={{ animation: 'fadeUp 320ms cubic-bezier(0.2,0.9,0.25,1) both' }}
+      className={`flex flex-col items-center justify-center text-center py-14 px-6 rounded-2xl ${className || ''}`}
+      style={{
+        animation: 'fadeUp 320ms cubic-bezier(0.2,0.9,0.25,1) both',
+        background: 'linear-gradient(180deg, color-mix(in srgb, var(--bg-card) 70%, transparent) 0%, transparent 100%)',
+        border: '1px solid var(--brand-borderSoft)',
+      }}
     >
       <div
         className="w-16 h-16 rounded-2xl flex items-center justify-center mb-3.5 relative"

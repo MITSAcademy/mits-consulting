@@ -73,12 +73,13 @@ export function Topbar({
   const { open: openMobile } = useContext(MobileNavCtx);
   return (
     <div
-      className="flex justify-between items-center px-4 md:px-6 py-3.5 border-b sticky top-0 z-10 flex-wrap gap-2.5"
+      className="flex justify-between items-center px-4 md:px-6 py-4 border-b sticky top-0 z-10 flex-wrap gap-2.5"
       style={{
-        borderColor: 'color-mix(in srgb, var(--brand-border) 70%, transparent)',
-        background: 'color-mix(in srgb, var(--bg-page) 80%, transparent)',
-        backdropFilter: 'saturate(160%) blur(12px)',
-        WebkitBackdropFilter: 'saturate(160%) blur(12px)',
+        borderColor: 'color-mix(in srgb, var(--brand-border) 55%, transparent)',
+        background: 'color-mix(in srgb, var(--bg-page) 85%, transparent)',
+        backdropFilter: 'saturate(180%) blur(16px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(16px)',
+        boxShadow: '0 1px 0 color-mix(in srgb, var(--brand-border) 40%, transparent), 0 4px 20px rgba(0,0,0,0.06)',
       }}
     >
       <div className="flex items-center gap-3 flex-wrap min-w-0">
@@ -90,10 +91,10 @@ export function Topbar({
         >
           <Menu size={18} />
         </button>
-        <div className="h-page min-w-0 truncate">
-          {title}
+        <div className="min-w-0 truncate">
+          <span className="h-page">{title}</span>
           {subtitle && (
-            <span className="text-brand-textMuted font-normal text-[13px] ml-2">· {subtitle}</span>
+            <span className="font-normal text-[12.5px] ml-2.5" style={{ color: 'var(--brand-textMuted)' }}>· {subtitle}</span>
           )}
         </div>
         <GreetingChip />
@@ -119,5 +120,9 @@ export function Topbar({
 }
 
 export function Page({ children }: { children: React.ReactNode }) {
-  return <div className="px-4 md:px-6 py-5 route-enter relative" style={{ maxWidth: '1600px', margin: '0 auto' }}>{children}</div>;
+  return (
+    <div className="px-4 md:px-6 py-6 route-enter relative" style={{ maxWidth: '1600px', margin: '0 auto' }}>
+      {children}
+    </div>
+  );
 }

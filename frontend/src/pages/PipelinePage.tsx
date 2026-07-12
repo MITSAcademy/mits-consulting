@@ -20,30 +20,47 @@ export function PipelinePage() {
         <div className="callout">
           Full client lifecycle: Lead → Intake → Sourcing → Verification → Demo → Sale close → Active.
         </div>
-        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))' }}>
           {LIFECYCLE.map((s) => {
             const clients = (data?.[s] || []) as any[];
             const isExpanded = expanded.has(s);
             const visible = isExpanded ? clients : clients.slice(0, 8);
             return (
-              <div key={s} className="bg-bg-card border border-brand-border rounded-md p-2.5 min-h-[220px]">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-brand-textSecondary mb-2 flex justify-between">
+              <div
+                key={s}
+                className="card"
+                style={{ padding: '12px 12px', minHeight: 200 }}
+              >
+                <div className="card-h">
                   <span>{stageLabel(s)}</span>
-                  <span className="bg-bg-input text-brand-textSecondary text-[10px] px-1.5 rounded-full font-semibold">
+                  <span
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                    style={{
+                      background: clients.length > 0 ? 'var(--accent-goldSoft)' : 'var(--bg-input)',
+                      color: clients.length > 0 ? 'var(--accent-gold)' : 'var(--brand-textMuted)',
+                      border: `1px solid ${clients.length > 0 ? 'rgba(229,178,76,0.25)' : 'var(--brand-borderSoft)'}`,
+                    }}
+                  >
                     {clients.length}
                   </span>
                 </div>
                 {clients.length === 0 && (
-                  <div className="muted text-[11px] text-center pt-3">Empty</div>
+                  <div className="muted text-[11px] text-center pt-4 pb-2">Empty</div>
                 )}
                 {visible.map((c) => (
                   <Link
                     key={c.id}
                     to={`/clients/${c.id}`}
-                    className="block bg-bg-input border border-brand-borderSoft rounded p-2 mb-1.5 hover:bg-bg-cardHover transition-colors"
+                    className="block rounded-lg p-2 mb-1 transition-colors"
+                    style={{
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--brand-borderSoft)',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'color-mix(in srgb, var(--accent-gold) 6%, var(--bg-input))'; (e.currentTarget as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--accent-gold) 20%, var(--brand-borderSoft))'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-input)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--brand-borderSoft)'; }}
                   >
-                    <div className="font-medium text-xs mb-0.5">{c.name}</div>
-                    <div className="text-[10px] muted mono">
+                    <div className="font-medium text-[12px] leading-snug">{c.name}</div>
+                    <div className="text-[10px] muted mt-0.5 mono truncate">
                       {c.engagementType} · {c.source || '—'}
                     </div>
                   </Link>
@@ -55,10 +72,10 @@ export function PipelinePage() {
                       isExpanded ? next.delete(s) : next.add(s);
                       return next;
                     })}
-                    className="w-full text-[10px] text-center mt-1 py-1 rounded transition-colors"
-                    style={{ color: 'var(--accent-gold)', background: 'rgba(229,178,76,0.07)' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(229,178,76,0.14)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(229,178,76,0.07)'; }}
+                    className="w-full text-[10px] text-center mt-1.5 py-1.5 rounded-lg transition-colors font-medium"
+                    style={{ color: 'var(--accent-gold)', background: 'var(--accent-goldSoft)', border: '1px solid rgba(229,178,76,0.20)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(229,178,76,0.18)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--accent-goldSoft)'; }}
                   >
                     {isExpanded ? '▲ Show less' : `+${clients.length - 8} more`}
                   </button>
