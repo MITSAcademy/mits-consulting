@@ -8,6 +8,7 @@ import { ThemeToggle, timeGreeting } from '@/components/ThemeToggle';
 import { SetupAppPasswordModal } from '@/components/SetupAppPasswordModal';
 import { AskAIButton } from '@/components/AskAI';
 import { CelebrationLayer } from '@/components/CelebrationLayer';
+import { IdleGame } from '@/components/IdleGame';
 import { useAuth } from '@/store/auth';
 import { GlobalSearch, openGlobalSearch } from '@/components/GlobalSearch';
 
@@ -30,6 +31,7 @@ export function AppLayout() {
       <Toaster />
       <SetupAppPasswordModal />
       <CelebrationLayer />
+      <IdleGame />
       <GlobalSearch />
     </MobileNavCtx.Provider>
   );
