@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
-import { useState, createContext, useContext, Suspense } from 'react';
+import { useState, createContext, useContext, Suspense, useEffect } from 'react';
+import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { Menu, Search } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Toaster } from '@/components/ui/toast';
@@ -20,11 +21,18 @@ const MobileNavCtx = createContext<{ open: () => void }>({ open: () => {} });
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const user = useAuth((s) => s.user);
+
+  useEffect(() => {
+    const handler = () => setMobileOpen(true);
+    window.addEventListener('mits:open-sidebar', handler);
+    return () => window.removeEventListener('mits:open-sidebar', handler);
+  }, []);
+
   return (
     <MobileNavCtx.Provider value={{ open: () => setMobileOpen(true) }}>
       <div className="flex min-h-screen">
         <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-        <main className="flex-1 min-w-0 w-full overflow-x-hidden">
+        <main className="flex-1 min-w-0 w-full overflow-x-hidden pb-16 md:pb-0">
           <Suspense fallback={<div style={{ position: 'fixed', top: 0, left: 0, right: 0, height: '2px', background: 'var(--accent-gold)', animation: 'progress-bar 1s ease-in-out infinite' }} />}>
             <Outlet />
           </Suspense>
@@ -36,6 +44,7 @@ export function AppLayout() {
       <CelebrationLayer />
       <IdleGame />
       <GlobalSearch />
+      <MobileBottomNav />
     </MobileNavCtx.Provider>
   );
 }
