@@ -11,8 +11,18 @@ export function setSoundEnabled(v: boolean) {
   localStorage.setItem(PREF_KEY, v ? 'on' : 'off');
 }
 
+let sharedCtx: AudioContext | null = null;
+
 function ctx(): AudioContext | null {
-  try { return new (window.AudioContext || (window as any).webkitAudioContext)(); } catch { return null; }
+  try {
+    if (!sharedCtx) {
+      sharedCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (sharedCtx.state === 'suspended') {
+      sharedCtx.resume().catch(() => {});
+    }
+    return sharedCtx;
+  } catch { return null; }
 }
 
 function play(fn: (ac: AudioContext) => void) {
