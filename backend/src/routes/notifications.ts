@@ -9,7 +9,8 @@
  */
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, AuthedRequest } from '../lib/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
+import { sendDailyReminders } from '../lib/dailyReminders';
 
 export const notificationsRouter = Router();
 notificationsRouter.use(requireAuth);
@@ -46,3 +47,13 @@ notificationsRouter.post('/read-all', async (req: AuthedRequest, res) => {
   });
   res.json({ ok: true, updated: r.count });
 });
+
+// Manual trigger for daily reminders — founder only (useful for testing without waiting for 9:30 AM)
+notificationsRouter.post(
+  '/trigger-reminders',
+  requireRole('founder'),
+  async (_req, res) => {
+    await sendDailyReminders();
+    res.json({ ok: true });
+  },
+);
