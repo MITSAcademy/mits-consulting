@@ -47,10 +47,14 @@ export async function notify(args: NotifyArgs): Promise<void> {
   try {
     const user = await prisma.user.findUnique({
       where: { id: args.userId },
-      select: { email: true, gmailAddress: true, name: true },
+      select: { email: true, gmailAddress: true, sendAsAddress: true, name: true },
     });
-    const to = user?.gmailAddress || user?.email;
-    if (!to) return;
+    const to = user?.sendAsAddress || user?.gmailAddress || user?.email;
+    if (!to) {
+      console.warn(`[notify] no email address for user ${args.userId} (${user?.name}) — skipping email for "${args.title}"`);
+      return;
+    }
+    console.log(`[notify] sending email to ${to} (user ${args.userId}) — "${args.title}"`);
     const linkLine = args.link && FRONTEND_BASE
       ? `\n\nOpen in portal: ${FRONTEND_BASE}${args.link}`
       : '';

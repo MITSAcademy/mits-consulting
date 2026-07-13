@@ -85,10 +85,10 @@ usersRouter.delete('/me/smtp', async (req: AuthedRequest, res) => {
 usersRouter.post('/me/smtp/test-system', async (req: AuthedRequest, res) => {
   const u = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    select: { id: true, name: true, gmailAddress: true, email: true },
+    select: { id: true, name: true, gmailAddress: true, sendAsAddress: true, email: true },
   });
   if (!u) return res.status(404).json({ error: 'User not found' });
-  const to = u.gmailAddress || u.email;
+  const to = u.sendAsAddress || u.gmailAddress || u.email;
   if (!to) return res.status(400).json({ error: 'No email on file for your user — ask admin to update.' });
   try {
     const r = await sendEmail({
