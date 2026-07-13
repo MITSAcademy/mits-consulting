@@ -20,7 +20,7 @@ export function FloatingActions() {
       color: '#E5B24C',
       onClick: () => {
         setOpen(false);
-        window.dispatchEvent(new CustomEvent('mits:open-idle-game'));
+        setTimeout(() => window.dispatchEvent(new CustomEvent('mits:open-idle-game')), 50);
       },
     },
   ];

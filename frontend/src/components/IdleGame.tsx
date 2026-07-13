@@ -626,6 +626,7 @@ export function IdleGame() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showModalRef = useRef(false);
   const showToastRef = useRef(false);
+  const openGameRef = useRef<() => void>(() => {});
 
   useEffect(() => { showModalRef.current = showModal; }, [showModal]);
   useEffect(() => { showToastRef.current = showToast; }, [showToast]);
@@ -639,10 +640,9 @@ export function IdleGame() {
   }, []);
 
   useEffect(() => {
-    const handler = () => openGame();
+    const handler = () => openGameRef.current();
     window.addEventListener('mits:open-idle-game', handler);
     return () => window.removeEventListener('mits:open-idle-game', handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -665,6 +665,7 @@ export function IdleGame() {
     setShowToast(false);
     setShowModal(true);
   }
+  openGameRef.current = openGame;
 
   function closeGame() {
     setShowModal(false);
