@@ -14,12 +14,14 @@ metricsRouter.get('/home', async (_req, res) => {
   const today = todayISO();
   const monthStart = today.slice(0, 8) + '01';
 
-  const [payments, clients, sessions, leverage] = await Promise.all([
+  const [payments, clients, sessions, leverage, activeTrainings] = await Promise.all([
     prisma.payment.findMany({ where: { paymentDate: { gte: monthStart } } }),
     prisma.client.findMany(),
     prisma.sessionLog.findMany({ where: { date: { gte: monthStart } } }),
     prisma.leverageRequest.findMany({ where: { status: 'PendingVaibhav' } }),
+    prisma.regularTraining.findMany({ where: { status: 'active', clientId: { not: null } }, select: { clientId: true } }),
   ]);
+  const activeTrainingClientIds = new Set(activeTrainings.map((t) => t.clientId!));
 
   // Sum payments per currency — was previously USD + CAD only, which silently
   // dropped INR / EUR / GBP / AUD / AED into a black hole on MoneyFlow.
@@ -42,6 +44,9 @@ metricsRouter.get('/home', async (_req, res) => {
     .reduce((s, l) => s + l.amountInr, 0);
 
   const active = clients.filter((c) => c.lifecycle === 'Active' || c.lifecycle === 'LeverageGranted');
+  // Subset with an active training stub — matches Bhavneet's team board
+  const activeWithStub = active.filter((c) => activeTrainingClientIds.has(c.id));
+  const activeNoStub = active.length - activeWithStub.length;
   const inPipeline = clients.filter((c) =>
     ['Lead', 'IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters', 'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone', 'SaleClosing'].includes(c.lifecycle),
   );
@@ -65,6 +70,8 @@ metricsRouter.get('/home', async (_req, res) => {
     },
     ops: {
       activeClients: active.length,
+      activeClientsWithStub: activeWithStub.length,
+      activeClientsNoStub: activeNoStub,
       inPipeline: inPipeline.length,
       dueToday, holds, red, amber,
       pendingLeverage: leverage.length,
