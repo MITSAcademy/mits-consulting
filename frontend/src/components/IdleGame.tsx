@@ -624,34 +624,35 @@ export function IdleGame() {
   const [showToast, setShowToast] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showModalRef = useRef(false); // stable ref so resetTimer never needs showModal in deps
+  const showModalRef = useRef(false);
+  const showToastRef = useRef(false);
 
-  // Keep ref in sync with state
   useEffect(() => { showModalRef.current = showModal; }, [showModal]);
+  useEffect(() => { showToastRef.current = showToast; }, [showToast]);
 
   const resetTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (showModalRef.current) return; // game open — don't interfere
+    if (showModalRef.current) return;
     timerRef.current = setTimeout(() => {
       setShowToast(true);
     }, IDLE_MS);
-  }, []); // stable — no deps needed now
+  }, []);
 
   useEffect(() => {
-    const events = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart'];
-    // User activity: clear toast (they're back) then restart timer
+    // Only mousemove/keydown/scroll reset the timer — NOT click/touch
+    // so that clicking "Play a game" on the toast doesn't dismiss it before openGame fires
+    const resetEvents = ['mousemove', 'keydown', 'scroll'];
     const onActivity = () => {
-      if (showModalRef.current) return;
-      setShowToast(false);
+      if (showModalRef.current || showToastRef.current) return;
       resetTimer();
     };
-    events.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
-    resetTimer(); // start on mount
+    resetEvents.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
+    resetTimer();
     return () => {
-      events.forEach((e) => window.removeEventListener(e, onActivity));
+      resetEvents.forEach((e) => window.removeEventListener(e, onActivity));
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [resetTimer]); // resetTimer is stable so this runs once
+  }, [resetTimer]);
 
   function openGame() {
     setShowToast(false);
