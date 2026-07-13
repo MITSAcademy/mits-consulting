@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, uploadFile, fileUrl } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select, Textarea } from '@/components/ui/input';
@@ -231,9 +231,26 @@ function ProposeDialog({ req, onClose }: { req: FreelanceReq; onClose: () => voi
   const showToast = useUI((s) => s.showToast);
   const qc = useQueryClient();
   const [rows, setRows] = useState<TrainerProposal[]>([emptyDraft()]);
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
 
   function update(i: number, patch: Partial<TrainerProposal>) {
     setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, ...patch } : r));
+  }
+
+  async function pickRecording(i: number, file: File, kind: 'Audio' | 'Screenshot') {
+    setUploadingIdx(i);
+    try {
+      const final = kind === 'Audio'
+        ? new File([file], `trainer-recording-${Date.now()}.mp3`, { type: 'audio/mpeg' })
+        : file;
+      const r = await uploadFile(final);
+      update(i, { trainerRecording: r.url });
+      showToast(`${kind} attached`);
+    } catch (e: any) {
+      showToast(e?.response?.data?.error || 'Upload failed', 'error');
+    } finally {
+      setUploadingIdx(null);
+    }
   }
 
   const submit = useMutation({
@@ -268,7 +285,41 @@ function ProposeDialog({ req, onClose }: { req: FreelanceReq; onClose: () => voi
               <div className="form-row"><Label>Name *</Label><Input value={r.trainerName || ''} onChange={(e) => update(i, { trainerName: e.target.value })} placeholder="Trainer name" /></div>
               <div className="form-row"><Label>Phone</Label><Input value={r.trainerPhone || ''} onChange={(e) => update(i, { trainerPhone: e.target.value })} placeholder="+91 9876543210" /></div>
               <div className="form-row"><Label>Email</Label><Input value={r.trainerEmail || ''} onChange={(e) => update(i, { trainerEmail: e.target.value })} placeholder="trainer@email.com" /></div>
-              <div className="form-row"><Label>Recording link</Label><Input value={r.trainerRecording || ''} onChange={(e) => update(i, { trainerRecording: e.target.value })} placeholder="Drive / Loom link…" /></div>
+              <div className="form-row" style={{ gridColumn: '1 / -1' }}>
+                <Label>Recording</Label>
+                {r.trainerRecording ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-page)', borderRadius: 8, padding: '6px 10px', border: '1px solid var(--brand-borderSoft)' }}>
+                    {r.trainerRecording.startsWith('/uploads') || r.trainerRecording.includes('audio') ? (
+                      <audio controls src={fileUrl(r.trainerRecording)} style={{ height: 28, flex: 1 }} />
+                    ) : (
+                      <a href={r.trainerRecording} target="_blank" rel="noreferrer" style={{ flex: 1, fontSize: 12, color: 'var(--brand-primary)' }}>🔗 {r.trainerRecording}</a>
+                    )}
+                    <button onClick={() => update(i, { trainerRecording: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand-textMuted)', padding: 2 }} title="Remove">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                    <label style={{ cursor: uploadingIdx === i ? 'not-allowed' : 'pointer', opacity: uploadingIdx === i ? 0.5 : 1 }} className="btn btn-sm">
+                      🎙 Audio recording
+                      <input type="file" hidden accept="audio/*,video/*" disabled={uploadingIdx === i}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) pickRecording(i, f, 'Audio'); e.target.value = ''; }} />
+                    </label>
+                    <label style={{ cursor: uploadingIdx === i ? 'not-allowed' : 'pointer', opacity: uploadingIdx === i ? 0.5 : 1 }} className="btn btn-sm">
+                      🖼 Screenshot
+                      <input type="file" hidden accept="image/*" disabled={uploadingIdx === i}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) pickRecording(i, f, 'Screenshot'); e.target.value = ''; }} />
+                    </label>
+                    <span style={{ fontSize: 11, color: 'var(--brand-textMuted)' }}>or paste link:</span>
+                    <input style={{ flex: 1, minWidth: 120, fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--brand-border)', background: 'var(--bg-input)', color: 'var(--brand-text)' }}
+                      placeholder="https://drive.google.com/…"
+                      onBlur={(e) => { if (e.target.value.trim()) update(i, { trainerRecording: e.target.value.trim() }); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value.trim(); if (v) update(i, { trainerRecording: v }); } }}
+                    />
+                    {uploadingIdx === i && <span style={{ fontSize: 11, color: 'var(--brand-textMuted)' }}>Uploading…</span>}
+                  </div>
+                )}
+              </div>
               <div className="form-row" style={{ gridColumn: '1 / -1' }}><Label>Available timings</Label><Textarea value={r.trainerTimings || ''} onChange={(e) => update(i, { trainerTimings: e.target.value })} rows={2} placeholder="e.g. Mon–Fri 9–11 AM IST, evenings 7–9 PM" /></div>
               <div className="form-row" style={{ gridColumn: '1 / -1' }}><Label>Notes</Label><Textarea value={r.notes || ''} onChange={(e) => update(i, { notes: e.target.value })} rows={2} placeholder="Any additional info…" /></div>
             </div>
@@ -437,7 +488,11 @@ function ReqCard({ req }: { req: FreelanceReq }) {
                       {p.trainerTimings && <span style={{ gridColumn: '1 / -1', color: 'var(--brand-textSecondary)' }}>🕐 {p.trainerTimings}</span>}
                       {p.trainerRecording && (
                         <span style={{ gridColumn: '1 / -1' }}>
-                          <a href={p.trainerRecording} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-primary)', fontSize: 11 }}>🎙 Recording link</a>
+                          {p.trainerRecording.startsWith('/uploads') || p.trainerRecording.includes('audio') ? (
+                            <audio controls src={fileUrl(p.trainerRecording)} style={{ height: 26, width: '100%', marginTop: 2 }} />
+                          ) : (
+                            <a href={p.trainerRecording} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-primary)', fontSize: 11 }}>🎙 Recording</a>
+                          )}
                         </span>
                       )}
                       {p.notes && <span style={{ gridColumn: '1 / -1', color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>{p.notes}</span>}
