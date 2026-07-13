@@ -10,7 +10,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
-import { Plus, ChevronDown, ChevronUp, CheckCircle2, XCircle, CircleDot, Search, Users } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, CheckCircle2, Search, Users, Loader2, AlertTriangle } from 'lucide-react';
 
 // readOnly = true means cards are visible but not clickable (another team owns that stage)
 const TEAM2_STAGES = [
@@ -356,25 +356,75 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
     notes: '',
   });
 
+  const [dupWarning, setDupWarning] = useState<{ message: string; existingId?: string } | null>(null);
+
   const create = useMutation({
-    mutationFn: () => api.post('/clients', { ...f, lifecycle: 'Lead', currency: 'USD' }),
+    mutationFn: (force = false) => api.post('/clients', {
+      ...f,
+      lifecycle: 'Lead',
+      currency: 'USD',
+      ...(force ? { _forceDuplicate: true } : {}),
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clients'] });
       qc.invalidateQueries({ queryKey: ['nav-badges'] });
       showToast('Lead saved');
       onClose();
     },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
+    onError: (e: any) => {
+      const data = e.response?.data;
+      if (data?.code === 'CLIENT_DUPLICATE') {
+        setDupWarning({ message: data.error, existingId: data.existingId });
+      } else {
+        showToast(data?.error || e.message || 'Failed to save lead', 'error');
+      }
+    },
   });
 
-  const ok = f.name && (f.whatsappGroupName || f.phoneDigits);
+  const ok = f.name.trim() && (f.whatsappGroupName.trim() || f.phoneDigits.trim());
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent title="New lead" description="Captures a new prospect. Team 2 (Anjali/Taran) will pick it up for intake.">
+        {dupWarning && (
+          <div
+            className="rounded-xl p-3 mb-3 flex flex-col gap-2"
+            style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.35)' }}
+          >
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={14} style={{ color: 'var(--status-amber)', flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <div className="text-[12px] font-semibold" style={{ color: 'var(--status-amber)' }}>Possible duplicate</div>
+                <div className="text-[11px] mt-0.5" style={{ color: 'var(--brand-textSecondary)' }}>{dupWarning.message}</div>
+              </div>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {dupWarning.existingId && (
+                <Link
+                  to={`/clients/${dupWarning.existingId}`}
+                  onClick={onClose}
+                  className="btn btn-sm"
+                  style={{ fontSize: 11 }}
+                >
+                  View existing client →
+                </Link>
+              )}
+              <button
+                className="btn btn-sm btn-amber"
+                style={{ fontSize: 11 }}
+                onClick={() => { setDupWarning(null); create.mutate(true); }}
+              >
+                Save anyway (different person)
+              </button>
+              <button className="btn btn-sm" style={{ fontSize: 11 }} onClick={() => setDupWarning(null)}>
+                Edit details
+              </button>
+            </div>
+          </div>
+        )}
         <div className="form-row">
           <Label>Name</Label>
-          <Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} autoFocus />
+          <Input value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setDupWarning(null); }} autoFocus />
         </div>
         <div className="form-row">
           <Label>WhatsApp group name <span className="text-brand-textMuted normal-case ml-1">(group OR phone required)</span></Label>
@@ -390,7 +440,7 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
             <Select value={f.phoneCode} onChange={(e) => setF({ ...f, phoneCode: e.target.value })}>
               <option>+1</option><option>+91</option><option>+44</option><option>+61</option><option>+971</option><option>+65</option>
             </Select>
-            <Input value={f.phoneDigits} onChange={(e) => setF({ ...f, phoneDigits: e.target.value.replace(/\D/g, '') })} placeholder="10 digits" />
+            <Input value={f.phoneDigits} onChange={(e) => { setF({ ...f, phoneDigits: e.target.value.replace(/\D/g, '') }); setDupWarning(null); }} placeholder="10 digits" />
           </div>
         </div>
         <div className="grid md:grid-cols-2 gap-2.5">
@@ -421,7 +471,13 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
         </div>
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!ok || create.isPending} onClick={() => create.mutate()}>Save lead</Button>
+          <Button
+            variant="primary"
+            disabled={!ok || create.isPending}
+            onClick={() => { setDupWarning(null); create.mutate(false); }}
+          >
+            {create.isPending ? <><Loader2 size={12} className="animate-spin" /> Saving…</> : 'Save lead'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
