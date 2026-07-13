@@ -34,6 +34,24 @@ const REPO = process.env.MITS_REPO_PATH || path.resolve(__dirname, '..');
 const MAX_CONCURRENT = 3;
 const FIX_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes per fix
 
+// Find claude CLI — check PATH first, then known VSCode extension locations
+function findClaude() {
+  const { execSync } = require('child_process');
+  try { return execSync('which claude', { encoding: 'utf8' }).trim(); } catch {}
+  const vscodeBase = path.join(process.env.HOME || '', '.vscode/extensions');
+  if (fs.existsSync(vscodeBase)) {
+    const dirs = fs.readdirSync(vscodeBase)
+      .filter(d => d.startsWith('anthropic.claude-code'))
+      .sort().reverse(); // latest version first
+    for (const d of dirs) {
+      const p = path.join(vscodeBase, d, 'resources/native-binary/claude');
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  return 'claude'; // fallback
+}
+const CLAUDE_BIN = process.env.CLAUDE_BIN || findClaude();
+
 // Backend URL to patch bug status after fix
 const BACKEND_URL = process.env.MITS_BACKEND_URL || 'http://localhost:4000';
 const BACKEND_SECRET = process.env.AUTOFIX_BACKEND_SECRET || ''; // founder JWT or service token
@@ -92,9 +110,10 @@ Instructions:
 Fix the bug now.`;
 
   return new Promise((resolve) => {
+    log(`[${bugId}] Using claude: ${CLAUDE_BIN}`);
     const child = execFile(
-      'claude',
-      ['--print', '--allowedTools', 'Read,Edit,Write,Bash', prompt],
+      CLAUDE_BIN,
+      ['--print', '--allowedTools', 'Read,Edit,Write,Bash'],
       {
         cwd: REPO,
         timeout: FIX_TIMEOUT_MS,
@@ -121,7 +140,11 @@ Fix the bug now.`;
       }
     );
 
-    child.on('spawn', () => log(`[${bugId}] Claude CLI spawned (pid ${child.pid})`));
+    child.on('spawn', () => {
+      log(`[${bugId}] Claude CLI spawned (pid ${child.pid})`);
+      child.stdin.write(prompt);
+      child.stdin.end();
+    });
   });
 }
 

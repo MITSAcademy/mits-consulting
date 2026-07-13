@@ -107,11 +107,11 @@ export function Topbar({
     <div
       className="flex justify-between items-center px-4 md:px-6 py-4 border-b sticky top-0 z-10 flex-wrap gap-2.5"
       style={{
-        borderColor: 'color-mix(in srgb, var(--brand-border) 55%, transparent)',
-        background: 'color-mix(in srgb, var(--bg-page) 85%, transparent)',
-        backdropFilter: 'saturate(180%) blur(16px)',
-        WebkitBackdropFilter: 'saturate(180%) blur(16px)',
-        boxShadow: '0 1px 0 color-mix(in srgb, var(--brand-border) 40%, transparent), 0 4px 20px rgba(0,0,0,0.06)',
+        borderColor: 'color-mix(in srgb, var(--brand-border) 60%, transparent)',
+        background: 'color-mix(in srgb, var(--bg-page) 88%, transparent)',
+        backdropFilter: 'saturate(200%) blur(20px)',
+        WebkitBackdropFilter: 'saturate(200%) blur(20px)',
+        boxShadow: '0 1px 0 color-mix(in srgb, var(--brand-border) 50%, transparent), 0 6px 24px rgba(0,0,0,0.08)',
       }}
     >
       <div className="flex items-center gap-3 flex-wrap min-w-0">

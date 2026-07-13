@@ -288,12 +288,13 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
           width: sidebarWidth,
           minWidth: sidebarWidth,
           background:
-            'radial-gradient(600px 200px at 0% 0%, rgba(229,178,76,0.04), transparent 50%), ' +
-            'linear-gradient(180deg, var(--bg-sidebar) 0%, color-mix(in srgb, var(--bg-sidebar) 92%, #000) 100%)',
-          borderColor: 'rgba(255,255,255,0.06)',
-          color: '#E8E2D3',
+            'radial-gradient(500px 180px at 50% 0%, rgba(232,184,75,0.07), transparent 55%), ' +
+            'radial-gradient(400px 300px at 100% 100%, rgba(92,143,240,0.04), transparent 55%), ' +
+            'linear-gradient(180deg, #07080C 0%, #050608 100%)',
+          borderColor: 'rgba(255,255,255,0.07)',
+          color: '#EBE4D5',
           transition: 'width 220ms cubic-bezier(0.2,0.9,0.25,1), min-width 220ms cubic-bezier(0.2,0.9,0.25,1)',
-          boxShadow: '4px 0 24px rgba(0,0,0,0.30)',
+          boxShadow: '4px 0 32px rgba(0,0,0,0.40), 1px 0 0 rgba(255,255,255,0.04)',
           transitionDuration: '280ms',
           transitionTimingFunction: 'cubic-bezier(0.2, 0.9, 0.25, 1)',
         }}
@@ -308,8 +309,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
             <div
               className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform hover:rotate-3"
               style={{
-                background: 'linear-gradient(135deg, #FAF5E7 0%, #E8DEC2 50%, #D4B98C 100%)',
-                boxShadow: '0 2px 10px rgba(229,178,76,0.20), inset 0 1px 0 rgba(255,255,255,0.40)',
+                background: 'linear-gradient(145deg, #FDF6E3 0%, #ECD89A 45%, #C8961C 100%)',
+                boxShadow: '0 2px 14px rgba(232,184,75,0.35), inset 0 1px 0 rgba(255,255,255,0.50), 0 0 0 1px rgba(232,184,75,0.25)',
                 color: '#0F1115',
               }}
             >

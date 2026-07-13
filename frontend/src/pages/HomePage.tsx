@@ -183,23 +183,42 @@ function HomeHero({ name }: { name: string }) {
   const dayDate = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   return (
     <div className="card-hero mb-5 relative overflow-hidden" style={{ animation: 'fadeUp 300ms cubic-bezier(0.2,0.9,0.25,1) both' }}>
-      <div className="text-[12px] muted flex items-center gap-1.5 mb-1.5">
-        <span aria-hidden>{emoji}</span>
-        <span>{greeting}</span>
+      {/* Ambient orbs */}
+      <div aria-hidden style={{
+        position: 'absolute', top: -50, right: -50, width: 240, height: 240,
+        borderRadius: '50%', pointerEvents: 'none',
+        background: 'radial-gradient(circle, rgba(232,184,75,0.13) 0%, transparent 70%)',
+        animation: 'heroOrb1 8s ease-in-out infinite',
+      }} />
+      <div aria-hidden style={{
+        position: 'absolute', bottom: -30, left: '25%', width: 180, height: 180,
+        borderRadius: '50%', pointerEvents: 'none',
+        background: 'radial-gradient(circle, rgba(92,143,240,0.07) 0%, transparent 70%)',
+        animation: 'heroOrb2 11s ease-in-out infinite',
+      }} />
+      <div className="relative z-10">
+        <div className="flex items-center gap-2 mb-2.5">
+          <span style={{
+            fontSize: 10.5, fontWeight: 700, letterSpacing: '0.13em', textTransform: 'uppercase' as const,
+            color: 'var(--accent-gold)', opacity: 0.9,
+          }}>
+            {emoji} {greeting}
+          </span>
+        </div>
+        <h1 className="h-display mb-2.5">
+          Welcome back, <span className="text-gold-grad">{firstName}</span>
+        </h1>
+        <div style={{ fontSize: 12, color: 'var(--brand-textMuted)', display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{
+            display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+            background: 'var(--status-green)',
+            boxShadow: '0 0 7px var(--status-green)',
+            animation: 'mits-breathe 2.4s ease-in-out infinite',
+            flexShrink: 0,
+          }} />
+          {dayDate}
+        </div>
       </div>
-      <h1 className="h-display">
-        Welcome back, <span className="text-gold-grad">{firstName}</span>
-      </h1>
-      <div className="text-[13px] muted mt-1.5">{dayDate}</div>
-      {/* Subtle animated shimmer streak */}
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute', top: 0, right: 0, width: 260, height: '100%', pointerEvents: 'none',
-          background: 'linear-gradient(135deg, transparent 40%, rgba(229,178,76,0.06) 60%, transparent 80%)',
-          animation: 'heroShimmer 6s ease-in-out infinite',
-        }}
-      />
     </div>
   );
 }
@@ -306,9 +325,28 @@ export function HomePage() {
                   {links.map(({ to, label, icon: Icon, color }) => (
                     <Link key={to} to={to}
                       className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold transition-all hover:-translate-y-0.5"
-                      style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)', color: 'var(--brand-textSecondary)', boxShadow: 'var(--shadow-sm)' }}
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: `1px solid color-mix(in srgb, ${color} 20%, var(--brand-border))`,
+                        color: 'var(--brand-textSecondary)',
+                        boxShadow: `var(--shadow-sm), 0 0 0 0 ${color}00`,
+                        transition: 'all 200ms cubic-bezier(0.2,0.9,0.25,1)',
+                      }}
+                      onMouseEnter={e => {
+                        (e.currentTarget as HTMLElement).style.boxShadow = `var(--shadow-md), 0 0 12px ${color}22`;
+                        (e.currentTarget as HTMLElement).style.borderColor = `color-mix(in srgb, ${color} 40%, var(--brand-border))`;
+                      }}
+                      onMouseLeave={e => {
+                        (e.currentTarget as HTMLElement).style.boxShadow = `var(--shadow-sm)`;
+                        (e.currentTarget as HTMLElement).style.borderColor = `color-mix(in srgb, ${color} 20%, var(--brand-border))`;
+                      }}
                     >
-                      <Icon size={13} style={{ color }} />
+                      <span style={{
+                        width: 24, height: 24, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        background: `color-mix(in srgb, ${color} 15%, transparent)`,
+                      }}>
+                        <Icon size={12} style={{ color }} />
+                      </span>
                       {label}
                     </Link>
                   ))}
@@ -383,9 +421,13 @@ export function HomePage() {
         )}
       </Page>
       <style>{`
-        @keyframes heroShimmer {
-          0%, 100% { opacity: 0.5; transform: translateX(0); }
-          50%       { opacity: 1;   transform: translateX(-20px); }
+        @keyframes heroOrb1 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.8; }
+          50%       { transform: translate(-15px, 10px) scale(1.1); opacity: 1; }
+        }
+        @keyframes heroOrb2 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.6; }
+          50%       { transform: translate(10px, -12px) scale(1.08); opacity: 0.9; }
         }
       `}</style>
     </>
