@@ -281,7 +281,7 @@ export function HomePage() {
 
             <div className="divider">Operations</div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-4">
-              <Kpi icon={Users}         label="Active clients"   value={data.ops.activeClients} rawValue={data.ops.activeClients} sub={`${data.ops.holds} on hold · ${data.ops.activeClientsWithStub ?? data.ops.activeClients} on team board`} accent="blue" delay={0}   to="/clients" />
+              <Kpi icon={Users}         label="Active clients"   value={data.ops.activeClientsWithStub ?? data.ops.activeClients} rawValue={data.ops.activeClientsWithStub ?? data.ops.activeClients} sub={`${data.ops.holds} on hold${(data.ops.activeClientsNoStub ?? 0) > 0 ? ` · ${data.ops.activeClientsNoStub} no stub` : ''}`} accent="blue" delay={0}   to="/clients" />
               <Kpi icon={Activity}      label="In pipeline"      value={data.ops.inPipeline}    rawValue={data.ops.inPipeline}    sub="Lead → demo"                 accent="gold" delay={60}  to="/pipeline" />
               <Kpi
                 icon={Calendar}
