@@ -10,6 +10,7 @@ function todayISO() {
 }
 
 metricsRouter.get('/home', async (_req, res) => {
+  try {
   const today = todayISO();
   const monthStart = today.slice(0, 8) + '01';
 
@@ -76,21 +77,28 @@ metricsRouter.get('/home', async (_req, res) => {
       total: clients.length,
     },
   });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to load home metrics' });
+  }
 });
 
 metricsRouter.get('/pipeline', requireRole('founder', 'manager', 'lead', 'demo_lead', 'sales_closer'), async (_req, res) => {
-  const LIFECYCLE = [
-    'Lead', 'IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters',
-    'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone',
-    'SaleClosing', 'SaleWon', 'Active',
-  ];
-  const all = await prisma.client.findMany({ orderBy: { createdAt: 'desc' } });
-  const grouped: Record<string, any[]> = {};
-  LIFECYCLE.forEach((s) => (grouped[s] = []));
-  all.forEach((c) => {
-    if (grouped[c.lifecycle]) grouped[c.lifecycle].push(c);
-  });
-  res.json(grouped);
+  try {
+    const LIFECYCLE = [
+      'Lead', 'IntakeSent', 'IntakeReceived', 'InternalSearch', 'WithRecruiters',
+      'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone',
+      'SaleClosing', 'SaleWon', 'Active',
+    ];
+    const all = await prisma.client.findMany({ orderBy: { createdAt: 'desc' } });
+    const grouped: Record<string, any[]> = {};
+    LIFECYCLE.forEach((s) => (grouped[s] = []));
+    all.forEach((c) => {
+      if (grouped[c.lifecycle]) grouped[c.lifecycle].push(c);
+    });
+    res.json(grouped);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Failed to load pipeline metrics' });
+  }
 });
 
 metricsRouter.get('/money-flow', requireRole('founder', 'manager', 'accounts'), async (_req, res) => {

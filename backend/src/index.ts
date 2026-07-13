@@ -1,4 +1,21 @@
 import 'dotenv/config';
+// Patch Express 4 to forward unhandled async rejections to the global error handler.
+// Without this, a bare `await prisma.*` that throws inside a route handler either
+// hangs the HTTP connection (Express 4 default) or crashes the process (Node 15+).
+// This must come before any other import that uses express.Router().
+(function patchExpressAsync() {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const Layer = require('express/lib/router/layer');
+  const orig = Layer.prototype.handle_request;
+  Layer.prototype.handle_request = function (req: any, res: any, next: any) {
+    try {
+      const ret = orig.call(this, req, res, next);
+      if (ret && typeof ret.catch === 'function') ret.catch(next);
+    } catch (e) {
+      next(e);
+    }
+  };
+})();
 import express from 'express';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';

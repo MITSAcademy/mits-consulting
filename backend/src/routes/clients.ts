@@ -409,7 +409,7 @@ clientsRouter.post('/', async (req: AuthedRequest, res) => {
       where: {
         phoneDigits: data.phoneDigits,
         name: { equals: data.name?.trim(), mode: 'insensitive' },
-        lifecycle: { notIn: [Lifecycle.Closed, Lifecycle.Rejected] },
+        lifecycle: { notIn: [Lifecycle.Churned, Lifecycle.Completed] },
       },
       select: { id: true, name: true, seqId: true, lifecycle: true },
     });
