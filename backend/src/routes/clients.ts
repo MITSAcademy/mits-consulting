@@ -402,32 +402,33 @@ clientsRouter.post('/', async (req: AuthedRequest, res) => {
   const data: any = {};
   for (const f of allowedFields) if (f in req.body) data[f] = req.body[f];
   if (!data.name) return res.status(400).json({ error: 'Name required' });
-  // Soft duplicate check — warn if same name+phone already exists (skippable with _forceDuplicate)
+  console.log('[POST /clients] body:', JSON.stringify({ ...data, leadOwnerId: data.leadOwnerId || '(will default to user)' }));
   const forceDuplicate = req.body._forceDuplicate === true;
-  if (data.phoneDigits && !forceDuplicate) {
-    const existing = await prisma.client.findFirst({
-      where: {
-        phoneDigits: data.phoneDigits,
-        name: { equals: data.name?.trim(), mode: 'insensitive' },
-        lifecycle: { notIn: [Lifecycle.Churned, Lifecycle.Completed] },
-      },
-      select: { id: true, name: true, seqId: true, lifecycle: true },
-    });
-    if (existing) {
-      return res.status(409).json({
-        error: `Client already exists: ${existing.name} (C-${existing.seqId || existing.id}) — lifecycle: ${existing.lifecycle}`,
-        code: 'CLIENT_DUPLICATE',
-        existingId: existing.id,
-      });
-    }
-  }
-  if (!data.leadOwnerId) data.leadOwnerId = req.user!.id;
   try {
+    // Soft duplicate check — warn if same name+phone already exists (skippable with _forceDuplicate)
+    if (data.phoneDigits && !forceDuplicate) {
+      const existing = await prisma.client.findFirst({
+        where: {
+          phoneDigits: data.phoneDigits,
+          name: { equals: data.name?.trim(), mode: 'insensitive' },
+          lifecycle: { notIn: [Lifecycle.Churned, Lifecycle.Completed] },
+        },
+        select: { id: true, name: true, seqId: true, lifecycle: true },
+      });
+      if (existing) {
+        return res.status(409).json({
+          error: `Client already exists: ${existing.name} (C-${existing.seqId || existing.id}) — lifecycle: ${existing.lifecycle}`,
+          code: 'CLIENT_DUPLICATE',
+          existingId: existing.id,
+        });
+      }
+    }
+    if (!data.leadOwnerId) data.leadOwnerId = req.user!.id;
     const client = await prisma.client.create({ data, include });
     await audit(req.user!.id, req.user!.name, 'CLIENT_CREATE', client.name, { clientId: client.id });
     res.status(201).json(client);
   } catch (e: any) {
-    console.error('[POST /clients] create failed:', e?.message || e);
+    console.error('[POST /clients] create failed:', JSON.stringify({ message: e?.message, code: e?.code, meta: e?.meta }));
     res.status(500).json({ error: e?.message || 'Failed to save lead' });
   }
 });
