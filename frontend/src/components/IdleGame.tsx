@@ -639,6 +639,13 @@ export function IdleGame() {
   }, []);
 
   useEffect(() => {
+    const handler = () => openGame();
+    window.addEventListener('mits:open-idle-game', handler);
+    return () => window.removeEventListener('mits:open-idle-game', handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     // Only mousemove/keydown/scroll reset the timer — NOT click/touch
     // so that clicking "Play a game" on the toast doesn't dismiss it before openGame fires
     const resetEvents = ['mousemove', 'keydown', 'scroll'];

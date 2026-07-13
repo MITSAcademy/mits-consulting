@@ -15,6 +15,7 @@ import { useAuth } from '@/store/auth';
 import { GlobalSearch, openGlobalSearch } from '@/components/GlobalSearch';
 import { StreakBanner } from '@/components/StreakBanner';
 import { BugReportModal } from '@/components/BugReportModal';
+import { FloatingActions } from '@/components/FloatingActions';
 
 /** Context lets the Topbar open the off-canvas sidebar without lifting state
  *  through every page. */
@@ -61,6 +62,7 @@ export function AppLayout() {
       <HelpPanel />
       <MobileBottomNav />
       <BugReportModal />
+      <FloatingActions />
     </MobileNavCtx.Provider>
   );
 }
