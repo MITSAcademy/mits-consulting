@@ -359,7 +359,7 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
   const [dupWarning, setDupWarning] = useState<{ message: string; existingId?: string } | null>(null);
 
   const create = useMutation({
-    mutationFn: (force = false) => api.post('/clients', {
+    mutationFn: (force: boolean) => api.post('/clients', {
       ...f,
       lifecycle: 'Lead',
       currency: 'USD',

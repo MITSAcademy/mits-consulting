@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { prisma } from '../lib/prisma';
-import { SourcingStatus, DemoStatus } from '@prisma/client';
+import { SourcingStatus, DemoStatus, Lifecycle } from '@prisma/client';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 import { notify } from '../lib/notify';
@@ -409,7 +409,7 @@ clientsRouter.post('/', async (req: AuthedRequest, res) => {
       where: {
         phoneDigits: data.phoneDigits,
         name: { equals: data.name?.trim(), mode: 'insensitive' },
-        lifecycle: { notIn: ['Closed', 'Rejected'] as any },
+        lifecycle: { notIn: [Lifecycle.Closed, Lifecycle.Rejected] },
       },
       select: { id: true, name: true, seqId: true, lifecycle: true },
     });
