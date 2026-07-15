@@ -329,7 +329,7 @@ function ProposeDialog({ req, onClose }: { req: FreelanceReq; onClose: () => voi
               <div className="form-row" style={{ gridColumn: '1 / -1' }}><Label>Available timings</Label><Textarea value={r.trainerTimings || ''} onChange={(e) => update(i, { trainerTimings: e.target.value })} rows={2} placeholder="e.g. Mon–Fri 9–11 AM IST, evenings 7–9 PM" /></div>
               <div className="form-row"><Label>Experience</Label><Input value={r.experience || ''} onChange={(e) => update(i, { experience: e.target.value })} placeholder="e.g. 5 years, ex-Google" /></div>
               <div className="form-row"><Label>Payment (₹)</Label><Input type="number" value={r.payment ?? ''} onChange={(e) => update(i, { payment: e.target.value ? Number(e.target.value) : null })} placeholder="e.g. 5000" /></div>
-              <div className="form-row"><Label>Payment Release Date</Label><Input type="date" value={r.paymentReleaseDate || ''} onChange={(e) => update(i, { paymentReleaseDate: e.target.value })} /></div>
+              <div className="form-row"><Label>Clearance Day <span style={{ fontWeight: 400, opacity: 0.6, fontSize: '0.75em' }}>(Wednesday of clearance week)</span></Label><Input type="date" value={r.paymentReleaseDate || ''} onChange={(e) => update(i, { paymentReleaseDate: e.target.value })} /></div>
               <div className="form-row"><Label>Payment Status</Label>
                 <Select value={r.paymentStatus || 'Pending'} onChange={(e) => update(i, { paymentStatus: e.target.value })}>
                   {PAYMENT_STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -510,7 +510,7 @@ function ReqCard({ req }: { req: FreelanceReq }) {
                       {p.trainerTimings && <span style={{ gridColumn: '1 / -1', color: 'var(--brand-textSecondary)' }}>🕐 {p.trainerTimings}</span>}
                       {(p.paymentStatus || p.paymentReleaseDate) && (
                         <span style={{ gridColumn: '1 / -1', color: 'var(--brand-textSecondary)' }}>
-                          💳 Payment: {p.paymentStatus || '—'}{p.paymentReleaseDate ? ` · due ${p.paymentReleaseDate}` : ''}
+                          💳 Payment: {p.paymentStatus || '—'}{p.paymentReleaseDate ? ` · clearance ${p.paymentReleaseDate}` : ''}
                         </span>
                       )}
                       {p.trainerRecording && (
