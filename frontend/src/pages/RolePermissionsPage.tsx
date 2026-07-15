@@ -4,6 +4,7 @@ import { useAuth } from '@/store/auth';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Navigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useUI } from '@/store/ui';
 
 interface MatrixData {
   resources: { key: string; label: string }[];
@@ -36,6 +37,7 @@ const CATEGORY_ORDER = [
 export function RolePermissionsPage() {
   const user = useAuth((s) => s.user);
   const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
   const [resetTarget, setResetTarget] = useState<{ resource: string } | null>(null);
 
   if (user?.role !== 'founder') return <Navigate to="/" replace />;
@@ -66,8 +68,12 @@ export function RolePermissionsPage() {
       }
       return { prev };
     },
+    onSuccess: (_data, vars) => {
+      showToast(`Permission updated — ${vars.role}: ${vars.resource} ${vars.allowed ? 'enabled' : 'disabled'}`);
+    },
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev) qc.setQueryData(['role-permissions-matrix'], ctx.prev);
+      showToast('Failed to update permission', 'error');
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ['role-permissions-matrix'] }),
   });

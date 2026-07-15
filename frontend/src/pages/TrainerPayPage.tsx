@@ -20,7 +20,7 @@ export function TrainerPayPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const [weekStart, setWeekStart] = useState(startOfWeek(todayISO()));
-  const { data: logs } = useQuery({
+  const { data: logs, isLoading: logsLoading } = useQuery({
     queryKey: ['session-logs', { weekStart }],
     queryFn: () => api.get('/session-logs', { params: { weekStart } }).then((r) => r.data),
   });
@@ -64,7 +64,8 @@ export function TrainerPayPage() {
             <Button variant="primary" disabled={create.isPending} onClick={() => create.mutate()}>Create payout batch →</Button>
           </div>
         )}
-        {(logs || []).length === 0 ? (
+        {logsLoading && <div className="muted text-sm p-6">Loading sessions...</div>}
+        {!logsLoading && (logs || []).length === 0 ? (
           <EmptyState
             icon={Wallet}
             tone="grey"

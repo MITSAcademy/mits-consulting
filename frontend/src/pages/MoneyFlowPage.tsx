@@ -8,7 +8,7 @@ export function MoneyFlowPage() {
     queryKey: ['metrics/home'],
     queryFn: () => api.get('/metrics/home').then((r) => r.data),
   });
-  const { data: flow } = useQuery({
+  const { data: flow, isLoading: flowLoading } = useQuery({
     queryKey: ['metrics/money-flow'],
     queryFn: () => api.get('/metrics/money-flow').then((r) => r.data),
   });
@@ -72,6 +72,7 @@ export function MoneyFlowPage() {
           </div>
         </div>
         <div className="divider">Bank-wise inflows this month</div>
+        {flowLoading && <SkeletonTable rows={3} />}
         <div className="table-card">
           <table>
             <thead>
@@ -82,7 +83,7 @@ export function MoneyFlowPage() {
               </tr>
             </thead>
             <tbody>
-              {flow?.byBank?.length ? (
+              {!flowLoading && flow?.byBank?.length ? (
                 flow.byBank.map((b: any) => (
                   <tr key={b.bank.id}>
                     <td>
@@ -96,13 +97,13 @@ export function MoneyFlowPage() {
                     </td>
                   </tr>
                 ))
-              ) : (
+              ) : !flowLoading ? (
                 <tr>
                   <td colSpan={3} className="muted text-center py-8">
                     No payments this month yet.
                   </td>
                 </tr>
-              )}
+              ) : null}
             </tbody>
           </table>
         </div>

@@ -13,7 +13,7 @@ import { FileText } from 'lucide-react';
 export function TemplatesPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const { data } = useQuery({ queryKey: ['templates'], queryFn: () => api.get('/templates').then((r) => r.data) });
+  const { data, isLoading } = useQuery({ queryKey: ['templates'], queryFn: () => api.get('/templates').then((r) => r.data) });
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ id: '', kind: 'Email', stage: '', name: '', subject: '', body: '' });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -50,8 +50,9 @@ export function TemplatesPage() {
         </Dialog>
       } />
       <Page>
+        {isLoading && <div className="muted text-sm p-6">Loading...</div>}
         <div className="space-y-3">
-          {(data || []).length === 0 && (
+          {!isLoading && (data || []).length === 0 && (
             <EmptyState
               icon={FileText}
               tone="gold"

@@ -11,6 +11,7 @@ import { useUI } from '@/store/ui';
 import { todayISO, stageLabel, formatPhone, waLink } from '@/lib/utils';
 import { Moon, MessageCircle, Play } from 'lucide-react';
 import { useAuth } from '@/store/auth';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 export function DormantClientsPage() {
   const qc = useQueryClient();
@@ -18,6 +19,7 @@ export function DormantClientsPage() {
   const user = useAuth((s) => s.user)!;
   const isSalesCloser = user.role === 'sales_closer';
   const today = todayISO();
+  const [resumeConfirm, setResumeConfirm] = useState<{ id: string; lifecycle: string } | null>(null);
   const [q, setQ] = useState('');
 
   const { data: clients, isLoading } = useQuery({
@@ -122,7 +124,7 @@ export function DormantClientsPage() {
                 <MessageCircle size={12}/> WA
               </a>
             )}
-            <Button size="sm" variant="success" disabled={resumePartial.isPending} onClick={() => resumePartial.mutate({ id: c.id, lifecycle: c.dormantResumeFromStage || 'IntakeReceived' })}>
+            <Button size="sm" variant="success" disabled={resumePartial.isPending} onClick={() => setResumeConfirm({ id: c.id, lifecycle: c.dormantResumeFromStage || 'IntakeReceived' })}>
               <Play size={12}/> Resume
             </Button>
             <Link to={`/clients/${c.id}`} className="btn btn-sm">Open</Link>
@@ -206,6 +208,16 @@ export function DormantClientsPage() {
           </div>
         )}
       </Page>
+      <ConfirmDialog
+        open={!!resumeConfirm}
+        onClose={() => setResumeConfirm(null)}
+        onConfirm={() => { resumePartial.mutate(resumeConfirm!); setResumeConfirm(null); }}
+        title="Resume this client?"
+        description={`This will move the client back into the active pipeline (${resumeConfirm?.lifecycle || 'IntakeReceived'} stage). Make sure they've confirmed re-engagement before proceeding.`}
+        confirmLabel="Resume client"
+        confirmVariant="success"
+        loading={resumePartial.isPending}
+      />
     </>
   );
 }

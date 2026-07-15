@@ -150,7 +150,7 @@ export function AuditPage() {
     <>
       <Topbar
         title="Activity log"
-        subtitle={`${entries.length}${entries.length !== raw.length ? ` of ${raw.length}` : ''} events · read-only`}
+        subtitle={`${entries.length}${entries.length !== raw.length ? ` of ${raw.length}` : ''} events · read-only${raw.length >= 500 ? ' · showing latest 500 — narrow your date range to see older events' : ''}`}
         actions={
           <div className="flex items-center gap-2">
             <Input

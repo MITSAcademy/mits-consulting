@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
@@ -5,12 +6,14 @@ import { Button } from '@/components/ui/button';
 import { useUI } from '@/store/ui';
 import { Pill } from '@/components/ui/pill';
 import { EmptyState } from '@/components/EmptyState';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ClipboardCheck } from 'lucide-react';
 
 export function EditRequestsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const { data, isLoading } = useQuery({ queryKey: ['edit-requests'], queryFn: () => api.get('/edit-requests').then((r) => r.data) });
+  const [rejectConfirm, setRejectConfirm] = useState<{ id: string; field: string; requester: string } | null>(null);
 
   const approve = useMutation({
     mutationFn: (id: string) => api.post(`/edit-requests/${id}/approve`),
@@ -52,7 +55,7 @@ export function EditRequestsPage() {
                     {r.status === 'Pending' && (
                       <div className="space-x-1">
                         <Button size="sm" variant="success" disabled={approve.isPending || reject.isPending} onClick={() => approve.mutate(r.id)}>Approve</Button>
-                        <Button size="sm" variant="danger" disabled={approve.isPending || reject.isPending} onClick={() => reject.mutate(r.id)}>Reject</Button>
+                        <Button size="sm" variant="danger" disabled={approve.isPending || reject.isPending} onClick={() => setRejectConfirm({ id: r.id, field: r.field, requester: r.requestedBy?.name || 'someone' })}>Reject</Button>
                       </div>
                     )}
                   </td>
@@ -63,6 +66,15 @@ export function EditRequestsPage() {
         </div>
         )}
       </Page>
+      <ConfirmDialog
+        open={!!rejectConfirm}
+        onClose={() => setRejectConfirm(null)}
+        onConfirm={() => { reject.mutate(rejectConfirm!.id); setRejectConfirm(null); }}
+        title="Reject this edit request?"
+        description={rejectConfirm ? `This will permanently reject ${rejectConfirm.requester}'s request to change "${rejectConfirm.field}". They will need to submit a new request if this was a mistake.` : ''}
+        confirmLabel="Reject"
+        loading={reject.isPending}
+      />
     </>
   );
 }

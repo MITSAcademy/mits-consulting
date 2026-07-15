@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
@@ -9,11 +10,13 @@ import { todayISO, stageLabel, waLink } from '@/lib/utils';
 import { HandMetal, MessageCircle, Play, Wallet, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 import { EmptyState } from '@/components/EmptyState';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 export function HoldClientsPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user)!;
+  const [dormantConfirm, setDormantConfirm] = useState<string | null>(null);
   const isSalesCloser = user.role === 'sales_closer';
   const isManager = user.role === 'manager';
   const today = todayISO();
@@ -129,7 +132,7 @@ export function HoldClientsPage() {
               </Button>
             )}
             {!isSalesCloser && (
-              <Button size="sm" disabled={markDormant.isPending} onClick={() => markDormant.mutate(c.id)}>
+              <Button size="sm" disabled={markDormant.isPending} onClick={() => setDormantConfirm(c.id)}>
                 <Play size={12}/> Mark dormant
               </Button>
             )}
@@ -203,6 +206,15 @@ export function HoldClientsPage() {
           </div>
         )}
       </Page>
+      <ConfirmDialog
+        open={!!dormantConfirm}
+        onClose={() => setDormantConfirm(null)}
+        onConfirm={() => { markDormant.mutate(dormantConfirm!); setDormantConfirm(null); }}
+        title="Mark client as dormant?"
+        description="This moves the client out of the active Hold pipeline. Only do this if they've stopped responding after the check-back date."
+        confirmLabel="Mark dormant"
+        loading={markDormant.isPending}
+      />
     </>
   );
 }

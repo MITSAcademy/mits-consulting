@@ -10,12 +10,14 @@ import { Pill } from '@/components/ui/pill';
 import { Avatar } from '@/components/ui/avatar';
 import { ROLE_LABELS } from '@/lib/utils';
 import { Mail, ShieldCheck, RefreshCw, BellRing, FileText, Activity, Send } from 'lucide-react';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 export function TeamAdminPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const { data, isLoading } = useQuery({ queryKey: ['users'], queryFn: () => api.get('/users').then((r) => r.data) });
   const [open, setOpen] = useState(false);
+  const [deactivateConfirm, setDeactivateConfirm] = useState<{ id: string; name: string; active: boolean } | null>(null);
   const [f, setF] = useState({ name: '', email: '', password: '', role: 'staff', reportsToId: '' });
   useEffect(() => { if (!open) setF({ name: '', email: '', password: '', role: 'staff', reportsToId: '' }); }, [open]);
   const create = useMutation({
@@ -114,7 +116,11 @@ export function TeamAdminPage() {
                   <td>
                     <div className="flex items-center gap-2">
                       <Pill color={u.active ? 'green' : 'red'}>{u.active ? 'Active' : 'Inactive'}</Pill>
-                      <Button size="sm" variant={u.active ? 'default' : 'success'} onClick={() => setActive.mutate({ id: u.id, active: !u.active })}>
+                      <Button
+                        size="sm"
+                        variant={u.active ? 'default' : 'success'}
+                        onClick={() => u.active ? setDeactivateConfirm({ id: u.id, name: u.name, active: false }) : setActive.mutate({ id: u.id, active: true })}
+                      >
                         {u.active ? 'Deactivate' : 'Activate'}
                       </Button>
                     </div>
@@ -355,6 +361,15 @@ export function TeamAdminPage() {
           </div>
         </div>
       </Page>
+      <ConfirmDialog
+        open={!!deactivateConfirm}
+        onClose={() => setDeactivateConfirm(null)}
+        onConfirm={() => { setActive.mutate({ id: deactivateConfirm!.id, active: false }); setDeactivateConfirm(null); }}
+        title={`Deactivate ${deactivateConfirm?.name}?`}
+        description="This will immediately block the user from logging in. You can reactivate them at any time from this page."
+        confirmLabel="Deactivate"
+        loading={setActive.isPending}
+      />
     </>
   );
 }

@@ -21,6 +21,7 @@ export function BulkUploadPage() {
       showToast(`Imported ${r.data.count}`);
       setRaw('');
     },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to import — check your connection and try again', 'error'),
   });
 
   // Quote-aware CSV row splitter — handles cells containing commas (e.g.
@@ -95,6 +96,7 @@ export function BulkUploadPage() {
     },
     onSuccess: ({ created, failed }) => {
       qc.invalidateQueries({ queryKey: ['clients'] });
+      qc.invalidateQueries({ queryKey: ['metrics/home'] });
       if (failed.length > 0) {
         const sample = failed.slice(0, 3).map((f) => `row ${f.row} (${f.name}): ${f.error}`).join(' · ');
         showToast(
@@ -108,7 +110,10 @@ export function BulkUploadPage() {
       }
       setCsv('');
     },
-    onError: (e: any) => showToast(e?.message || 'CSV parse failed', 'error'),
+    onError: (e: any) => {
+      const msg = e?.response?.data?.error || e?.message || 'CSV parse failed';
+      showToast(`Import failed: ${msg}. Check that the first row has the required column headers (name, phoneCode, phoneDigits…).`, 'error');
+    },
   });
 
   return (

@@ -32,7 +32,7 @@ export function VerificationsPage() {
   // Default to "Mine only" for Anjali/Taran so they aren't distracted by their colleague's queue
   const [mineOnly, setMineOnly] = useState(user.role === 'demo_intake');
 
-  const { data: dataRaw } = useQuery({
+  const { data: dataRaw, isLoading } = useQuery({
     queryKey: ['sourcing', 'Proposed'],
     queryFn: () => api.get('/sourcing', { params: { status: 'Proposed' } }).then((r) => r.data),
   });
@@ -148,6 +148,7 @@ export function VerificationsPage() {
         }
       />
       <Page>
+        {isLoading && <div className="muted text-sm p-6">Loading proposals...</div>}
         <div className="callout">
           Recruiters propose trainers — sometimes 3 or 4 options. Pass each trainer you want to demo, Fail the rest. You can Pass multiple per client (we routinely run more than one demo). The most recent Pass becomes the default primary trainer for Schedule demo; you can run additional demos by re-selecting from the Pass'd set on the client page.
         </div>

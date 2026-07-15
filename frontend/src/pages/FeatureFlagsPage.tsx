@@ -85,7 +85,7 @@ export default function FeatureFlagsPage() {
     );
   }
 
-  if (!data) return null;
+  if (!data) return <div className="p-8 text-brand-textMuted text-sm">No data available. You may not have access to this page.</div>;
 
   const { flags, users } = data;
 
