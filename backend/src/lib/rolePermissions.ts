@@ -3,14 +3,15 @@ import { prisma } from './prisma';
 export const ALL_ROLES = [
   'founder', 'manager', 'lead', 'account_manager', 'demo_lead',
   'recruiter', 'sales_closer', 'accounts', 'payment_processor',
+  'demo_intake', 'staff',
 ];
 
 export const RESOURCE_MATRIX: Record<string, { label: string; defaultRoles: string[] }> = {
   'feedback.read':           { label: 'Feedback: View',              defaultRoles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'] },
   'feedback.write':          { label: 'Feedback: Create/Edit',       defaultRoles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'] },
   'feedback.delete':         { label: 'Feedback: Delete',            defaultRoles: ['founder', 'manager'] },
-  'tasks.read':              { label: 'Tasks: View',                 defaultRoles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'accounts', 'payment_processor'] },
-  'tasks.write':             { label: 'Tasks: Create/Edit',          defaultRoles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'accounts', 'payment_processor'] },
+  'tasks.read':              { label: 'Tasks: View',                 defaultRoles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'accounts', 'payment_processor', 'demo_intake', 'recruiter', 'sales_closer', 'staff'] },
+  'tasks.write':             { label: 'Tasks: Create/Edit',          defaultRoles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'accounts', 'payment_processor', 'demo_intake', 'recruiter', 'sales_closer', 'staff'] },
   'tasks.complete':          { label: 'Tasks: Complete (bills)',     defaultRoles: ['founder', 'manager', 'lead', 'account_manager'] },
   'tasks.delete':            { label: 'Tasks: Delete',               defaultRoles: ['founder', 'manager', 'lead'] },
   'payments.read':           { label: 'Payments: View',              defaultRoles: ['founder', 'manager', 'demo_lead', 'sales_closer', 'accounts', 'payment_processor'] },

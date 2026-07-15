@@ -6,7 +6,7 @@ import { audit } from '../lib/audit';
 export const issueTrackerRouter = Router();
 issueTrackerRouter.use(requireAuth);
 
-const READ_ROLES  = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'];
+const READ_ROLES  = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'demo_intake'];
 const WRITE_ROLES = ['founder', 'manager', 'lead', 'account_manager'];
 const ADMIN_ROLES = ['founder', 'manager', 'lead'];
 

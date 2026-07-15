@@ -6,7 +6,7 @@ import { audit } from '../lib/audit';
 export const editRequestsRouter = Router();
 editRequestsRouter.use(requireAuth);
 
-editRequestsRouter.get('/', async (_req, res) => {
+editRequestsRouter.get('/', requireRole('founder', 'demo_lead', 'manager'), async (_req, res) => {
   const items = await prisma.editRequest.findMany({
     include: {
       requestedBy: { select: { id: true, name: true } },

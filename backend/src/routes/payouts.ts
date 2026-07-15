@@ -1,20 +1,20 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { requireAuth, AuthedRequest } from '../lib/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 
 export const payoutsRouter = Router();
 payoutsRouter.use(requireAuth);
 
-payoutsRouter.get('/', async (_req, res) => {
+payoutsRouter.get('/', requireRole('founder', 'manager', 'lead', 'accounts', 'payment_processor'), async (_req, res) => {
   const batches = await prisma.payoutBatch.findMany({ orderBy: { createdAt: 'desc' } });
   res.json(batches);
 });
 
 payoutsRouter.post('/', async (req: AuthedRequest, res) => {
   // Bhavneet (lead) creates batches from payment sheet; payment_processor + founder also allowed
-  if (!['founder', 'lead', 'payment_processor', 'accounts'].includes(req.user!.role)) {
-    return res.status(403).json({ error: 'Forbidden — only Bhavneet (lead), payment processor, or founder can create payout batches' });
+  if (!['founder', 'manager', 'lead', 'payment_processor', 'accounts'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Forbidden — only lead, manager, payment processor, or founder can create payout batches' });
   }
   const { weekStart, sessionIds } = req.body;
   if (!weekStart || !Array.isArray(sessionIds) || sessionIds.length === 0) {

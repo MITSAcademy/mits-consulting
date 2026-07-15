@@ -6,7 +6,7 @@ import { audit } from '../lib/audit';
 export const banksRouter = Router();
 banksRouter.use(requireAuth);
 
-banksRouter.get('/', async (_req, res) => {
+banksRouter.get('/', requireRole('founder', 'accounts'), async (_req, res) => {
   const b = await prisma.bankAccount.findMany({ orderBy: { label: 'asc' } });
   res.json(b);
 });

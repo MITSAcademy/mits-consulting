@@ -6,10 +6,17 @@ import { audit } from '../lib/audit';
 export const reportsRouter = Router();
 reportsRouter.use(requireAuth);
 
+const REPORTS_ALL_ROLES = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'];
+
 reportsRouter.get('/', async (req: AuthedRequest, res) => {
   const { userId, from, to } = req.query as any;
   const where: any = {};
-  if (userId) where.userId = userId;
+  // Non-leadership roles can only read their own reports
+  if (!REPORTS_ALL_ROLES.includes(req.user!.role)) {
+    where.userId = req.user!.id;
+  } else if (userId) {
+    where.userId = userId;
+  }
   if (from || to) where.date = { gte: from, lte: to };
   const reports = await prisma.dailyReport.findMany({
     where,
