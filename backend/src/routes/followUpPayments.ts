@@ -62,7 +62,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       },
       payments: {
         where: { kind: { not: 'Fresh' } },  // only Renewal payments = follow-up collections
-        select: { id: true, kind: true, amount: true, currency: true, paymentDate: true },
+        select: { id: true, kind: true, amount: true, currency: true, paymentDate: true, receivedBy: { select: { name: true } } },
         orderBy: { paymentDate: 'desc' },
         take: 10,
       },
@@ -146,6 +146,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       feedbackNeeded,
       status,
       paymentCount: c.payments.length,
+      payments: c.payments,
     };
   });
 
@@ -172,7 +173,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
 // ─────────────────────────────────────────
 followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, res) => {
   if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
-  const { newDate2 } = req.body || {};
+  const { newDate2, amountReceived } = req.body || {};
   if (!newDate2 || !/^\d{4}-\d{2}-\d{2}$/.test(newDate2)) {
     return res.status(400).json({ error: 'newDate2 must be YYYY-MM-DD' });
   }
@@ -181,31 +182,33 @@ followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, r
     select: { id: true, name: true, payDate1: true, payDate2: true, cycleAmount: true, currency: true },
   });
   if (!c) return res.status(404).json({ error: 'Client not found' });
-  const collectedDate = c.payDate1 || todayISO(); // payDate1 is the due date being collected
-  const newDate1 = c.payDate2 || todayISO();       // next due = old payDate2
+  const collectedDate = c.payDate1 || todayISO();
+  const newDate1 = c.payDate2 || todayISO();
+  const recordedAmount = (amountReceived !== undefined && amountReceived !== null && !isNaN(Number(amountReceived)))
+    ? Math.round(Number(amountReceived))
+    : (c.cycleAmount || 0);
   await prisma.$transaction([
     prisma.client.update({
       where: { id: c.id },
       data: {
-        payDate1: newDate1,   // next upcoming due date
-        payDate2: newDate2,   // future installment
+        payDate1: newDate1,
+        payDate2: newDate2,
         leverageUntil: null,
         leverageNote: null,
       },
     }),
-    // Record the payment so it appears in Mitali's weekly section of the report
     prisma.payment.create({
       data: {
         clientId: c.id,
         kind: 'Renewal',
-        amount: c.cycleAmount || 0,
+        amount: recordedAmount,
         currency: (c.currency || 'INR') as any,
         paymentDate: collectedDate,
         receivedById: req.user!.id,
       },
     }),
   ]);
-  await audit(req.user!.id, req.user!.name, 'PAYMENT_ADVANCED', `${c.name}: collected ${collectedDate}, next due ${newDate1} → ${newDate2}`, { clientId: c.id });
+  await audit(req.user!.id, req.user!.name, 'PAYMENT_ADVANCED', `${c.name}: collected ${collectedDate} (${c.currency} ${recordedAmount}), next due ${newDate1} → ${newDate2}`, { clientId: c.id });
   res.json({ ok: true, payDate1: newDate1, payDate2: newDate2 });
 });
 

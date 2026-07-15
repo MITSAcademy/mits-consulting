@@ -64,6 +64,7 @@ interface Row {
   feedbackNeeded: boolean;
   status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'no_date' | 'deferred';
   paymentCount: number;
+  payments: { id: string; amount: number; currency: string; paymentDate: string; receivedBy: { name: string } | null }[];
 }
 
 interface Comment {
@@ -279,12 +280,16 @@ function AdvancePaymentModal({ r, onClose }: { r: Row; onClose: () => void }) {
   const showToast = useUI((s) => s.showToast);
   const defaultNext = r.payDate2 ? addDays(r.payDate2, 14) : addDays(todayISO(), 14);
   const [newDate2, setNewDate2] = useState(defaultNext);
+  const [amountReceived, setAmountReceived] = useState(String(r.cycleAmount || ''));
 
   const adv = useMutation({
-    mutationFn: () => api.post(`/follow-up-payments/${r.id}/advance-payment`, { newDate2 }),
+    mutationFn: () => api.post(`/follow-up-payments/${r.id}/advance-payment`, {
+      newDate2,
+      amountReceived: amountReceived ? Number(amountReceived) : undefined,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
-      showToast(`Payment done ✓ — next due ${fmtDate(newDate2)}`);
+      showToast(`Payment done ✓ — ${r.currency} ${amountReceived || r.cycleAmount} recorded · next due ${fmtDate(newDate2)}`);
       onClose();
     },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
@@ -293,15 +298,27 @@ function AdvancePaymentModal({ r, onClose }: { r: Row; onClose: () => void }) {
   const content = (
     <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="rounded-2xl p-5 w-[340px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+      <div className="rounded-2xl p-5 w-[380px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
         <div className="font-bold text-sm mb-1">Mark payment done — {r.name}</div>
         <div className="muted text-[11px] mb-4">
           Current due date: <strong>{fmtDate(r.payDate2)}</strong> → moves to Pay Date 1.<br/>
-          Set the next due date below.
+          Enter the amount received and set the next due date.
         </div>
-        <div className="form-row">
-          <Label>Next payment due date</Label>
-          <Input type="date" value={newDate2} min={todayISO()} onChange={(e) => setNewDate2(e.target.value)} />
+        <div className="flex flex-col gap-3">
+          <div className="form-row">
+            <Label>Amount received ({r.currency})</Label>
+            <Input
+              type="number"
+              min="0"
+              value={amountReceived}
+              onChange={(e) => setAmountReceived(e.target.value)}
+              placeholder={String(r.cycleAmount || '')}
+            />
+          </div>
+          <div className="form-row">
+            <Label>Next payment due date</Label>
+            <Input type="date" value={newDate2} min={todayISO()} onChange={(e) => setNewDate2(e.target.value)} />
+          </div>
         </div>
         <div className="flex gap-2 mt-4 justify-end">
           <Button onClick={onClose}>Cancel</Button>
@@ -722,6 +739,24 @@ function PayRow({ r }: { r: Row }) {
             </Button>
           </div>
         </div>
+        {/* Payment history */}
+        {r.payments && r.payments.length > 0 && (
+          <div style={{ borderTop: '1px solid var(--brand-borderSoft)', padding: '8px 16px' }}>
+            <div className="text-[10px] font-bold uppercase tracking-widest muted mb-2">Payment history</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {r.payments.map((p) => (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11 }}>
+                  <span className="font-mono font-semibold" style={{ minWidth: 80, color: 'var(--status-green)' }}>
+                    {p.currency} {p.amount.toLocaleString()}
+                  </span>
+                  <span style={{ color: 'var(--brand-textSecondary)', minWidth: 64 }}>{fmtDate(p.paymentDate)}</span>
+                  {p.receivedBy && <span className="muted">recorded by {p.receivedBy.name}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Info strip: Phone | Email | Feedback Date | Account Name */}
         <div className="flex items-center gap-6 px-4 py-2 flex-wrap" style={{ borderTop: '1px solid var(--brand-borderSoft)', background: 'rgba(255,255,255,0.02)' }}>
           <div className="flex items-center gap-1.5 text-[11px]">
