@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
-import { TableProperties, Download, Filter, X, Check, Pencil, ChevronsUpDown, LayoutGrid, List } from 'lucide-react';
+import { TableProperties, Download, Filter, X, Check, Pencil, ChevronsUpDown, LayoutGrid, List, FileSpreadsheet } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { todayISO } from '@/lib/utils';
 import { useUI } from '@/store/ui';
@@ -399,6 +399,106 @@ function exportWhatsApp(logs: Log[], weekLabel: string) {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Export in Bhavneet's Google Sheet format:
+ * - Rows: one per trainer (Sr No, Name, Bank Details, UPI/Phone)
+ * - Column groups: one per week (Days, Amount/session, Total Amount, Comments)
+ * - Matching the layout: MITS Payment Sheet (Responses)
+ */
+function exportBhavneetSheet(allWeeksLogs: { weekStart: string; logs: Log[] }[]) {
+  // Collect all unique trainers across all weeks (preserve insertion order by first appearance)
+  const trainerMap = new Map<string, TrainerInfo>();
+  for (const { logs } of allWeeksLogs) {
+    for (const l of logs) {
+      if (!trainerMap.has(l.trainer.id)) trainerMap.set(l.trainer.id, l.trainer);
+    }
+  }
+  const trainers = Array.from(trainerMap.values());
+
+  // Aggregate per trainer per week
+  type WeekData = { days: number; rate: number; total: number; comments: string[] };
+  const data = new Map<string, Map<string, WeekData>>(); // trainerId → weekStart → data
+  for (const { weekStart, logs } of allWeeksLogs) {
+    for (const l of logs) {
+      if (!data.has(l.trainer.id)) data.set(l.trainer.id, new Map());
+      const tw = data.get(l.trainer.id)!;
+      if (!tw.has(weekStart)) tw.set(weekStart, { days: 0, rate: l.rateSnapshot, total: 0, comments: [] });
+      const w = tw.get(weekStart)!;
+      w.days += l.hours;
+      w.total += l.amountInr;
+      w.rate = l.rateSnapshot; // use last rate seen
+      if (l.comments) w.comments.push(l.comments);
+    }
+  }
+
+  const weeks = allWeeksLogs.map((w) => w.weekStart);
+
+  // Build TSV rows
+  const tab = '\t';
+
+  // Row 1: merged header (blank for static cols, then date group header per week)
+  const staticCols = ['Sr no', 'Name', 'Google Pay # or UPI ID or Bank account Details', 'Google Pay / Phonepe'];
+  const row1Parts = [...staticCols.map(() => '')];
+  for (const ws of weeks) {
+    const d = new Date(ws);
+    const label = `Date-${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+    row1Parts.push(label, '', '', ''); // spans 4 cols (Days, Amount/session, Total Amount, Comments)
+  }
+
+  // Row 2: column headers
+  const row2Parts = [...staticCols];
+  for (const _ws of weeks) {
+    row2Parts.push('Days', 'Amount/session', 'Total Amount', 'Comments');
+  }
+
+  // Data rows
+  const dataRows: string[][] = trainers.map((t, idx) => {
+    const bankDetails = t.upiId
+      ? `UPI: ${t.upiId}`
+      : [
+          t.bankHolderName ? `Name: ${t.bankHolderName}` : '',
+          t.bankAccountNumber ? `Bank Account Number: ${t.bankAccountNumber}` : '',
+          t.bankIfscCode ? `IFSC Code: ${t.bankIfscCode}` : '',
+          t.bankName ? `Bank: ${t.bankName}` : '',
+          t.bankBranchName ? `Branch: ${t.bankBranchName}` : '',
+        ].filter(Boolean).join('\n');
+    const phone = t.upiId || (t.phoneCode && t.phoneDigits ? `${t.phoneCode}${t.phoneDigits}` : '');
+    const row: string[] = [String(idx + 1), t.name, bankDetails, phone];
+    for (const ws of weeks) {
+      const w = data.get(t.id)?.get(ws);
+      row.push(
+        w ? String(w.days) : '0',
+        w ? String(w.rate) : '',
+        w ? String(w.total) : '0',
+        w?.comments.join('; ') ?? '',
+      );
+    }
+    return row;
+  });
+
+  // Grand total row
+  const totalRow: string[] = ['', 'TOTAL', '', ''];
+  for (const ws of weeks) {
+    let totalAmount = 0;
+    for (const t of trainers) {
+      totalAmount += data.get(t.id)?.get(ws)?.total ?? 0;
+    }
+    totalRow.push('', '', String(totalAmount), '');
+  }
+
+  const allRows = [row1Parts, row2Parts, ...dataRows, totalRow];
+  const tsv = allRows.map((r) => r.join(tab)).join('\n');
+
+  const blob = new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const month = new Date(weeks[0]).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }).replace(' ', '-');
+  a.download = `MITS-Payment-Sheet-${month}.xls`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function exportPdf(logs: Log[], weekLabel: string) {
   const totalAmount = logs.reduce((s, l) => s + l.amountInr, 0);
   const rows = logs.map((l, i) => `<tr>
@@ -660,6 +760,23 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh }: {
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
+/** Returns all Monday dates for the 4–5 weeks that fall within the given month (year-MM). */
+function weeksInMonth(yearMonth: string): string[] {
+  const [year, month] = yearMonth.split('-').map(Number);
+  const firstDay = new Date(year, month - 1, 1);
+  const lastDay = new Date(year, month, 0);
+  const mondays: string[] = [];
+  // Start from the Monday on or before the 1st
+  const d = new Date(firstDay);
+  const dow = d.getDay();
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  while (d <= lastDay) {
+    mondays.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 7);
+  }
+  return mondays;
+}
+
 export function TrainerPaySheetPage() {
   const user = useAuth((s) => s.user)!;
   // Only Samita (demo_lead) and founder can mark Paid / Not Paid
@@ -675,6 +792,36 @@ export function TrainerPaySheetPage() {
   const [filterClient, setFilterClient] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [filterProceed, setFilterProceed] = useState('');
+  const [exportingMonthly, setExportingMonthly] = useState(false);
+  const showToast = useUI((s) => s.showToast);
+
+  // Current month derived from selected week (for monthly export label)
+  const currentMonth = weekStart.slice(0, 7); // "YYYY-MM"
+
+  async function handleMonthlyExport() {
+    setExportingMonthly(true);
+    try {
+      const mondays = weeksInMonth(currentMonth);
+      const allWeeksLogs = await Promise.all(
+        mondays.map(async (ws) => {
+          const r = await api.get('/session-logs', { params: { weekStart: ws } });
+          return { weekStart: ws, logs: r.data as Log[] };
+        })
+      );
+      // Only keep weeks that have at least one log
+      const withData = allWeeksLogs.filter((w) => w.logs.length > 0);
+      if (withData.length === 0) {
+        showToast('No session data found for this month', 'error');
+        return;
+      }
+      exportBhavneetSheet(withData);
+      showToast(`Exported ${withData.length} week(s) for ${new Date(currentMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`);
+    } catch {
+      showToast('Export failed', 'error');
+    } finally {
+      setExportingMonthly(false);
+    }
+  }
 
   const { data: logs, isLoading } = useQuery({
     queryKey: ['session-logs', { weekStart }],
@@ -761,6 +908,16 @@ export function TrainerPaySheetPage() {
                   {activeFilterCount}
                 </span>
               )}
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={handleMonthlyExport}
+              disabled={exportingMonthly}
+              title={`Export full month (${new Date(currentMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}) in Bhavneet's Google Sheet format`}
+            >
+              <FileSpreadsheet size={12} />
+              {exportingMonthly ? 'Exporting…' : `Export ${new Date(currentMonth + '-01').toLocaleDateString('en-IN', { month: 'short' })} Sheet`}
             </Button>
             {filtered.length > 0 && (
               <>
