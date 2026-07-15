@@ -399,60 +399,95 @@ function exportWhatsApp(logs: Log[], weekLabel: string) {
   URL.revokeObjectURL(url);
 }
 
+// Alternating week background colors (pastel, prints well)
+const WEEK_COLORS = [
+  { header: '#D6E4F0', row: '#EBF5FB' },  // blue
+  { header: '#D5F5E3', row: '#EAFAF1' },  // green
+  { header: '#FEF9E7', row: '#FEFDF5' },  // yellow
+  { header: '#F9EBEA', row: '#FDEDEC' },  // pink
+  { header: '#EAE0F5', row: '#F5EEF8' },  // purple
+];
+
 /**
- * Export in Bhavneet's Google Sheet format:
- * - Rows: one per trainer (Sr No, Name, Bank Details, UPI/Phone)
- * - Column groups: one per week (Days, Amount/session, Total Amount, Comments)
- * - Matching the layout: MITS Payment Sheet (Responses)
+ * Export in Bhavneet's Google Sheet format as HTML-XLS.
+ * HTML-as-XLS is the only way to preserve:
+ *   - Text format for bank account / phone numbers (no scientific notation)
+ *   - Per-week color coding
+ *   - Merged header cells
+ *   - Client mapping column per week
  */
 function exportBhavneetSheet(allWeeksLogs: { weekStart: string; logs: Log[] }[]) {
-  // Collect all unique trainers across all weeks (preserve insertion order by first appearance)
+  // Collect all unique trainers across all weeks, sorted by name
   const trainerMap = new Map<string, TrainerInfo>();
   for (const { logs } of allWeeksLogs) {
     for (const l of logs) {
       if (!trainerMap.has(l.trainer.id)) trainerMap.set(l.trainer.id, l.trainer);
     }
   }
-  const trainers = Array.from(trainerMap.values());
+  const trainers = Array.from(trainerMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
-  // Aggregate per trainer per week
-  type WeekData = { days: number; rate: number; total: number; comments: string[] };
+  // Aggregate per trainer per week, also collect client names
+  type WeekData = { days: number; rate: number; total: number; comments: string[]; clients: Set<string> };
   const data = new Map<string, Map<string, WeekData>>(); // trainerId → weekStart → data
   for (const { weekStart, logs } of allWeeksLogs) {
     for (const l of logs) {
       if (!data.has(l.trainer.id)) data.set(l.trainer.id, new Map());
       const tw = data.get(l.trainer.id)!;
-      if (!tw.has(weekStart)) tw.set(weekStart, { days: 0, rate: l.rateSnapshot, total: 0, comments: [] });
+      if (!tw.has(weekStart)) tw.set(weekStart, { days: 0, rate: l.rateSnapshot, total: 0, comments: [], clients: new Set() });
       const w = tw.get(weekStart)!;
       w.days += l.hours;
       w.total += l.amountInr;
-      w.rate = l.rateSnapshot; // use last rate seen
+      w.rate = l.rateSnapshot;
       if (l.comments) w.comments.push(l.comments);
+      if (l.client?.name) w.clients.add(l.client.name);
     }
   }
 
   const weeks = allWeeksLogs.map((w) => w.weekStart);
+  // 5 cols per week: Days, Amount/session, Total Amount, Clients, Comments
+  const WEEK_COLS = 5;
 
-  // Build TSV rows
-  const tab = '\t';
-
-  // Row 1: merged header (blank for static cols, then date group header per week)
-  const staticCols = ['Sr no', 'Name', 'Google Pay # or UPI ID or Bank account Details', 'Google Pay / Phonepe'];
-  const row1Parts = [...staticCols.map(() => '')];
-  for (const ws of weeks) {
-    const d = new Date(ws);
-    const label = `Date-${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
-    row1Parts.push(label, '', '', ''); // spans 4 cols (Days, Amount/session, Total Amount, Comments)
+  function esc(s: string) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+
+  // text cell — forces Excel to treat value as text (no scientific notation)
+  function td(val: string, bg: string, extra = '') {
+    return `<td style="background:${bg};mso-number-format:'@';font-size:11px;padding:4px 6px;border:1px solid #ccc;white-space:pre-wrap;${extra}">${esc(val)}</td>`;
+  }
+  function tdNum(val: string | number, bg: string, bold = false) {
+    return `<td style="background:${bg};font-size:11px;padding:4px 6px;border:1px solid #ccc;text-align:right;${bold ? 'font-weight:bold;' : ''}">${val}</td>`;
+  }
+  function th(val: string, bg: string, extra = '') {
+    return `<th style="background:${bg};font-size:11px;font-weight:bold;padding:5px 6px;border:1px solid #aaa;${extra}">${esc(val)}</th>`;
+  }
+
+  // Row 1: week date group headers (merged across WEEK_COLS each)
+  const staticCount = 4; // Sr no, Name, Bank details, UPI/Phone
+  let row1 = `<tr><th colspan="${staticCount}" style="background:#f0f0f0;border:1px solid #aaa;"></th>`;
+  for (let wi = 0; wi < weeks.length; wi++) {
+    const ws = weeks[wi];
+    const d = new Date(ws + 'T00:00:00');
+    const label = `Date-${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+    const col = WEEK_COLORS[wi % WEEK_COLORS.length];
+    row1 += `<th colspan="${WEEK_COLS}" style="background:${col.header};font-size:12px;font-weight:bold;padding:5px 6px;border:1px solid #aaa;text-align:center;">${label}</th>`;
+  }
+  row1 += '</tr>';
 
   // Row 2: column headers
-  const row2Parts = [...staticCols];
-  for (const _ws of weeks) {
-    row2Parts.push('Days', 'Amount/session', 'Total Amount', 'Comments');
+  let row2 = `<tr>
+    ${th('Sr no', '#e8e8e8')}
+    ${th('Name', '#e8e8e8')}
+    ${th('Bank Account / UPI Details', '#e8e8e8')}
+    ${th('Google Pay / Phonepe', '#e8e8e8')}`;
+  for (let wi = 0; wi < weeks.length; wi++) {
+    const col = WEEK_COLORS[wi % WEEK_COLORS.length];
+    row2 += th('Days', col.header) + th('Amount/session', col.header) + th('Total Amount', col.header) + th('Clients', col.header) + th('Comments', col.header);
   }
+  row2 += '</tr>';
 
   // Data rows
-  const dataRows: string[][] = trainers.map((t, idx) => {
+  const dataRowsHtml = trainers.map((t, idx) => {
     const bankDetails = t.upiId
       ? `UPI: ${t.upiId}`
       : [
@@ -462,39 +497,72 @@ function exportBhavneetSheet(allWeeksLogs: { weekStart: string; logs: Log[] }[])
           t.bankName ? `Bank: ${t.bankName}` : '',
           t.bankBranchName ? `Branch: ${t.bankBranchName}` : '',
         ].filter(Boolean).join('\n');
+    // Force phone as text to avoid scientific notation
     const phone = t.upiId || (t.phoneCode && t.phoneDigits ? `${t.phoneCode}${t.phoneDigits}` : '');
-    const row: string[] = [String(idx + 1), t.name, bankDetails, phone];
-    for (const ws of weeks) {
+
+    let row = `<tr>
+      ${tdNum(idx + 1, '#fff')}
+      ${td(t.name, '#fff', 'font-weight:600;')}
+      ${td(bankDetails, '#fff')}
+      ${td(phone, '#fff')}`;
+
+    for (let wi = 0; wi < weeks.length; wi++) {
+      const ws = weeks[wi];
       const w = data.get(t.id)?.get(ws);
-      row.push(
-        w ? String(w.days) : '0',
-        w ? String(w.rate) : '',
-        w ? String(w.total) : '0',
-        w?.comments.join('; ') ?? '',
-      );
+      const bg = WEEK_COLORS[wi % WEEK_COLORS.length].row;
+      const clients = w ? Array.from(w.clients).join(', ') : '';
+      row += tdNum(w ? w.days : 0, bg)
+           + tdNum(w ? w.rate : '', bg)
+           + tdNum(w ? w.total : 0, bg, true)
+           + td(clients, bg, 'font-size:10px;color:#555;')
+           + td(w?.comments.join('; ') ?? '', bg, 'font-size:10px;');
     }
+    row += '</tr>';
     return row;
-  });
+  }).join('');
 
   // Grand total row
-  const totalRow: string[] = ['', 'TOTAL', '', ''];
-  for (const ws of weeks) {
-    let totalAmount = 0;
-    for (const t of trainers) {
-      totalAmount += data.get(t.id)?.get(ws)?.total ?? 0;
-    }
-    totalRow.push('', '', String(totalAmount), '');
+  let totalRow = `<tr style="background:#f0f0f0;">
+    <td colspan="3" style="font-weight:bold;text-align:right;font-size:12px;padding:5px 6px;border:1px solid #aaa;">GRAND TOTAL</td>
+    <td style="border:1px solid #aaa;"></td>`;
+  for (let wi = 0; wi < weeks.length; wi++) {
+    const ws = weeks[wi];
+    let totalAmt = 0;
+    for (const t of trainers) totalAmt += data.get(t.id)?.get(ws)?.total ?? 0;
+    const col = WEEK_COLORS[wi % WEEK_COLORS.length];
+    totalRow += `<td style="background:${col.header};border:1px solid #aaa;"></td>`
+              + `<td style="background:${col.header};border:1px solid #aaa;"></td>`
+              + `<td style="background:${col.header};font-weight:bold;text-align:right;font-size:12px;padding:5px 6px;border:1px solid #aaa;">₹${totalAmt.toLocaleString()}</td>`
+              + `<td style="background:${col.header};border:1px solid #aaa;"></td>`
+              + `<td style="background:${col.header};border:1px solid #aaa;"></td>`;
   }
+  totalRow += '</tr>';
 
-  const allRows = [row1Parts, row2Parts, ...dataRows, totalRow];
-  const tsv = allRows.map((r) => r.join(tab)).join('\n');
+  const month = new Date(weeks[0] + 'T00:00:00').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8">
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+<x:Name>${month}</x:Name>
+<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+<style>
+  table { border-collapse: collapse; font-family: Arial, sans-serif; }
+  td, th { border: 1px solid #ccc; }
+</style>
+</head>
+<body>
+<h3 style="font-family:Arial;font-size:14px;margin-bottom:8px;">MITS Payment Sheet — ${month}</h3>
+<table>
+  <thead>${row1}${row2}</thead>
+  <tbody>${dataRowsHtml}${totalRow}</tbody>
+</table>
+</body></html>`;
 
-  const blob = new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8;' });
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const month = new Date(weeks[0]).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }).replace(' ', '-');
-  a.download = `MITS-Payment-Sheet-${month}.xls`;
+  a.download = `MITS-Payment-Sheet-${month.replace(' ', '-')}.xls`;
   a.click();
   URL.revokeObjectURL(url);
 }
