@@ -8,7 +8,17 @@
  * operation (we just log it). Notifications are convenience, not source of truth.
  */
 import { prisma } from './prisma';
-import { sendEmail } from './mailer';
+import { sendEmail, safeBuildFromUser } from './mailer';
+
+/** Pick the best available SMTP sender (Vaibhav first, then any configured user). */
+async function getSystemFromUser() {
+  const users = await prisma.user.findMany({
+    where: { smtpAppPassword: { not: null }, active: true },
+    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
+  });
+  const preferred = users.find((u: any) => u.id === 'u-vaibhav') || users[0];
+  return preferred ? safeBuildFromUser(preferred as any) : null;
+}
 
 export interface NotifyArgs {
   userId: string;
@@ -54,13 +64,19 @@ export async function notify(args: NotifyArgs): Promise<void> {
       console.warn(`[notify] no email address for user ${args.userId} (${user?.name}) — skipping email for "${args.title}"`);
       return;
     }
-    console.log(`[notify] sending email to ${to} (user ${args.userId}) — "${args.title}"`);
+    const fromUser = await getSystemFromUser();
+    if (!fromUser) {
+      console.warn(`[notify] no SMTP sender configured — skipping email to ${to} for "${args.title}"`);
+      return;
+    }
+    console.log(`[notify] sending email to ${to} via ${fromUser.gmailAddress} — "${args.title}"`);
     const linkLine = args.link && FRONTEND_BASE
       ? `\n\nOpen in portal: ${FRONTEND_BASE}${args.link}`
       : '';
     const greeting = user?.name ? `Hi ${user.name.split(' ')[0]},\n\n` : '';
     const body = `${greeting}${args.title}${args.body ? `\n\n${args.body}` : ''}${linkLine}\n\n— MITS Consulting Hub`;
     await sendEmail({
+      fromUser,
       to,
       subject: `[MITS] ${args.title}`,
       body,
