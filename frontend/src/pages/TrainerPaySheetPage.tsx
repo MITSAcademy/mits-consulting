@@ -868,15 +868,13 @@ export function TrainerPaySheetPage() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterProceed, setFilterProceed] = useState('');
   const [exportingMonthly, setExportingMonthly] = useState(false);
+  const [exportMonth, setExportMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const showToast = useUI((s) => s.showToast);
-
-  // Current month derived from selected week (for monthly export label)
-  const currentMonth = weekStart.slice(0, 7); // "YYYY-MM"
 
   async function handleMonthlyExport() {
     setExportingMonthly(true);
     try {
-      const mondays = weeksInMonth(currentMonth);
+      const mondays = weeksInMonth(exportMonth);
       const allWeeksLogs = await Promise.all(
         mondays.map(async (ws) => {
           const r = await api.get('/session-logs', { params: { weekStart: ws } });
@@ -890,7 +888,7 @@ export function TrainerPaySheetPage() {
         return;
       }
       exportBhavneetSheet(withData);
-      showToast(`Exported ${withData.length} week(s) for ${new Date(currentMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`);
+      showToast(`Exported ${withData.length} week(s) for ${new Date(exportMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}`);
     } catch {
       showToast('Export failed', 'error');
     } finally {
@@ -984,15 +982,22 @@ export function TrainerPaySheetPage() {
                 </span>
               )}
             </Button>
+            <input
+              type="month"
+              value={exportMonth}
+              onChange={(e) => setExportMonth(e.target.value)}
+              className="text-xs px-2 py-1 rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] h-7"
+              title="Month to export"
+            />
             <Button
               size="sm"
               variant="primary"
               onClick={handleMonthlyExport}
               disabled={exportingMonthly}
-              title={`Export full month (${new Date(currentMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}) in Bhavneet's Google Sheet format`}
+              title={`Export full month (${new Date(exportMonth + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}) in Bhavneet's Google Sheet format`}
             >
               <FileSpreadsheet size={12} />
-              {exportingMonthly ? 'Exporting…' : `Export ${new Date(currentMonth + '-01').toLocaleDateString('en-IN', { month: 'short' })} Sheet`}
+              {exportingMonthly ? 'Exporting…' : `Export ${new Date(exportMonth + '-01').toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })} Sheet`}
             </Button>
             {filtered.length > 0 && (
               <>
