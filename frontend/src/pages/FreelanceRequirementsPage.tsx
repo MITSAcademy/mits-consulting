@@ -7,7 +7,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { MessageSquare, Plus, Trash2, AlertTriangle, Clock, Pencil, X } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, AlertTriangle, Clock, Pencil, X, Send } from 'lucide-react';
 
 interface Comment {
   id: string;
@@ -23,6 +23,10 @@ interface TrainerProposal {
   trainerRecording: string | null;
   trainerTimings: string | null;
   notes: string | null;
+  experience?: string | null;
+  payment?: number | null;
+  paymentReleaseDate?: string | null;
+  paymentStatus?: string | null;
   addedByName?: string;
   addedAt?: string;
 }
@@ -222,8 +226,10 @@ function CommentsPanel({ req, onClose }: { req: FreelanceReq; onClose: () => voi
 }
 
 // ── Empty proposal draft ──────────────────────────────────────────────────────
+const PAYMENT_STATUS_OPTIONS = ['Pending', 'Released', 'On Hold', 'Partial'];
+
 function emptyDraft(): TrainerProposal {
-  return { trainerName: '', trainerPhone: '', trainerEmail: '', trainerRecording: '', trainerTimings: '', notes: '' };
+  return { trainerName: '', trainerPhone: '', trainerEmail: '', trainerRecording: '', trainerTimings: '', notes: '', experience: '', payment: null, paymentReleaseDate: '', paymentStatus: 'Pending' };
 }
 
 // ── Propose Trainers Dialog ───────────────────────────────────────────────────
@@ -321,6 +327,14 @@ function ProposeDialog({ req, onClose }: { req: FreelanceReq; onClose: () => voi
                 )}
               </div>
               <div className="form-row" style={{ gridColumn: '1 / -1' }}><Label>Available timings</Label><Textarea value={r.trainerTimings || ''} onChange={(e) => update(i, { trainerTimings: e.target.value })} rows={2} placeholder="e.g. Mon–Fri 9–11 AM IST, evenings 7–9 PM" /></div>
+              <div className="form-row"><Label>Experience</Label><Input value={r.experience || ''} onChange={(e) => update(i, { experience: e.target.value })} placeholder="e.g. 5 years, ex-Google" /></div>
+              <div className="form-row"><Label>Payment (₹)</Label><Input type="number" value={r.payment ?? ''} onChange={(e) => update(i, { payment: e.target.value ? Number(e.target.value) : null })} placeholder="e.g. 5000" /></div>
+              <div className="form-row"><Label>Payment Release Date</Label><Input type="date" value={r.paymentReleaseDate || ''} onChange={(e) => update(i, { paymentReleaseDate: e.target.value })} /></div>
+              <div className="form-row"><Label>Payment Status</Label>
+                <Select value={r.paymentStatus || 'Pending'} onChange={(e) => update(i, { paymentStatus: e.target.value })}>
+                  {PAYMENT_STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </div>
               <div className="form-row" style={{ gridColumn: '1 / -1' }}><Label>Notes</Label><Textarea value={r.notes || ''} onChange={(e) => update(i, { notes: e.target.value })} rows={2} placeholder="Any additional info…" /></div>
             </div>
           ))}
@@ -366,6 +380,12 @@ function ReqCard({ req }: { req: FreelanceReq }) {
     mutationFn: (idx: number) => api.delete(`/freelance-requirements/${req.id}/proposals/${idx}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['freelance-requirements'] }); showToast('Proposal removed'); },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const notifyTrainer = useMutation({
+    mutationFn: (idx: number) => api.post(`/freelance-requirements/${req.id}/proposals/${idx}/notify`),
+    onSuccess: () => showToast('Notification sent to trainer'),
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to send', 'error'),
   });
 
   function InlineText({ field, value, placeholder, multiline }: { field: keyof FreelanceReq; value: string | null; placeholder: string; multiline?: boolean }) {
@@ -485,7 +505,14 @@ function ReqCard({ req }: { req: FreelanceReq }) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px', fontSize: 11 }}>
                       {p.trainerPhone && <span style={{ color: 'var(--brand-textSecondary)' }}>📞 {p.trainerPhone}</span>}
                       {p.trainerEmail && <span style={{ color: 'var(--brand-textSecondary)' }}>✉ {p.trainerEmail}</span>}
+                      {p.experience && <span style={{ color: 'var(--brand-textSecondary)' }}>🏅 {p.experience}</span>}
+                      {p.payment != null && <span style={{ color: 'var(--brand-textSecondary)' }}>💰 ₹{p.payment.toLocaleString()}</span>}
                       {p.trainerTimings && <span style={{ gridColumn: '1 / -1', color: 'var(--brand-textSecondary)' }}>🕐 {p.trainerTimings}</span>}
+                      {(p.paymentStatus || p.paymentReleaseDate) && (
+                        <span style={{ gridColumn: '1 / -1', color: 'var(--brand-textSecondary)' }}>
+                          💳 Payment: {p.paymentStatus || '—'}{p.paymentReleaseDate ? ` · due ${p.paymentReleaseDate}` : ''}
+                        </span>
+                      )}
                       {p.trainerRecording && (
                         <span style={{ gridColumn: '1 / -1' }}>
                           {p.trainerRecording.startsWith('/uploads') || p.trainerRecording.includes('audio') ? (
@@ -497,6 +524,17 @@ function ReqCard({ req }: { req: FreelanceReq }) {
                       )}
                       {p.notes && <span style={{ gridColumn: '1 / -1', color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>{p.notes}</span>}
                     </div>
+                    {p.trainerEmail && (
+                      <div style={{ marginTop: 8 }}>
+                        <button
+                          onClick={() => notifyTrainer.mutate(i)}
+                          disabled={notifyTrainer.isPending}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: 'var(--brand-primary)', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}
+                        >
+                          <Send size={11} /> Notify Trainer
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -161,7 +161,7 @@ freelanceRequirementsRouter.post('/:id/proposals', requireRole(...READ_ROLES), a
   const { proposals } = req.body;
   if (!Array.isArray(proposals)) return res.status(400).json({ error: 'proposals array required' });
 
-  // Each proposal: { trainerName, trainerPhone, trainerEmail, trainerRecording, trainerTimings, notes }
+  // Each proposal: { trainerName, trainerPhone, trainerEmail, trainerRecording, trainerTimings, notes, experience, payment, paymentReleaseDate, paymentStatus }
   const clean = proposals.map((p: any) => ({
     trainerName: p.trainerName?.trim() || null,
     trainerPhone: p.trainerPhone?.trim() || null,
@@ -169,6 +169,10 @@ freelanceRequirementsRouter.post('/:id/proposals', requireRole(...READ_ROLES), a
     trainerRecording: p.trainerRecording?.trim() || null,
     trainerTimings: p.trainerTimings?.trim() || null,
     notes: p.notes?.trim() || null,
+    experience: p.experience?.trim() || null,
+    payment: p.payment != null && !isNaN(Number(p.payment)) ? Number(p.payment) : null,
+    paymentReleaseDate: p.paymentReleaseDate?.trim() || null,
+    paymentStatus: p.paymentStatus?.trim() || null,
     addedByName: req.user!.name,
     addedAt: new Date().toISOString(),
   }));
@@ -221,6 +225,59 @@ freelanceRequirementsRouter.delete('/:id/proposals/:idx', requireRole(...READ_RO
     where: { id: req.params.id }, data, include,
   });
   res.json({ ...item, isEscalated: shouldEscalate(item) });
+});
+
+// POST /:id/proposals/:idx/notify — send email to trainer about the requirement
+freelanceRequirementsRouter.post('/:id/proposals/:idx/notify', requireRole(...READ_ROLES), async (req: AuthedRequest, res) => {
+  const idx = parseInt(req.params.idx, 10);
+  const req2 = await (prisma as any).freelanceRequirement.findUnique({
+    where: { id: req.params.id }, select: { proposals: true, clientName: true, skillRequired: true, clientTimings: true },
+  });
+  if (!req2) return res.status(404).json({ error: 'Requirement not found' });
+  const proposals = Array.isArray(req2.proposals) ? req2.proposals : [];
+  if (idx < 0 || idx >= proposals.length) return res.status(400).json({ error: 'Invalid proposal index' });
+
+  const p = proposals[idx] as any;
+  if (!p.trainerEmail) return res.status(400).json({ error: 'No email address on this trainer proposal' });
+
+  const fromUser = await getFromUser();
+  if (!fromUser) return res.status(503).json({ error: 'No SMTP sender configured' });
+
+  const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e4e4e7;">
+      <tr><td style="background:#1A1B1E;padding:24px 32px;border-radius:12px 12px 0 0;">
+        <div style="font-size:18px;font-weight:700;color:#FBBF24;">MITS Consulting Hub</div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:2px;">Training Opportunity</div>
+      </td></tr>
+      <tr><td style="padding:28px 32px;">
+        <p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 12px;">Hi ${p.trainerName || 'Trainer'},</p>
+        <p style="font-size:14px;color:#374151;margin:0 0 16px;">We have a training opportunity that matches your profile. Please find the details below:</p>
+        <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;border-collapse:collapse;">
+          <tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;white-space:nowrap;border-bottom:1px solid #f3f4f6;">Skill Required</td><td style="padding:8px 14px;font-size:13px;color:#111827;font-weight:500;border-bottom:1px solid #f3f4f6;">${req2.skillRequired}</td></tr>
+          <tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;white-space:nowrap;border-bottom:1px solid #f3f4f6;">Client</td><td style="padding:8px 14px;font-size:13px;color:#111827;font-weight:500;border-bottom:1px solid #f3f4f6;">${req2.clientName}</td></tr>
+          ${req2.clientTimings ? `<tr><td style="padding:8px 14px;font-size:13px;color:#6b7280;white-space:nowrap;">Client Timings</td><td style="padding:8px 14px;font-size:13px;color:#111827;font-weight:500;">${req2.clientTimings}</td></tr>` : ''}
+        </table>
+        <p style="font-size:13px;color:#6b7280;margin:20px 0 0;">If you're interested, please reply to this email or contact us at your earliest convenience.</p>
+        <p style="font-size:13px;color:#6b7280;margin:8px 0 0;">— ${req.user!.name}, MITS Consulting</p>
+      </td></tr>
+      <tr><td style="background:#f9fafb;padding:14px 32px;border-top:1px solid #e5e7eb;border-radius:0 0 12px 12px;">
+        <div style="font-size:11px;color:#9ca3af;text-align:center;">MITS Solution · Internal notification</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table></body></html>`;
+
+  await sendEmail({
+    fromUser,
+    to: p.trainerEmail,
+    subject: `Training opportunity: ${req2.skillRequired} — MITS Consulting`,
+    body: `Hi ${p.trainerName || 'Trainer'}, we have a training opportunity for ${req2.skillRequired} for client ${req2.clientName}. Please reply if interested.`,
+    htmlBody: html,
+  });
+  await audit(req.user!.id, req.user!.name, 'FREELANCE_TRAINER_NOTIFY', `${req.params.id} · ${p.trainerEmail}`);
+  res.json({ ok: true });
 });
 
 freelanceRequirementsRouter.delete('/:id', requireRole('founder', 'manager', 'lead'), async (req: AuthedRequest, res) => {
