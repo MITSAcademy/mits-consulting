@@ -41,12 +41,19 @@ type TrainerInfo = {
 
 type Log = {
   id: string; date: string; hours: number;
-  rateSnapshot: number; amountInr: number;
+  rateSnapshot: number; rateModel?: string; amountInr: number;
   status: string; notes?: string; feedback?: string;
   proceed?: string | null; comments?: string | null;
   trainer: TrainerInfo;
   client?: { id: string; name: string } | null;
 };
+
+/** Convert raw hours to "sessions" for display/export.
+ *  per_session: 1 session = 2 hours (trainer charges per-session, not per-hour)
+ *  per_hour: hours = sessions directly */
+function toSessions(log: Log): number {
+  return log.rateModel === 'per_hour' ? log.hours : log.hours / 2;
+}
 
 /* ── Status config ────────────────────────────────────────────────────────── */
 
@@ -435,9 +442,9 @@ function exportBhavneetSheet(allWeeksLogs: { weekStart: string; logs: Log[] }[])
       const tw = data.get(l.trainer.id)!;
       if (!tw.has(weekStart)) tw.set(weekStart, { days: 0, rate: l.rateSnapshot, total: 0, comments: [], clients: new Set() });
       const w = tw.get(weekStart)!;
-      w.days += l.hours;
+      w.days += toSessions(l);   // sessions, not raw hours
       w.total += l.amountInr;
-      w.rate = l.rateSnapshot;
+      w.rate = l.rateSnapshot;   // per-session rate as stored
       if (l.comments) w.comments.push(l.comments);
       if (l.client?.name) w.clients.add(l.client.name);
     }
@@ -659,7 +666,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh }: {
         map.set(key, { trainer: l.trainer, date: l.date, days: 0, perSession: l.rateSnapshot, amount: 0, logIds: [], status: 'Paid' });
       }
       const r = map.get(key)!;
-      r.days += l.hours;
+      r.days += toSessions(l);   // sessions, not raw hours
       r.amount += l.amountInr;
       r.logIds.push(l.id);
       if (l.date > r.date) r.date = l.date;
