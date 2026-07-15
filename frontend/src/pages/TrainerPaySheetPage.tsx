@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
-import { TableProperties, Download, Filter, X, Check, Pencil, ChevronsUpDown } from 'lucide-react';
+import { TableProperties, Download, Filter, X, Check, Pencil, ChevronsUpDown, LayoutGrid, List } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { todayISO } from '@/lib/utils';
 import { useUI } from '@/store/ui';
@@ -457,6 +457,207 @@ function SummaryCard({ label, value, color }: { label: string; value: string; co
   );
 }
 
+/* ── Excel-style grouped view ─────────────────────────────────────────────── */
+
+type TrainerRow = {
+  trainer: TrainerInfo;
+  date: string;       // latest session date for this week
+  days: number;       // total sessions (hours)
+  perSession: number; // rate snapshot
+  amount: number;     // total amount
+  logIds: string[];   // underlying log ids (for status ops)
+  status: string;     // worst-case status across logs (Paid if all paid, else Logged)
+};
+
+function bankDetail(t: TrainerInfo): string {
+  if (t.upiId) return `UPI: ${t.upiId}`;
+  const parts = [t.bankHolderName, t.bankName, t.bankAccountNumber ? `A/c ${t.bankAccountNumber}` : '', t.bankIfscCode ? `IFSC ${t.bankIfscCode}` : ''].filter(Boolean);
+  return parts.join(' · ') || '—';
+}
+
+function ExcelView({ logs, canMarkStatus, canEdit, onRefresh }: {
+  logs: Log[]; canMarkStatus: boolean; canEdit: boolean; onRefresh: () => void;
+}) {
+  const showToast = useUI((s) => s.showToast);
+  const [editingAmount, setEditingAmount] = useState<string | null>(null);
+  const [amountDraft, setAmountDraft] = useState('');
+
+  // Group logs by trainer
+  const rows = useMemo<TrainerRow[]>(() => {
+    const map = new Map<string, TrainerRow>();
+    for (const l of logs) {
+      const key = l.trainer.id;
+      if (!map.has(key)) {
+        map.set(key, { trainer: l.trainer, date: l.date, days: 0, perSession: l.rateSnapshot, amount: 0, logIds: [], status: 'Paid' });
+      }
+      const r = map.get(key)!;
+      r.days += l.hours;
+      r.amount += l.amountInr;
+      r.logIds.push(l.id);
+      if (l.date > r.date) r.date = l.date;
+      // status: if any log isn't Paid, show as unpaid
+      if (l.status !== 'Paid') r.status = l.status;
+    }
+    return Array.from(map.values()).sort((a, b) => a.trainer.name.localeCompare(b.trainer.name));
+  }, [logs]);
+
+  const grandTotal = rows.reduce((s, r) => s + r.amount, 0);
+
+  const markAllStatus = async (_trainerId: string, logIds: string[], status: string) => {
+    try {
+      await Promise.all(logIds.map((id) => api.patch(`/session-logs/${id}`, { status })));
+      onRefresh();
+      showToast(status === 'Paid' ? 'Payment marked as Done ✓' : 'Marked as Pending');
+    } catch {
+      showToast('Failed to update status', 'error');
+    }
+  };
+
+  const saveAmount = async (_trainerId: string, logIds: string[], newTotal: number, perSession: number) => {
+    // Distribute amount evenly across all logs for this trainer
+    const perLog = Math.round(newTotal / logIds.length);
+    try {
+      await Promise.all(logIds.map((id) => api.patch(`/session-logs/${id}`, { amountInr: perLog, rateSnapshot: perSession })));
+      onRefresh();
+    } catch {
+      showToast('Failed to save', 'error');
+    }
+    setEditingAmount(null);
+  };
+
+  const thStyle: React.CSSProperties = {
+    padding: '9px 12px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
+    letterSpacing: '0.06em', color: 'var(--brand-textMuted)',
+    borderBottom: '2px solid var(--brand-border)', whiteSpace: 'nowrap',
+    background: 'var(--bg-card)',
+  };
+  const tdStyle: React.CSSProperties = { padding: '10px 12px', fontSize: 13, borderBottom: '1px solid var(--brand-borderSoft)', verticalAlign: 'middle' };
+
+  return (
+    <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--brand-border)' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={thStyle}>#</th>
+            <th style={thStyle}>Trainer Name</th>
+            <th style={thStyle}>Bank Details</th>
+            <th style={thStyle}>Date</th>
+            <th style={thStyle}>Days</th>
+            <th style={thStyle}>Per Session ₹</th>
+            <th style={thStyle}>Amount ₹</th>
+            <th style={{ ...thStyle, textAlign: 'center' }}>
+              Actions {!canMarkStatus && <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--brand-textMuted)' }}>(Samita only)</span>}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const isPaid = r.logIds.every((id) => {
+              const l = logs.find((x) => x.id === id);
+              return l?.status === 'Paid';
+            });
+            const isEditing = editingAmount === r.trainer.id;
+
+            return (
+              <tr key={r.trainer.id} style={{ background: isPaid ? 'rgba(34,197,94,0.04)' : undefined }}>
+                <td style={{ ...tdStyle, color: 'var(--brand-textMuted)', fontFamily: 'monospace', fontSize: 11 }}>{i + 1}</td>
+                <td style={{ ...tdStyle, fontWeight: 600 }}>{r.trainer.name}</td>
+                <td style={{ ...tdStyle, fontSize: 11, color: 'var(--brand-textMuted)', maxWidth: 220 }}>
+                  <span title={bankDetail(r.trainer)}>{bankDetail(r.trainer)}</span>
+                </td>
+                <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 12 }}>{r.date}</td>
+                <td style={{ ...tdStyle, fontFamily: 'monospace', textAlign: 'center' }}>
+                  {canEdit ? (
+                    <EditableNumber value={r.days} logId={r.logIds[0]} field="hours" onSaved={onRefresh} />
+                  ) : r.days}
+                </td>
+                <td style={{ ...tdStyle, fontFamily: 'monospace' }}>
+                  {canEdit ? (
+                    <EditableNumber value={r.perSession} logId={r.logIds[0]} field="rateSnapshot" prefix="₹" onSaved={onRefresh} />
+                  ) : `₹${r.perSession.toLocaleString()}`}
+                </td>
+                <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 600 }}>
+                  {isEditing ? (
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <span style={{ color: 'var(--brand-textMuted)', fontSize: 12 }}>₹</span>
+                      <input
+                        type="number"
+                        defaultValue={r.amount}
+                        autoFocus
+                        style={{ width: 80, background: 'var(--bg-input)', border: '1px solid var(--brand-border)', borderRadius: 4, padding: '2px 6px', fontSize: 12, color: 'var(--brand-text)', fontFamily: 'monospace' }}
+                        onBlur={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) saveAmount(r.trainer.id, r.logIds, v, r.perSession); else setEditingAmount(null); }}
+                        onKeyDown={(e) => { if (e.key === 'Escape') setEditingAmount(null); }}
+                      />
+                    </div>
+                  ) : (
+                    <button
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: canEdit ? 'pointer' : 'default' }}
+                      onClick={() => { if (canEdit) { setAmountDraft(String(r.amount)); setEditingAmount(r.trainer.id); } }}
+                      title={canEdit ? 'Click to edit' : undefined}
+                    >
+                      ₹{r.amount.toLocaleString()}
+                      {canEdit && <Pencil size={9} style={{ opacity: 0.4 }} />}
+                    </button>
+                  )}
+                </td>
+                <td style={{ ...tdStyle, textAlign: 'center' }}>
+                  {canMarkStatus ? (
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                      <button
+                        onClick={() => markAllStatus(r.trainer.id, r.logIds, 'Paid')}
+                        disabled={isPaid}
+                        style={{
+                          padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: isPaid ? 'default' : 'pointer',
+                          background: isPaid ? 'rgba(34,197,94,0.2)' : 'rgba(34,197,94,0.15)',
+                          color: '#16a34a', border: '1px solid rgba(34,197,94,0.4)',
+                          opacity: isPaid ? 0.7 : 1,
+                        }}
+                        title="Mark payment as done"
+                      >
+                        🟢 Payment Done
+                      </button>
+                      <button
+                        onClick={() => markAllStatus(r.trainer.id, r.logIds, 'NotPaid')}
+                        disabled={!isPaid}
+                        style={{
+                          padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: !isPaid ? 'default' : 'pointer',
+                          background: !isPaid ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.08)',
+                          color: '#dc2626', border: '1px solid rgba(239,68,68,0.3)',
+                          opacity: !isPaid ? 1 : 0.5,
+                        }}
+                        title="Mark payment as pending"
+                      >
+                        🔴 Payment Pending
+                      </button>
+                    </div>
+                  ) : (
+                    <span style={{
+                      padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+                      background: isPaid ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.1)',
+                      color: isPaid ? '#16a34a' : '#dc2626',
+                    }}>
+                      {isPaid ? '🟢 Paid' : '🔴 Pending'}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr style={{ background: 'var(--bg-input)' }}>
+            <td colSpan={6} style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, fontSize: 12 }}>End Total</td>
+            <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 800, fontSize: 14, color: 'var(--status-green)' }}>
+              ₹{grandTotal.toLocaleString()}
+            </td>
+            <td style={tdStyle} />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 export function TrainerPaySheetPage() {
@@ -468,6 +669,7 @@ export function TrainerPaySheetPage() {
 
   const qc = useQueryClient();
   const [weekStart, setWeekStart] = useState(mondayOf(todayISO()));
+  const [viewMode, setViewMode] = useState<'excel' | 'detail'>('excel');
   const [showFilters, setShowFilters] = useState(false);
   const [filterTrainer, setFilterTrainer] = useState('');
   const [filterClient, setFilterClient] = useState('');
@@ -534,6 +736,24 @@ export function TrainerPaySheetPage() {
               onChange={(e) => setWeekStart(mondayOf(e.target.value))}
             />
             <button className="btn-icon" onClick={nextWeek} title="Next week">›</button>
+            <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid var(--brand-border)' }}>
+              <button
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium"
+                style={{ background: viewMode === 'excel' ? 'var(--accent-gold)' : 'var(--bg-card)', color: viewMode === 'excel' ? '#1A1B1E' : 'var(--brand-textMuted)' }}
+                onClick={() => setViewMode('excel')}
+                title="Excel-style grouped view"
+              >
+                <LayoutGrid size={11} /> Excel
+              </button>
+              <button
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium"
+                style={{ background: viewMode === 'detail' ? 'var(--accent-gold)' : 'var(--bg-card)', color: viewMode === 'detail' ? '#1A1B1E' : 'var(--brand-textMuted)', borderLeft: '1px solid var(--brand-border)' }}
+                onClick={() => setViewMode('detail')}
+                title="Detailed session-level view"
+              >
+                <List size={11} /> Detail
+              </button>
+            </div>
             <Button size="sm" variant={showFilters ? 'primary' : 'default'} onClick={() => setShowFilters(!showFilters)}>
               <Filter size={12} /> Filters
               {activeFilterCount > 0 && (
@@ -638,6 +858,8 @@ export function TrainerPaySheetPage() {
               ? 'Clear the filters above to see all entries.'
               : 'Navigate to a different week, or log sessions via Session logs.'}
           />
+        ) : viewMode === 'excel' ? (
+          <ExcelView logs={filtered} canMarkStatus={canMarkStatus} canEdit={canEdit} onRefresh={refresh} />
         ) : (
           <div className="table-card">
             <table>

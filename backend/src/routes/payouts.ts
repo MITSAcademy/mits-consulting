@@ -100,3 +100,54 @@ payoutsRouter.post('/:id/pay', async (req: AuthedRequest, res) => {
   await audit(req.user!.id, req.user!.name, 'PAYOUT_PAID', req.params.id);
   res.json(batch);
 });
+
+// POST /payouts/auto-archive — archive previous week's Logged sessions into a PayoutBatch.
+// Called by Saturday cron (system) or manually by founder/lead. Idempotent: if a batch
+// for that weekStart already exists it returns the existing batch.
+payoutsRouter.post('/auto-archive', async (req: AuthedRequest, res) => {
+  if (!['founder', 'lead', 'manager', 'payment_processor'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  // Default to archiving the *previous* Monday's week (the week just ended Saturday)
+  const { weekStart: supplied } = req.body || {};
+  let weekStart = supplied as string | undefined;
+  if (!weekStart) {
+    // Compute the Monday that just ended
+    const now = new Date();
+    const day = now.getDay(); // 0=Sun … 6=Sat
+    const daysToLastMonday = day === 0 ? 6 : day - 1;
+    const lastMonday = new Date(now);
+    lastMonday.setDate(now.getDate() - daysToLastMonday - 7);
+    weekStart = lastMonday.toISOString().slice(0, 10);
+  }
+
+  // Idempotency: already archived?
+  const existing = await prisma.payoutBatch.findFirst({ where: { weekStart } });
+  if (existing) {
+    return res.json({ alreadyArchived: true, batch: existing });
+  }
+
+  const weekEnd = addDays(weekStart, 6);
+  const logs = await prisma.sessionLog.findMany({
+    where: { status: 'Logged', date: { gte: weekStart, lte: weekEnd } },
+  });
+
+  if (logs.length === 0) {
+    return res.json({ archived: 0, weekStart, message: 'No Logged sessions found for this week' });
+  }
+
+  const validIds = logs.map((l) => l.id);
+  const totalInr = logs.reduce((s, l) => s + l.amountInr, 0);
+  const batch = await prisma.payoutBatch.create({
+    data: { weekStart, totalInr, sessionIds: validIds, status: 'Pending' },
+  });
+  await prisma.sessionLog.updateMany({ where: { id: { in: validIds } }, data: { status: 'ReadyForFinal' } });
+  await audit(req.user!.id, req.user!.name, 'PAYOUT_BATCH_AUTO_ARCHIVE', `${weekStart} · ₹${totalInr} · ${validIds.length} sessions`);
+  res.status(201).json({ archived: validIds.length, weekStart, totalInr, batch });
+});
+
+function addDays(iso: string, n: number): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}

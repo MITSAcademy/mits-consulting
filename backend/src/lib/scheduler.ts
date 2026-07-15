@@ -19,9 +19,44 @@ import { sendPaymentFollowUpReport } from './paymentFollowUpReport';
 import { sendBhavneetDailySheet } from './bhavneetDailySheet';
 import { sendSmtpHealthAdvisory } from './smtpHealthAdvisory';
 import { sendDailyReminders } from './dailyReminders';
+import { prisma } from './prisma';
 
 function safe(label: string, fn: () => Promise<void>) {
   fn().catch((e) => console.error(`[scheduler] ${label} failed:`, e));
+}
+
+async function autoArchiveWeeklyPayouts() {
+  // Find the Monday of the current week
+  const now = new Date();
+  const day = now.getDay();
+  const daysToMonday = day === 0 ? 6 : day - 1;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - daysToMonday);
+  const weekStart = monday.toISOString().slice(0, 10);
+  const weekEnd = new Date(monday);
+  weekEnd.setDate(monday.getDate() + 6);
+  const weekEndStr = weekEnd.toISOString().slice(0, 10);
+
+  // Idempotency check
+  const existing = await prisma.payoutBatch.findFirst({ where: { weekStart } });
+  if (existing) {
+    console.log(`[weekly-archive] batch for ${weekStart} already exists — skipping`);
+    return;
+  }
+
+  const logs = await prisma.sessionLog.findMany({
+    where: { status: 'Logged', date: { gte: weekStart, lte: weekEndStr } },
+  });
+  if (logs.length === 0) {
+    console.log(`[weekly-archive] no Logged sessions for ${weekStart} — skipping`);
+    return;
+  }
+
+  const ids = logs.map((l) => l.id);
+  const totalInr = logs.reduce((s, l) => s + l.amountInr, 0);
+  await prisma.payoutBatch.create({ data: { weekStart, totalInr, sessionIds: ids, status: 'Pending' } });
+  await prisma.sessionLog.updateMany({ where: { id: { in: ids } }, data: { status: 'ReadyForFinal' } });
+  console.log(`[weekly-archive] archived ${ids.length} sessions for ${weekStart} → ₹${totalInr}`);
 }
 
 export function initScheduler() {
@@ -88,6 +123,11 @@ export function initScheduler() {
 
   // Daily proactive reminders — 9:30 AM IST daily → in-app notifications per user
   cron.schedule('30 9 * * *', () => safe('daily-reminders', () => sendDailyReminders()), {
+    timezone: 'Asia/Kolkata',
+  });
+
+  // Saturday 11:00 PM IST — auto-archive current week's session logs into a PayoutBatch
+  cron.schedule('0 23 * * 6', () => safe('weekly-payout-archive', autoArchiveWeeklyPayouts), {
     timezone: 'Asia/Kolkata',
   });
 
