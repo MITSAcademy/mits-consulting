@@ -354,19 +354,32 @@ app.get('/api/internal/debug-training-stubs', requireAuth, requireRole('founder'
 });
 
 // Founder-only: re-send freelance requirement notifications for all open (no trainer assigned) requirements
-// One-time backfill: stamp lastFeedbackTakenAt on clients that already have feedback activities
+// One-time backfill: stamp lastFeedbackTakenAt on clients that already have feedback activities or records
 app.post('/api/internal/backfill-feedback-dates', requireAuth, requireRole('founder'), async (_req, res) => {
+  const latest = new Map<string, string>();
+
+  // Source 1: FeedbackActivity records (most precise — actual date feedback was taken)
   const activities = await (prisma as any).feedbackActivity.findMany({
     select: { clientId: true, loggedAt: true },
     orderBy: { loggedAt: 'desc' },
   });
-  // For each client, find their most recent activity date
-  const latest = new Map<string, string>();
   for (const a of activities) {
     if (a.clientId && !latest.has(a.clientId)) {
       latest.set(a.clientId, new Date(a.loggedAt).toISOString().slice(0, 10));
     }
   }
+
+  // Source 2: Feedback records weekStart (fallback for clients with ratings but no activities)
+  const feedbackRecords = await (prisma as any).feedback.findMany({
+    select: { clientId: true, weekStart: true },
+    orderBy: { weekStart: 'desc' },
+  });
+  for (const f of feedbackRecords) {
+    if (f.clientId && !latest.has(f.clientId)) {
+      latest.set(f.clientId, f.weekStart);
+    }
+  }
+
   let updated = 0;
   for (const [clientId, date] of latest.entries()) {
     await prisma.client.update({ where: { id: clientId }, data: { lastFeedbackTakenAt: date } });

@@ -54,6 +54,13 @@ feedbackRouter.post('/', async (req: AuthedRequest, res) => {
     include,
   });
   await audit(req.user!.id, req.user!.name, 'FEEDBACK_CREATE', `${fb.client.name} · ${rating}`);
+  // Sync lastFeedbackTakenAt on creation too
+  if (clientId) {
+    await prisma.client.update({
+      where: { id: clientId },
+      data: { lastFeedbackTakenAt: weekStart },
+    });
+  }
   res.status(201).json(fb);
 });
 
@@ -71,6 +78,14 @@ feedbackRouter.patch('/:id', async (req: AuthedRequest, res) => {
     },
     include,
   });
+  // Sync lastFeedbackTakenAt so all modules reflect the latest feedback date
+  if (fb.clientId) {
+    const today = new Date().toISOString().slice(0, 10);
+    await prisma.client.update({
+      where: { id: fb.clientId },
+      data: { lastFeedbackTakenAt: today },
+    });
+  }
   res.json(fb);
 });
 
