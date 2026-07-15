@@ -350,8 +350,7 @@ async function fetchData(): Promise<Row[]> {
 
   const clients = await prisma.client.findMany({
     where: {
-      lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] },
-      cycleAmount: { gt: 0 },
+      regularTrainings: { some: { status: 'active' } },
       hostOwnerId: { in: ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'] },
     },
     select: {
@@ -398,7 +397,7 @@ async function fetchData(): Promise<Row[]> {
     return {
       name: c.name,
       hostOwner: c.hostOwner?.name || null,
-      cycleAmount: c.cycleAmount,
+      cycleAmount: c.cycleAmount ?? 0,
       currency: (c.currency as string) || 'INR',
       payDate1,
       payDate2,

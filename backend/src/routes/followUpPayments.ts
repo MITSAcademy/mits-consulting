@@ -41,7 +41,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
   }
 
   const clients = await prisma.client.findMany({
-    where: { lifecycle: { in: ['Active', 'LeverageGranted', 'SaleWon'] }, cycleAmount: { gt: 0 } },
+    where: { regularTrainings: { some: { status: 'active' } } },
     select: {
       id: true, name: true,
       currency: true, cycleAmount: true,
@@ -115,7 +115,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       id: c.id,
       name: c.name,
       currency: c.currency,
-      cycleAmount: c.cycleAmount,
+      cycleAmount: c.cycleAmount ?? 0,
       engagementType: c.engagementType,
       payDate1,
       payDate2,
