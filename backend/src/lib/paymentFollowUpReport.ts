@@ -35,7 +35,7 @@ function fmtDate(iso: string | null | undefined): string {
 }
 
 function fmtAmt(amount: number, currency: string): string {
-  const sym = currency === 'USD' ? '$' : currency === 'GBP' ? '£' : currency === 'AED' ? 'AED ' : '₹';
+  const sym = currency === 'USD' ? '$' : currency === 'CAD' ? 'CA$' : currency === 'GBP' ? '£' : currency === 'AED' ? 'AED ' : '₹';
   return `${sym}${amount.toLocaleString('en-IN')}`;
 }
 
@@ -398,7 +398,7 @@ async function fetchData(): Promise<Row[]> {
       name: c.name,
       hostOwner: c.hostOwner?.name || null,
       cycleAmount: c.cycleAmount ?? 0,
-      currency: (c.currency as string) || 'INR',
+      currency: (c.currency as string) || 'USD',
       payDate1,
       payDate2,
       leverageUntil: c.leverageUntil,

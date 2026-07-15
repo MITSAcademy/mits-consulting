@@ -638,8 +638,9 @@ function PayRow({ r }: { r: Row }) {
                     onChange={e => setCurrencyDraft(e.target.value)}
                     className="rounded border px-1 py-0.5 text-[11px] h-7 w-16"
                     style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}>
-                    <option value="INR">INR</option>
                     <option value="USD">USD</option>
+                    <option value="CAD">CAD</option>
+                    <option value="INR">INR</option>
                     <option value="GBP">GBP</option>
                     <option value="AED">AED</option>
                   </select>
@@ -867,6 +868,12 @@ function TableView({ rows }: { rows: Row[] }) {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  const saveCurrency = useMutation({
+    mutationFn: ({ id, currency }: { id: string; currency: string }) => api.patch(`/follow-up-payments/${id}/currency`, { currency }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); showToast('Currency updated'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
   const saveAccount = useMutation({
     mutationFn: ({ id }: { id: string }) => api.patch(`/follow-up-payments/${id}/account-name`, { accountName: accountDraft }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingAccount(null); showToast('Account saved'); },
@@ -904,6 +911,7 @@ function TableView({ rows }: { rows: Row[] }) {
               <th style={thStyle}>Client</th>
               <th style={thStyle}>Pay Date 1 (Next Due)</th>
               <th style={thStyle}>Pay Date 2 (After That)</th>
+              <th style={thStyle}>Currency</th>
               <th style={thStyle}>Amount</th>
               <th style={thStyle}>Comments</th>
               <th style={thStyle}>Feedback / Notes</th>
@@ -968,14 +976,28 @@ function TableView({ rows }: { rows: Row[] }) {
                     {r.payDate2 ? fmtDate(r.payDate2) : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
                   </td>
 
+                  {/* Currency */}
+                  <td style={{ ...tdStyle }}>
+                    {canEditAmountAccount ? (
+                      <select
+                        value={r.currency || 'USD'}
+                        onChange={e => saveCurrency.mutate({ id: r.id, currency: e.target.value })}
+                        style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', borderRadius: 4, padding: '2px 4px', fontSize: 11, width: 52 }}>
+                        <option>USD</option><option>CAD</option><option>INR</option><option>GBP</option><option>AED</option>
+                      </select>
+                    ) : (
+                      <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.currency || '—'}</span>
+                    )}
+                  </td>
+
                   {/* Amount */}
                   <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 600 }}>
                     {editingAmount === r.id ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <div style={{ display: 'flex', gap: 3 }}>
                           <select value={currencyDraft} onChange={e => setCurrencyDraft(e.target.value)}
-                            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', borderRadius: 4, padding: '1px 2px', fontSize: 10, width: 44 }}>
-                            <option>INR</option><option>USD</option><option>GBP</option><option>AED</option>
+                            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', borderRadius: 4, padding: '1px 2px', fontSize: 10, width: 52 }}>
+                            <option>USD</option><option>CAD</option><option>INR</option><option>GBP</option><option>AED</option>
                           </select>
                           <input type="text" value={amountDraft} onChange={e => setAmountDraft(e.target.value.replace(/[^0-9.]/g, ''))}
                             style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', borderRadius: 4, padding: '1px 4px', fontSize: 11, width: 60 }} autoFocus />

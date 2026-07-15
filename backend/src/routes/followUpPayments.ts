@@ -202,7 +202,7 @@ followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, r
         clientId: c.id,
         kind: 'Renewal',
         amount: recordedAmount,
-        currency: (c.currency || 'INR') as any,
+        currency: (c.currency || 'USD') as any,
         paymentDate: collectedDate,
         receivedById: req.user!.id,
       },
@@ -360,6 +360,23 @@ followUpPaymentsRouter.patch('/:id/amount', async (req: AuthedRequest, res) => {
   });
   await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${c.name}: cycleAmount → ${amount}${currency ? ' ' + currency : ''} (${reason})`, { clientId: c.id });
   res.json({ ok: true, cycleAmount: amount, ...(currency ? { currency } : {}) });
+});
+
+// ─────────────────────────────────────────
+// PATCH /:id/currency — update currency only; founder/manager/accounts
+// Body: { currency: string }  — no reason required (low-stakes correction)
+// ─────────────────────────────────────────
+followUpPaymentsRouter.patch('/:id/currency', async (req: AuthedRequest, res) => {
+  const CURRENCY_ROLES = ['founder', 'manager', 'accounts'];
+  if (!CURRENCY_ROLES.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const VALID = ['INR', 'USD', 'CAD', 'GBP', 'AED'];
+  const currency = typeof req.body?.currency === 'string' ? req.body.currency.trim().toUpperCase() : '';
+  if (!VALID.includes(currency)) return res.status(400).json({ error: `currency must be one of ${VALID.join(', ')}` });
+  const c = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true, currency: true } });
+  if (!c) return res.status(404).json({ error: 'Client not found' });
+  await prisma.client.update({ where: { id: c.id }, data: { currency } });
+  await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${c.name}: currency ${c.currency} → ${currency}`, { clientId: c.id });
+  res.json({ ok: true, currency });
 });
 
 // ─────────────────────────────────────────
