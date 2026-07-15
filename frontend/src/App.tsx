@@ -60,10 +60,8 @@ const TasksPage = lazy(() => import('@/pages/TasksPage').then((m) => ({ default:
 const LeveragePage = lazy(() => import('@/pages/LeveragePage').then((m) => ({ default: m.LeveragePage })));
 const AccountsQueuePage = lazy(() => import('@/pages/AccountsQueuePage').then((m) => ({ default: m.AccountsQueuePage })));
 const DailyReportPage = lazy(() => import('@/pages/DailyReportPage').then((m) => ({ default: m.DailyReportPage })));
-const ReportsDashboardPage = lazy(() => import('@/pages/ReportsDashboardPage').then((m) => ({ default: m.ReportsDashboardPage })));
 const BulkUploadPage = lazy(() => import('@/pages/BulkUploadPage').then((m) => ({ default: m.BulkUploadPage })));
 const RawLeadsPage = lazy(() => import('@/pages/RawLeadsPage').then((m) => ({ default: m.RawLeadsPage })));
-const EditRequestsPage = lazy(() => import('@/pages/EditRequestsPage').then((m) => ({ default: m.EditRequestsPage })));
 const TeamAdminPage = lazy(() => import('@/pages/TeamAdminPage').then((m) => ({ default: m.TeamAdminPage })));
 const TemplatesPage = lazy(() => import('@/pages/TemplatesPage').then((m) => ({ default: m.TemplatesPage })));
 const LeadSourcesPage = lazy(() => import('@/pages/LeadSourcesPage').then((m) => ({ default: m.LeadSourcesPage })));
@@ -164,10 +162,8 @@ export default function App() {
           <Route path="/leverage" element={<LeveragePage />} />
           <Route path="/accounts-queue" element={<AccountsQueuePage />} />
           <Route path="/daily-report" element={<DailyReportPage />} />
-          <Route path="/reports-dashboard" element={<ReportsDashboardPage />} />
           <Route path="/bulk-upload" element={<BulkUploadPage />} />
           <Route path="/raw-leads" element={<RawLeadsPage />} />
-          <Route path="/edit-requests" element={<EditRequestsPage />} />
           <Route path="/team" element={<TeamAdminPage />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/sources" element={<LeadSourcesPage />} />

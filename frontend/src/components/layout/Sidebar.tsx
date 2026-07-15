@@ -12,7 +12,7 @@ import {
   Notebook, ChartLine, Upload, Inbox, Edit, UsersRound, Mail, Tag, LockKeyhole,
   Building2, History, Settings, LogOut, Moon, Calendar, ChevronsLeft, ChevronsRight,
   TableProperties, CalendarDays, AlertTriangle, Link, BarChart2, BarChart3, ToggleRight,
-  Sparkles, X, Bug,
+  Sparkles, X, Bug, Handshake,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -185,11 +185,10 @@ const NAV: NavItem[] = [
 
   // ── Admin (Vaibhav + team leads for visibility) ───────────────────────
   { section: 'admin', page: '/reports/monthly', label: 'Monthly report', icon: BarChart3, roles: ['founder', 'manager', 'lead', 'account_manager'] },
-  { section: 'admin', page: '/reports-dashboard', label: 'Reports dashboard', icon: ChartLine, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/bulk-upload', label: 'Bulk upload', icon: Upload, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/raw-leads', label: 'Raw leads inbox', icon: Inbox, roles: ['founder', 'demo_lead', 'demo_intake'] },
-  { section: 'admin', page: '/edit-requests', label: 'Edit requests', icon: Edit, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/team', label: 'Team', icon: UsersRound, roles: ['founder'] },
+  { section: 'admin', page: '/partners', label: 'Partners', icon: Handshake, roles: ['founder'] },
   { section: 'admin', page: '/templates', label: 'Email templates', icon: Mail, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/sources', label: 'Lead sources', icon: Tag, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/feature-flags', label: 'Feature flags', icon: ToggleRight, roles: ['founder'] },
@@ -258,7 +257,6 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
     if (page === '/vaibhav-queue') return metrics.pendingVaibhav;
     if (page === '/sourcing') return metrics.sourcingOpen;
     if (page === '/verifications') return metrics.verPending;
-    if (page === '/edit-requests') return metrics.editReqPending;
     if (page === '/dormant') return metrics.dormantOverdue;
     if (page === '/hold') return metrics.holdDue;
     if (page === '/demo-intake') return metrics.demoIntakePending;

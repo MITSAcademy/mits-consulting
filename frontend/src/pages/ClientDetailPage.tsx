@@ -863,10 +863,8 @@ export function ClientDetailPage() {
             <div className="card">
               <div className="card-h">
                 <span>Engagement</span>
-                {canEditClient(user.role, 'engagement') ? (
+                {canEditClient(user.role, 'engagement') && (
                   <Button size="sm" onClick={() => setModal('editEngagement')}><EditIcon size={12}/></Button>
-                ) : (
-                  <Button size="sm" onClick={() => showToast('Request edit flow — for now ask Vaibhav/Samita/Mitali', 'error')}><MessageCircle size={12}/> request</Button>
                 )}
               </div>
               {!['manager', 'lead', 'account_manager'].includes(user.role) && (

@@ -146,7 +146,6 @@ metricsRouter.get('/nav-badges', async (req: AuthedRequest, res) => {
     pendingLeverageCount,
     sourcingOpenCount,
     verPendingCount,
-    editReqPendingCount,
     escalationCount,
     dormantOverdueCount,
     holdDueCount,
@@ -176,11 +175,6 @@ metricsRouter.get('/nav-badges', async (req: AuthedRequest, res) => {
     // verifications pending — founder/demo_lead/demo_intake
     ['founder', 'demo_lead', 'demo_intake'].includes(role)
       ? prisma.sourcingRequest.count({ where: { status: 'Proposed' } })
-      : Promise.resolve(0),
-
-    // edit requests pending — founder/demo_lead
-    ['founder', 'demo_lead'].includes(role)
-      ? prisma.editRequest.count({ where: { status: 'Pending' } })
       : Promise.resolve(0),
 
     // escalations — founder/manager/lead/demo_lead/demo_intake
@@ -247,7 +241,6 @@ metricsRouter.get('/nav-badges', async (req: AuthedRequest, res) => {
     pendingLeverage: pendingLeverageCount,
     sourcingOpen: sourcingOpenCount,
     verPending: verPendingCount,
-    editReqPending: editReqPendingCount,
     escalationCount,
     dormantOverdue: dormantOverdueCount,
     holdDue: holdDueCount,
