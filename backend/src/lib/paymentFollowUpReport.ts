@@ -287,7 +287,7 @@ function buildHtml(params: {
         <div style="margin-top:28px;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:12px;">
           Auto-sent daily at noon IST by MITS Hub ·
           <a href="https://hub.mitssolution.com/follow-up-payments" style="color:#6366f1;">View live sheet →</a><br/>
-          Covers Active + LeverageGranted clients managed by Mitali's team (Mitali / Bhavneet / Kashish / Muskan).
+          Covers all active clients with an active training — same scope as the Payment Follow-Ups page.
         </div>
       </td></tr>
     </table>
@@ -351,7 +351,6 @@ async function fetchData(): Promise<Row[]> {
   const clients = await prisma.client.findMany({
     where: {
       regularTrainings: { some: { status: 'active' } },
-      hostOwnerId: { in: ['u-mitali', 'u-bhavneet', 'u-kashish', 'u-muskan'] },
     },
     select: {
       name: true,
