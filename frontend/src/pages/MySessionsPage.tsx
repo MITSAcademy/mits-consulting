@@ -741,7 +741,8 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
   const clientNameCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const t of rows) {
-      if (t.client?.name) counts[t.client.name] = (counts[t.client.name] || 0) + 1;
+      const name = t.client?.name || t.name;
+      if (name) counts[name] = (counts[name] || 0) + 1;
     }
     return counts;
   }, [rows]);
@@ -952,12 +953,18 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers, clientNameCounts }: { t
             <div className="flex items-start gap-1">
               <div>
                 <div className="flex items-center gap-1">
-                  {t.client
-                    ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>
-                        {t.client.name}{(clientNameCounts?.[t.client.name] ?? 0) > 1 && t.client.phoneDigits ? ` (${String(t.client.phoneDigits).slice(-4)})` : ''}
-                      </Link>
-                    : <span className="font-semibold">{t.name}</span>
-                  }
+                  {(() => {
+                    const baseName = t.client?.name || t.name || '—';
+                    const isDupe = (clientNameCounts?.[baseName] ?? 0) > 1;
+                    const suffix = isDupe
+                      ? t.client?.phoneDigits
+                        ? ` (${String(t.client.phoneDigits).slice(-4)})`
+                        : t.trainer?.name ? ` (${t.trainer.name.split(' ')[0]})` : ''
+                      : '';
+                    return t.client
+                      ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>{baseName + suffix}</Link>
+                      : <span className="font-semibold">{baseName + suffix}</span>;
+                  })()}
                   {t.dailyNotes && <span title={t.dailyNotes} style={{ fontSize: 12, cursor: 'default' }}>📝</span>}
                 </div>
                 <div className="flex items-center gap-1 mt-0.5 flex-wrap">

@@ -279,9 +279,16 @@ export function SessionLogsPage() {
     }
     return list.map((t) => {
       const baseName = t.client?.name || t.name || 'Unknown';
-      const suffix = nameCounts[baseName] > 1 && t.client?.phoneDigits
-        ? ` (${String(t.client.phoneDigits).slice(-4)})`
-        : '';
+      let suffix = '';
+      if (nameCounts[baseName] > 1) {
+        if (t.client?.phoneDigits) {
+          // Prefer last-4 of phone for linked clients
+          suffix = ` (${String(t.client.phoneDigits).slice(-4)})`;
+        } else if (t.trainer?.name) {
+          // Fallback: trainer first name so they can tell which is which
+          suffix = ` (${t.trainer.name.split(' ')[0]})`;
+        }
+      }
       return {
         trainingId: t.id,
         clientId: t.client?.id || null,
