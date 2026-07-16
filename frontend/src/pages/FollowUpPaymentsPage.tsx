@@ -434,6 +434,180 @@ function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
   return createPortal(content, document.body);
 }
 
+// ─── incomplete nag modal ─────────────────────────────────────────────────────
+
+function IncompleteNagModal({ clients, onDone }: { clients: Row[]; onDone: () => void }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+
+  // Per-client inline state: date2 + amount + currency + promised
+  const [state, setState] = useState<Record<string, { date2: string; amount: string; currency: string; promised: boolean }>>(() => {
+    const s: Record<string, { date2: string; amount: string; currency: string; promised: boolean }> = {};
+    for (const c of clients) {
+      s[c.id] = { date2: c.payDate2 || '', amount: c.cycleAmount ? String(c.cycleAmount) : '', currency: c.currency || 'USD', promised: false };
+    }
+    return s;
+  });
+
+  const saveDate = useMutation({
+    mutationFn: ({ id, date2 }: { id: string; date2: string }) =>
+      api.post(`/follow-up-payments/${id}/set-pay-dates`, { date1: null, date2 }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['follow-up-payments'] }),
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to save date', 'error'),
+  });
+
+  const saveAmount = useMutation({
+    mutationFn: ({ id, amount, currency }: { id: string; amount: number; currency: string }) =>
+      api.patch(`/follow-up-payments/${id}/amount`, { cycleAmount: amount, currency, reason: 'Set via incomplete-data prompt' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['follow-up-payments'] }),
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to save amount', 'error'),
+  });
+
+  const pending = clients.filter((c) => !state[c.id]?.promised);
+
+  async function handleSave(c: Row) {
+    const s = state[c.id];
+    const promises: Promise<any>[] = [];
+    if (s.date2 && s.date2 !== c.payDate2) promises.push(saveDate.mutateAsync({ id: c.id, date2: s.date2 }));
+    if (s.amount && Number(s.amount) > 0 && Number(s.amount) !== c.cycleAmount)
+      promises.push(saveAmount.mutateAsync({ id: c.id, amount: Number(s.amount), currency: s.currency }));
+    if (promises.length) await Promise.all(promises);
+    setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], promised: true } }));
+  }
+
+  function handlePromise(id: string) {
+    setState((prev) => ({ ...prev, [id]: { ...prev[id], promised: true } }));
+  }
+
+  const allDone = pending.length === 0;
+
+  const content = (
+    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.75)' }}>
+      <div className="rounded-2xl flex flex-col" style={{
+        background: 'var(--bg-card)', border: '2px solid #f87171',
+        width: 560, maxHeight: '85vh', overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div className="px-5 py-4 flex items-start gap-3" style={{ borderBottom: '1px solid var(--brand-border)', background: '#fff5f5' }}>
+          <div style={{ fontSize: 28 }}>⚠️</div>
+          <div>
+            <div className="font-bold text-[15px]" style={{ color: '#b91c1c' }}>
+              {clients.length} client{clients.length > 1 ? 's' : ''} with incomplete data
+            </div>
+            <div className="text-[12px] mt-0.5" style={{ color: '#6b7280' }}>
+              Please fill in the next due date and amount for each client before proceeding.
+              If you don't have this information yet, click <strong>"I'll fill this soon — I promise"</strong>.
+            </div>
+          </div>
+        </div>
+
+        {/* Scrollable client list */}
+        <div className="overflow-y-auto flex-1 p-4 space-y-3">
+          {clients.map((c) => {
+            const s = state[c.id];
+            const isDone = s.promised;
+            const missingDate = !c.payDate2;
+            const missingAmount = !c.cycleAmount || c.cycleAmount === 0;
+            return (
+              <div key={c.id} className="rounded-xl p-3" style={{
+                background: isDone ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.05)',
+                border: `1px solid ${isDone ? '#86efac' : '#fca5a5'}`,
+                opacity: isDone ? 0.6 : 1,
+              }}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-bold text-[13px]">{c.name}</div>
+                  {isDone && <span className="text-[11px] font-bold" style={{ color: '#16a34a' }}>✓ Saved / Promised</span>}
+                </div>
+                {!isDone && (
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    {missingDate && (
+                      <div>
+                        <div className="text-[10px] font-semibold mb-1" style={{ color: '#b91c1c' }}>⚠ Next Due Date missing</div>
+                        <input
+                          type="date"
+                          value={s.date2}
+                          onChange={(e) => setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], date2: e.target.value } }))}
+                          className="w-full text-[12px] px-2 py-1.5 rounded-lg"
+                          style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}
+                        />
+                      </div>
+                    )}
+                    {missingAmount && (
+                      <div>
+                        <div className="text-[10px] font-semibold mb-1" style={{ color: '#b91c1c' }}>⚠ Amount missing</div>
+                        <div className="flex gap-1">
+                          <select
+                            value={s.currency}
+                            onChange={(e) => setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], currency: e.target.value } }))}
+                            className="text-[12px] px-1 py-1.5 rounded-lg"
+                            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', width: 70 }}
+                          >
+                            {['USD','CAD','GBP','AED','INR'].map(cur => <option key={cur} value={cur}>{cur}</option>)}
+                          </select>
+                          <input
+                            type="number"
+                            value={s.amount}
+                            min={0}
+                            placeholder="e.g. 650"
+                            onChange={(e) => setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], amount: e.target.value } }))}
+                            className="flex-1 text-[12px] px-2 py-1.5 rounded-lg"
+                            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!isDone && (
+                  <div className="flex gap-2 mt-1">
+                    <button
+                      onClick={() => handleSave(c)}
+                      disabled={saveDate.isPending || saveAmount.isPending}
+                      className="flex-1 text-[11px] font-bold py-1.5 rounded-lg"
+                      style={{ background: '#1d4ed8', color: '#fff', border: 'none', cursor: 'pointer' }}
+                    >
+                      Save &amp; Done
+                    </button>
+                    <button
+                      onClick={() => handlePromise(c.id)}
+                      className="flex-1 text-[11px] py-1.5 rounded-lg"
+                      style={{ background: 'transparent', color: '#9ca3af', border: '1px solid var(--brand-border)', cursor: 'pointer' }}
+                    >
+                      I'll fill this soon — I promise
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 flex justify-between items-center" style={{ borderTop: '1px solid var(--brand-border)' }}>
+          <div className="text-[11px]" style={{ color: '#9ca3af' }}>
+            {pending.length > 0 ? `${pending.length} client${pending.length > 1 ? 's' : ''} still need attention` : 'All addressed ✓'}
+          </div>
+          <button
+            onClick={onDone}
+            disabled={!allDone}
+            className="text-[12px] font-bold px-4 py-2 rounded-lg"
+            style={{
+              background: allDone ? '#16a34a' : 'var(--bg-input)',
+              color: allDone ? '#fff' : '#9ca3af',
+              border: 'none',
+              cursor: allDone ? 'pointer' : 'not-allowed',
+              opacity: allDone ? 1 : 0.5,
+            }}
+          >
+            {allDone ? 'Close — All Done' : `${pending.length} remaining…`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+  return createPortal(content, document.body);
+}
+
 // ─── client card ──────────────────────────────────────────────────────────────
 
 function PayRow({ r }: { r: Row }) {
@@ -1139,6 +1313,7 @@ export function FollowUpPaymentsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'due_soon' | 'pending_vaibhav' | 'deferred'>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
+  const [nagDismissed, setNagDismissed] = useState(false);
   const showToast = useUI((s) => s.showToast);
   const pageUser = useAuth((s) => s.user);
 
@@ -1176,8 +1351,18 @@ export function FollowUpPaymentsPage() {
     return o;
   }, [data]);
 
+  // Clients with missing next-due-date OR missing amount — shown in nag modal
+  const incompleteClients = useMemo(() => {
+    if (!data) return [];
+    return data.filter((r) => !r.payDate2 || !r.cycleAmount || r.cycleAmount === 0);
+  }, [data]);
+
+  const showNag = !nagDismissed && !isLoading && incompleteClients.length > 0
+    && ['manager', 'founder'].includes(pageUser?.role || '');
+
   return (
     <>
+      {showNag && <IncompleteNagModal clients={incompleteClients} onDone={() => setNagDismissed(true)} />}
       <Topbar
         title="Payment follow-up"
         subtitle={`${(data || []).length} active clients`}
