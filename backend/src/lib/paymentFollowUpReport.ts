@@ -166,13 +166,14 @@ function buildHtml(params: {
   overdue: Row[];
   dueSoon: Row[];
   upcoming: Row[];
+  farFuture: Row[];
   noDate: Row[];
   freshPayments: PaymentRow[];
   followUpPayments: PaymentRow[];
 }): string {
-  const { date, overdue, dueSoon, upcoming, noDate, freshPayments, followUpPayments } = params;
+  const { date, overdue, dueSoon, upcoming, farFuture, noDate, freshPayments, followUpPayments } = params;
 
-  const totalTracked = overdue.length + dueSoon.length + upcoming.length + noDate.length;
+  const totalTracked = overdue.length + dueSoon.length + upcoming.length + farFuture.length + noDate.length;
 
   const summaryHtml = `
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
@@ -224,6 +225,14 @@ function buildHtml(params: {
     `🔵 Upcoming — next 4–14 days (${upcoming.length})`,
     upcoming,
     'pill-blue',
+    (r) => `Due in ${r.daysUntilDue}d`,
+    '',
+  );
+
+  const farFutureSection = section(
+    `🟢 Later — 15+ days away (${farFuture.length})`,
+    farFuture,
+    'pill-green',
     (r) => `Due in ${r.daysUntilDue}d`,
     '',
   );
@@ -282,6 +291,7 @@ function buildHtml(params: {
         ${overdueSection}
         ${dueSoonSection}
         ${upcomingSection}
+        ${farFutureSection}
         ${noDateSection}
 
         <div style="margin-top:28px;font-size:11px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:12px;">
@@ -431,10 +441,11 @@ export async function sendPaymentFollowUpReport({ force = false }: { force?: boo
     fetchWeeklyPayments(),
   ]);
 
-  const overdue  = rows.filter(r => r.daysUntilDue !== null && r.daysUntilDue < 0);
-  const dueSoon  = rows.filter(r => r.daysUntilDue !== null && r.daysUntilDue >= 0 && r.daysUntilDue <= 3);
-  const upcoming = rows.filter(r => r.daysUntilDue !== null && r.daysUntilDue > 3 && r.daysUntilDue <= 14);
-  const noDate   = rows.filter(r => r.daysUntilDue === null);
+  const overdue    = rows.filter(r => r.daysUntilDue !== null && r.daysUntilDue < 0);
+  const dueSoon    = rows.filter(r => r.daysUntilDue !== null && r.daysUntilDue >= 0 && r.daysUntilDue <= 3);
+  const upcoming   = rows.filter(r => r.daysUntilDue !== null && r.daysUntilDue > 3 && r.daysUntilDue <= 14);
+  const farFuture  = rows.filter(r => r.daysUntilDue !== null && r.daysUntilDue > 14);
+  const noDate     = rows.filter(r => r.daysUntilDue === null);
 
   const dateLabel = new Date(today + 'T00:00:00Z').toLocaleDateString('en-IN', {
     weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
@@ -445,7 +456,7 @@ export async function sendPaymentFollowUpReport({ force = false }: { force?: boo
     : dueSoon.length > 0 ? '🟡 ' : '🟢 ';
 
   const subject = `${urgency}Payment Follow-Up Report — ${dateLabel}`;
-  const html = buildHtml({ date: dateLabel, overdue, dueSoon, upcoming, noDate, freshPayments, followUpPayments });
+  const html = buildHtml({ date: dateLabel, overdue, dueSoon, upcoming, farFuture, noDate, freshPayments, followUpPayments });
 
   // Send from Vaibhav's account
   const vaibhav = await prisma.user.findFirst({
