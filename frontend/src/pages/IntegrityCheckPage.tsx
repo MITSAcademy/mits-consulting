@@ -1,0 +1,272 @@
+/**
+ * Data integrity check — admin diagnostic tool.
+ * Runs a suite of checks across the database and surfaces orphaned or
+ * inconsistent records that need manual attention.
+ * Visible to founder + manager only.
+ */
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { api } from '@/lib/api';
+import { Topbar, Page } from '@/components/layout/AppLayout';
+import { ShieldAlert, ChevronDown, ChevronRight, RefreshCw, CheckCircle2, AlertTriangle, AlertOctagon } from 'lucide-react';
+
+interface CheckItem {
+  id: string;
+  label: string;
+  detail: string;
+}
+
+interface Check {
+  id: string;
+  severity: 'critical' | 'warning';
+  title: string;
+  description: string;
+  count: number;
+  items: CheckItem[];
+}
+
+interface IntegrityResult {
+  summary: {
+    totalIssues: number;
+    critical: number;
+    warning: number;
+  };
+  checks: Check[];
+}
+
+function CheckCard({ check }: { check: Check }) {
+  const [expanded, setExpanded] = useState(false);
+  const isCritical = check.severity === 'critical';
+
+  const borderColor = isCritical ? 'var(--status-red)' : '#f59e0b';
+  const badgeBg = isCritical ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)';
+  const badgeColor = isCritical ? 'var(--status-red)' : '#f59e0b';
+  const Icon = isCritical ? AlertOctagon : AlertTriangle;
+
+  return (
+    <div
+      className="card mb-3 p-0 overflow-hidden"
+      style={{ borderLeft: `3px solid ${borderColor}` }}
+    >
+      {/* Header */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left"
+        style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+      >
+        <Icon size={15} style={{ color: badgeColor, flexShrink: 0 }} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>
+              {check.title}
+            </span>
+            <span
+              className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style={{ background: badgeBg, color: badgeColor }}
+            >
+              {check.count}
+            </span>
+            <span
+              className="text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wide font-semibold"
+              style={{ background: badgeBg, color: badgeColor }}
+            >
+              {check.severity}
+            </span>
+          </div>
+          <div className="text-[11px] mt-0.5" style={{ color: 'var(--brand-textMuted)' }}>
+            {check.description}
+          </div>
+        </div>
+        <div style={{ color: 'var(--brand-textMuted)', flexShrink: 0 }}>
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </div>
+      </button>
+
+      {/* Expanded item list */}
+      {expanded && check.items.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
+          {check.items.map((item, idx) => (
+            <div
+              key={item.id}
+              className="flex items-start gap-3 px-4 py-2"
+              style={{
+                borderBottom: idx < check.items.length - 1 ? '1px solid var(--brand-borderSoft)' : undefined,
+                background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)',
+              }}
+            >
+              <div className="text-[10px] font-mono mt-px" style={{ color: 'var(--brand-textMuted)', minWidth: 120, flexShrink: 0 }}>
+                {item.id.length > 16 ? item.id.slice(0, 14) + '…' : item.id}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-medium" style={{ color: 'var(--brand-text)' }}>
+                  {item.label}
+                </div>
+                <div className="text-[11px]" style={{ color: 'var(--brand-textMuted)' }}>
+                  {item.detail}
+                </div>
+              </div>
+            </div>
+          ))}
+          {check.count > check.items.length && (
+            <div className="px-4 py-2 text-[11px]" style={{ color: 'var(--brand-textMuted)' }}>
+              Showing {check.items.length} of {check.count} — fix these first, then re-run to see more.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SkeletonCard() {
+  return (
+    <div className="card mb-3 p-4 animate-pulse" style={{ borderLeft: '3px solid var(--brand-borderSoft)' }}>
+      <div className="flex items-center gap-3">
+        <div className="w-4 h-4 rounded" style={{ background: 'var(--brand-borderSoft)' }} />
+        <div className="flex-1">
+          <div className="h-3 w-48 rounded mb-2" style={{ background: 'var(--brand-borderSoft)' }} />
+          <div className="h-2 w-72 rounded" style={{ background: 'var(--brand-borderSoft)' }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function IntegrityCheckPage() {
+  const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery<IntegrityResult>({
+    queryKey: ['integrity-check'],
+    queryFn: () => api.get('/integrity-check').then((r) => r.data),
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
+
+  const lastRun = dataUpdatedAt
+    ? new Date(dataUpdatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : null;
+
+  const activeChecks = data?.checks.filter((c) => c.count > 0) ?? [];
+  const cleanChecks = data?.checks.filter((c) => c.count === 0) ?? [];
+
+  return (
+    <>
+      <Topbar
+        title="Data integrity"
+        subtitle={lastRun ? `Last run at ${lastRun}` : 'Diagnostic checks across all linked records'}
+        actions={
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
+            style={{
+              background: 'var(--bg-card)',
+              borderColor: 'var(--brand-border)',
+              color: 'var(--brand-textSecondary)',
+              opacity: isFetching ? 0.6 : 1,
+              cursor: isFetching ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <RefreshCw size={12} className={isFetching ? 'animate-spin' : ''} />
+            {isFetching ? 'Running…' : 'Re-run check'}
+          </button>
+        }
+      />
+
+      <Page>
+        {/* Summary banner */}
+        {data && (
+          <div
+            className="card mb-5 flex items-center gap-4 px-5 py-4"
+            style={{
+              borderLeft: `4px solid ${
+                data.summary.totalIssues === 0
+                  ? 'var(--status-green)'
+                  : data.summary.critical > 0
+                  ? 'var(--status-red)'
+                  : '#f59e0b'
+              }`,
+            }}
+          >
+            {data.summary.totalIssues === 0 ? (
+              <>
+                <CheckCircle2 size={20} style={{ color: 'var(--status-green)', flexShrink: 0 }} />
+                <div>
+                  <div className="text-[14px] font-bold" style={{ color: 'var(--status-green)' }}>
+                    All systems linked correctly
+                  </div>
+                  <div className="text-[12px] mt-0.5" style={{ color: 'var(--brand-textMuted)' }}>
+                    No data integrity issues found across {data.checks.length} checks.
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <ShieldAlert size={20} style={{ color: data.summary.critical > 0 ? 'var(--status-red)' : '#f59e0b', flexShrink: 0 }} />
+                <div className="flex-1">
+                  <div className="text-[14px] font-bold" style={{ color: 'var(--brand-text)' }}>
+                    {data.summary.totalIssues} issue{data.summary.totalIssues !== 1 ? 's' : ''} found
+                  </div>
+                  <div className="flex gap-3 mt-1">
+                    {data.summary.critical > 0 && (
+                      <span className="text-[12px] font-semibold" style={{ color: 'var(--status-red)' }}>
+                        {data.summary.critical} critical
+                      </span>
+                    )}
+                    {data.summary.warning > 0 && (
+                      <span className="text-[12px] font-semibold" style={{ color: '#f59e0b' }}>
+                        {data.summary.warning} warning{data.summary.warning !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Loading skeletons */}
+        {isLoading && (
+          <>
+            {[...Array(5)].map((_, i) => <SkeletonCard key={i} />)}
+          </>
+        )}
+
+        {/* Checks with issues */}
+        {!isLoading && activeChecks.length > 0 && (
+          <div className="mb-6">
+            <div className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: 'var(--brand-textMuted)' }}>
+              Issues to fix · {activeChecks.length} check{activeChecks.length !== 1 ? 's' : ''}
+            </div>
+            {activeChecks.map((check) => (
+              <CheckCard key={check.id} check={check} />
+            ))}
+          </div>
+        )}
+
+        {/* Clean checks */}
+        {!isLoading && cleanChecks.length > 0 && (
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: 'var(--brand-textMuted)' }}>
+              Passing · {cleanChecks.length} check{cleanChecks.length !== 1 ? 's' : ''}
+            </div>
+            <div className="card p-0 overflow-hidden">
+              {cleanChecks.map((check, idx) => (
+                <div
+                  key={check.id}
+                  className="flex items-center gap-3 px-4 py-2.5"
+                  style={{
+                    borderBottom: idx < cleanChecks.length - 1 ? '1px solid var(--brand-borderSoft)' : undefined,
+                  }}
+                >
+                  <CheckCircle2 size={13} style={{ color: 'var(--status-green)', flexShrink: 0 }} />
+                  <span className="text-[12px]" style={{ color: 'var(--brand-textSecondary)' }}>
+                    {check.title}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Page>
+    </>
+  );
+}

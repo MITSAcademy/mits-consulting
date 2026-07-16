@@ -12,7 +12,7 @@ import {
   Notebook, ChartLine, Upload, Inbox, Edit, UsersRound, Mail, Tag, LockKeyhole,
   Building2, History, Settings, LogOut, Moon, Calendar, ChevronsLeft, ChevronsRight,
   TableProperties, CalendarDays, AlertTriangle, Link, BarChart2, BarChart3, ToggleRight,
-  Sparkles, X, Bug, Handshake,
+  Sparkles, X, Bug, Handshake, ShieldAlert,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -196,6 +196,7 @@ const NAV: NavItem[] = [
   { section: 'admin', page: '/role-permissions', label: 'Role permissions', icon: ShieldCheck, roles: ['founder'] },
   { section: 'admin', page: '/banks', label: 'Bank accounts', icon: Building2, roles: ['founder', 'accounts'] },
   { section: 'admin', page: '/audit', label: 'Activity log', icon: History, roles: ['founder', 'manager'] },
+  { section: 'admin', page: '/integrity', label: 'Data integrity', icon: ShieldAlert, roles: ['founder', 'manager'] },
   { section: 'admin', page: '/settings', label: 'Settings', icon: Settings, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
 ];
 
