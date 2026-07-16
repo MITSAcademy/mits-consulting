@@ -267,23 +267,29 @@ export function SessionLogsPage() {
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // De-duped client rows from trainings — one per unique client, keeping trainer info
+  // One row per active training (not per client) — avoids merging clients with identical names
   const clientRows = useMemo(() => {
-    const seen = new Set<string>();
-    const out: Array<{ trainingId: string; clientId: string; clientName: string; trainerId: string; trainerName: string; coordinator: string }> = [];
-    for (const t of (trainings || []) as any[]) {
-      if (!t.client || seen.has(t.client.id)) continue;
-      seen.add(t.client.id);
-      out.push({
-        trainingId: t.id,
-        clientId: t.client.id,
-        clientName: t.client.name,
-        trainerId: t.trainer?.id || '',
-        trainerName: t.trainer?.name || '',
-        coordinator: t.hostedByDefault?.name || '',
-      });
+    const list = (trainings || []) as any[];
+    // Count how many trainings share each client name to detect duplicates
+    const nameCounts: Record<string, number> = {};
+    for (const t of list) {
+      if (t.client?.name) nameCounts[t.client.name] = (nameCounts[t.client.name] || 0) + 1;
     }
-    return out;
+    return list
+      .filter((t) => !!t.client)
+      .map((t) => {
+        const suffix = nameCounts[t.client.name] > 1 && t.client.phoneDigits
+          ? ` (${String(t.client.phoneDigits).slice(-4)})`
+          : '';
+        return {
+          trainingId: t.id,
+          clientId: t.client.id,
+          clientName: t.client.name + suffix,
+          trainerId: t.trainer?.id || '',
+          trainerName: t.trainer?.name || '',
+          coordinator: t.hostedByDefault?.name || '',
+        };
+      });
   }, [trainings]);
 
   // Inline row state keyed by trainingId

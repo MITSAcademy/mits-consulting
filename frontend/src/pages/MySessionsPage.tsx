@@ -220,6 +220,21 @@ export function MySessionsPage() {
         t.trainer?.skills?.toLowerCase().includes(searchLower))
     : (mySessions || []);
 
+  // Detect duplicate client names so we can append phone suffix for disambiguation
+  const clientNameCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const t of (mySessions || []) as any[]) {
+      if (t.client?.name) counts[t.client.name] = (counts[t.client.name] || 0) + 1;
+    }
+    return counts;
+  }, [mySessions]);
+  const displayClientName = (t: any) => {
+    if (!t.client) return t.name || '—';
+    if (clientNameCounts[t.client.name] > 1 && t.client.phoneDigits)
+      return `${t.client.name} (${String(t.client.phoneDigits).slice(-4)})`;
+    return t.client.name;
+  };
+
   const sessionCount = filteredSessions.length;
 
   return (
@@ -944,7 +959,7 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
               <div>
                 <div className="flex items-center gap-1">
                   {t.client
-                    ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>{t.client.name}</Link>
+                    ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>{displayClientName(t)}</Link>
                     : <span className="font-semibold">{t.name}</span>
                   }
                   {t.dailyNotes && <span title={t.dailyNotes} style={{ fontSize: 12, cursor: 'default' }}>📝</span>}
