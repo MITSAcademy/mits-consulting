@@ -242,6 +242,55 @@ integrityCheckRouter.get('/', requireRole('founder', 'manager'), async (_req: Au
     })),
   });
 
+  // ── BACKFILL GAPS (records created before the FK columns were added) ──────
+
+  // 9. SessionLogs with no regularTrainingId (old records, created before migration)
+  const sessionNoTrainingId = await prisma.sessionLog.findMany({
+    where: { regularTrainingId: null },
+    select: {
+      id: true, date: true,
+      client: { select: { name: true } },
+      trainer: { select: { name: true } },
+    },
+    orderBy: { date: 'desc' },
+    take: 100,
+  });
+  checks.push({
+    id: 'sessionlog_no_training_id',
+    severity: 'warning',
+    title: 'Session logs not linked to a RegularTraining (backfill needed)',
+    description: 'These session logs were created before the regularTrainingId column was added. They are not formally linked to any training record.',
+    count: sessionNoTrainingId.length,
+    items: sessionNoTrainingId.map((s) => ({
+      id: s.id,
+      label: `${s.client?.name || 'Unknown client'} · ${String(s.date).slice(0, 10)}`,
+      detail: `trainer: ${s.trainer?.name || 'none'}`,
+    })),
+  });
+
+  // 10. Payments with no trainerId (old records, created before migration)
+  const paymentNoTrainer = await prisma.payment.findMany({
+    where: { trainerId: null },
+    select: {
+      id: true, paymentDate: true, amount: true, currency: true,
+      client: { select: { name: true } },
+    },
+    orderBy: { paymentDate: 'desc' },
+    take: 100,
+  });
+  checks.push({
+    id: 'payment_no_trainer_id',
+    severity: 'warning',
+    title: 'Payments not linked to a trainer (backfill needed)',
+    description: 'These payments were created before the trainerId column was added. They have no trainer linked.',
+    count: paymentNoTrainer.length,
+    items: paymentNoTrainer.map((p) => ({
+      id: p.id,
+      label: `${p.client?.name || 'Unknown client'} · ${String(p.paymentDate).slice(0, 10)}`,
+      detail: `${p.currency} ${p.amount}`,
+    })),
+  });
+
   // ── Summary ───────────────────────────────────────────────────────────────
   const critical = checks
     .filter((c) => c.severity === 'critical' && c.count > 0)
@@ -257,5 +306,58 @@ integrityCheckRouter.get('/', requireRole('founder', 'manager'), async (_req: Au
       warning,
     },
     checks,
+  });
+});
+
+// POST /api/integrity-check/backfill — auto-fix regularTrainingId + trainerId on old records
+// Matches each SessionLog/Payment to an active RegularTraining by clientId+trainerId
+integrityCheckRouter.post('/backfill', requireRole('founder'), async (_req: AuthedRequest, res) => {
+  let sessionFixed = 0, sessionSkipped = 0;
+  let paymentFixed = 0, paymentSkipped = 0;
+
+  // ── Backfill SessionLog.regularTrainingId ──────────────────────────────────
+  const logsToFix = await prisma.sessionLog.findMany({
+    where: { regularTrainingId: null, clientId: { not: null } },
+    select: { id: true, clientId: true, trainerId: true },
+  });
+
+  for (const log of logsToFix) {
+    const training = await prisma.regularTraining.findFirst({
+      where: { clientId: log.clientId!, trainerId: log.trainerId },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (training) {
+      await prisma.sessionLog.update({ where: { id: log.id }, data: { regularTrainingId: training.id } });
+      sessionFixed++;
+    } else {
+      sessionSkipped++;
+    }
+  }
+
+  // ── Backfill Payment.trainerId ─────────────────────────────────────────────
+  const paymentsToFix = await prisma.payment.findMany({
+    where: { trainerId: null },
+    select: { id: true, clientId: true },
+  });
+
+  for (const payment of paymentsToFix) {
+    const training = await prisma.regularTraining.findFirst({
+      where: { clientId: payment.clientId, status: 'active', trainerId: { not: null } },
+      select: { trainerId: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (training?.trainerId) {
+      await prisma.payment.update({ where: { id: payment.id }, data: { trainerId: training.trainerId } });
+      paymentFixed++;
+    } else {
+      paymentSkipped++;
+    }
+  }
+
+  res.json({
+    sessionLogs: { fixed: sessionFixed, skipped: sessionSkipped },
+    payments: { fixed: paymentFixed, skipped: paymentSkipped },
+    message: `Fixed ${sessionFixed} session logs and ${paymentFixed} payments. Skipped ${sessionSkipped + paymentSkipped} with no matching training.`,
   });
 });

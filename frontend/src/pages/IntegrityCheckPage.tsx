@@ -4,7 +4,7 @@
  * inconsistent records that need manual attention.
  * Visible to founder + manager only.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
@@ -133,11 +133,22 @@ function SkeletonCard() {
 }
 
 export function IntegrityCheckPage() {
+  const qc = useQueryClient();
   const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery<IntegrityResult>({
     queryKey: ['integrity-check'],
     queryFn: () => api.get('/integrity-check').then((r) => r.data),
     staleTime: 0,
     refetchOnWindowFocus: false,
+  });
+
+  const [backfillResult, setBackfillResult] = useState<string | null>(null);
+  const backfill = useMutation({
+    mutationFn: () => api.post('/integrity-check/backfill').then((r) => r.data),
+    onSuccess: (d) => {
+      setBackfillResult(d.message);
+      qc.invalidateQueries({ queryKey: ['integrity-check'] });
+      refetch();
+    },
   });
 
   const lastRun = dataUpdatedAt
@@ -153,21 +164,42 @@ export function IntegrityCheckPage() {
         title="Data integrity"
         subtitle={lastRun ? `Last run at ${lastRun}` : 'Diagnostic checks across all linked records'}
         actions={
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
-            style={{
-              background: 'var(--bg-card)',
-              borderColor: 'var(--brand-border)',
-              color: 'var(--brand-textSecondary)',
-              opacity: isFetching ? 0.6 : 1,
-              cursor: isFetching ? 'not-allowed' : 'pointer',
-            }}
-          >
-            <RefreshCw size={12} className={isFetching ? 'animate-spin' : ''} />
-            {isFetching ? 'Running…' : 'Re-run check'}
-          </button>
+          <div className="flex items-center gap-2">
+            {backfillResult && (
+              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
+                {backfillResult}
+              </span>
+            )}
+            <button
+              onClick={() => { setBackfillResult(null); backfill.mutate(); }}
+              disabled={backfill.isPending}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
+              style={{
+                background: 'rgba(99,102,241,0.1)',
+                borderColor: 'rgba(99,102,241,0.4)',
+                color: '#a5b4fc',
+                opacity: backfill.isPending ? 0.6 : 1,
+                cursor: backfill.isPending ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {backfill.isPending ? 'Backfilling…' : '⚡ Auto-backfill old records'}
+            </button>
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
+              style={{
+                background: 'var(--bg-card)',
+                borderColor: 'var(--brand-border)',
+                color: 'var(--brand-textSecondary)',
+                opacity: isFetching ? 0.6 : 1,
+                cursor: isFetching ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <RefreshCw size={12} className={isFetching ? 'animate-spin' : ''} />
+              {isFetching ? 'Running…' : 'Re-run check'}
+            </button>
+          </div>
         }
       />
 
