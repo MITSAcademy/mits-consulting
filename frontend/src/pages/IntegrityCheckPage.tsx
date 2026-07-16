@@ -151,6 +151,22 @@ export function IntegrityCheckPage() {
     },
   });
 
+  const [createTrainingsResult, setCreateTrainingsResult] = useState<string | null>(null);
+  const createTrainings = useMutation({
+    mutationFn: () => api.post('/integrity-check/create-missing-trainings', [
+      { clientName: 'Chandana', trainerPhone: '9175591712' },
+      { clientName: 'Shaik', trainerPhone: '7676955798' },
+      { clientName: 'Shruthi', trainerPhone: '9987218936' },
+      { clientName: 'Shalini', trainerPhone: '8074834527' },
+    ]).then((r) => r.data),
+    onSuccess: (d) => {
+      const summary = d.results.map((r: { clientName: string; status: string }) => `${r.clientName}: ${r.status}`).join(' · ');
+      setCreateTrainingsResult(`${d.message} — ${summary}`);
+      qc.invalidateQueries({ queryKey: ['integrity-check'] });
+      refetch();
+    },
+  });
+
   const [fixFeedbackResult, setFixFeedbackResult] = useState<string | null>(null);
   const fixFeedback = useMutation({
     mutationFn: () => api.post('/integrity-check/fix-feedback-trainers').then((r) => r.data),
@@ -185,6 +201,25 @@ export function IntegrityCheckPage() {
         subtitle={lastRun ? `Last run at ${lastRun}` : 'Diagnostic checks across all linked records'}
         actions={
           <div className="flex items-center gap-2">
+            {createTrainingsResult && (
+              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
+                {createTrainingsResult}
+              </span>
+            )}
+            <button
+              onClick={() => { setCreateTrainingsResult(null); createTrainings.mutate(); }}
+              disabled={createTrainings.isPending}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
+              style={{
+                background: 'rgba(251,191,36,0.1)',
+                borderColor: 'rgba(251,191,36,0.35)',
+                color: '#fde68a',
+                opacity: createTrainings.isPending ? 0.6 : 1,
+                cursor: createTrainings.isPending ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {createTrainings.isPending ? 'Creating…' : '✨ Create missing trainings'}
+            </button>
             {fixFeedbackResult && (
               <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
                 {fixFeedbackResult}

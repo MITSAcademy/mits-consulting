@@ -503,6 +503,82 @@ integrityCheckRouter.post('/fix-feedback-trainer', requireRole('founder'), async
   });
 });
 
+// POST /api/integrity-check/create-missing-trainings
+// Creates active RegularTrainings for clients who have payments but no active training.
+// Body: [{ clientName: string, trainerPhone: string }]
+integrityCheckRouter.post('/create-missing-trainings', requireRole('founder'), async (req: AuthedRequest, res) => {
+  const entries = req.body as { clientName: string; trainerPhone: string }[];
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return res.status(400).json({ error: 'Body must be a non-empty array of { clientName, trainerPhone }' });
+  }
+
+  const digitsOnly = (s: string) => s.replace(/\D/g, '');
+
+  const allTrainers = await prisma.trainer.findMany({ select: { id: true, name: true, phoneDigits: true, phoneCode: true } });
+  const allClients = await prisma.client.findMany({ select: { id: true, name: true } });
+
+  const results: { clientName: string; status: string; trainingId?: string }[] = [];
+
+  for (const entry of entries) {
+    const trainerDigits = digitsOnly(entry.trainerPhone);
+    const trainer = allTrainers.find((t) => {
+      const p = digitsOnly(t.phoneDigits || '');
+      return p.endsWith(trainerDigits.slice(-10)) || trainerDigits.endsWith(p.slice(-10));
+    });
+    if (!trainer) {
+      results.push({ clientName: entry.clientName, status: `trainer not found (phone: ${entry.trainerPhone})` });
+      continue;
+    }
+
+    const client = allClients.find((c) =>
+      c.name.toLowerCase().includes(entry.clientName.toLowerCase().split(' ')[0]) ||
+      entry.clientName.toLowerCase().includes(c.name.toLowerCase().split(' ')[0])
+    );
+    if (!client) {
+      results.push({ clientName: entry.clientName, status: 'client not found' });
+      continue;
+    }
+
+    // Skip if active training already exists
+    const existing = await prisma.regularTraining.findFirst({
+      where: { clientId: client.id, trainerId: trainer.id, status: 'active' },
+    });
+    if (existing) {
+      results.push({ clientName: client.name, status: 'already exists', trainingId: existing.id });
+      continue;
+    }
+
+    const training = await prisma.regularTraining.create({
+      data: {
+        name: `${client.name} – ${trainer.name}`,
+        clientId: client.id,
+        trainerId: trainer.id,
+        status: 'active',
+      },
+    });
+    results.push({ clientName: client.name, status: 'created', trainingId: training.id });
+  }
+
+  // After creating trainings, backfill payments that have no trainerId
+  const paymentsToFix = await prisma.payment.findMany({
+    where: { trainerId: null },
+    select: { id: true, clientId: true },
+  });
+  let paymentFixed = 0;
+  for (const payment of paymentsToFix) {
+    const training = await prisma.regularTraining.findFirst({
+      where: { clientId: payment.clientId, trainerId: { not: null }, status: 'active' },
+      select: { trainerId: true },
+    });
+    if (training?.trainerId) {
+      await prisma.payment.update({ where: { id: payment.id }, data: { trainerId: training.trainerId } });
+      paymentFixed++;
+    }
+  }
+
+  res.json({ results, paymentFixed, message: `Processed ${results.length} entries. Fixed ${paymentFixed} unlinked payments.` });
+});
+
 // DELETE /api/integrity-check/dummy-clients — remove all dummy_* test clients and their data
 integrityCheckRouter.delete('/dummy-clients', requireRole('founder'), async (_req: AuthedRequest, res) => {
   const dummies = await prisma.client.findMany({
