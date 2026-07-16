@@ -22,7 +22,7 @@ export const ALL_FLAGS: (keyof FeatureFlags)[] = ['regularCalls'];
 
 export function readFlags(): FeatureFlags {
   return {
-    regularCalls: process.env.FEATURES_REGULAR_CALLS === 'true',
+    regularCalls: true, // always on — backend routes have no flag gate
   };
 }
 
