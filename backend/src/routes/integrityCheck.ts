@@ -396,6 +396,113 @@ integrityCheckRouter.post('/backfill', requireRole('founder'), async (_req: Auth
   });
 });
 
+// POST /api/integrity-check/fix-feedback-trainers
+// For every feedback record whose (clientId, trainerId) pair has no active training,
+// re-point trainerId to the trainer on that client's active RegularTraining.
+integrityCheckRouter.post('/fix-feedback-trainers', requireRole('founder'), async (_req: AuthedRequest, res) => {
+  // Get all feedback with a trainerId
+  const feedbacks = await prisma.feedback.findMany({
+    where: { trainerId: { not: null } },
+    select: { id: true, clientId: true, trainerId: true },
+  });
+
+  let fixed = 0;
+  let skipped = 0;
+
+  for (const fb of feedbacks) {
+    // Check if the current (clientId, trainerId) pair has a valid active training
+    const validTraining = await prisma.regularTraining.findFirst({
+      where: { clientId: fb.clientId, trainerId: fb.trainerId!, status: 'active' },
+      select: { id: true },
+    });
+    if (validTraining) continue; // already correct
+
+    // Find the active training for this client with any trainer
+    const activeTraining = await prisma.regularTraining.findFirst({
+      where: { clientId: fb.clientId, status: 'active', trainerId: { not: null } },
+      select: { trainerId: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (activeTraining?.trainerId) {
+      await prisma.feedback.update({ where: { id: fb.id }, data: { trainerId: activeTraining.trainerId } });
+      fixed++;
+    } else {
+      skipped++;
+    }
+  }
+
+  res.json({ fixed, skipped, message: `Fixed ${fixed} feedback records. Skipped ${skipped} with no active training for client.` });
+});
+
+// POST /api/integrity-check/fix-feedback-trainer
+// Finds the trainer by phone, creates a RegularTraining for the client, fixing the critical feedback mismatch.
+// Body: { clientPhone?: string, clientName?: string, trainerPhone: string, trainingName?: string }
+integrityCheckRouter.post('/fix-feedback-trainer', requireRole('founder'), async (req: AuthedRequest, res) => {
+  const { clientPhone, clientName, trainerPhone, trainingName } = req.body as {
+    clientPhone?: string;
+    clientName?: string;
+    trainerPhone?: string;
+    trainingName?: string;
+  };
+
+  if (!trainerPhone) return res.status(400).json({ error: 'trainerPhone is required' });
+
+  // Find trainer by phone (strip non-digits for comparison)
+  const digitsOnly = (s: string) => s.replace(/\D/g, '');
+  const trainerDigits = digitsOnly(trainerPhone);
+
+  const allTrainers = await prisma.trainer.findMany({ select: { id: true, name: true, phone: true, phoneDigits: true } });
+  const trainer = allTrainers.find((t) => {
+    const p = t.phoneDigits || t.phone || '';
+    return digitsOnly(p).endsWith(trainerDigits) || trainerDigits.endsWith(digitsOnly(p));
+  });
+  if (!trainer) return res.status(404).json({ error: `No trainer found with phone containing ${trainerPhone}` });
+
+  // Find client
+  let client = null;
+  if (clientPhone) {
+    const phoneDigits = digitsOnly(clientPhone);
+    const allClients = await prisma.client.findMany({ select: { id: true, name: true, phone: true } });
+    client = allClients.find((c) => {
+      const p = c.phone || '';
+      return digitsOnly(p).endsWith(phoneDigits) || phoneDigits.endsWith(digitsOnly(p));
+    }) || null;
+  }
+  if (!client && clientName) {
+    client = await prisma.client.findFirst({
+      where: { name: { contains: clientName, mode: 'insensitive' } },
+      select: { id: true, name: true, phone: true },
+    });
+  }
+  if (!client) return res.status(404).json({ error: 'Client not found. Provide clientPhone or clientName.' });
+
+  // Check if active training already exists
+  const existing = await prisma.regularTraining.findFirst({
+    where: { clientId: client.id, trainerId: trainer.id, status: 'active' },
+  });
+  if (existing) {
+    return res.json({ alreadyExists: true, trainingId: existing.id, client: client.name, trainer: trainer.name });
+  }
+
+  // Create the RegularTraining
+  const training = await prisma.regularTraining.create({
+    data: {
+      name: trainingName || `${client.name} – ${trainer.name}`,
+      clientId: client.id,
+      trainerId: trainer.id,
+      status: 'active',
+    },
+  });
+
+  res.json({
+    created: true,
+    trainingId: training.id,
+    trainingName: training.name,
+    client: client.name,
+    trainer: trainer.name,
+  });
+});
+
 // DELETE /api/integrity-check/dummy-clients — remove all dummy_* test clients and their data
 integrityCheckRouter.delete('/dummy-clients', requireRole('founder'), async (_req: AuthedRequest, res) => {
   const dummies = await prisma.client.findMany({

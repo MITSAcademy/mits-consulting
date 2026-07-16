@@ -151,6 +151,16 @@ export function IntegrityCheckPage() {
     },
   });
 
+  const [fixFeedbackResult, setFixFeedbackResult] = useState<string | null>(null);
+  const fixFeedback = useMutation({
+    mutationFn: () => api.post('/integrity-check/fix-feedback-trainers').then((r) => r.data),
+    onSuccess: (d) => {
+      setFixFeedbackResult(d.message);
+      qc.invalidateQueries({ queryKey: ['integrity-check'] });
+      refetch();
+    },
+  });
+
   const [dummyResult, setDummyResult] = useState<string | null>(null);
   const deleteDummies = useMutation({
     mutationFn: () => api.delete('/integrity-check/dummy-clients').then((r) => r.data),
@@ -175,6 +185,25 @@ export function IntegrityCheckPage() {
         subtitle={lastRun ? `Last run at ${lastRun}` : 'Diagnostic checks across all linked records'}
         actions={
           <div className="flex items-center gap-2">
+            {fixFeedbackResult && (
+              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
+                {fixFeedbackResult}
+              </span>
+            )}
+            <button
+              onClick={() => { setFixFeedbackResult(null); fixFeedback.mutate(); }}
+              disabled={fixFeedback.isPending}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
+              style={{
+                background: 'rgba(16,185,129,0.1)',
+                borderColor: 'rgba(16,185,129,0.35)',
+                color: '#6ee7b7',
+                opacity: fixFeedback.isPending ? 0.6 : 1,
+                cursor: fixFeedback.isPending ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {fixFeedback.isPending ? 'Fixing…' : '🔗 Fix feedback trainers'}
+            </button>
             {dummyResult && (
               <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--status-red)' }}>
                 {dummyResult}
