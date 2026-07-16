@@ -1444,12 +1444,12 @@ export function FollowUpPaymentsPage() {
             <span style={{ fontSize: 18 }}>⚠️</span>
             <div>
               <div className="font-bold text-[13px]" style={{ color: '#b45309' }}>
-                Count mismatch: Bhavneet's sheet has {trainingCount} active trainings, your sheet has {clientCount} clients
+                Count mismatch: Bhavneet's sheet has {trainingCount} active trainings, payment tracker has {clientCount} clients
               </div>
               <div className="text-[12px] mt-0.5" style={{ color: '#92400e' }}>
                 {trainingCount > clientCount
-                  ? `${trainingCount - clientCount} training${trainingCount - clientCount > 1 ? 's' : ''} in Bhavneet's sheet may not be tracked here. One client can have multiple trainings (e.g. two clients with same name = 2 trainings, 1 client record). Check with Bhavneet if a new client needs to be added to your payment tracking.`
-                  : `Your sheet has ${clientCount - trainingCount} more client${clientCount - trainingCount > 1 ? 's' : ''} than Bhavneet's active trainings. Some clients here may no longer have active sessions — check with Bhavneet.`
+                  ? `${trainingCount - clientCount} training${trainingCount - clientCount > 1 ? 's' : ''} in Bhavneet's sheet may not be tracked here. One client can have multiple trainings (e.g. two clients with same name = 2 trainings, 1 client record). Check with Bhavneet if a new client needs to be added to payment tracking.`
+                  : `Payment tracker has ${clientCount - trainingCount} more client${clientCount - trainingCount > 1 ? 's' : ''} than Bhavneet's active trainings. Some clients here may no longer have active sessions — check with Bhavneet.`
                 }
               </div>
             </div>
