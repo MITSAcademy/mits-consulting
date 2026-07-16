@@ -530,10 +530,12 @@ integrityCheckRouter.post('/create-missing-trainings', requireRole('founder'), a
       continue;
     }
 
-    const client = allClients.find((c) =>
-      c.name.toLowerCase().includes(entry.clientName.toLowerCase().split(' ')[0]) ||
-      entry.clientName.toLowerCase().includes(c.name.toLowerCase().split(' ')[0])
-    );
+    const searchName = entry.clientName.toLowerCase();
+    const client = allClients.find((c) => {
+      const cn = c.name.toLowerCase();
+      return cn.includes(searchName) || searchName.includes(cn) ||
+        cn.split(' ')[0] === searchName.split(' ')[0];
+    });
     if (!client) {
       results.push({ clientName: entry.clientName, status: 'client not found' });
       continue;
@@ -559,16 +561,18 @@ integrityCheckRouter.post('/create-missing-trainings', requireRole('founder'), a
     results.push({ clientName: client.name, status: 'created', trainingId: training.id });
   }
 
-  // After creating trainings, backfill payments that have no trainerId
+  // After creating/confirming trainings, backfill ALL payments that have no trainerId
   const paymentsToFix = await prisma.payment.findMany({
     where: { trainerId: null },
     select: { id: true, clientId: true },
   });
   let paymentFixed = 0;
   for (const payment of paymentsToFix) {
+    // Try active training first, then any training
     const training = await prisma.regularTraining.findFirst({
-      where: { clientId: payment.clientId, trainerId: { not: null }, status: 'active' },
+      where: { clientId: payment.clientId, trainerId: { not: null } },
       select: { trainerId: true },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
     if (training?.trainerId) {
       await prisma.payment.update({ where: { id: payment.id }, data: { trainerId: training.trainerId } });
