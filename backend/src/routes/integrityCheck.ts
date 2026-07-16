@@ -690,10 +690,11 @@ integrityCheckRouter.post('/fix-null-trainer-payments', requireRole('founder'), 
       });
       if (nameMatch?.regularTrainings[0]) {
         trainerId = nameMatch.regularTrainings[0].trainerId;
+        const correctClientId = nameMatch.regularTrainings[0].clientId;
         // Also re-point clientId to the correct client
         await prisma.payment.update({
           where: { id: p.id },
-          data: { trainerId, clientId: nameMatch.regularTrainings[0].clientId },
+          data: { trainerId: trainerId ?? undefined, ...(correctClientId ? { clientId: correctClientId } : {}) },
         });
         fixed.push(`${clientName}: linked trainerId + re-pointed clientId via name match`);
         continue;
