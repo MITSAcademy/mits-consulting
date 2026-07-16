@@ -131,7 +131,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       isEmployerCall: (c as any).isEmployerCall || false,
       employerName: (c as any).employerName || null,
       clientEmail: (c as any).email || null,
-      accountName: (c as any).accountNameRaw || (c as any).assignedAm?.name || null,
+      accountName: (c as any).accountNameRaw || null,
       hostOwner: c.hostOwner?.name || null,
       clientPhone: (c.phoneCode && c.phoneDigits) ? `${c.phoneCode}${c.phoneDigits}`.replace(/[^0-9+]/g, '') : null,
       clientGroupLink: (c as any).whatsappGroupLink || null,
@@ -404,6 +404,17 @@ followUpPaymentsRouter.patch('/:id/account-name', async (req: AuthedRequest, res
   await prisma.client.update({ where: { id: c.id }, data: { accountNameRaw: accountName || null } });
   await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${c.name}: accountName → ${accountName || '(cleared)'}`, { clientId: c.id });
   res.json({ ok: true, accountName: accountName || null });
+});
+
+// PATCH /:id/email — update client email; founder/manager/accounts
+followUpPaymentsRouter.patch('/:id/email', async (req: AuthedRequest, res) => {
+  if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+  const c = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
+  if (!c) return res.status(404).json({ error: 'Client not found' });
+  await prisma.client.update({ where: { id: c.id }, data: { email: email || null } });
+  await audit(req.user!.id, req.user!.name, 'CLIENT_UPDATE', `${c.name}: email → ${email || '(cleared)'}`, { clientId: c.id });
+  res.json({ ok: true, email: email || null });
 });
 
 // ─────────────────────────────────────────

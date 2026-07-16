@@ -1051,6 +1051,8 @@ function TableView({ rows }: { rows: Row[] }) {
   const [amountReason, setAmountReason] = useState('');
   const [editingAccount, setEditingAccount] = useState<string | null>(null);
   const [accountDraft, setAccountDraft] = useState('');
+  const [editingEmail, setEditingEmail] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState('');
   const [showComments, setShowComments] = useState<string | null>(null);
   const [showAdvance, setShowAdvance] = useState<Row | null>(null);
   const [showEditDates, setShowEditDates] = useState<Row | null>(null);
@@ -1070,6 +1072,12 @@ function TableView({ rows }: { rows: Row[] }) {
   const saveAccount = useMutation({
     mutationFn: ({ id }: { id: string }) => api.patch(`/follow-up-payments/${id}/account-name`, { accountName: accountDraft }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingAccount(null); showToast('Account saved'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const saveEmail = useMutation({
+    mutationFn: ({ id }: { id: string }) => api.patch(`/follow-up-payments/${id}/email`, { email: emailDraft }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingEmail(null); showToast('Email saved'); },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
@@ -1280,7 +1288,7 @@ function TableView({ rows }: { rows: Row[] }) {
                         style={{ color: 'var(--brand-textMuted)', cursor: canEditAmountAccount ? 'pointer' : 'default' }}
                         title={canEditAmountAccount ? 'Click to edit account name' : undefined}
                       >
-                        {r.accountName || '—'}
+                        {r.accountName || <span className="italic" style={{ color: 'var(--brand-textMuted)', opacity: 0.6 }}>{canEditAmountAccount ? '— click to add' : '—'}</span>}
                       </span>
                     )}
                   </td>
@@ -1294,9 +1302,26 @@ function TableView({ rows }: { rows: Row[] }) {
 
                   {/* Email */}
                   <td style={{ ...tdStyle, fontSize: 11 }}>
-                    {r.clientEmail
-                      ? <a href={`mailto:${r.clientEmail}`} style={{ color: 'var(--brand-textSecondary)' }}>{r.clientEmail}</a>
-                      : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
+                    {editingEmail === r.id ? (
+                      <input
+                        autoFocus type="email"
+                        value={emailDraft}
+                        onChange={e => setEmailDraft(e.target.value)}
+                        onBlur={() => saveEmail.mutate({ id: r.id })}
+                        onKeyDown={e => { if (e.key === 'Enter') saveEmail.mutate({ id: r.id }); if (e.key === 'Escape') setEditingEmail(null); }}
+                        style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, border: '1px solid var(--brand-border)', background: 'var(--bg-input)', color: 'var(--brand-text)', width: 160 }}
+                      />
+                    ) : r.clientEmail ? (
+                      <a href={`mailto:${r.clientEmail}`} style={{ color: 'var(--brand-textSecondary)' }}
+                        onClick={e => { e.preventDefault(); setEmailDraft(r.clientEmail || ''); setEditingEmail(r.id); }}>
+                        {r.clientEmail}
+                      </a>
+                    ) : (
+                      <span className="muted italic cursor-pointer hover:opacity-70"
+                        onClick={() => { setEmailDraft(''); setEditingEmail(r.id); }}>
+                        — click to add
+                      </span>
+                    )}
                   </td>
 
                   {/* Actions */}
