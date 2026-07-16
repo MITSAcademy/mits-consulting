@@ -47,12 +47,17 @@ paymentsRouter.post('/', async (req: AuthedRequest, res) => {
     clientCycleAmount = cli?.cycleAmount || null;
   }
 
+  const activeTraining = await prisma.regularTraining.findFirst({
+    where: { clientId, status: 'active' },
+    select: { trainerId: true },
+  });
   const p = await prisma.payment.create({
     data: {
       clientId, kind: kindToUse, amount: amountToUse, currency,
       paymentDate, bankAccountId: bankAccountId || null,
       paymentMode: paymentMode || 'Bank',
       receivedById: req.user!.id,
+      trainerId: activeTraining?.trainerId || null,
     },
     include,
   });

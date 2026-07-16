@@ -288,6 +288,7 @@ model Trainer {
   comments       Comment[]
   proposals      Proposal[]
   sessionLogs    SessionLog[]
+  payments       Payment[]
   tasks          Task[]
   outboundMessages OutboundMessage[]
   regularTrainings RegularTraining[]
@@ -574,6 +575,8 @@ model Payment {
   id              String      @id @default(cuid())
   clientId        String
   client          Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  trainerId       String?
+  trainer         Trainer?    @relation(fields: [trainerId], references: [id], onDelete: SetNull)
   kind            String      // Fresh | Renewal | Other
   amount          Int
   currency        Currency
@@ -620,12 +623,14 @@ model Task {
 
 // -------- SESSION LOGS --------
 model SessionLog {
-  id            String        @id @default(cuid())
-  trainerId     String
-  trainer       Trainer       @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  clientId      String?
-  client        Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  date          String
+  id                  String           @id @default(cuid())
+  trainerId           String
+  trainer             Trainer          @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  clientId            String?
+  client              Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  regularTrainingId   String?
+  regularTraining     RegularTraining? @relation(fields: [regularTrainingId], references: [id], onDelete: SetNull)
+  date                String
   hours         Float
   rateSnapshot  Int
   rateModel     RateModel
@@ -722,6 +727,7 @@ model RegularTraining {
   updatedAt                DateTime @updatedAt
 
   sessions                 TrainingSession[]
+  sessionLogs              SessionLog[]
 
   @@index([status])
   @@index([hostedByDefaultId])

@@ -108,7 +108,7 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
     ? Math.round(Number(amountOverride)) : defaultAmount;
 
   const data: any = {
-    trainerId, clientId, date, hours: actualHours, rateSnapshot: rateSnapshot || 0,
+    trainerId, clientId, regularTrainingId: linkedTraining.id, date, hours: actualHours, rateSnapshot: rateSnapshot || 0,
     rateModel: rateModel || 'per_session', amountInr: amount, status: 'Logged',
     notes: notes || null, feedback: feedback || null, loggedById: req.user!.id,
     sessionHappened: didHappen,

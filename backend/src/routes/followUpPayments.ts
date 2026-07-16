@@ -183,6 +183,10 @@ followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, r
     select: { id: true, name: true, payDate1: true, payDate2: true, cycleAmount: true, currency: true },
   });
   if (!c) return res.status(404).json({ error: 'Client not found' });
+  const activeTraining = await prisma.regularTraining.findFirst({
+    where: { clientId: c.id, status: 'active' },
+    select: { trainerId: true },
+  });
   const collectedDate = c.payDate1 || todayISO();
   const newDate1 = c.payDate2 || todayISO();
   const recordedAmount = (amountReceived !== undefined && amountReceived !== null && !isNaN(Number(amountReceived)))
@@ -201,6 +205,7 @@ followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, r
     prisma.payment.create({
       data: {
         clientId: c.id,
+        trainerId: activeTraining?.trainerId || null,
         kind: 'Renewal',
         amount: recordedAmount,
         currency: (c.currency || 'USD') as any,
