@@ -467,7 +467,7 @@ app.post('/api/internal/retrigger-freelance-notifications', requireAuth, require
 });
 
 // Founder-only: manually trigger the payment follow-up email right now
-app.post('/api/internal/send-payment-report', requireAuth, requireRole('founder'), async (_req, res) => {
+app.post('/api/internal/send-payment-report', requireAuth, requireRole('founder', 'manager', 'accounts'), async (_req, res) => {
   try {
     await sendPaymentFollowUpReport({ force: true });
     res.json({ ok: true, message: 'Payment follow-up report sent.' });
