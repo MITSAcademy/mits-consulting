@@ -322,7 +322,7 @@ integrityCheckRouter.post('/backfill', requireRole('founder'), async (_req: Auth
   });
 
   for (const log of logsToFix) {
-    // Match any training (active or archived) by clientId+trainerId
+    // Pass 1: exact match by clientId + trainerId (any status)
     const training = await prisma.regularTraining.findFirst({
       where: { clientId: log.clientId!, trainerId: log.trainerId },
       select: { id: true },
@@ -331,9 +331,20 @@ integrityCheckRouter.post('/backfill', requireRole('founder'), async (_req: Auth
     if (training) {
       await prisma.sessionLog.update({ where: { id: log.id }, data: { regularTrainingId: training.id } });
       sessionFixed++;
-    } else {
-      sessionSkipped++;
+      continue;
     }
+    // Pass 2: any training for this client (trainer may have changed)
+    const anyTraining = await prisma.regularTraining.findFirst({
+      where: { clientId: log.clientId! },
+      select: { id: true },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    });
+    if (anyTraining) {
+      await prisma.sessionLog.update({ where: { id: log.id }, data: { regularTrainingId: anyTraining.id } });
+      sessionFixed++;
+      continue;
+    }
+    sessionSkipped++;
   }
 
   // ── Backfill Payment.trainerId ─────────────────────────────────────────────
@@ -343,18 +354,39 @@ integrityCheckRouter.post('/backfill', requireRole('founder'), async (_req: Auth
   });
 
   for (const payment of paymentsToFix) {
-    // Try active first, then fall back to any training (archived/paused) — most recent
+    // Pass 1: any RegularTraining for this client with a trainer (active first)
     const training = await prisma.regularTraining.findFirst({
       where: { clientId: payment.clientId, trainerId: { not: null } },
       select: { trainerId: true },
-      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }], // active sorts before archived
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
     if (training?.trainerId) {
       await prisma.payment.update({ where: { id: payment.id }, data: { trainerId: training.trainerId } });
       paymentFixed++;
-    } else {
-      paymentSkipped++;
+      continue;
     }
+    // Pass 2: fall back to client.primaryTrainerId
+    const client = await prisma.client.findUnique({
+      where: { id: payment.clientId },
+      select: { primaryTrainerId: true },
+    });
+    if (client?.primaryTrainerId) {
+      await prisma.payment.update({ where: { id: payment.id }, data: { trainerId: client.primaryTrainerId } });
+      paymentFixed++;
+      continue;
+    }
+    // Pass 3: infer from most recent Feedback for this client
+    const recentFeedback = await prisma.feedback.findFirst({
+      where: { clientId: payment.clientId, trainerId: { not: null } },
+      select: { trainerId: true },
+      orderBy: { weekStart: 'desc' },
+    });
+    if (recentFeedback?.trainerId) {
+      await prisma.payment.update({ where: { id: payment.id }, data: { trainerId: recentFeedback.trainerId } });
+      paymentFixed++;
+      continue;
+    }
+    paymentSkipped++;
   }
 
   res.json({
