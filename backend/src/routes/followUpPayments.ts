@@ -170,14 +170,20 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
 
 // ─────────────────────────────────────────
 // POST /:id/advance-payment
-// When Mitali collects: payDate1 ← payDate2, set new payDate2
-// Body: { newDate2: 'YYYY-MM-DD', amount?: number }
+// Record payment received. Sets payDate1 to the new next due date.
+// Does NOT auto-shift payDate2. payDate2 stays unchanged.
+// Body: { newDate2: 'YYYY-MM-DD' (next due date), amountReceived?: number }
 // ─────────────────────────────────────────
 followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, res) => {
   if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const { newDate2, amountReceived } = req.body || {};
+  // newDate2 = the new next-due date (payDate1 in schema); must be today or future
   if (!newDate2 || !/^\d{4}-\d{2}-\d{2}$/.test(newDate2)) {
-    return res.status(400).json({ error: 'newDate2 must be YYYY-MM-DD' });
+    return res.status(400).json({ error: 'newDate2 (next due date) must be YYYY-MM-DD' });
+  }
+  const todayStr = todayISO();
+  if (newDate2 < todayStr) {
+    return res.status(400).json({ error: 'Next due date cannot be in the past.' });
   }
   const c = await prisma.client.findUnique({
     where: { id: req.params.id },
@@ -188,13 +194,6 @@ followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, r
     where: { clientId: c.id, status: 'active' },
     select: { trainerId: true },
   });
-  const collectedDate = c.payDate1 || todayISO();
-  // Block future-dated payments — payDate1 must be today or in the past
-  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
-  if (collectedDate && new Date(collectedDate) > todayEnd) {
-    return res.status(400).json({ error: `Cannot record collection — the payment date (${collectedDate}) is in the future. Update the client's payDate1 to today's date first.` });
-  }
-  const newDate1 = c.payDate2 || todayISO();
   const recordedAmount = (amountReceived !== undefined && amountReceived !== null && !isNaN(Number(amountReceived)))
     ? Math.round(Number(amountReceived))
     : (c.cycleAmount || 0);
@@ -202,10 +201,10 @@ followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, r
     prisma.client.update({
       where: { id: c.id },
       data: {
-        payDate1: newDate1,
-        payDate2: newDate2,
+        payDate1: newDate2,   // new next due date
         leverageUntil: null,
         leverageNote: null,
+        // payDate2 intentionally left unchanged
       },
     }),
     prisma.payment.create({
@@ -215,13 +214,13 @@ followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, r
         kind: 'Renewal',
         amount: recordedAmount,
         currency: (c.currency || 'USD') as any,
-        paymentDate: collectedDate,
+        paymentDate: todayStr,
         receivedById: req.user!.id,
       },
     }),
   ]);
-  await audit(req.user!.id, req.user!.name, 'PAYMENT_ADVANCED', `${c.name}: collected ${collectedDate} (${c.currency} ${recordedAmount}), next due ${newDate1} → ${newDate2}`, { clientId: c.id });
-  res.json({ ok: true, payDate1: newDate1, payDate2: newDate2 });
+  await audit(req.user!.id, req.user!.name, 'PAYMENT_ADVANCED', `${c.name}: payment recorded today (${c.currency} ${recordedAmount}), next due set to ${newDate2}`, { clientId: c.id });
+  res.json({ ok: true, payDate1: newDate2 });
 });
 
 // ─────────────────────────────────────────

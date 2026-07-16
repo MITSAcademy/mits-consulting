@@ -28,7 +28,6 @@ import {
   AlertTriangle, CheckCircle2, Clock, MessageSquare,
   Send, Pin, Trash2, Users, LayoutList, Table2
 } from 'lucide-react';
-import { minFutureDate, maxTodayDate, minPastDate } from '@/lib/utils';
 import DateChangeRequestModal from '@/components/follow-up/DateChangeRequestModal';
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -275,133 +274,7 @@ function CommentThread({ clientId, onClose }: { clientId: string; onClose: () =>
   return createPortal(content, document.body);
 }
 
-// ─── "Payment done" modal ─────────────────────────────────────────────────────
-
-function AdvancePaymentModal({ r, onClose }: { r: Row; onClose: () => void }) {
-  const qc = useQueryClient();
-  const showToast = useUI((s) => s.showToast);
-  const defaultNext = r.payDate2 ? addDays(r.payDate2, 14) : addDays(todayISO(), 14);
-  const [newDate2, setNewDate2] = useState(defaultNext);
-  const [amountReceived, setAmountReceived] = useState(String(r.cycleAmount || ''));
-
-  const adv = useMutation({
-    mutationFn: () => api.post(`/follow-up-payments/${r.id}/advance-payment`, {
-      newDate2,
-      amountReceived: amountReceived ? Number(amountReceived) : undefined,
-    }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
-      showToast(`Payment done ✓ — ${r.currency} ${amountReceived || r.cycleAmount} recorded · next due ${fmtDate(newDate2)}`);
-      onClose();
-    },
-    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
-  });
-
-  const hasFuture = r.futureDatedPayments?.length > 0;
-
-  const content = (
-    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="rounded-2xl p-5 w-[400px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
-        <div className="font-bold text-sm mb-1">Mark payment done — {r.name}</div>
-        {hasFuture && (
-          <div className="rounded-lg px-3 py-2.5 mb-3 text-[12px]" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
-            <div className="font-bold mb-1">⚠️ Fix future-dated payments first</div>
-            {r.futureDatedPayments.map((p) => (
-              <div key={p.id}>Payment of {p.currency} {p.amount} is dated <strong>{p.paymentDate.slice(0, 10)}</strong> — correct this date before recording a new collection.</div>
-            ))}
-          </div>
-        )}
-        <div className="muted text-[11px] mb-4">
-          Current due date: <strong>{fmtDate(r.payDate2)}</strong> → moves to Pay Date 1.<br/>
-          Enter the amount received and set the next due date.
-        </div>
-        <div className="flex flex-col gap-3">
-          <div className="form-row">
-            <Label>Amount received ({r.currency})</Label>
-            <Input
-              type="number"
-              min="0"
-              value={amountReceived}
-              onChange={(e) => setAmountReceived(e.target.value)}
-              placeholder={String(r.cycleAmount || '')}
-            />
-          </div>
-          <div className="form-row">
-            <Label>Next payment due date</Label>
-            <Input type="date" value={newDate2} min={todayISO()} onChange={(e) => setNewDate2(e.target.value)} />
-          </div>
-        </div>
-        <div className="flex gap-2 mt-4 justify-end">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!newDate2 || adv.isPending || hasFuture} onClick={() => adv.mutate()}>
-            {adv.isPending ? 'Saving…' : 'Confirm done'}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-  return createPortal(content, document.body);
-}
-
-// ─── leverage modal ───────────────────────────────────────────────────────────
-
-function LeverageModal({ r, onClose }: { r: Row; onClose: () => void }) {
-  const qc = useQueryClient();
-  const showToast = useUI((s) => s.showToast);
-  const base = r.payDate2 || todayISO();
-  const maxDate = addDays(base, 3);
-  const [newDate2, setNewDate2] = useState(addDays(base, 1));
-  const [note, setNote] = useState('');
-
-  const lev = useMutation({
-    mutationFn: () => api.post(`/follow-up-payments/${r.id}/leverage`, { newDate2, note }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
-      qc.invalidateQueries({ queryKey: ['comments', { clientId: r.id }] });
-      showToast(`Leverage granted — due extended to ${fmtDate(newDate2)}`);
-      onClose();
-    },
-    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
-  });
-
-  const content = (
-    <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="rounded-2xl p-5 w-[360px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
-        <div className="font-bold text-sm mb-1">Grant leverage — {r.name}</div>
-        <div className="muted text-[11px] mb-3">
-          Client can't pay yet. Extend due date by <strong>max 3 days</strong> (until {fmtDate(maxDate)}).<br/>
-          The extension is auto-logged as a comment.
-        </div>
-        {r.leverageUntil && (
-          <div className="text-[11px] mb-3 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--status-amber)' }}>
-            Already extended to {fmtDate(r.leverageUntil)}{r.leverageNote ? ` · ${r.leverageNote}` : ''}
-          </div>
-        )}
-        <div className="form-row mb-3">
-          <Label>New due date (max {fmtDate(maxDate)})</Label>
-          <Input type="date" value={newDate2} min={todayISO()} max={maxDate}
-            onChange={(e) => setNewDate2(e.target.value)} />
-        </div>
-        <div className="form-row">
-          <Label>Reason (logged as comment)</Label>
-          <Input value={note} onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. Client travelling, will pay Monday" />
-        </div>
-        <div className="flex gap-2 mt-4 justify-end">
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!newDate2 || newDate2 > maxDate || lev.isPending} onClick={() => lev.mutate()}>
-            {lev.isPending ? 'Saving…' : 'Grant leverage'}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-  return createPortal(content, document.body);
-}
-
-// ─── edit pay dates modal ─────────────────────────────────────────────────────
+// ─── edit pay dates modal (admin-only direct edit) ────────────────────────────
 
 function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
   const qc = useQueryClient();
@@ -637,8 +510,6 @@ function PayRow({ r }: { r: Row }) {
   const isManager = user?.role === 'manager';
 
   const [showComments, setShowComments] = useState(false);
-  const [showAdvance, setShowAdvance] = useState(false);
-  const [showLeverage, setShowLeverage] = useState(false);
   const [showEditDates, setShowEditDates] = useState(false);
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountDraft, setAmountDraft] = useState('');
@@ -904,19 +775,9 @@ function PayRow({ r }: { r: Row }) {
 
           {/* Actions */}
           <div className="px-4 py-3 flex flex-col gap-1.5 justify-center">
-            <Button size="sm" onClick={() => setShowEditDates(true)}
-              title="Edit pay dates">
-              ✏ Edit dates
-            </Button>
-            <Button size="sm"
-              style={r.leverageUntil ? { background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.35)' } : {}}
-              onClick={() => setShowLeverage(true)}
-              title="Extend due date by max 3 days">
-              ⟳ Leverage
-            </Button>
-            <Button size="sm" variant="primary" onClick={() => setShowAdvance(true)}
-              title="Mark payment collected — rolls date forward">
-              <CheckCircle2 size={11}/> Payment done
+            <Button size="sm" variant="primary" onClick={() => setShowEditDates(true)}
+              title="Record payment or request date change">
+              <CheckCircle2 size={11}/> Dates / Pay
             </Button>
             {isManager && (
               <Button size="sm"
@@ -998,8 +859,6 @@ function PayRow({ r }: { r: Row }) {
       </div>
 
       {showComments  && <CommentThread clientId={r.id} onClose={() => setShowComments(false)}/>}
-      {showAdvance   && <AdvancePaymentModal r={r} onClose={() => setShowAdvance(false)}/>}
-      {showLeverage  && <LeverageModal r={r} onClose={() => setShowLeverage(false)}/>}
       {showEditDates && <DateChangeRequestModal r={r} onClose={() => setShowEditDates(false)}/>}
       {showEmployerDialog && createPortal(
         <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
@@ -1055,7 +914,6 @@ function TableView({ rows }: { rows: Row[] }) {
   const [editingEmail, setEditingEmail] = useState<string | null>(null);
   const [emailDraft, setEmailDraft] = useState('');
   const [showComments, setShowComments] = useState<string | null>(null);
-  const [showAdvance, setShowAdvance] = useState<Row | null>(null);
   const [showEditDates, setShowEditDates] = useState<Row | null>(null);
 
   const saveAmount = useMutation({
@@ -1327,18 +1185,11 @@ function TableView({ rows }: { rows: Row[] }) {
 
                   {/* Actions */}
                   <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setShowEditDates(r)} title="Edit pay dates"
-                        className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80"
-                        style={{ background: 'var(--bg-input)', color: 'var(--brand-textMuted)', border: '1px solid var(--brand-borderSoft)' }}>
-                        ✏ Dates
-                      </button>
-                      <button onClick={() => setShowAdvance(r)} title="Record payment received"
-                        className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80"
-                        style={{ background: 'rgba(34,197,94,0.15)', color: 'var(--status-green)', border: '1px solid rgba(34,197,94,0.35)' }}>
-                        ✓ Record
-                      </button>
-                    </div>
+                    <button onClick={() => setShowEditDates(r)} title="Record payment or request date change"
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80"
+                      style={{ background: 'rgba(34,197,94,0.15)', color: 'var(--status-green)', border: '1px solid rgba(34,197,94,0.35)' }}>
+                      💳 Dates / Pay
+                    </button>
                   </td>
                 </tr>
               );
@@ -1348,7 +1199,6 @@ function TableView({ rows }: { rows: Row[] }) {
       </div>
 
       {showComments  && <CommentThread clientId={showComments} onClose={() => setShowComments(null)}/>}
-      {showAdvance   && <AdvancePaymentModal r={showAdvance} onClose={() => setShowAdvance(null)}/>}
       {showEditDates && <DateChangeRequestModal r={showEditDates} onClose={() => setShowEditDates(null)}/>}
     </>
   );
