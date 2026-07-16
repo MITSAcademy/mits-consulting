@@ -322,10 +322,11 @@ integrityCheckRouter.post('/backfill', requireRole('founder'), async (_req: Auth
   });
 
   for (const log of logsToFix) {
+    // Match any training (active or archived) by clientId+trainerId
     const training = await prisma.regularTraining.findFirst({
       where: { clientId: log.clientId!, trainerId: log.trainerId },
       select: { id: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
     if (training) {
       await prisma.sessionLog.update({ where: { id: log.id }, data: { regularTrainingId: training.id } });
@@ -342,10 +343,11 @@ integrityCheckRouter.post('/backfill', requireRole('founder'), async (_req: Auth
   });
 
   for (const payment of paymentsToFix) {
+    // Try active first, then fall back to any training (archived/paused) — most recent
     const training = await prisma.regularTraining.findFirst({
-      where: { clientId: payment.clientId, status: 'active', trainerId: { not: null } },
+      where: { clientId: payment.clientId, trainerId: { not: null } },
       select: { trainerId: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }], // active sorts before archived
     });
     if (training?.trainerId) {
       await prisma.payment.update({ where: { id: payment.id }, data: { trainerId: training.trainerId } });
