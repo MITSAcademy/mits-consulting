@@ -515,47 +515,55 @@ function IncompleteNagModal({ clients, onDone }: { clients: Row[]; onDone: () =>
                 opacity: isDone ? 0.6 : 1,
               }}>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="font-bold text-[13px]">{c.name}</div>
+                  <div>
+                    <div className="font-bold text-[13px]">{c.name}</div>
+                    <div className="flex gap-2 mt-0.5">
+                      {missingDate && <span className="text-[10px] font-semibold" style={{ color: '#b91c1c' }}>⚠ Date missing</span>}
+                      {missingAmount && <span className="text-[10px] font-semibold" style={{ color: '#b91c1c' }}>⚠ Amount missing</span>}
+                    </div>
+                  </div>
                   {isDone && <span className="text-[11px] font-bold" style={{ color: '#16a34a' }}>✓ Saved / Promised</span>}
                 </div>
                 {!isDone && (
                   <div className="grid grid-cols-2 gap-2 mb-2">
-                    {missingDate && (
-                      <div>
-                        <div className="text-[10px] font-semibold mb-1" style={{ color: '#b91c1c' }}>⚠ Next Due Date missing</div>
+                    {/* Next due date — always shown */}
+                    <div>
+                      <div className="text-[10px] font-semibold mb-1" style={{ color: missingDate ? '#b91c1c' : '#6b7280' }}>
+                        {missingDate ? '⚠ Next Due Date' : 'Next Due Date'}
+                      </div>
+                      <input
+                        type="date"
+                        value={s.date2}
+                        onChange={(e) => setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], date2: e.target.value } }))}
+                        className="w-full text-[12px] px-2 py-1.5 rounded-lg"
+                        style={{ background: 'var(--bg-input)', border: `1px solid ${missingDate ? '#f87171' : 'var(--brand-border)'}`, color: 'var(--brand-text)' }}
+                      />
+                    </div>
+                    {/* Amount — always shown */}
+                    <div>
+                      <div className="text-[10px] font-semibold mb-1" style={{ color: missingAmount ? '#b91c1c' : '#6b7280' }}>
+                        {missingAmount ? '⚠ Amount' : 'Amount'}
+                      </div>
+                      <div className="flex gap-1">
+                        <select
+                          value={s.currency}
+                          onChange={(e) => setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], currency: e.target.value } }))}
+                          className="text-[12px] px-1 py-1.5 rounded-lg"
+                          style={{ background: 'var(--bg-input)', border: `1px solid ${missingAmount ? '#f87171' : 'var(--brand-border)'}`, color: 'var(--brand-text)', width: 70 }}
+                        >
+                          {['USD','CAD','GBP','AED','INR'].map(cur => <option key={cur} value={cur}>{cur}</option>)}
+                        </select>
                         <input
-                          type="date"
-                          value={s.date2}
-                          onChange={(e) => setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], date2: e.target.value } }))}
-                          className="w-full text-[12px] px-2 py-1.5 rounded-lg"
-                          style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}
+                          type="number"
+                          value={s.amount}
+                          min={0}
+                          placeholder="e.g. 650"
+                          onChange={(e) => setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], amount: e.target.value } }))}
+                          className="flex-1 text-[12px] px-2 py-1.5 rounded-lg"
+                          style={{ background: 'var(--bg-input)', border: `1px solid ${missingAmount ? '#f87171' : 'var(--brand-border)'}`, color: 'var(--brand-text)' }}
                         />
                       </div>
-                    )}
-                    {missingAmount && (
-                      <div>
-                        <div className="text-[10px] font-semibold mb-1" style={{ color: '#b91c1c' }}>⚠ Amount missing</div>
-                        <div className="flex gap-1">
-                          <select
-                            value={s.currency}
-                            onChange={(e) => setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], currency: e.target.value } }))}
-                            className="text-[12px] px-1 py-1.5 rounded-lg"
-                            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', width: 70 }}
-                          >
-                            {['USD','CAD','GBP','AED','INR'].map(cur => <option key={cur} value={cur}>{cur}</option>)}
-                          </select>
-                          <input
-                            type="number"
-                            value={s.amount}
-                            min={0}
-                            placeholder="e.g. 650"
-                            onChange={(e) => setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], amount: e.target.value } }))}
-                            className="flex-1 text-[12px] px-2 py-1.5 rounded-lg"
-                            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}
-                          />
-                        </div>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 )}
                 {!isDone && (
