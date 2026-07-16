@@ -451,9 +451,9 @@ integrityCheckRouter.post('/fix-feedback-trainer', requireRole('founder'), async
   const digitsOnly = (s: string) => s.replace(/\D/g, '');
   const trainerDigits = digitsOnly(trainerPhone);
 
-  const allTrainers = await prisma.trainer.findMany({ select: { id: true, name: true, phone: true, phoneDigits: true } });
+  const allTrainers = await prisma.trainer.findMany({ select: { id: true, name: true, phoneDigits: true } });
   const trainer = allTrainers.find((t) => {
-    const p = t.phoneDigits || t.phone || '';
+    const p = t.phoneDigits || '';
     return digitsOnly(p).endsWith(trainerDigits) || trainerDigits.endsWith(digitsOnly(p));
   });
   if (!trainer) return res.status(404).json({ error: `No trainer found with phone containing ${trainerPhone}` });
@@ -462,16 +462,16 @@ integrityCheckRouter.post('/fix-feedback-trainer', requireRole('founder'), async
   let client = null;
   if (clientPhone) {
     const phoneDigits = digitsOnly(clientPhone);
-    const allClients = await prisma.client.findMany({ select: { id: true, name: true, phone: true } });
+    const allClients = await prisma.client.findMany({ select: { id: true, name: true, phoneDigits: true } });
     client = allClients.find((c) => {
-      const p = c.phone || '';
+      const p = c.phoneDigits || '';
       return digitsOnly(p).endsWith(phoneDigits) || phoneDigits.endsWith(digitsOnly(p));
     }) || null;
   }
   if (!client && clientName) {
     client = await prisma.client.findFirst({
       where: { name: { contains: clientName, mode: 'insensitive' } },
-      select: { id: true, name: true, phone: true },
+      select: { id: true, name: true, phoneDigits: true },
     });
   }
   if (!client) return res.status(404).json({ error: 'Client not found. Provide clientPhone or clientName.' });
