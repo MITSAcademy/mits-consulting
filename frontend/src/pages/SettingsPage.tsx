@@ -352,6 +352,13 @@ export function SettingsPage() {
                 </div>
                 <MalikaReportButton />
               </div>
+              <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
+                <div>
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Send Mitali's daily activity report now</div>
+                  <div className="text-[11px] muted mt-0.5">Fires today's activity summary to Mitali, Vaibhav and Samita immediately (normally auto-sends at 11:30 PM IST).</div>
+                </div>
+                <MitaliDailyReportButton />
+              </div>
             </div>
 
             <div className="callout">
@@ -535,6 +542,20 @@ function MalikaReportButton() {
   const report = useMutation({
     mutationFn: () => api.post('/briefing/malika-status'),
     onSuccess: () => showToast('Malika status report sent ✓'),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Send failed', 'error'),
+  });
+  return (
+    <Button size="sm" variant="primary" disabled={report.isPending} onClick={() => report.mutate()}>
+      <Send size={12} /> {report.isPending ? 'Sending…' : 'Send now'}
+    </Button>
+  );
+}
+
+function MitaliDailyReportButton() {
+  const showToast = useUI((s) => s.showToast);
+  const report = useMutation({
+    mutationFn: () => api.post('/briefing/mitali-daily'),
+    onSuccess: () => showToast("Mitali's daily report sent ✓"),
     onError: (e: any) => showToast(e.response?.data?.error || 'Send failed', 'error'),
   });
   return (

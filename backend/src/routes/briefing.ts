@@ -9,6 +9,7 @@ import { Router } from 'express';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { sendTeam1Briefing, sendTeam2Briefing, sendSamitaBriefing, sendRoshniBriefing } from '../lib/dailyBriefing';
 import { sendMalikaStatusReport } from '../lib/malikaStatusReport';
+import { sendMitaliDailyReport } from '../lib/mitaliDailyReport';
 
 export const briefingRouter = Router();
 briefingRouter.use(requireAuth);
@@ -27,6 +28,19 @@ briefingRouter.post('/trigger', async (req: AuthedRequest, res) => {
     else if (team === 'roshni') await sendRoshniBriefing(shift as 'morning' | 'evening');
     else await sendSamitaBriefing(shift as 'morning' | 'evening');
     res.json({ ok: true, message: `${team} ${shift} briefing sent.` });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+// POST /api/briefing/mitali-daily  — trigger Mitali's daily activity report immediately
+briefingRouter.post('/mitali-daily', async (req: AuthedRequest, res) => {
+  if (req.user!.role !== 'founder') {
+    return res.status(403).json({ error: 'Only founder can trigger this.' });
+  }
+  try {
+    await sendMitaliDailyReport();
+    res.json({ ok: true, message: "Mitali's daily report sent." });
   } catch (e: any) {
     res.status(500).json({ error: e.message || String(e) });
   }
