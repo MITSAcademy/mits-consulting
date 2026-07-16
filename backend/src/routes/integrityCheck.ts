@@ -568,26 +568,36 @@ integrityCheckRouter.post('/create-missing-trainings', requireRole('founder'), a
     results.push({ clientName: client.name, status: 'created', trainingId: training.id, trainerFound: trainer.name });
   }
 
-  // Re-point payments whose clientId has no active training to the correct client record (same name, has training)
-  const orphanPayments = await prisma.payment.findMany({
-    where: { kind: 'Renewal', client: { regularTrainings: { none: { status: 'active' } } } },
-    select: { id: true, clientId: true, client: { select: { name: true } } },
-  });
+  // Re-point payments to the correct training based on trainer phone
   let repointed = 0;
-  for (const payment of orphanPayments) {
-    const clientName = payment.client?.name;
-    if (!clientName) continue;
-    // Find another client with same name that HAS an active training
-    const correctClient = await prisma.client.findFirst({
+  for (const entry of entries) {
+    const trainerDigits2 = digitsOnly(entry.trainerPhone).slice(-10);
+    const correctTrainer = allTrainers.find((t) => digitsOnly(t.phoneDigits || '').slice(-10) === trainerDigits2);
+    if (!correctTrainer) continue;
+
+    const correctTraining = await prisma.regularTraining.findFirst({
+      where: { trainerId: correctTrainer.id, status: 'active', clientId: { not: null } },
+      select: { clientId: true, trainerId: true },
+    });
+    if (!correctTraining?.clientId) continue;
+
+    // Find all payments for clients with matching name that have wrong clientId
+    const searchName = entry.clientName.toLowerCase();
+    const nameClients = await prisma.client.findMany({
+      where: { name: { contains: searchName.split(' ')[0], mode: 'insensitive' } },
+      select: { id: true },
+    });
+    const clientIds = nameClients.map(c => c.id);
+
+    const wrongPayments = await prisma.payment.findMany({
       where: {
-        name: { equals: clientName, mode: 'insensitive' },
-        id: { not: payment.clientId },
-        regularTrainings: { some: { status: 'active' } },
+        clientId: { in: clientIds, not: correctTraining.clientId },
+        kind: 'Renewal',
       },
       select: { id: true },
     });
-    if (correctClient) {
-      await prisma.payment.update({ where: { id: payment.id }, data: { clientId: correctClient.id } });
+    for (const p of wrongPayments) {
+      await prisma.payment.update({ where: { id: p.id }, data: { clientId: correctTraining.clientId, trainerId: correctTraining.trainerId } });
       repointed++;
     }
   }
