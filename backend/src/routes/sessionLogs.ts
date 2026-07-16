@@ -61,6 +61,7 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
   const { trainerId, clientId, date, hours, rateSnapshot, rateModel, notes, amountInr: amountOverride, feedback, sessionHappened, cancelledBy } = req.body;
   const didHappen = sessionHappened !== false && sessionHappened !== 'false';
   if (!trainerId || !date) return res.status(400).json({ error: 'trainerId and date required' });
+  if (!clientId) return res.status(400).json({ error: 'clientId is required — every session log must be linked to a client' });
   if (didHappen && !hours) return res.status(400).json({ error: 'hours required when session happened' });
 
   // lead (Bhavneet) can only log sessions for clients owned by her team.
@@ -86,6 +87,17 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
         return res.status(403).json({ error: 'You can only log sessions for your assigned clients' });
       }
     }
+  }
+
+  // Validate that clientId + trainerId match an active RegularTraining — ensures the 4 systems stay in sync
+  const linkedTraining = await prisma.regularTraining.findFirst({
+    where: { clientId, trainerId, status: 'active' },
+    select: { id: true },
+  });
+  if (!linkedTraining) {
+    return res.status(400).json({
+      error: `No active RegularTraining found linking this client to this trainer. Please fix the training record first — every session log must correspond to a live training in the system.`,
+    });
   }
 
   // No-show: hours=0, amount=0, regardless of what was sent
