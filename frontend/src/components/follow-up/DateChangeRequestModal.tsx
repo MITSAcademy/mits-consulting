@@ -9,11 +9,10 @@ import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Clock, CheckCircle2, XCircle, Upload } from 'lucide-react';
-import api from '@/lib/api';
+import { api } from '@/lib/api';
 import { useUI } from '@/store/ui';
-import Button from '@/components/ui/Button';
-import Label from '@/components/ui/Label';
-import Input from '@/components/ui/Input';
+import { Button } from '@/components/ui/button';
+import { Label, Input } from '@/components/ui/input';
 
 interface Row {
   id: string;
@@ -61,13 +60,13 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
   // Fetch existing pending/rejected request for this client
   const { data: existing, isLoading } = useQuery<DCR | null>({
     queryKey: ['dcr-client', r.id],
-    queryFn: () => api.get(`/date-change-requests/client/${r.id}`).then(d => d.data),
+    queryFn: () => api.get(`/date-change-requests/client/${r.id}`).then((d: any) => d.data),
   });
 
   // Also fetch all requests to find last rejected
   const { data: allRequests } = useQuery<DCR[]>({
     queryKey: ['date-change-requests'],
-    queryFn: () => api.get('/date-change-requests').then(d => d.data),
+    queryFn: () => api.get('/date-change-requests').then((d: any) => d.data),
   });
   const lastRejected = allRequests?.find(req => req.status === 'rejected' && (req as any).clientId === r.id);
 
@@ -119,7 +118,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed to submit', 'error'),
   });
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) { showToast('Image must be under 2MB', 'error'); return; }
@@ -214,7 +213,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
                   {r.payments && r.payments.length > 0 && (
                     <div>
                       <Label>Link a recorded payment</Label>
-                      <select value={linkedPaymentId} onChange={e => setLinkedPaymentId(e.target.value)}
+                      <select value={linkedPaymentId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLinkedPaymentId(e.target.value)}
                         className="w-full text-[12px] rounded-lg px-3 py-2 mt-1"
                         style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}>
                         <option value="">— Select payment —</option>
@@ -258,21 +257,21 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
 
                   <div className="form-row">
                     <Label>Client summary — last 30 days *</Label>
-                    <textarea value={summary30d} onChange={e => setSummary30d(e.target.value)} rows={2} placeholder="How sessions went, client attitude, progress…"
+                    <textarea value={summary30d} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSummary30d(e.target.value)} rows={2} placeholder="How sessions went, client attitude, progress…"
                       className="w-full text-[12px] rounded-lg px-3 py-2 mt-1"
                       style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', resize: 'vertical' }} />
                   </div>
 
                   <div className="form-row">
                     <Label>Feedback you (Mitali) took — last 15 days *</Label>
-                    <textarea value={mitaliF15d} onChange={e => setMitaliF15d(e.target.value)} rows={2} placeholder="What did client say about training? Issues raised?"
+                    <textarea value={mitaliF15d} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMitaliF15d(e.target.value)} rows={2} placeholder="What did client say about training? Issues raised?"
                       className="w-full text-[12px] rounded-lg px-3 py-2 mt-1"
                       style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', resize: 'vertical' }} />
                   </div>
 
                   <div className="form-row">
                     <Label>Feedback Bhavneet took — last 15 days *</Label>
-                    <textarea value={bhavneetF15d} onChange={e => setBhavneetF15d(e.target.value)} rows={2} placeholder="What did Bhavneet report?"
+                    <textarea value={bhavneetF15d} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBhavneetF15d(e.target.value)} rows={2} placeholder="What did Bhavneet report?"
                       className="w-full text-[12px] rounded-lg px-3 py-2 mt-1"
                       style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', resize: 'vertical' }} />
                   </div>
@@ -284,7 +283,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
 
                   <div className="form-row">
                     <Label>Issue detail * <span className="muted font-normal">(min 50 words — {wordCount} written)</span></Label>
-                    <textarea value={issueDetail} onChange={e => setIssueDetail(e.target.value)} rows={4}
+                    <textarea value={issueDetail} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setIssueDetail(e.target.value)} rows={4}
                       placeholder="Explain in detail why the client needs more time. What is the exact situation? What did they say? What is your plan?"
                       className="w-full text-[12px] rounded-lg px-3 py-2 mt-1"
                       style={{

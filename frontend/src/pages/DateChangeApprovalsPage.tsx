@@ -7,12 +7,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, XCircle, ChevronDown, ChevronRight, Clock } from 'lucide-react';
-import api from '@/lib/api';
+import { api } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 import { useUI } from '@/store/ui';
-import Topbar from '@/components/layout/Topbar';
-import Page from '@/components/layout/Page';
-import Button from '@/components/ui/Button';
+import { Topbar, Page } from '@/components/layout/AppLayout';
+import { Button } from '@/components/ui/button';
 
 interface DCR {
   id: string;
@@ -68,7 +67,7 @@ function RequestCard({ r, canApprove }: { r: DCR; canApprove: boolean }) {
   const [rejecting, setRejecting] = useState(false);
 
   const approve = useMutation({
-    mutationFn: () => api.post(`/date-change-requests/${r.id}/approve`),
+    mutationFn: (): Promise<any> => api.post(`/date-change-requests/${r.id}/approve`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['date-change-requests'] }); showToast('Approved — dates updated ✓'); },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
@@ -196,7 +195,7 @@ export default function DateChangeApprovalsPage() {
 
   const { data = [], isLoading } = useQuery<DCR[]>({
     queryKey: ['date-change-requests'],
-    queryFn: () => api.get('/date-change-requests').then(r => r.data),
+    queryFn: () => api.get('/date-change-requests').then((r: any) => r.data),
   });
 
   const canApprove = ['founder', 'manager', 'demo_lead'].includes(user?.role || '');
@@ -248,7 +247,7 @@ export default function DateChangeApprovalsPage() {
             </div>
           </div>
         )}
-        {shown.map(r => (
+        {shown.map((r: DCR) => (
           <RequestCard key={r.id} r={r} canApprove={canApprove} />
         ))}
       </Page>
