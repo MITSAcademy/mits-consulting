@@ -208,6 +208,26 @@ export function IntegrityCheckPage() {
     },
   });
 
+  const [nikhilResult, setNikhilResult] = useState<string | null>(null);
+  const fixNikhil = useMutation({
+    mutationFn: () => api.post('/integrity-check/fix-nikhil-c0157').then((r) => r.data),
+    onSuccess: (d) => {
+      setNikhilResult(d.fixes?.join(' · ') || 'Done');
+      qc.invalidateQueries({ queryKey: ['integrity-check'] });
+      refetch();
+    },
+  });
+
+  const [gapResult, setGapResult] = useState<string | null>(null);
+  const checkGap = useMutation({
+    mutationFn: () => api.get('/integrity-check/session-payment-gap').then((r) => r.data),
+    onSuccess: (d) => {
+      const multi = d.clientsWithMultipleActiveTrainings.map((c: any) => `${c.name} (${c.count} trainings: ${c.trainings.join(', ')})`).join(' | ');
+      const missing = d.trainingsNotInPayTracker.map((t: any) => `${t.clientName} [${t.lifecycle}]`).join(', ');
+      setGapResult(`Sessions: ${d.sessionSheetCount} · Payments: ${d.payTrackerCount} · Gap: ${d.gap}${multi ? ` | Multi-training: ${multi}` : ''}${missing ? ` | Not in tracker: ${missing}` : ''}`);
+    },
+  });
+
   const lastRun = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : null;
@@ -268,6 +288,8 @@ export function IntegrityCheckPage() {
                 { label: '✨ Create missing trainings', result: createTrainingsResult, pending: createTrainings.isPending, pendingLabel: 'Creating…', onClick: () => { setCreateTrainingsResult(null); createTrainings.mutate(); }, color: '251,191,36' },
                 { label: '🔗 Fix feedback trainers', result: fixFeedbackResult, pending: fixFeedback.isPending, pendingLabel: 'Fixing…', onClick: () => { setFixFeedbackResult(null); fixFeedback.mutate(); }, color: '16,185,129' },
                 { label: '🗑 Delete dummy clients', result: dummyResult, pending: deleteDummies.isPending, pendingLabel: 'Deleting…', onClick: () => { setDummyResult(null); deleteDummies.mutate(); }, color: '239,68,68' },
+                { label: '📱 Fix Nikhil C-0157', result: nikhilResult, pending: fixNikhil.isPending, pendingLabel: 'Fixing…', onClick: () => { setNikhilResult(null); fixNikhil.mutate(); }, color: '20,184,166' },
+                { label: '🔍 Diagnose session/payment gap', result: gapResult, pending: checkGap.isPending, pendingLabel: 'Checking…', onClick: () => { setGapResult(null); checkGap.mutate(); }, color: '168,85,247' },
               ].map((t) => (
                 <div key={t.label} className="flex flex-col gap-1">
                   <button

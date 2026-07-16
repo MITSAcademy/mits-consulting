@@ -824,6 +824,53 @@ integrityCheckRouter.post('/fix-nikhil-c0157', requireRole('founder'), async (_r
   res.json({ ok: true, fixes });
 });
 
+// GET /api/integrity-check/session-payment-gap — diagnose why session count != payment tracker count
+integrityCheckRouter.get('/session-payment-gap', requireRole('founder', 'manager'), async (_req: AuthedRequest, res) => {
+  // All active trainings grouped by client
+  const trainings = await prisma.regularTraining.findMany({
+    where: { status: 'active' },
+    select: {
+      id: true, name: true,
+      client: { select: { id: true, name: true, lifecycle: true } },
+    },
+    orderBy: { client: { name: 'asc' } },
+  });
+
+  // Clients in payment tracker (same query as followUpPayments GET /)
+  const payClients = await prisma.client.findMany({
+    where: { regularTrainings: { some: { status: 'active' } } },
+    select: { id: true, name: true, lifecycle: true },
+  });
+
+  const payClientIds = new Set(payClients.map((c) => c.id));
+
+  // Clients with multiple active trainings
+  const trainingCountByClient: Record<string, { name: string; count: number; trainings: string[] }> = {};
+  for (const t of trainings) {
+    const cid = t.client?.id || 'no-client';
+    const cname = t.client?.name || 'Unknown';
+    if (!trainingCountByClient[cid]) trainingCountByClient[cid] = { name: cname, count: 0, trainings: [] };
+    trainingCountByClient[cid].count++;
+    trainingCountByClient[cid].trainings.push(t.name);
+  }
+  const multiTraining = Object.entries(trainingCountByClient)
+    .filter(([, v]) => v.count > 1)
+    .map(([id, v]) => ({ id, ...v }));
+
+  // Trainings whose client is NOT in payment tracker
+  const missingFromPayTracker = trainings
+    .filter((t) => t.client && !payClientIds.has(t.client.id))
+    .map((t) => ({ trainingId: t.id, trainingName: t.name, clientId: t.client?.id, clientName: t.client?.name, lifecycle: t.client?.lifecycle }));
+
+  res.json({
+    sessionSheetCount: trainings.length,
+    payTrackerCount: payClients.length,
+    gap: trainings.length - payClients.length,
+    clientsWithMultipleActiveTrainings: multiTraining,
+    trainingsNotInPayTracker: missingFromPayTracker,
+  });
+});
+
 // DELETE /api/integrity-check/dummy-clients — remove all dummy_* test clients and their data
 integrityCheckRouter.delete('/dummy-clients', requireRole('founder'), async (_req: AuthedRequest, res) => {
   const dummies = await prisma.client.findMany({
