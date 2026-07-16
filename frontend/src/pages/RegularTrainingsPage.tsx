@@ -23,7 +23,6 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Pill } from '@/components/ui/pill';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { useUI } from '@/store/ui';
-import { useFeatures } from '@/hooks/useFeatures';
 import { EmptyState } from '@/components/EmptyState';
 import { FolderOpen, Plus, Video, ExternalLink, Mail, Calendar as CalendarIcon } from 'lucide-react';
 
@@ -48,14 +47,12 @@ interface Training {
 const MEETING_MODES = ['Zoom', 'GoToMeeting', 'Teams', 'Google Meet', 'Phone', 'Other'];
 
 export function RegularTrainingsPage() {
-  const features = useFeatures();
   const [statusFilter, setStatusFilter] = useState<'active' | 'archived' | 'all'>('active');
   const [search, setSearch] = useState('');
 
   const { data: trainings, isLoading } = useQuery<Training[]>({
     queryKey: ['regular-trainings'],
     queryFn: () => api.get('/regular-trainings/trainings').then((r) => r.data),
-    enabled: features.regularCalls,
   });
 
   const filtered = useMemo(() => {
@@ -83,22 +80,6 @@ export function RegularTrainingsPage() {
     }
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
-
-  if (!features.regularCalls) {
-    return (
-      <>
-        <Topbar title="Regular trainings" />
-        <Page>
-          <EmptyState
-            icon={Video}
-            tone="grey"
-            title="Feature not enabled"
-            description="Ask Vaibhav to set FEATURES_REGULAR_CALLS=true in Render env to enable this view."
-          />
-        </Page>
-      </>
-    );
-  }
 
   return (
     <>

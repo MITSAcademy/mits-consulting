@@ -17,7 +17,6 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { Pill } from '@/components/ui/pill';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { useUI } from '@/store/ui';
-import { useFeatures } from '@/hooks/useFeatures';
 import { EmptyState } from '@/components/EmptyState';
 import { useAuth } from '@/store/auth';
 import { todayISO, minPastDate, maxTodayDate, minFutureDate } from '@/lib/utils';
@@ -175,7 +174,6 @@ function ReassignClientButton({ trainingId, currentClient }: { trainingId: strin
 
 export function RegularTrainingDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const features = useFeatures();
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const user = useAuth((s) => s.user);
@@ -183,7 +181,7 @@ export function RegularTrainingDetailPage() {
   const { data, isLoading } = useQuery<TrainingDetail>({
     queryKey: ['regular-training', id],
     queryFn: () => api.get(`/regular-trainings/trainings/${id}`).then((r) => r.data),
-    enabled: features.regularCalls && !!id,
+    enabled: !!id,
     refetchInterval: 5 * 60_000,
   });
 
@@ -195,10 +193,7 @@ export function RegularTrainingDetailPage() {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
-  if (!features.regularCalls) {
-    return <Page><EmptyState icon={Video} tone="grey" title="Feature not enabled" description="Set FEATURES_REGULAR_CALLS=true to enable." /></Page>;
-  }
-  if (isLoading || !data) {
+if (isLoading || !data) {
     return (
       <>
         <Topbar title="Training" />
