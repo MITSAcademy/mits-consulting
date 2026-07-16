@@ -96,23 +96,32 @@ integrityCheckRouter.get('/', requireRole('founder', 'manager'), async (_req: Au
     count: sessionNoClient.length,
     items: sessionNoClient.map((s) => ({
       id: s.id,
-      label: `Session on ${s.date instanceof Date ? s.date.toISOString().slice(0, 10) : String(s.date).slice(0, 10)}`,
+      label: `Session on ${String(s.date).slice(0, 10)}`,
       detail: `trainer: ${s.trainer?.name || 'none'}`,
     })),
   });
 
   // 5. Feedback with wrong trainer (trainer doesn't match any active training for that client)
-  const allFeedback = await prisma.feedback.findMany({
-    where: { trainerId: { not: null }, clientId: { not: null } },
+  const allFeedbackRaw = await prisma.feedback.findMany({
+    where: {},
     select: {
       id: true,
       clientId: true,
       trainerId: true,
       weekStart: true,
-      client: { select: { name: true } },
-      trainer: { select: { name: true } },
     },
   });
+  const allFeedback = allFeedbackRaw.filter((f) => !!f.trainerId);
+
+  // Fetch trainer/client names for display separately
+  const feedbackClientIds = [...new Set(allFeedback.map((f) => f.clientId))];
+  const feedbackTrainerIds = [...new Set(allFeedback.map((f) => f.trainerId!))];
+  const [fbClients, fbTrainers] = await Promise.all([
+    prisma.client.findMany({ where: { id: { in: feedbackClientIds } }, select: { id: true, name: true } }),
+    prisma.trainer.findMany({ where: { id: { in: feedbackTrainerIds } }, select: { id: true, name: true } }),
+  ]);
+  const fbClientMap = new Map(fbClients.map((c) => [c.id, c.name]));
+  const fbTrainerMap = new Map(fbTrainers.map((t) => [t.id, t.name]));
 
   // Collect unique (clientId, trainerId) pairs
   const pairSet = new Map<string, { clientId: string; trainerId: string }>();
@@ -152,8 +161,8 @@ integrityCheckRouter.get('/', requireRole('founder', 'manager'), async (_req: Au
     count: wrongTrainerFeedback.length,
     items: wrongTrainerFeedback.map((f) => ({
       id: f.id,
-      label: f.client?.name || f.clientId || 'Unknown client',
-      detail: `trainer: ${f.trainer?.name || 'none'} · week: ${f.weekStart ? String(f.weekStart).slice(0, 10) : 'unknown'}`,
+      label: fbClientMap.get(f.clientId) || f.clientId || 'Unknown client',
+      detail: `trainer: ${f.trainerId ? (fbTrainerMap.get(f.trainerId) || 'unknown') : 'none'} · week: ${f.weekStart ? String(f.weekStart).slice(0, 10) : 'unknown'}`,
     })),
   });
 
