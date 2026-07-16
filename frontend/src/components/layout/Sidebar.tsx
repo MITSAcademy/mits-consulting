@@ -164,8 +164,8 @@ const NAV: NavItem[] = [
   { section: 'work', page: '/sessions', label: 'Team sessions', icon: CalendarDays, roles: ['founder', 'manager', 'lead'] },
   { section: 'work', page: '/issues', label: 'Issues & escalations', icon: AlertTriangle, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'demo_intake'] },
   { section: 'work', page: '/freelance-requirements', label: 'Freelance Requirements', icon: Briefcase, roles: ['founder', 'manager', 'lead', 'account_manager', 'recruiter'] },
-  { section: 'clients', page: '/regular-trainings', label: 'Regular trainings', icon: Video, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
-  { section: 'clients', page: '/meeting-links', label: 'Meeting links', icon: Link, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'], feature: 'regularCalls' },
+  { section: 'clients', page: '/regular-trainings', label: 'Regular trainings', icon: Video, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'] },
+  { section: 'clients', page: '/meeting-links', label: 'Meeting links', icon: Link, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'] },
 
   // ── Trainer ops: Bhavneet (lead) + AMs log sessions; Bhavneet creates payout batches; Mitali approves ──
   { section: 'trainerOps', page: '/session-logs', label: 'Session logs', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager', 'accounts', 'payment_processor'] },
