@@ -19,6 +19,7 @@ import { sendPaymentFollowUpReport } from './paymentFollowUpReport';
 import { sendBhavneetDailySheet } from './bhavneetDailySheet';
 import { sendSmtpHealthAdvisory } from './smtpHealthAdvisory';
 import { sendDailyReminders } from './dailyReminders';
+import { sendMitaliDailyReport } from './mitaliDailyReport';
 import { prisma } from './prisma';
 
 function safe(label: string, fn: () => Promise<void>) {
@@ -131,6 +132,11 @@ export function initScheduler() {
     timezone: 'Asia/Kolkata',
   });
 
+  // 11:30 PM IST daily — Mitali's daily activity report (payments, feedback, active window)
+  cron.schedule('30 23 * * *', () => safe('mitali-daily-report', () => sendMitaliDailyReport()), {
+    timezone: 'Asia/Kolkata',
+  });
+
   console.log('[scheduler] Daily briefing crons registered (Asia/Kolkata timezone)');
   console.log('[scheduler]   Team 2 (Anjali + Taran) → 06:00 + 18:00 IST');
   console.log('[scheduler]   Team 1 (Aman + Kanchan) → 09:00 + 16:00 IST (CC Samita + Vaibhav)');
@@ -138,4 +144,5 @@ export function initScheduler() {
   console.log('[scheduler]   Roshni (sales pipeline) → 08:00 + 20:00 IST (CC Vaibhav)');
   console.log('[scheduler]   Payment follow-up report → 12:00 IST (Vaibhav + Samita + Mitali only)');
   console.log('[scheduler]   Daily proactive reminders → 09:30 IST (per-user in-app notifications)');
+  console.log('[scheduler]   Mitali daily activity report → 23:30 IST (Mitali + Vaibhav + Samita)');
 }
