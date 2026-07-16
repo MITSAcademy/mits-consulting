@@ -720,6 +720,15 @@ integrityCheckRouter.post('/fix-orphan-payments', requireRole('founder'), async 
         select: { clientId: true, trainerId: true },
       });
     }
+    // Pass 3: any client whose name matches, who has an active training
+    if (!training && p.client?.name) {
+      const firstName = p.client.name.split(' ')[0];
+      const matchClient = await prisma.client.findFirst({
+        where: { name: { contains: firstName, mode: 'insensitive' }, regularTrainings: { some: { status: 'active', trainerId: { not: null } } } },
+        select: { id: true, regularTrainings: { where: { status: 'active', trainerId: { not: null } }, select: { clientId: true, trainerId: true }, take: 1 } },
+      });
+      if (matchClient?.regularTrainings[0]) training = matchClient.regularTrainings[0];
+    }
     if (training?.trainerId) {
       await prisma.payment.update({
         where: { id: p.id },
