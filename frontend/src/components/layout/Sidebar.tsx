@@ -4,7 +4,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useFeatures } from '@/hooks/useFeatures';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Home, ArrowRightLeft, AlertCircle, Target, MessageSquare, ShieldCheck, Video,
   Briefcase, UserSearch, UserCog, FileCheck, DollarSign, LayoutGrid, Users, RefreshCw,
@@ -12,7 +12,7 @@ import {
   Notebook, ChartLine, Upload, Inbox, Edit, UsersRound, Mail, Tag, LockKeyhole,
   Building2, History, Settings, LogOut, Moon, Calendar, ChevronsLeft, ChevronsRight,
   TableProperties, CalendarDays, AlertTriangle, Link, BarChart2, BarChart3, ToggleRight,
-  Sparkles, X, Bug, Handshake, ShieldAlert,
+  Sparkles, X, Bug, Handshake, ShieldAlert, Search,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -233,6 +233,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try { return localStorage.getItem('sidebar-collapsed') === 'true'; } catch { return false; }
   });
+  const [navSearch, setNavSearch] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try { localStorage.setItem('sidebar-collapsed', String(collapsed)); } catch {}
@@ -248,7 +250,12 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
 
   if (!user) return null;
 
-  const filtered = NAV.filter((n) => n.roles.includes(user.role) && (!n.feature || features[n.feature]));
+  const filtered = NAV.filter((n) => {
+    if (!n.roles.includes(user.role)) return false;
+    if (n.feature && !features[n.feature]) return false;
+    if (navSearch) return n.label.toLowerCase().includes(navSearch.toLowerCase());
+    return true;
+  });
   const grouped: Record<string, NavItem[]> = {};
   filtered.forEach((n) => { (grouped[n.section] = grouped[n.section] || []).push(n); });
 
@@ -348,6 +355,28 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
               className="mt-2 h-px"
               style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(229,178,76,0.40) 50%, transparent 100%)' }}
             />
+          )}
+          {!collapsed && (
+            <div className="relative mt-2">
+              <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'rgba(229,178,76,0.45)' }} />
+              <input
+                ref={searchRef}
+                value={navSearch}
+                onChange={(e) => setNavSearch(e.target.value)}
+                placeholder="Search menu…"
+                className="w-full rounded-lg text-[11px] pl-7 pr-7 py-1.5 outline-none"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.09)',
+                  color: 'rgba(232,226,211,0.85)',
+                }}
+              />
+              {navSearch && (
+                <button onClick={() => setNavSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2" style={{ color: 'rgba(232,226,211,0.4)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  <X size={11} />
+                </button>
+              )}
+            </div>
           )}
         </div>
 

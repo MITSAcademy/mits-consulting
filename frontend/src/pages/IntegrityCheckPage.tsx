@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
-import { ShieldAlert, ChevronDown, ChevronRight, RefreshCw, CheckCircle2, AlertTriangle, AlertOctagon } from 'lucide-react';
+import { ShieldAlert, ChevronDown, ChevronRight, RefreshCw, CheckCircle2, AlertTriangle, AlertOctagon, Wrench } from 'lucide-react';
 
 interface CheckItem {
   id: string;
@@ -141,6 +141,7 @@ export function IntegrityCheckPage() {
     refetchOnWindowFocus: false,
   });
 
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [backfillResult, setBackfillResult] = useState<string | null>(null);
   const backfill = useMutation({
     mutationFn: () => api.post('/integrity-check/backfill').then((r) => r.data),
@@ -221,119 +222,19 @@ export function IntegrityCheckPage() {
         subtitle={lastRun ? `Last run at ${lastRun}` : 'Diagnostic checks across all linked records'}
         actions={
           <div className="flex items-center gap-2">
-            {fixOrphanResult && (
-              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
-                {fixOrphanResult}
-              </span>
-            )}
+            {/* Tools panel toggle */}
             <button
-              onClick={() => { setFixOrphanResult(null); fixOrphanPayments.mutate(); }}
-              disabled={fixOrphanPayments.isPending}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
+              onClick={() => setToolsOpen(o => !o)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
               style={{
-                background: 'rgba(234,179,8,0.1)',
-                borderColor: 'rgba(234,179,8,0.35)',
-                color: '#fef08a',
-                opacity: fixOrphanPayments.isPending ? 0.6 : 1,
-                cursor: fixOrphanPayments.isPending ? 'not-allowed' : 'pointer',
+                background: toolsOpen ? 'rgba(99,102,241,0.15)' : 'var(--bg-card)',
+                borderColor: toolsOpen ? 'rgba(99,102,241,0.4)' : 'var(--brand-border)',
+                color: toolsOpen ? '#a5b4fc' : 'var(--brand-textSecondary)',
               }}
             >
-              {fixOrphanPayments.isPending ? 'Fixing…' : '💳 Fix orphan payments'}
-            </button>
-            {fixHostsResult && (
-              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
-                {fixHostsResult}
-              </span>
-            )}
-            <button
-              onClick={() => { setFixHostsResult(null); fixHosts.mutate(); }}
-              disabled={fixHosts.isPending}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
-              style={{
-                background: 'rgba(59,130,246,0.1)',
-                borderColor: 'rgba(59,130,246,0.35)',
-                color: '#93c5fd',
-                opacity: fixHosts.isPending ? 0.6 : 1,
-                cursor: fixHosts.isPending ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {fixHosts.isPending ? 'Fixing…' : '🏠 Fix missing hosts'}
-            </button>
-            {createTrainingsResult && (
-              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
-                {createTrainingsResult}
-              </span>
-            )}
-            <button
-              onClick={() => { setCreateTrainingsResult(null); createTrainings.mutate(); }}
-              disabled={createTrainings.isPending}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
-              style={{
-                background: 'rgba(251,191,36,0.1)',
-                borderColor: 'rgba(251,191,36,0.35)',
-                color: '#fde68a',
-                opacity: createTrainings.isPending ? 0.6 : 1,
-                cursor: createTrainings.isPending ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {createTrainings.isPending ? 'Creating…' : '✨ Create missing trainings'}
-            </button>
-            {fixFeedbackResult && (
-              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
-                {fixFeedbackResult}
-              </span>
-            )}
-            <button
-              onClick={() => { setFixFeedbackResult(null); fixFeedback.mutate(); }}
-              disabled={fixFeedback.isPending}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
-              style={{
-                background: 'rgba(16,185,129,0.1)',
-                borderColor: 'rgba(16,185,129,0.35)',
-                color: '#6ee7b7',
-                opacity: fixFeedback.isPending ? 0.6 : 1,
-                cursor: fixFeedback.isPending ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {fixFeedback.isPending ? 'Fixing…' : '🔗 Fix feedback trainers'}
-            </button>
-            {dummyResult && (
-              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--status-red)' }}>
-                {dummyResult}
-              </span>
-            )}
-            {backfillResult && (
-              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
-                {backfillResult}
-              </span>
-            )}
-            <button
-              onClick={() => { setDummyResult(null); deleteDummies.mutate(); }}
-              disabled={deleteDummies.isPending}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
-              style={{
-                background: 'rgba(239,68,68,0.1)',
-                borderColor: 'rgba(239,68,68,0.35)',
-                color: '#fca5a5',
-                opacity: deleteDummies.isPending ? 0.6 : 1,
-                cursor: deleteDummies.isPending ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {deleteDummies.isPending ? 'Deleting…' : '🗑 Delete dummy clients'}
-            </button>
-            <button
-              onClick={() => { setBackfillResult(null); backfill.mutate(); }}
-              disabled={backfill.isPending}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
-              style={{
-                background: 'rgba(99,102,241,0.1)',
-                borderColor: 'rgba(99,102,241,0.4)',
-                color: '#a5b4fc',
-                opacity: backfill.isPending ? 0.6 : 1,
-                cursor: backfill.isPending ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {backfill.isPending ? 'Backfilling…' : '⚡ Auto-backfill old records'}
+              <Wrench size={12} />
+              Fix tools
+              {toolsOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
             </button>
             <button
               onClick={() => refetch()}
@@ -355,6 +256,45 @@ export function IntegrityCheckPage() {
       />
 
       <Page>
+        {/* Fix tools panel */}
+        {toolsOpen && (
+          <div className="card mb-4 p-4" style={{ borderLeft: '3px solid rgba(99,102,241,0.5)' }}>
+            <div className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: 'rgba(99,102,241,0.8)' }}>Fix tools — run when integrity issues are found</div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: '⚡ Auto-backfill', result: backfillResult, pending: backfill.isPending, pendingLabel: 'Backfilling…', onClick: () => { setBackfillResult(null); backfill.mutate(); }, color: '99,102,241' },
+                { label: '💳 Fix orphan payments', result: fixOrphanResult, pending: fixOrphanPayments.isPending, pendingLabel: 'Fixing…', onClick: () => { setFixOrphanResult(null); fixOrphanPayments.mutate(); }, color: '234,179,8' },
+                { label: '🏠 Fix missing hosts', result: fixHostsResult, pending: fixHosts.isPending, pendingLabel: 'Fixing…', onClick: () => { setFixHostsResult(null); fixHosts.mutate(); }, color: '59,130,246' },
+                { label: '✨ Create missing trainings', result: createTrainingsResult, pending: createTrainings.isPending, pendingLabel: 'Creating…', onClick: () => { setCreateTrainingsResult(null); createTrainings.mutate(); }, color: '251,191,36' },
+                { label: '🔗 Fix feedback trainers', result: fixFeedbackResult, pending: fixFeedback.isPending, pendingLabel: 'Fixing…', onClick: () => { setFixFeedbackResult(null); fixFeedback.mutate(); }, color: '16,185,129' },
+                { label: '🗑 Delete dummy clients', result: dummyResult, pending: deleteDummies.isPending, pendingLabel: 'Deleting…', onClick: () => { setDummyResult(null); deleteDummies.mutate(); }, color: '239,68,68' },
+              ].map((t) => (
+                <div key={t.label} className="flex flex-col gap-1">
+                  <button
+                    onClick={t.onClick}
+                    disabled={t.pending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border transition-all"
+                    style={{
+                      background: `rgba(${t.color},0.1)`,
+                      borderColor: `rgba(${t.color},0.35)`,
+                      color: `rgb(${t.color})`,
+                      opacity: t.pending ? 0.6 : 1,
+                      cursor: t.pending ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {t.pending ? t.pendingLabel : t.label}
+                  </button>
+                  {t.result && (
+                    <span className="text-[10px] px-2 py-0.5 rounded max-w-[220px] truncate" style={{ background: 'rgba(34,197,94,0.1)', color: 'var(--status-green)' }} title={t.result}>
+                      {t.result}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Summary banner */}
         {data && (
           <div
