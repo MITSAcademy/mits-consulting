@@ -1368,12 +1368,22 @@ export function FollowUpPaymentsPage() {
   const showNag = !nagDismissed && !isLoading && incompleteClients.length > 0
     && ['manager', 'founder'].includes(pageUser?.role || '');
 
+  // Fetch active training count to detect sync gap with Bhavneet's sheet
+  const { data: trainingsData } = useQuery<any[]>({
+    queryKey: ['my-sessions-sheet'],
+    queryFn: () => api.get('/regular-trainings/my-sessions').then((r) => r.data),
+    enabled: ['manager', 'founder'].includes(pageUser?.role || ''),
+  });
+  const trainingCount = trainingsData?.length ?? 0;
+  const clientCount = (data || []).length;
+  const syncGap = !isLoading && trainingCount > 0 && trainingCount !== clientCount;
+
   return (
     <>
       {showNag && <IncompleteNagModal clients={incompleteClients} onDone={() => setNagDismissed(true)} />}
       <Topbar
         title="Payment follow-up"
-        subtitle={`${(data || []).length} active clients`}
+        subtitle={`${clientCount} active clients`}
         actions={
           <div className="flex items-center gap-2">
             {['founder', 'manager', 'lead'].includes(pageUser?.role || '') && (
@@ -1417,6 +1427,23 @@ export function FollowUpPaymentsPage() {
         }
       />
       <Page>
+        {/* Sync gap banner — shows when training count ≠ client count */}
+        {syncGap && (
+          <div className="mb-3 px-4 py-3 rounded-xl flex items-start gap-3" style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.4)' }}>
+            <span style={{ fontSize: 18 }}>⚠️</span>
+            <div>
+              <div className="font-bold text-[13px]" style={{ color: '#b45309' }}>
+                Count mismatch: Bhavneet's sheet has {trainingCount} active trainings, your sheet has {clientCount} clients
+              </div>
+              <div className="text-[12px] mt-0.5" style={{ color: '#92400e' }}>
+                {trainingCount > clientCount
+                  ? `${trainingCount - clientCount} training${trainingCount - clientCount > 1 ? 's' : ''} in Bhavneet's sheet may not be tracked here. One client can have multiple trainings (e.g. two clients with same name = 2 trainings, 1 client record). Check with Bhavneet if a new client needs to be added to your payment tracking.`
+                  : `Your sheet has ${clientCount - trainingCount} more client${clientCount - trainingCount > 1 ? 's' : ''} than Bhavneet's active trainings. Some clients here may no longer have active sessions — check with Bhavneet.`
+                }
+              </div>
+            </div>
+          </div>
+        )}
         {/* KPI bar */}
         {(data || []).length > 0 && (
           <div className="card-hero mb-4 grid grid-cols-2 md:grid-cols-5 gap-6">

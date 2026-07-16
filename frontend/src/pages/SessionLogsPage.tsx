@@ -281,13 +281,8 @@ export function SessionLogsPage() {
       const baseName = t.client?.name || t.name || 'Unknown';
       let suffix = '';
       if (nameCounts[baseName] > 1) {
-        if (t.client?.phoneDigits) {
-          // Prefer last-4 of phone for linked clients
-          suffix = ` (${String(t.client.phoneDigits).slice(-4)})`;
-        } else if (t.trainer?.name) {
-          // Fallback: trainer first name so they can tell which is which
-          suffix = ` (${t.trainer.name.split(' ')[0]})`;
-        }
+        // Always use trainer first name — phone may be identical when same client has 2 trainings
+        if (t.trainer?.name) suffix = ` (${t.trainer.name.split(' ')[0]})`;
       }
       return {
         trainingId: t.id,

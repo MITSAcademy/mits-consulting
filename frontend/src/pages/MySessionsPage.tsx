@@ -956,10 +956,9 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers, clientNameCounts }: { t
                   {(() => {
                     const baseName = t.client?.name || t.name || '—';
                     const isDupe = (clientNameCounts?.[baseName] ?? 0) > 1;
-                    const suffix = isDupe
-                      ? t.client?.phoneDigits
-                        ? ` (${String(t.client.phoneDigits).slice(-4)})`
-                        : t.trainer?.name ? ` (${t.trainer.name.split(' ')[0]})` : ''
+                    // Always use trainer name for duplicates — phone can be same when same client has 2 trainings
+                    const suffix = isDupe && t.trainer?.name
+                      ? ` (${t.trainer.name.split(' ')[0]})`
                       : '';
                     return t.client
                       ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>{baseName + suffix}</Link>
