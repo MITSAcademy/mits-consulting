@@ -179,7 +179,7 @@ integrityCheckRouter.get('/', requireRole('founder', 'manager'), async (_req: Au
       amount: true,
       currency: true,
       paymentDate: true,
-      client: { select: { name: true } },
+      client: { select: { name: true, lifecycle: true } },
     },
     orderBy: { paymentDate: 'desc' },
     take: 50,
@@ -193,7 +193,7 @@ integrityCheckRouter.get('/', requireRole('founder', 'manager'), async (_req: Au
     items: paymentNoTraining.map((p) => ({
       id: p.id,
       label: p.client?.name || 'Unknown client',
-      detail: `${p.currency || ''} ${p.amount} on ${p.paymentDate ? String(p.paymentDate).slice(0, 10) : 'unknown'}`.trim(),
+      detail: `${p.currency || ''} ${p.amount} on ${p.paymentDate ? String(p.paymentDate).slice(0, 10) : 'unknown'} · status: ${p.client?.lifecycle || 'unknown'}`.trim(),
     })),
   });
 
@@ -394,4 +394,24 @@ integrityCheckRouter.post('/backfill', requireRole('founder'), async (_req: Auth
     payments: { fixed: paymentFixed, skipped: paymentSkipped },
     message: `Fixed ${sessionFixed} session logs and ${paymentFixed} payments. Skipped ${sessionSkipped + paymentSkipped} with no matching training.`,
   });
+});
+
+// DELETE /api/integrity-check/dummy-clients — remove all dummy_* test clients and their data
+integrityCheckRouter.delete('/dummy-clients', requireRole('founder'), async (_req: AuthedRequest, res) => {
+  const dummies = await prisma.client.findMany({
+    where: { name: { startsWith: 'dummy', mode: 'insensitive' } },
+    select: { id: true, name: true },
+  });
+  if (dummies.length === 0) return res.json({ deleted: 0, names: [] });
+
+  const ids = dummies.map((c) => c.id);
+
+  // Delete cascade-dependent records first (in case DB doesn't cascade automatically)
+  await prisma.sessionLog.deleteMany({ where: { clientId: { in: ids } } });
+  await prisma.payment.deleteMany({ where: { clientId: { in: ids } } });
+  await prisma.feedback.deleteMany({ where: { clientId: { in: ids } } });
+  await prisma.regularTraining.deleteMany({ where: { clientId: { in: ids } } });
+  await prisma.client.deleteMany({ where: { id: { in: ids } } });
+
+  res.json({ deleted: dummies.length, names: dummies.map((c) => c.name) });
 });

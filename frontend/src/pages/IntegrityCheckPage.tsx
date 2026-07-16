@@ -151,6 +151,16 @@ export function IntegrityCheckPage() {
     },
   });
 
+  const [dummyResult, setDummyResult] = useState<string | null>(null);
+  const deleteDummies = useMutation({
+    mutationFn: () => api.delete('/integrity-check/dummy-clients').then((r) => r.data),
+    onSuccess: (d) => {
+      setDummyResult(d.deleted > 0 ? `Deleted ${d.deleted} dummy clients: ${d.names.join(', ')}` : 'No dummy clients found');
+      qc.invalidateQueries({ queryKey: ['integrity-check'] });
+      refetch();
+    },
+  });
+
   const lastRun = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : null;
@@ -165,11 +175,30 @@ export function IntegrityCheckPage() {
         subtitle={lastRun ? `Last run at ${lastRun}` : 'Diagnostic checks across all linked records'}
         actions={
           <div className="flex items-center gap-2">
+            {dummyResult && (
+              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--status-red)' }}>
+                {dummyResult}
+              </span>
+            )}
             {backfillResult && (
               <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
                 {backfillResult}
               </span>
             )}
+            <button
+              onClick={() => { setDummyResult(null); deleteDummies.mutate(); }}
+              disabled={deleteDummies.isPending}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
+              style={{
+                background: 'rgba(239,68,68,0.1)',
+                borderColor: 'rgba(239,68,68,0.35)',
+                color: '#fca5a5',
+                opacity: deleteDummies.isPending ? 0.6 : 1,
+                cursor: deleteDummies.isPending ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {deleteDummies.isPending ? 'Deleting…' : '🗑 Delete dummy clients'}
+            </button>
             <button
               onClick={() => { setBackfillResult(null); backfill.mutate(); }}
               disabled={backfill.isPending}
