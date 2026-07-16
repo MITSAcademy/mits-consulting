@@ -776,6 +776,54 @@ integrityCheckRouter.post('/fix-missing-hosts', requireRole('founder'), async (_
   res.json({ fixed: noHost.length, host: defaultHost?.name, message: `Set host to "${defaultHost?.name}" on ${noHost.length} training(s).` });
 });
 
+// POST /api/integrity-check/fix-nikhil-c0157 — fix phone, WhatsApp group link, and trainer for C-0157
+integrityCheckRouter.post('/fix-nikhil-c0157', requireRole('founder'), async (_req: AuthedRequest, res) => {
+  const clientId = 'cmq86yziv002djc2w6mr4zs52';
+
+  // Find Raj by phone
+  const raj = await prisma.trainer.findFirst({
+    where: { phoneDigits: { endsWith: '8148829141' } },
+    select: { id: true, name: true, phoneDigits: true },
+  });
+
+  const fixes: string[] = [];
+
+  // Fix phone + WhatsApp group link
+  await prisma.client.update({
+    where: { id: clientId },
+    data: {
+      phoneCode: '+1',
+      phoneDigits: '6095408222',
+      whatsappGroupLink: 'https://chat.whatsapp.com/D5If7m1nrCt3yk5V8gx3Vc',
+      whatsappGroupName: 'Nikhil (Raj)',
+      ...(raj ? { primaryTrainerId: raj.id } : {}),
+    },
+  });
+  fixes.push('Phone corrected to +1 6095408222');
+  fixes.push('WhatsApp group link updated');
+  if (raj) fixes.push(`Primary trainer set to ${raj.name}`);
+  else fixes.push('Raj trainer not found by phone 8148829141 — trainer not updated');
+
+  // Also fix the active training's trainerId if Raj found
+  if (raj) {
+    const training = await prisma.regularTraining.findFirst({
+      where: { clientId, status: 'active' },
+      select: { id: true, name: true, trainerId: true },
+    });
+    if (training && training.trainerId !== raj.id) {
+      await prisma.regularTraining.update({
+        where: { id: training.id },
+        data: { trainerId: raj.id },
+      });
+      fixes.push(`Training "${training.name}" trainer linked to ${raj.name}`);
+    } else if (training) {
+      fixes.push(`Training "${training.name}" trainer already correct`);
+    }
+  }
+
+  res.json({ ok: true, fixes });
+});
+
 // DELETE /api/integrity-check/dummy-clients — remove all dummy_* test clients and their data
 integrityCheckRouter.delete('/dummy-clients', requireRole('founder'), async (_req: AuthedRequest, res) => {
   const dummies = await prisma.client.findMany({
