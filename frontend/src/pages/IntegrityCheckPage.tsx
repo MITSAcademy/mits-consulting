@@ -151,6 +151,16 @@ export function IntegrityCheckPage() {
     },
   });
 
+  const [fixHostsResult, setFixHostsResult] = useState<string | null>(null);
+  const fixHosts = useMutation({
+    mutationFn: () => api.post('/integrity-check/fix-missing-hosts').then((r) => r.data),
+    onSuccess: (d) => {
+      setFixHostsResult(d.message);
+      qc.invalidateQueries({ queryKey: ['integrity-check'] });
+      refetch();
+    },
+  });
+
   const [createTrainingsResult, setCreateTrainingsResult] = useState<string | null>(null);
   const createTrainings = useMutation({
     mutationFn: () => api.post('/integrity-check/create-missing-trainings', [
@@ -201,6 +211,25 @@ export function IntegrityCheckPage() {
         subtitle={lastRun ? `Last run at ${lastRun}` : 'Diagnostic checks across all linked records'}
         actions={
           <div className="flex items-center gap-2">
+            {fixHostsResult && (
+              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
+                {fixHostsResult}
+              </span>
+            )}
+            <button
+              onClick={() => { setFixHostsResult(null); fixHosts.mutate(); }}
+              disabled={fixHosts.isPending}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
+              style={{
+                background: 'rgba(59,130,246,0.1)',
+                borderColor: 'rgba(59,130,246,0.35)',
+                color: '#93c5fd',
+                opacity: fixHosts.isPending ? 0.6 : 1,
+                cursor: fixHosts.isPending ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {fixHosts.isPending ? 'Fixing…' : '🏠 Fix missing hosts'}
+            </button>
             {createTrainingsResult && (
               <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
                 {createTrainingsResult}

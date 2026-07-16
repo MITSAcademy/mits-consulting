@@ -568,6 +568,30 @@ integrityCheckRouter.post('/create-missing-trainings', requireRole('founder'), a
     results.push({ clientName: client.name, status: 'created', trainingId: training.id, trainerFound: trainer.name });
   }
 
+  // Re-point payments whose clientId has no active training to the correct client record (same name, has training)
+  const orphanPayments = await prisma.payment.findMany({
+    where: { kind: 'Renewal', client: { regularTrainings: { none: { status: 'active' } } } },
+    select: { id: true, clientId: true, client: { select: { name: true } } },
+  });
+  let repointed = 0;
+  for (const payment of orphanPayments) {
+    const clientName = payment.client?.name;
+    if (!clientName) continue;
+    // Find another client with same name that HAS an active training
+    const correctClient = await prisma.client.findFirst({
+      where: {
+        name: { equals: clientName, mode: 'insensitive' },
+        id: { not: payment.clientId },
+        regularTrainings: { some: { status: 'active' } },
+      },
+      select: { id: true },
+    });
+    if (correctClient) {
+      await prisma.payment.update({ where: { id: payment.id }, data: { clientId: correctClient.id } });
+      repointed++;
+    }
+  }
+
   // After creating/confirming trainings, backfill ALL payments that have no trainerId
   const paymentsToFix = await prisma.payment.findMany({
     where: { trainerId: null },
@@ -587,7 +611,41 @@ integrityCheckRouter.post('/create-missing-trainings', requireRole('founder'), a
     }
   }
 
-  res.json({ results, paymentFixed, message: `Processed ${results.length} entries. Fixed ${paymentFixed} unlinked payments.` });
+  res.json({ results, paymentFixed, repointed, message: `Processed ${results.length} entries. Re-pointed ${repointed} payments to correct client. Fixed ${paymentFixed} unlinked payments.` });
+});
+
+// POST /api/integrity-check/fix-missing-hosts
+// Sets hostedByDefaultId on active trainings that have none, using the most common host across all trainings.
+integrityCheckRouter.post('/fix-missing-hosts', requireRole('founder'), async (_req: AuthedRequest, res) => {
+  // Find the most-used host across all active trainings that have one
+  const trainingsWithHost = await prisma.regularTraining.findMany({
+    where: { status: 'active', hostedByDefaultId: { not: null } },
+    select: { hostedByDefaultId: true },
+  });
+  if (trainingsWithHost.length === 0) {
+    return res.status(400).json({ error: 'No active trainings with a host found to infer from.' });
+  }
+  // Pick most common
+  const freq = new Map<string, number>();
+  for (const t of trainingsWithHost) {
+    const h = t.hostedByDefaultId!;
+    freq.set(h, (freq.get(h) || 0) + 1);
+  }
+  const defaultHostId = [...freq.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const defaultHost = await prisma.user.findUnique({ where: { id: defaultHostId }, select: { id: true, name: true } });
+
+  const noHost = await prisma.regularTraining.findMany({
+    where: { status: 'active', hostedByDefaultId: null },
+    select: { id: true, name: true },
+  });
+  if (noHost.length === 0) return res.json({ fixed: 0, host: defaultHost?.name, message: 'No trainings missing a host.' });
+
+  await prisma.regularTraining.updateMany({
+    where: { id: { in: noHost.map(t => t.id) } },
+    data: { hostedByDefaultId: defaultHostId },
+  });
+
+  res.json({ fixed: noHost.length, host: defaultHost?.name, message: `Set host to "${defaultHost?.name}" on ${noHost.length} training(s).` });
 });
 
 // DELETE /api/integrity-check/dummy-clients — remove all dummy_* test clients and their data
