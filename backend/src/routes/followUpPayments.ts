@@ -53,6 +53,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       paymentPendingVaibhav: true,
       email: true, accountNameRaw: true,
       hostOwner: { select: { name: true } },
+      assignedAm: { select: { name: true } },
       phoneCode: true, phoneDigits: true, whatsappGroupLink: true,
       primaryTrainer: { select: { id: true, name: true, phoneCode: true, phoneDigits: true, whatsappGroupLink: true } },
       regularTrainings: {
@@ -130,7 +131,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       isEmployerCall: (c as any).isEmployerCall || false,
       employerName: (c as any).employerName || null,
       clientEmail: (c as any).email || null,
-      accountName: (c as any).accountNameRaw || null,
+      accountName: (c as any).accountNameRaw || (c as any).assignedAm?.name || null,
       hostOwner: c.hostOwner?.name || null,
       clientPhone: (c.phoneCode && c.phoneDigits) ? `${c.phoneCode}${c.phoneDigits}`.replace(/[^0-9+]/g, '') : null,
       clientGroupLink: (c as any).whatsappGroupLink || null,
