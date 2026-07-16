@@ -63,6 +63,7 @@ regularTrainingsRouter.post('/trainings', async (req: AuthedRequest, res) => {
   if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const b = req.body || {};
   if (typeof b.name !== 'string' || !b.name.trim()) return res.status(400).json({ error: 'name required' });
+  if (!b.clientId) return res.status(400).json({ error: 'clientId is required — every training must be linked to a client record to avoid duplicate-name confusion' });
   const created = await prisma.regularTraining.create({
     data: {
       name: b.name.trim(),

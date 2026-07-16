@@ -222,6 +222,11 @@ export function MySessionsPage() {
 
   const sessionCount = filteredSessions.length;
 
+  // Trainings with no linked client record — data integrity issue
+  const unlinkedTrainings = useMemo(() =>
+    (mySessions || []).filter((t: any) => !t.client),
+  [mySessions]);
+
   return (
     <>
       <Topbar
@@ -293,10 +298,26 @@ export function MySessionsPage() {
                     <div className="text-[12px] muted mt-1">Sessions will appear here once Bhavneet / Mitali allocates calls to you from Regular Trainings.</div>
                   </div>
                 ) : (
-                  <AMSheetTable
-                    rows={filteredSessions}
-                    onChanged={() => qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] })}
-                  />
+                  <>
+                    {unlinkedTrainings.length > 0 && (
+                      <div className="mb-3 px-4 py-3 rounded-xl flex items-start gap-3" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.35)' }}>
+                        <span style={{ fontSize: 16 }}>🔗</span>
+                        <div>
+                          <div className="font-bold text-[12px]" style={{ color: '#b91c1c' }}>
+                            {unlinkedTrainings.length} training{unlinkedTrainings.length > 1 ? 's' : ''} not linked to a client record:
+                            {' '}{unlinkedTrainings.map((t: any) => t.name).join(', ')}
+                          </div>
+                          <div className="text-[11px] mt-0.5" style={{ color: '#991b1b' }}>
+                            This causes duplicate-name confusion and missing phone numbers. Please go to Regular Trainings → edit each one → link it to the correct client.
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    <AMSheetTable
+                      rows={filteredSessions}
+                      onChanged={() => qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] })}
+                    />
+                  </>
                 )}
               </div>
             )}
