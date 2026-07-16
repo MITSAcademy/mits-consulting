@@ -626,7 +626,11 @@ function EditTrainingButton({ training }: { training: TrainingDetail }) {
           <Label>Trainer</Label>
           <Select value={form.trainerId} onChange={(e) => setForm({ ...form, trainerId: e.target.value, trainerReplacementReason: '' })}>
             <option value="">— none —</option>
-            {(trainers || []).map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            {(trainers || []).map((t: any) => (
+              <option key={t.id} value={t.id}>
+                {t.name}{t.phoneDigits ? ` · ${t.phoneDigits}` : ''}
+              </option>
+            ))}
           </Select>
         </div>
         {trainerChanged && (
