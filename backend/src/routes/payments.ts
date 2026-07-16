@@ -86,6 +86,19 @@ paymentsRouter.post('/', async (req: AuthedRequest, res) => {
   res.status(201).json(p);
 });
 
+// PATCH /:id — correct payment date (manager/founder only, cannot set future date)
+paymentsRouter.patch('/:id', async (req: AuthedRequest, res) => {
+  if (!['founder', 'manager'].includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const { paymentDate } = req.body;
+  if (!paymentDate) return res.status(400).json({ error: 'paymentDate required' });
+  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+  if (new Date(paymentDate) > todayEnd) {
+    return res.status(400).json({ error: `Payment date cannot be in the future.` });
+  }
+  const updated = await prisma.payment.update({ where: { id: req.params.id }, data: { paymentDate } });
+  res.json(updated);
+});
+
 paymentsRouter.delete('/:id', async (req: AuthedRequest, res) => {
   if (req.user!.role !== 'founder') return res.status(403).json({ error: 'Only founder' });
   await prisma.payment.delete({ where: { id: req.params.id } });

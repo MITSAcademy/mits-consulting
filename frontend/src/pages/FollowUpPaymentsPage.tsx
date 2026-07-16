@@ -65,6 +65,7 @@ interface Row {
   status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'no_date' | 'deferred';
   paymentCount: number;
   payments: { id: string; amount: number; currency: string; paymentDate: string; receivedBy: { name: string } | null }[];
+  futureDatedPayments: { id: string; amount: number; currency: string; paymentDate: string; receivedBy: { name: string } | null }[];
 }
 
 interface Comment {
@@ -295,11 +296,21 @@ function AdvancePaymentModal({ r, onClose }: { r: Row; onClose: () => void }) {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  const hasFuture = r.futureDatedPayments?.length > 0;
+
   const content = (
     <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="rounded-2xl p-5 w-[380px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+      <div className="rounded-2xl p-5 w-[400px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
         <div className="font-bold text-sm mb-1">Mark payment done — {r.name}</div>
+        {hasFuture && (
+          <div className="rounded-lg px-3 py-2.5 mb-3 text-[12px]" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
+            <div className="font-bold mb-1">⚠️ Fix future-dated payments first</div>
+            {r.futureDatedPayments.map((p) => (
+              <div key={p.id}>Payment of {p.currency} {p.amount} is dated <strong>{p.paymentDate.slice(0, 10)}</strong> — correct this date before recording a new collection.</div>
+            ))}
+          </div>
+        )}
         <div className="muted text-[11px] mb-4">
           Current due date: <strong>{fmtDate(r.payDate2)}</strong> → moves to Pay Date 1.<br/>
           Enter the amount received and set the next due date.
@@ -322,7 +333,7 @@ function AdvancePaymentModal({ r, onClose }: { r: Row; onClose: () => void }) {
         </div>
         <div className="flex gap-2 mt-4 justify-end">
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!newDate2 || adv.isPending} onClick={() => adv.mutate()}>
+          <Button variant="primary" disabled={!newDate2 || adv.isPending || hasFuture} onClick={() => adv.mutate()}>
             {adv.isPending ? 'Saving…' : 'Confirm done'}
           </Button>
         </div>

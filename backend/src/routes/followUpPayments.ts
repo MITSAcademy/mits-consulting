@@ -148,6 +148,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       status,
       paymentCount: c.payments.length,
       payments: c.payments,
+      futureDatedPayments: c.payments.filter((p) => p.paymentDate && String(p.paymentDate).slice(0, 10) > today),
     };
   });
 
