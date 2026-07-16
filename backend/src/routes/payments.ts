@@ -29,6 +29,10 @@ paymentsRouter.post('/', async (req: AuthedRequest, res) => {
   if (!clientId || !amount || !currency || !paymentDate) {
     return res.status(400).json({ error: 'clientId, amount, currency, paymentDate required' });
   }
+  const today = new Date(); today.setHours(23, 59, 59, 999);
+  if (new Date(paymentDate) > today) {
+    return res.status(400).json({ error: `Payment date cannot be in the future. You entered ${paymentDate} — please use today's date or earlier.` });
+  }
   const kindToUse = kind || 'Fresh';
   const amountToUse = Number(amount);
 

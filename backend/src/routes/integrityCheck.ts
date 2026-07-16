@@ -700,21 +700,33 @@ integrityCheckRouter.post('/fix-orphan-payments', requireRole('founder'), async 
     }
   }
 
-  // Also fix Shalini's unlinked payment (trainerId null)
+  // Fix all payments with no trainerId — search by clientId, then by client name match to any active training
   const unlinkedPayments = await prisma.payment.findMany({
     where: { trainerId: null },
     select: { id: true, clientId: true, client: { select: { name: true } } },
   });
   for (const p of unlinkedPayments) {
-    const training = await prisma.regularTraining.findFirst({
+    // Pass 1: training on same clientId
+    let training = await prisma.regularTraining.findFirst({
       where: { clientId: p.clientId, trainerId: { not: null } },
-      select: { trainerId: true },
+      select: { clientId: true, trainerId: true },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     });
+    // Pass 2: training whose name contains client's first name
+    if (!training && p.client?.name) {
+      const firstName = p.client.name.split(' ')[0];
+      training = await prisma.regularTraining.findFirst({
+        where: { name: { contains: firstName, mode: 'insensitive' }, trainerId: { not: null }, status: 'active' },
+        select: { clientId: true, trainerId: true },
+      });
+    }
     if (training?.trainerId) {
-      await prisma.payment.update({ where: { id: p.id }, data: { trainerId: training.trainerId } });
+      await prisma.payment.update({
+        where: { id: p.id },
+        data: { trainerId: training.trainerId, clientId: training.clientId || p.clientId },
+      });
       fixed++;
-      details.push(`${p.client?.name}: linked trainerId from training`);
+      details.push(`${p.client?.name}: linked trainerId`);
     }
   }
 

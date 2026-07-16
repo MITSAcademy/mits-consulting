@@ -188,6 +188,11 @@ followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, r
     select: { trainerId: true },
   });
   const collectedDate = c.payDate1 || todayISO();
+  // Block future-dated payments — payDate1 must be today or in the past
+  const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+  if (collectedDate && new Date(collectedDate) > todayEnd) {
+    return res.status(400).json({ error: `Cannot record collection — the payment date (${collectedDate}) is in the future. Update the client's payDate1 to today's date first.` });
+  }
   const newDate1 = c.payDate2 || todayISO();
   const recordedAmount = (amountReceived !== undefined && amountReceived !== null && !isNaN(Number(amountReceived)))
     ? Math.round(Number(amountReceived))
