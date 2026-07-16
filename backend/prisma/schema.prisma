@@ -486,6 +486,7 @@ model Client {
   regularTrainings    RegularTraining[] @relation("RegularTrainingClient")
   issueTrackers    IssueTracker[]
   freelanceRequirements FreelanceRequirement[]
+  dateChangeRequests   DateChangeRequest[]
 
   @@index([lifecycle])                                    // every kanban/queue filters by stage
   @@index([nextRenewalDue])                               // RenewalsPage + Roshni queue
@@ -1199,6 +1200,51 @@ model FreelanceRequirementComment {
   authorName    String
   body          String
   createdAt     DateTime @default(now())
+}
+
+// -------- DATE CHANGE REQUESTS (payment follow-up approval workflow) --------
+// When Mitali wants to change payDate1/payDate2, she must submit a request.
+// Path A (payment_received): links a recorded payment + optional screenshot → Samita approves
+// Path B (leverage): fills context form → Vaibhav approves
+// Old dates stay locked until approved.
+model DateChangeRequest {
+  id              String   @id @default(cuid())
+  clientId        String
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  requestedById   String
+  requestedByName String
+
+  type            String   // "payment_received" | "leverage"
+
+  // Proposed new dates
+  proposedDate1   String?  // proposed payDate1
+  proposedDate2   String?  // proposed payDate2
+
+  // Path A — payment received
+  linkedPaymentId String?  // Payment.id that proves collection
+  screenshotBase64 String? @db.Text  // base64 image
+
+  // Path B — leverage
+  summary30d      String?  @db.Text  // client summary last 30 days
+  mitaliF15d      String?  // what feedback Mitali took last 15 days
+  bhavneetF15d    String?  // what feedback Bhavneet took last 15 days
+  lastSessionDate String?  // ISO date of last session
+  issueDetail     String?  @db.Text  // min 100 words
+  leverageScreenshot String? @db.Text  // base64
+
+  // Approval
+  status          String   @default("pending") // pending | approved | rejected
+  approvedById    String?
+  approvedByName  String?
+  approvedAt      DateTime?
+  rejectionNote   String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([status])
+  @@index([requestedById])
 }
 
 model BugReport {

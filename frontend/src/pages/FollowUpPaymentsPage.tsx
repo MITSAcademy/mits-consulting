@@ -29,6 +29,7 @@ import {
   Send, Pin, Trash2, Users, LayoutList, Table2
 } from 'lucide-react';
 import { minFutureDate, maxTodayDate, minPastDate } from '@/lib/utils';
+import DateChangeRequestModal from '@/components/follow-up/DateChangeRequestModal';
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -999,7 +1000,7 @@ function PayRow({ r }: { r: Row }) {
       {showComments  && <CommentThread clientId={r.id} onClose={() => setShowComments(false)}/>}
       {showAdvance   && <AdvancePaymentModal r={r} onClose={() => setShowAdvance(false)}/>}
       {showLeverage  && <LeverageModal r={r} onClose={() => setShowLeverage(false)}/>}
-      {showEditDates && <EditDatesModal r={r} onClose={() => setShowEditDates(false)}/>}
+      {showEditDates && <DateChangeRequestModal r={r} onClose={() => setShowEditDates(false)}/>}
       {showEmployerDialog && createPortal(
         <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowEmployerDialog(false); }}>
@@ -1348,7 +1349,7 @@ function TableView({ rows }: { rows: Row[] }) {
 
       {showComments  && <CommentThread clientId={showComments} onClose={() => setShowComments(null)}/>}
       {showAdvance   && <AdvancePaymentModal r={showAdvance} onClose={() => setShowAdvance(null)}/>}
-      {showEditDates && <EditDatesModal r={showEditDates} onClose={() => setShowEditDates(null)}/>}
+      {showEditDates && <DateChangeRequestModal r={showEditDates} onClose={() => setShowEditDates(null)}/>}
     </>
   );
 }

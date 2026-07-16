@@ -45,6 +45,7 @@ const SourcingPage = lazy(() => import('@/pages/SourcingPage').then((m) => ({ de
 const SalesClosingPage = lazy(() => import('@/pages/SalesClosingPage').then((m) => ({ default: m.SalesClosingPage })));
 const FreshPaymentsPage = lazy(() => import('@/pages/FreshPaymentsPage').then((m) => ({ default: m.FreshPaymentsPage })));
 const FollowUpPaymentsPage = lazy(() => import('@/pages/FollowUpPaymentsPage').then((m) => ({ default: m.FollowUpPaymentsPage })));
+const DateChangeApprovalsPage = lazy(() => import('@/pages/DateChangeApprovalsPage'));
 const MySessionsPage = lazy(() => import('@/pages/MySessionsPage').then((m) => ({ default: m.MySessionsPage })));
 const DemoTeamReportPage = lazy(() => import('@/pages/DemoTeamReportPage').then((m) => ({ default: m.DemoTeamReportPage })));
 const RegularTrainingsPage = lazy(() => import('@/pages/RegularTrainingsPage').then((m) => ({ default: m.RegularTrainingsPage })));
@@ -144,6 +145,7 @@ export default function App() {
           <Route path="/sales-closing" element={<SalesClosingPage />} />
           <Route path="/fresh-payments" element={<FreshPaymentsPage />} />
           <Route path="/follow-up-payments" element={<FollowUpPaymentsPage />} />
+          <Route path="/date-change-approvals" element={<DateChangeApprovalsPage />} />
           <Route path="/my-sessions" element={<MySessionsPage />} />
           <Route path="/reports/demo-team" element={<DemoTeamReportPage />} />
           <Route path="/regular-trainings" element={<RegularTrainingsPage />} />
