@@ -220,21 +220,6 @@ export function MySessionsPage() {
         t.trainer?.skills?.toLowerCase().includes(searchLower))
     : (mySessions || []);
 
-  // Detect duplicate client names so we can append phone suffix for disambiguation
-  const clientNameCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const t of (mySessions || []) as any[]) {
-      if (t.client?.name) counts[t.client.name] = (counts[t.client.name] || 0) + 1;
-    }
-    return counts;
-  }, [mySessions]);
-  const displayClientName = (t: any) => {
-    if (!t.client) return t.name || '—';
-    if (clientNameCounts[t.client.name] > 1 && t.client.phoneDigits)
-      return `${t.client.name} (${String(t.client.phoneDigits).slice(-4)})`;
-    return t.client.name;
-  };
-
   const sessionCount = filteredSessions.length;
 
   return (
@@ -752,6 +737,15 @@ const SESSION_STATUS_OPTIONS = [
 const TOOL_OPTIONS = ['Zoom', 'GoToMeeting', 'Teams', 'Google Meet', 'Phone', 'Other'];
 
 function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void }) {
+  // Detect duplicate client names for phone-suffix disambiguation
+  const clientNameCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const t of rows) {
+      if (t.client?.name) counts[t.client.name] = (counts[t.client.name] || 0) + 1;
+    }
+    return counts;
+  }, [rows]);
+
   // Build unique trainer list from this coordinator's sessions (with phone + email)
   const coordinatorTrainers = useMemo(() => {
     const seen = new Set<string>();
@@ -815,7 +809,7 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
             </thead>
             <tbody>
               {assigned.map((t: any) => (
-                <AMSheetRow key={t.id} t={t} onChanged={onChanged} coordinatorTrainers={coordinatorTrainers} />
+                <AMSheetRow key={t.id} t={t} onChanged={onChanged} coordinatorTrainers={coordinatorTrainers} clientNameCounts={clientNameCounts} />
               ))}
             </tbody>
           </table>
@@ -826,7 +820,7 @@ function AMSheetTable({ rows, onChanged }: { rows: any[]; onChanged: () => void 
 }
 
 
-function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: () => void; coordinatorTrainers?: any[] }) {
+function AMSheetRow({ t, onChanged, coordinatorTrainers, clientNameCounts }: { t: any; onChanged: () => void; coordinatorTrainers?: any[]; clientNameCounts?: Record<string, number> }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const rowUser = useAuth((s) => s.user)!;
@@ -959,7 +953,9 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
               <div>
                 <div className="flex items-center gap-1">
                   {t.client
-                    ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>{displayClientName(t)}</Link>
+                    ? <Link to={`/clients/${t.client.id}`} className="font-semibold hover:underline" style={{ color: rowColor }}>
+                        {t.client.name}{(clientNameCounts?.[t.client.name] ?? 0) > 1 && t.client.phoneDigits ? ` (${String(t.client.phoneDigits).slice(-4)})` : ''}
+                      </Link>
                     : <span className="font-semibold">{t.name}</span>
                   }
                   {t.dailyNotes && <span title={t.dailyNotes} style={{ fontSize: 12, cursor: 'default' }}>📝</span>}
