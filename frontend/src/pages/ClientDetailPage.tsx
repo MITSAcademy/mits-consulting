@@ -988,7 +988,7 @@ export function ClientDetailPage() {
           />
         )}
         {modal === 'assignOwner' && <AssignOwnerModal client={client} onClose={() => setModal(null)} />}
-        {modal === 'editContact' && <EditContactModal client={client} emailOnly={user.role === 'lead'} onClose={() => setModal(null)} />}
+        {modal === 'editContact' && <EditContactModal client={client} onClose={() => setModal(null)} />}
         {modal === 'editEngagement' && <EditEngagementModal client={client} onClose={() => setModal(null)} />}
         {modal === 'recordIntake' && <RecordIntakeModal client={client} onClose={() => setModal(null)} />}
         {modal === 'sendIntake' && <SendIntakeModal client={client} onClose={() => setModal(null)} />}

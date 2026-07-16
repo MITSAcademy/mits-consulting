@@ -375,7 +375,7 @@ const CLIENT_PERMS: Record<string, Record<string, boolean>> = {
 };
 
 // Fields lead (Bhavneet) can edit regardless of category — team management
-const LEAD_ALLOWED_FIELDS = new Set(['assignedAmId', 'email', 'clientSkillSet', 'whatsappGroupLink', 'sessionTimings', 'meetingPlatform', 'clientTimezone', 'certificateUrl']);
+const LEAD_ALLOWED_FIELDS = new Set(['assignedAmId', 'email', 'phoneCode', 'phoneDigits', 'whatsappGroupName', 'whatsappGroupLink', 'clientSkillSet', 'sessionTimings', 'meetingPlatform', 'clientTimezone', 'certificateUrl']);
 
 function canEditFields(role: string, fields: string[]): { ok: boolean; blocked?: string[] } {
   if (role === 'founder') return { ok: true };
