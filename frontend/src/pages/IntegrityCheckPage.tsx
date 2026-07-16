@@ -294,6 +294,7 @@ export function IntegrityCheckPage() {
               {[
                 { label: '⚡ Auto-backfill', result: backfillResult, pending: backfill.isPending, pendingLabel: 'Backfilling…', onClick: () => { setBackfillResult(null); backfill.mutate(); }, color: '99,102,241' },
                 { label: '💳 Fix orphan payments', result: fixOrphanResult, pending: fixOrphanPayments.isPending, pendingLabel: 'Fixing…', onClick: () => { setFixOrphanResult(null); fixOrphanPayments.mutate(); }, color: '234,179,8' },
+                { label: '💳 Fix null-trainer payments', result: fixOrphanResult, pending: fixOrphanPayments.isPending, pendingLabel: 'Fixing…', onClick: () => { setFixOrphanResult(null); api.post('/integrity-check/fix-null-trainer-payments').then(r => setFixOrphanResult(r.data.details?.join(' · ') || r.data.skippedNames?.join(', ') || 'Done')); }, color: '234,100,8' },
                 { label: '🏠 Fix missing hosts', result: fixHostsResult, pending: fixHosts.isPending, pendingLabel: 'Fixing…', onClick: () => { setFixHostsResult(null); fixHosts.mutate(); }, color: '59,130,246' },
                 { label: '✨ Create missing trainings', result: createTrainingsResult, pending: createTrainings.isPending, pendingLabel: 'Creating…', onClick: () => { setCreateTrainingsResult(null); createTrainings.mutate(); }, color: '251,191,36' },
                 { label: '🔗 Fix feedback trainers', result: fixFeedbackResult, pending: fixFeedback.isPending, pendingLabel: 'Fixing…', onClick: () => { setFixFeedbackResult(null); fixFeedback.mutate(); }, color: '16,185,129' },

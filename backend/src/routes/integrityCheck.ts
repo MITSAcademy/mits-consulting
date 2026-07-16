@@ -643,6 +643,74 @@ integrityCheckRouter.get('/debug-payments', requireRole('founder'), async (_req:
   res.json(result);
 });
 
+// POST /api/integrity-check/fix-null-trainer-payments — stamp trainerId on ALL payments where trainerId is null
+// Uses 4 passes: client's active training → client's any training → client primaryTrainer → name-match across all clients
+integrityCheckRouter.post('/fix-null-trainer-payments', requireRole('founder'), async (_req: AuthedRequest, res) => {
+  const payments = await prisma.payment.findMany({
+    where: { trainerId: null },
+    select: { id: true, clientId: true, client: { select: { name: true, primaryTrainerId: true } } },
+  });
+
+  const fixed: string[] = [];
+  const skipped: string[] = [];
+
+  for (const p of payments) {
+    const clientName = p.client?.name || '';
+    const firstName = clientName.split(' ')[0];
+
+    // Pass 1: active training for this client
+    let trainerId: string | null = null;
+    const activeTr = await prisma.regularTraining.findFirst({
+      where: { clientId: p.clientId, status: 'active', trainerId: { not: null } },
+      select: { trainerId: true },
+    });
+    if (activeTr?.trainerId) trainerId = activeTr.trainerId;
+
+    // Pass 2: any training for this client
+    if (!trainerId) {
+      const anyTr = await prisma.regularTraining.findFirst({
+        where: { clientId: p.clientId, trainerId: { not: null } },
+        select: { trainerId: true },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (anyTr?.trainerId) trainerId = anyTr.trainerId;
+    }
+
+    // Pass 3: client.primaryTrainerId
+    if (!trainerId && p.client?.primaryTrainerId) trainerId = p.client.primaryTrainerId;
+
+    // Pass 4: find ANY active client whose name starts with same first name and has a trainer
+    if (!trainerId && firstName) {
+      const nameMatch = await prisma.client.findFirst({
+        where: {
+          name: { startsWith: firstName, mode: 'insensitive' },
+          regularTrainings: { some: { status: 'active', trainerId: { not: null } } },
+        },
+        select: { regularTrainings: { where: { status: 'active', trainerId: { not: null } }, select: { trainerId: true, clientId: true }, take: 1 } },
+      });
+      if (nameMatch?.regularTrainings[0]) {
+        trainerId = nameMatch.regularTrainings[0].trainerId;
+        // Also re-point clientId to the correct client
+        await prisma.payment.update({
+          where: { id: p.id },
+          data: { trainerId, clientId: nameMatch.regularTrainings[0].clientId },
+        });
+        fixed.push(`${clientName}: linked trainerId + re-pointed clientId via name match`);
+        continue;
+      }
+    }
+
+    if (trainerId) {
+      await prisma.payment.update({ where: { id: p.id }, data: { trainerId } });
+      fixed.push(`${clientName}: linked trainerId`);
+    } else {
+      skipped.push(clientName);
+    }
+  }
+
+  res.json({ fixed: fixed.length, skipped: skipped.length, details: fixed, skippedNames: skipped });
+});
+
 // POST /api/integrity-check/fix-orphan-payments
 // For every Renewal payment whose client has no active training,
 // find another client with same name who HAS an active training and re-point the payment.
