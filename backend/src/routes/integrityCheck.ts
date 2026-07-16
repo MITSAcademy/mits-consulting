@@ -614,6 +614,25 @@ integrityCheckRouter.post('/create-missing-trainings', requireRole('founder'), a
   res.json({ results, paymentFixed, repointed, message: `Processed ${results.length} entries. Re-pointed ${repointed} payments to correct client. Fixed ${paymentFixed} unlinked payments.` });
 });
 
+// GET /api/integrity-check/debug-payments — show raw data for orphan payment clients
+integrityCheckRouter.get('/debug-payments', requireRole('founder'), async (_req: AuthedRequest, res) => {
+  const orphanPayments = await prisma.payment.findMany({
+    where: { kind: 'Renewal', client: { regularTrainings: { none: { status: 'active' } } } },
+    select: { id: true, clientId: true, trainerId: true, amount: true, client: { select: { name: true } } },
+  });
+
+  const result = [];
+  for (const p of orphanPayments) {
+    // All clients with similar name
+    const nameClients = await prisma.client.findMany({
+      where: { name: { contains: p.client?.name?.split(' ')[0] || '', mode: 'insensitive' } },
+      select: { id: true, name: true, regularTrainings: { select: { id: true, status: true, trainerId: true, name: true } } },
+    });
+    result.push({ paymentId: p.id, paymentClientId: p.clientId, clientName: p.client?.name, amount: p.amount, matchingClients: nameClients });
+  }
+  res.json(result);
+});
+
 // POST /api/integrity-check/fix-orphan-payments
 // For every Renewal payment whose client has no active training,
 // find another client with same name who HAS an active training and re-point the payment.
