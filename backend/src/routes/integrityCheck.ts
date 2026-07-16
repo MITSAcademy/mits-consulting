@@ -614,6 +614,75 @@ integrityCheckRouter.post('/create-missing-trainings', requireRole('founder'), a
   res.json({ results, paymentFixed, repointed, message: `Processed ${results.length} entries. Re-pointed ${repointed} payments to correct client. Fixed ${paymentFixed} unlinked payments.` });
 });
 
+// POST /api/integrity-check/fix-orphan-payments
+// For every Renewal payment whose client has no active training,
+// find another client with same name who HAS an active training and re-point the payment.
+// If no duplicate client exists, links the payment's client directly to the training by clientId update.
+integrityCheckRouter.post('/fix-orphan-payments', requireRole('founder'), async (_req: AuthedRequest, res) => {
+  const orphanPayments = await prisma.payment.findMany({
+    where: { kind: 'Renewal', client: { regularTrainings: { none: { status: 'active' } } } },
+    select: { id: true, clientId: true, client: { select: { name: true } } },
+  });
+
+  let fixed = 0;
+  const details: string[] = [];
+
+  for (const payment of orphanPayments) {
+    const clientName = payment.client?.name;
+    if (!clientName) continue;
+
+    // Look for ANY client with matching name who has an active training
+    const correctClient = await prisma.client.findFirst({
+      where: {
+        name: { equals: clientName, mode: 'insensitive' },
+        id: { not: payment.clientId },
+        regularTrainings: { some: { status: 'active' } },
+      },
+      select: { id: true, name: true },
+    });
+
+    if (correctClient) {
+      await prisma.payment.update({ where: { id: payment.id }, data: { clientId: correctClient.id } });
+      fixed++;
+      details.push(`${clientName}: re-pointed to client ${correctClient.id}`);
+      continue;
+    }
+
+    // Same client — find active training for this client and set trainerId at least
+    const training = await prisma.regularTraining.findFirst({
+      where: { clientId: payment.clientId, status: 'active', trainerId: { not: null } },
+      select: { trainerId: true },
+    });
+    if (training?.trainerId) {
+      await prisma.payment.update({ where: { id: payment.id }, data: { trainerId: training.trainerId } });
+      fixed++;
+      details.push(`${clientName}: linked trainerId`);
+    } else {
+      details.push(`${clientName}: no active training found on either client record`);
+    }
+  }
+
+  // Also fix Shalini's unlinked payment (trainerId null)
+  const unlinkedPayments = await prisma.payment.findMany({
+    where: { trainerId: null },
+    select: { id: true, clientId: true, client: { select: { name: true } } },
+  });
+  for (const p of unlinkedPayments) {
+    const training = await prisma.regularTraining.findFirst({
+      where: { clientId: p.clientId, trainerId: { not: null } },
+      select: { trainerId: true },
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    });
+    if (training?.trainerId) {
+      await prisma.payment.update({ where: { id: p.id }, data: { trainerId: training.trainerId } });
+      fixed++;
+      details.push(`${p.client?.name}: linked trainerId from training`);
+    }
+  }
+
+  res.json({ fixed, details, message: `Fixed ${fixed} payments. Details: ${details.join(' · ')}` });
+});
+
 // POST /api/integrity-check/fix-missing-hosts
 // Sets hostedByDefaultId on active trainings that have none, using the most common host across all trainings.
 integrityCheckRouter.post('/fix-missing-hosts', requireRole('founder'), async (_req: AuthedRequest, res) => {

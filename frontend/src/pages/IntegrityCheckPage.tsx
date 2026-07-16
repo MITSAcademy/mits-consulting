@@ -151,6 +151,16 @@ export function IntegrityCheckPage() {
     },
   });
 
+  const [fixOrphanResult, setFixOrphanResult] = useState<string | null>(null);
+  const fixOrphanPayments = useMutation({
+    mutationFn: () => api.post('/integrity-check/fix-orphan-payments').then((r) => r.data),
+    onSuccess: (d) => {
+      setFixOrphanResult(d.message);
+      qc.invalidateQueries({ queryKey: ['integrity-check'] });
+      refetch();
+    },
+  });
+
   const [fixHostsResult, setFixHostsResult] = useState<string | null>(null);
   const fixHosts = useMutation({
     mutationFn: () => api.post('/integrity-check/fix-missing-hosts').then((r) => r.data),
@@ -211,6 +221,25 @@ export function IntegrityCheckPage() {
         subtitle={lastRun ? `Last run at ${lastRun}` : 'Diagnostic checks across all linked records'}
         actions={
           <div className="flex items-center gap-2">
+            {fixOrphanResult && (
+              <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
+                {fixOrphanResult}
+              </span>
+            )}
+            <button
+              onClick={() => { setFixOrphanResult(null); fixOrphanPayments.mutate(); }}
+              disabled={fixOrphanPayments.isPending}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all"
+              style={{
+                background: 'rgba(234,179,8,0.1)',
+                borderColor: 'rgba(234,179,8,0.35)',
+                color: '#fef08a',
+                opacity: fixOrphanPayments.isPending ? 0.6 : 1,
+                cursor: fixOrphanPayments.isPending ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {fixOrphanPayments.isPending ? 'Fixing…' : '💳 Fix orphan payments'}
+            </button>
             {fixHostsResult && (
               <span className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)' }}>
                 {fixHostsResult}
