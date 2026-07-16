@@ -267,29 +267,30 @@ export function SessionLogsPage() {
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // One row per active training (not per client) — avoids merging clients with identical names
+  // One row per active training — avoids merging clients with identical names.
+  // Trainings without a linked client record still appear, using the training name as fallback.
   const clientRows = useMemo(() => {
     const list = (trainings || []) as any[];
     // Count how many trainings share each client name to detect duplicates
     const nameCounts: Record<string, number> = {};
     for (const t of list) {
-      if (t.client?.name) nameCounts[t.client.name] = (nameCounts[t.client.name] || 0) + 1;
+      const name = t.client?.name || t.name;
+      if (name) nameCounts[name] = (nameCounts[name] || 0) + 1;
     }
-    return list
-      .filter((t) => !!t.client)
-      .map((t) => {
-        const suffix = nameCounts[t.client.name] > 1 && t.client.phoneDigits
-          ? ` (${String(t.client.phoneDigits).slice(-4)})`
-          : '';
-        return {
-          trainingId: t.id,
-          clientId: t.client.id,
-          clientName: t.client.name + suffix,
-          trainerId: t.trainer?.id || '',
-          trainerName: t.trainer?.name || '',
-          coordinator: t.hostedByDefault?.name || '',
-        };
-      });
+    return list.map((t) => {
+      const baseName = t.client?.name || t.name || 'Unknown';
+      const suffix = nameCounts[baseName] > 1 && t.client?.phoneDigits
+        ? ` (${String(t.client.phoneDigits).slice(-4)})`
+        : '';
+      return {
+        trainingId: t.id,
+        clientId: t.client?.id || null,
+        clientName: baseName + suffix,
+        trainerId: t.trainer?.id || '',
+        trainerName: t.trainer?.name || '',
+        coordinator: t.hostedByDefault?.name || '',
+      };
+    });
   }, [trainings]);
 
   // Inline row state keyed by trainingId
@@ -436,9 +437,10 @@ export function SessionLogsPage() {
                       <tr key={cr.trainingId}>
                         {/* Client */}
                         <td>
-                          <Link to={`/clients/${cr.clientId}`} className="font-medium text-[12px] hover:underline">
-                            {cr.clientName}
-                          </Link>
+                          {cr.clientId
+                            ? <Link to={`/clients/${cr.clientId}`} className="font-medium text-[12px] hover:underline">{cr.clientName}</Link>
+                            : <span className="font-medium text-[12px]">{cr.clientName}</span>
+                          }
                         </td>
 
                         {/* Trainer — typeahead backed by shared datalist (avoids N×M DOM nodes) */}
