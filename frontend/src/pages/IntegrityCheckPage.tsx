@@ -160,7 +160,7 @@ export function IntegrityCheckPage() {
       { clientName: 'Shalini', trainerPhone: '8074834527' },
     ]).then((r) => r.data),
     onSuccess: (d) => {
-      const summary = d.results.map((r: { clientName: string; status: string }) => `${r.clientName}: ${r.status}`).join(' · ');
+      const summary = d.results.map((r: { clientName: string; status: string; trainerFound?: string }) => `${r.clientName}(${r.trainerFound||'?'}): ${r.status}`).join(' · ');
       setCreateTrainingsResult(`${d.message} — ${summary}`);
       qc.invalidateQueries({ queryKey: ['integrity-check'] });
       refetch();

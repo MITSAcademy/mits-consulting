@@ -517,16 +517,18 @@ integrityCheckRouter.post('/create-missing-trainings', requireRole('founder'), a
   const allTrainers = await prisma.trainer.findMany({ select: { id: true, name: true, phoneDigits: true, phoneCode: true } });
   const allClients = await prisma.client.findMany({ select: { id: true, name: true } });
 
-  const results: { clientName: string; status: string; trainingId?: string }[] = [];
+  const results: { clientName: string; status: string; trainingId?: string; trainerFound?: string }[] = [];
 
   for (const entry of entries) {
-    const trainerDigits = digitsOnly(entry.trainerPhone);
+    const trainerDigits = digitsOnly(entry.trainerPhone).slice(-10); // last 10 digits
     const trainer = allTrainers.find((t) => {
-      const p = digitsOnly(t.phoneDigits || '');
-      return p.endsWith(trainerDigits.slice(-10)) || trainerDigits.endsWith(p.slice(-10));
+      const p = digitsOnly(t.phoneDigits || '').slice(-10);
+      return p === trainerDigits;
     });
     if (!trainer) {
-      results.push({ clientName: entry.clientName, status: `trainer not found (phone: ${entry.trainerPhone})` });
+      // Debug: show what we have
+      const partial = allTrainers.filter(t => digitsOnly(t.phoneDigits || '').includes(trainerDigits.slice(-8)));
+      results.push({ clientName: entry.clientName, status: `trainer not found (phone: ${entry.trainerPhone}, last10: ${trainerDigits}, candidates: ${partial.map(t=>t.name+'='+t.phoneDigits).join('|')})` });
       continue;
     }
 
@@ -541,12 +543,17 @@ integrityCheckRouter.post('/create-missing-trainings', requireRole('founder'), a
       continue;
     }
 
-    // Skip if active training already exists
+    // Delete any wrong active training for this client that has a different trainer
+    await prisma.regularTraining.deleteMany({
+      where: { clientId: client.id, status: 'active', trainerId: { not: trainer.id }, name: { contains: client.name } },
+    });
+
+    // Skip if correct active training already exists
     const existing = await prisma.regularTraining.findFirst({
       where: { clientId: client.id, trainerId: trainer.id, status: 'active' },
     });
     if (existing) {
-      results.push({ clientName: client.name, status: 'already exists', trainingId: existing.id });
+      results.push({ clientName: client.name, status: 'already exists', trainingId: existing.id, trainerFound: trainer.name });
       continue;
     }
 
@@ -558,7 +565,7 @@ integrityCheckRouter.post('/create-missing-trainings', requireRole('founder'), a
         status: 'active',
       },
     });
-    results.push({ clientName: client.name, status: 'created', trainingId: training.id });
+    results.push({ clientName: client.name, status: 'created', trainingId: training.id, trainerFound: trainer.name });
   }
 
   // After creating/confirming trainings, backfill ALL payments that have no trainerId
