@@ -45,6 +45,17 @@ feedbackRouter.post('/', async (req: AuthedRequest, res) => {
   if (!await checkPermission('feedback.write', req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
   const { clientId, weekStart, rating, notes, communicationStatus, trainerId } = req.body;
   if (!clientId || !weekStart || !rating) return res.status(400).json({ error: 'clientId, weekStart, rating required' });
+  if (trainerId) {
+    const linkedTraining = await prisma.regularTraining.findFirst({
+      where: { clientId, trainerId, status: 'active' },
+      select: { id: true },
+    });
+    if (!linkedTraining) {
+      return res.status(400).json({
+        error: 'No active RegularTraining found linking this client to this trainer. Fix the training record first before adding feedback.',
+      });
+    }
+  }
   const fb = await prisma.feedback.create({
     data: {
       clientId, weekStart, rating: Number(rating), notes,
@@ -67,6 +78,20 @@ feedbackRouter.post('/', async (req: AuthedRequest, res) => {
 feedbackRouter.patch('/:id', async (req: AuthedRequest, res) => {
   if (!await checkPermission('feedback.write', req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
   const { rating, notes, communicationStatus, trainerId, weekStart } = req.body;
+  if (trainerId) {
+    const existing = await prisma.feedback.findUnique({ where: { id: req.params.id }, select: { clientId: true } });
+    if (existing) {
+      const linkedTraining = await prisma.regularTraining.findFirst({
+        where: { clientId: existing.clientId, trainerId, status: 'active' },
+        select: { id: true },
+      });
+      if (!linkedTraining) {
+        return res.status(400).json({
+          error: 'No active RegularTraining found linking this client to this trainer. Fix the training record first before assigning feedback to this trainer.',
+        });
+      }
+    }
+  }
   const fb = await prisma.feedback.update({
     where: { id: req.params.id },
     data: {
