@@ -273,7 +273,7 @@ integrityCheckRouter.get('/', requireRole('founder', 'manager'), async (_req: Au
     where: { trainerId: null },
     select: {
       id: true, paymentDate: true, amount: true, currency: true,
-      client: { select: { name: true } },
+      client: { select: { name: true, lifecycle: true } },
     },
     orderBy: { paymentDate: 'desc' },
     take: 100,
@@ -287,7 +287,7 @@ integrityCheckRouter.get('/', requireRole('founder', 'manager'), async (_req: Au
     items: paymentNoTrainer.map((p) => ({
       id: p.id,
       label: `${p.client?.name || 'Unknown client'} · ${String(p.paymentDate).slice(0, 10)}`,
-      detail: `${p.currency} ${p.amount}`,
+      detail: `${p.currency} ${p.amount} · client status: ${p.client?.lifecycle || 'unknown'}`,
     })),
   });
 
