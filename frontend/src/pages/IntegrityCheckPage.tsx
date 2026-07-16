@@ -210,7 +210,7 @@ export function IntegrityCheckPage() {
 
   const [nikhilResult, setNikhilResult] = useState<string | null>(null);
   const fixNikhil = useMutation({
-    mutationFn: () => api.post('/integrity-check/fix-nikhil-c0157').then((r) => r.data),
+    mutationFn: () => api.post('/integrity-check/fix-both-nikhils').then((r) => r.data),
     onSuccess: (d) => {
       setNikhilResult(d.fixes?.join(' · ') || 'Done');
       qc.invalidateQueries({ queryKey: ['integrity-check'] });
@@ -298,7 +298,7 @@ export function IntegrityCheckPage() {
                 { label: '✨ Create missing trainings', result: createTrainingsResult, pending: createTrainings.isPending, pendingLabel: 'Creating…', onClick: () => { setCreateTrainingsResult(null); createTrainings.mutate(); }, color: '251,191,36' },
                 { label: '🔗 Fix feedback trainers', result: fixFeedbackResult, pending: fixFeedback.isPending, pendingLabel: 'Fixing…', onClick: () => { setFixFeedbackResult(null); fixFeedback.mutate(); }, color: '16,185,129' },
                 { label: '🗑 Delete dummy clients', result: dummyResult, pending: deleteDummies.isPending, pendingLabel: 'Deleting…', onClick: () => { setDummyResult(null); deleteDummies.mutate(); }, color: '239,68,68' },
-                { label: '📱 Fix Nikhil C-0157', result: nikhilResult, pending: fixNikhil.isPending, pendingLabel: 'Fixing…', onClick: () => { setNikhilResult(null); fixNikhil.mutate(); }, color: '20,184,166' },
+                { label: '👤 Fix both Nikhils', result: nikhilResult, pending: fixNikhil.isPending, pendingLabel: 'Fixing…', onClick: () => { setNikhilResult(null); fixNikhil.mutate(); }, color: '20,184,166' },
                 { label: '🔍 Diagnose session/payment gap', result: gapResult, pending: checkGap.isPending, pendingLabel: 'Checking…', onClick: () => { setGapResult(null); checkGap.mutate(); }, color: '168,85,247' },
                 { label: '🧹 Deactivate stale trainings', result: staleResult, pending: deactivateStale.isPending, pendingLabel: 'Deactivating…', onClick: () => { setStaleResult(null); deactivateStale.mutate(); }, color: '249,115,22' },
               ].map((t) => (

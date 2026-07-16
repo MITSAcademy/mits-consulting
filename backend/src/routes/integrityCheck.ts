@@ -776,6 +776,103 @@ integrityCheckRouter.post('/fix-missing-hosts', requireRole('founder'), async (_
   res.json({ fixed: noHost.length, host: defaultHost?.name, message: `Set host to "${defaultHost?.name}" on ${noHost.length} training(s).` });
 });
 
+// POST /api/integrity-check/fix-both-nikhils — fix both Nikhil clients completely
+integrityCheckRouter.post('/fix-both-nikhils', requireRole('founder'), async (_req: AuthedRequest, res) => {
+  const fixes: string[] = [];
+
+  // ── Find trainers ──────────────────────────────────────────────────────────
+  const raj = await prisma.trainer.findFirst({
+    where: { phoneDigits: { endsWith: '8148829141' } },
+    select: { id: true, name: true },
+  });
+  const arun = await prisma.trainer.findFirst({
+    where: { phoneDigits: { endsWith: '8919708804' } },
+    select: { id: true, name: true },
+  });
+
+  // ── Find both Nikhil clients by phone ─────────────────────────────────────
+  const nikhilRaj = await prisma.client.findFirst({
+    where: { phoneDigits: { endsWith: '6095408222' } },
+    select: { id: true, name: true, regularTrainings: { where: { status: { in: ['active', 'inactive'] } }, select: { id: true, name: true, status: true }, orderBy: { updatedAt: 'desc' } } },
+  });
+  const nikhilArun = await prisma.client.findFirst({
+    where: { phoneDigits: { endsWith: '2035431095' } },
+    select: { id: true, name: true, regularTrainings: { where: { status: { in: ['active', 'inactive'] } }, select: { id: true, name: true, status: true }, orderBy: { updatedAt: 'desc' } } },
+  });
+
+  // ── Fix Nikhil Raj ────────────────────────────────────────────────────────
+  if (nikhilRaj) {
+    await prisma.client.update({
+      where: { id: nikhilRaj.id },
+      data: {
+        phoneCode: '+1', phoneDigits: '6095408222',
+        whatsappGroupLink: 'https://chat.whatsapp.com/D5If7m1nrCt3yk5V8gx3Vc',
+        whatsappGroupName: 'Nikhil (Raj)',
+        ...(raj ? { primaryTrainerId: raj.id } : {}),
+      },
+    });
+    fixes.push(`Nikhil Raj (${nikhilRaj.id}): phone + WhatsApp group updated${raj ? ', trainer → Raj' : ''}`);
+
+    // Ensure his training named like Raj/sadew is active; link trainer
+    const rajTraining = nikhilRaj.regularTrainings.find((t) => !t.name.toLowerCase().includes('arun'));
+    if (rajTraining) {
+      await prisma.regularTraining.update({
+        where: { id: rajTraining.id },
+        data: { status: 'active', ...(raj ? { trainerId: raj.id } : {}) },
+      });
+      fixes.push(`Training "${rajTraining.name}" → active, trainer Raj`);
+    }
+
+    // Deactivate any Arun-named training on Raj's record (wrong client)
+    const wrongTraining = nikhilRaj.regularTrainings.find((t) => t.name.toLowerCase().includes('arun'));
+    if (wrongTraining) {
+      await prisma.regularTraining.update({ where: { id: wrongTraining.id }, data: { status: 'inactive' } });
+      fixes.push(`Training "${wrongTraining.name}" on Nikhil Raj → deactivated (belongs to Nikhil Arun)`);
+    }
+  } else {
+    fixes.push('Nikhil Raj not found by phone 6095408222');
+  }
+
+  // ── Fix Nikhil Arun ───────────────────────────────────────────────────────
+  if (nikhilArun) {
+    await prisma.client.update({
+      where: { id: nikhilArun.id },
+      data: {
+        phoneCode: '+1', phoneDigits: '2035431095',
+        whatsappGroupLink: 'https://chat.whatsapp.com/HvzQ7Krwrug1JIcwOfn9MO',
+        whatsappGroupName: 'Nikhil (Arun)',
+        ...(arun ? { primaryTrainerId: arun.id } : {}),
+      },
+    });
+    fixes.push(`Nikhil Arun (${nikhilArun.id}): phone + WhatsApp group updated${arun ? ', trainer → Arun' : ''}`);
+
+    // Ensure Arun training is active
+    const arunTraining = nikhilArun.regularTrainings.find((t) => t.name.toLowerCase().includes('arun') || t.status === 'inactive');
+    if (arunTraining) {
+      await prisma.regularTraining.update({
+        where: { id: arunTraining.id },
+        data: { status: 'active', ...(arun ? { trainerId: arun.id } : {}) },
+      });
+      fixes.push(`Training "${arunTraining.name}" → active, trainer Arun`);
+    } else if (arun) {
+      // No training found — create one
+      await prisma.regularTraining.create({
+        data: {
+          name: 'Nikhil · Arun',
+          status: 'active',
+          clientId: nikhilArun.id,
+          trainerId: arun.id,
+        },
+      });
+      fixes.push(`Created new training "Nikhil · Arun" for Nikhil Arun`);
+    }
+  } else {
+    fixes.push('Nikhil Arun not found by phone 2035431095');
+  }
+
+  res.json({ ok: true, fixes });
+});
+
 // POST /api/integrity-check/fix-nikhil-c0157 — fix phone, WhatsApp group link, and trainer for C-0157
 integrityCheckRouter.post('/fix-nikhil-c0157', requireRole('founder'), async (_req: AuthedRequest, res) => {
   const clientId = 'cmq86yziv002djc2w6mr4zs52';
