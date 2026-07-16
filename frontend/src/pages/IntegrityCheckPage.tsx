@@ -218,6 +218,16 @@ export function IntegrityCheckPage() {
     },
   });
 
+  const [staleResult, setStaleResult] = useState<string | null>(null);
+  const deactivateStale = useMutation({
+    mutationFn: () => api.post('/integrity-check/deactivate-stale-trainings').then((r) => r.data),
+    onSuccess: (d) => {
+      setStaleResult(d.message + (d.deactivated.length ? ': ' + d.deactivated.map((x: any) => `${x.client} → ${x.training}`).join(', ') : ''));
+      qc.invalidateQueries({ queryKey: ['integrity-check'] });
+      refetch();
+    },
+  });
+
   const [gapResult, setGapResult] = useState<string | null>(null);
   const checkGap = useMutation({
     mutationFn: () => api.get('/integrity-check/session-payment-gap').then((r) => r.data),
@@ -290,6 +300,7 @@ export function IntegrityCheckPage() {
                 { label: '🗑 Delete dummy clients', result: dummyResult, pending: deleteDummies.isPending, pendingLabel: 'Deleting…', onClick: () => { setDummyResult(null); deleteDummies.mutate(); }, color: '239,68,68' },
                 { label: '📱 Fix Nikhil C-0157', result: nikhilResult, pending: fixNikhil.isPending, pendingLabel: 'Fixing…', onClick: () => { setNikhilResult(null); fixNikhil.mutate(); }, color: '20,184,166' },
                 { label: '🔍 Diagnose session/payment gap', result: gapResult, pending: checkGap.isPending, pendingLabel: 'Checking…', onClick: () => { setGapResult(null); checkGap.mutate(); }, color: '168,85,247' },
+                { label: '🧹 Deactivate stale trainings', result: staleResult, pending: deactivateStale.isPending, pendingLabel: 'Deactivating…', onClick: () => { setStaleResult(null); deactivateStale.mutate(); }, color: '249,115,22' },
               ].map((t) => (
                 <div key={t.label} className="flex flex-col gap-1">
                   <button

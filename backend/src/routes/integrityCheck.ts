@@ -824,6 +824,35 @@ integrityCheckRouter.post('/fix-nikhil-c0157', requireRole('founder'), async (_r
   res.json({ ok: true, fixes });
 });
 
+// POST /api/integrity-check/deactivate-stale-trainings — deactivate duplicate active trainings
+// Keeps the most recently updated active training per client, deactivates the rest
+integrityCheckRouter.post('/deactivate-stale-trainings', requireRole('founder'), async (_req: AuthedRequest, res) => {
+  const clients = await prisma.client.findMany({
+    where: { regularTrainings: { some: { status: 'active' } } },
+    select: {
+      id: true, name: true,
+      regularTrainings: {
+        where: { status: 'active' },
+        select: { id: true, name: true, updatedAt: true },
+        orderBy: { updatedAt: 'desc' },
+      },
+    },
+  });
+
+  const deactivated: { client: string; training: string }[] = [];
+  for (const client of clients) {
+    if (client.regularTrainings.length <= 1) continue;
+    // Keep the most recently updated one, deactivate the rest
+    const [, ...stale] = client.regularTrainings;
+    for (const t of stale) {
+      await prisma.regularTraining.update({ where: { id: t.id }, data: { status: 'inactive' } });
+      deactivated.push({ client: client.name, training: t.name });
+    }
+  }
+
+  res.json({ deactivated, message: deactivated.length === 0 ? 'No stale trainings found.' : `Deactivated ${deactivated.length} stale training(s).` });
+});
+
 // GET /api/integrity-check/session-payment-gap — diagnose why session count != payment tracker count
 integrityCheckRouter.get('/session-payment-gap', requireRole('founder', 'manager'), async (_req: AuthedRequest, res) => {
   // All active trainings grouped by client
