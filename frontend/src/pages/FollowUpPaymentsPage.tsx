@@ -425,11 +425,11 @@ function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
         <div className="font-bold text-sm mb-3">Edit payment dates — {r.name}</div>
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="form-row">
-            <Label>Pay Date 1 (last paid)</Label>
-            <Input type="date" value={date1} min={minPastDate()} max={maxTodayDate()} onChange={(e) => setDate1(e.target.value)} />
+            <Label>Pay Date 1 (next due)</Label>
+            <Input type="date" value={date1} onChange={(e) => setDate1(e.target.value)} />
           </div>
           <div className="form-row">
-            <Label>Pay Date 2 (next due)</Label>
+            <Label>Pay Date 2 (after that)</Label>
             <Input type="date" value={date2} onChange={(e) => setDate2(e.target.value)} />
           </div>
         </div>
