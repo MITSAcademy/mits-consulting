@@ -119,14 +119,14 @@ const PILL: Record<string, string> = {
 const TH = 'background:#f3f4f6;text-align:left;padding:9px 12px;color:#4b5563;font-weight:600;font-size:12px;border-bottom:2px solid #e5e7eb;';
 const TD = 'padding:9px 12px;font-size:13px;vertical-align:middle;border-bottom:1px solid #f3f4f6;';
 
-function section(title: string, rows: Row[], pillClass: string, pillLabel: (r: Row) => string, bgColor: string): string {
+function section(title: string, rows: Row[], pillClass: string, pillLabel: (r: Row) => string, bgColor: string, startIndex = 1): string {
   const h3 = `<h3 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin:28px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb;color:#374151;">${title}</h3>`;
 
   if (rows.length === 0) {
     return `${h3}<p style="color:#9ca3af;font-style:italic;font-size:13px;margin:0 0 16px;">None.</p>`;
   }
 
-  const trs = rows.map(r => {
+  const trs = rows.map((r, i) => {
     const days = r.daysUntilDue;
     const daysStr = days === null ? '—'
       : days < 0 ? `<span style="color:#b91c1c;font-weight:700;">${Math.abs(days)}d overdue</span>`
@@ -136,6 +136,7 @@ function section(title: string, rows: Row[], pillClass: string, pillLabel: (r: R
     const rowBg = bgColor ? `background:${bgColor};` : '';
 
     return `<tr style="${rowBg}">
+      <td style="${TD}color:#9ca3af;font-size:11px;width:28px;text-align:right;padding-right:6px;">${startIndex + i}</td>
       <td style="${TD}"><strong style="font-size:13px;">${esc(r.name)}</strong>${r.feedbackNeeded ? '&nbsp;<span style="display:inline-block;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;">⚠ feedback</span>' : ''}</td>
       <td style="${TD}color:#9ca3af;font-size:12px;">${esc(r.hostOwner || '—')}</td>
       <td style="${TD}">${fmtDate(r.payDate1)}</td>
@@ -149,6 +150,7 @@ function section(title: string, rows: Row[], pillClass: string, pillLabel: (r: R
   return `${h3}
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;margin-bottom:8px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
       <thead><tr>
+        <th style="${TH}width:28px;">#</th>
         <th style="${TH}">Client</th>
         <th style="${TH}">Host</th>
         <th style="${TH}">Next Due (Pay 1)</th>
@@ -205,45 +207,27 @@ function buildHtml(params: {
       </tr>
     </table>`;
 
-  const overdueSection = section(
-    `🔴 Overdue (${overdue.length})`,
-    overdue,
-    'pill-red',
-    (r) => `${Math.abs(r.daysUntilDue!)}d overdue`,
-    '#fff5f5',
-  );
+  let rowNum = 1;
+  const overdueSection = section(`🔴 Overdue (${overdue.length})`, overdue, 'pill-red', (r) => `${Math.abs(r.daysUntilDue!)}d overdue`, '#fff5f5', rowNum);
+  rowNum += overdue.length;
 
-  const dueSoonSection = section(
-    `🟡 Due Today / Soon — within 3 days (${dueSoon.length})`,
-    dueSoon,
-    'pill-amber',
-    (r) => r.daysUntilDue === 0 ? 'Due today' : `Due in ${r.daysUntilDue}d`,
-    '#fffbeb',
-  );
+  const dueSoonSection = section(`🟡 Due Today / Soon — within 3 days (${dueSoon.length})`, dueSoon, 'pill-amber', (r) => r.daysUntilDue === 0 ? 'Due today' : `Due in ${r.daysUntilDue}d`, '#fffbeb', rowNum);
+  rowNum += dueSoon.length;
 
-  const upcomingSection = section(
-    `🔵 Upcoming — next 4–14 days (${upcoming.length})`,
-    upcoming,
-    'pill-blue',
-    (r) => `Due in ${r.daysUntilDue}d`,
-    '',
-  );
+  const upcomingSection = section(`🔵 Upcoming — next 4–14 days (${upcoming.length})`, upcoming, 'pill-blue', (r) => `Due in ${r.daysUntilDue}d`, '', rowNum);
+  rowNum += upcoming.length;
 
-  const farFutureSection = section(
-    `🟢 Later — 15+ days away (${farFuture.length})`,
-    farFuture,
-    'pill-green',
-    (r) => `Due in ${r.daysUntilDue}d`,
-    '',
-  );
+  const farFutureSection = section(`🟢 Later — 15+ days away (${farFuture.length})`, farFuture, 'pill-green', (r) => `Due in ${r.daysUntilDue}d`, '', rowNum);
+  rowNum += farFuture.length;
 
   const noDateSection = noDate.length > 0 ? `
     <h3 style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin:28px 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb;color:#374151;">⚪ No Due Date Set (${noDate.length})</h3>
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;margin-bottom:8px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
       <thead><tr>
-        <th style="${TH}">Client</th><th style="${TH}">Host</th><th style="${TH}">Last Paid</th><th style="${TH}">Amount</th>
+        <th style="${TH}width:28px;">#</th><th style="${TH}">Client</th><th style="${TH}">Host</th><th style="${TH}">Last Paid</th><th style="${TH}">Amount</th>
       </tr></thead>
-      <tbody>${noDate.map(r => `<tr>
+      <tbody>${noDate.map((r, i) => `<tr>
+        <td style="${TD}color:#9ca3af;font-size:11px;width:28px;text-align:right;padding-right:6px;">${rowNum + i}</td>
         <td style="${TD}">${esc(r.name)}</td>
         <td style="${TD}color:#9ca3af;font-size:12px;">${esc(r.hostOwner || '—')}</td>
         <td style="${TD}">${fmtDate(r.payDate1)}</td>
