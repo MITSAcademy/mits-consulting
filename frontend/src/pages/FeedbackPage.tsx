@@ -335,11 +335,9 @@ export function FeedbackPage() {
                     <td onClick={() => isCurrentWeek && startInline(c.id, fbRec)} style={{ cursor: !isCurrentWeek ? 'default' : inlineEdits[c.id] ? 'default' : 'pointer', minWidth: 110 }}>
                       {inlineEdits[c.id] ? (
                         <select
-                          autoFocus
                           value={inlineEdits[c.id].status}
                           onChange={(e) => setInlineEdits((p) => ({ ...p, [c.id]: { ...p[c.id], status: e.target.value } }))}
-                          onBlur={() => saveInline(c.id, fbRec)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') saveInline(c.id, fbRec); if (e.key === 'Escape') setInlineEdits((p) => { const n = { ...p }; delete n[c.id]; return n; }); }}
+                          onKeyDown={(e) => { if (e.key === 'Escape') setInlineEdits((p) => { const n = { ...p }; delete n[c.id]; return n; }); }}
                           style={{ fontSize: 11, padding: '2px 6px', borderRadius: 6, border: '1px solid var(--brand-border)', background: 'var(--bg-input)', color: 'var(--brand-text)', width: '100%' }}
                           onClick={(e) => e.stopPropagation()}
                         >
@@ -355,26 +353,43 @@ export function FeedbackPage() {
                       )}
                     </td>
 
-                    {/* Notes — inline textarea */}
+                    {/* Notes — inline textarea, save on Ctrl+Enter or Save button */}
                     <td onClick={() => isCurrentWeek && startInline(c.id, fbRec)} style={{ cursor: !isCurrentWeek ? 'default' : inlineEdits[c.id] ? 'default' : 'pointer', minWidth: 180 }}>
                       {inlineEdits[c.id] ? (
-                        <textarea
-                          autoFocus={false}
-                          value={inlineEdits[c.id].notes}
-                          onChange={(e) => setInlineEdits((p) => ({ ...p, [c.id]: { ...p[c.id], notes: e.target.value } }))}
-                          onBlur={() => saveInline(c.id, fbRec)}
-                          onKeyDown={(e) => { if (e.key === 'Escape') setInlineEdits((p) => { const n = { ...p }; delete n[c.id]; return n; }); }}
-                          rows={2}
-                          placeholder="Add notes…"
-                          style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--brand-border)', background: 'var(--bg-input)', color: 'var(--brand-text)', width: '100%', resize: 'none' }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} onClick={(e) => e.stopPropagation()}>
+                          <textarea
+                            autoFocus
+                            value={inlineEdits[c.id].notes}
+                            onChange={(e) => setInlineEdits((p) => ({ ...p, [c.id]: { ...p[c.id], notes: e.target.value } }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveInline(c.id, fbRec); }
+                              if (e.key === 'Escape') setInlineEdits((p) => { const n = { ...p }; delete n[c.id]; return n; });
+                            }}
+                            rows={2}
+                            placeholder="Add notes… (Ctrl+Enter to save)"
+                            style={{ fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--brand-border)', background: 'var(--bg-input)', color: 'var(--brand-text)', width: '100%', resize: 'none' }}
+                          />
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button
+                              disabled={savingInline[c.id]}
+                              onClick={() => saveInline(c.id, fbRec)}
+                              style={{ fontSize: 11, padding: '2px 10px', borderRadius: 5, background: 'var(--brand-accent)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                            >
+                              {savingInline[c.id] ? 'Saving…' : 'Save'}
+                            </button>
+                            <button
+                              onClick={() => setInlineEdits((p) => { const n = { ...p }; delete n[c.id]; return n; })}
+                              style={{ fontSize: 11, padding: '2px 8px', borderRadius: 5, background: 'transparent', color: 'var(--brand-textMuted)', border: '1px solid var(--brand-border)', cursor: 'pointer' }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
                       ) : (
                         <span className="text-[12px] muted" style={{ display: 'block', maxWidth: 200, whiteSpace: 'pre-wrap', wordBreak: 'break-word', borderBottom: fbRec?.notes ? 'none' : '1px dashed var(--brand-borderSoft)' }}>
                           {fbRec?.notes || '—'}
                         </span>
                       )}
-                      {savingInline[c.id] && <span className="muted text-[10px]">Saving…</span>}
                     </td>
 
                     {/* Activity Log — all entries */}
