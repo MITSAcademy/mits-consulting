@@ -951,8 +951,8 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers }: { t: any; onChanged: 
                 </div>
                 <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                   <span className="inline-block px-1.5 py-0 rounded text-[10px] font-semibold"
-                    style={t.ownerTeam === 'coordinator_team' ? { background: 'rgba(99,179,237,0.2)', color: '#63b3ed' } : { background: 'rgba(251,191,36,0.2)', color: '#fbbf24' }}>
-                    {t.ownerTeam === 'coordinator_team' ? 'Coordinator' : 'Demo Team'}
+                    style={{ background: 'rgba(99,179,237,0.2)', color: '#63b3ed' }}>
+                    Coordinator
                   </span>
                   <span className="text-[10px]" style={{ opacity: 0.6 }}>{t.completedSessionCount ?? 0}/4</span>
                   {t.demoEscalationRequested && <span className="inline-block px-1.5 py-0 rounded text-[10px] font-bold" style={{ background: 'rgba(239,68,68,0.25)', color: '#f87171' }}>⚠ Escalated</span>}
