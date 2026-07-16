@@ -649,35 +649,44 @@ integrityCheckRouter.post('/fix-orphan-payments', requireRole('founder'), async 
   for (const payment of orphanPayments) {
     const clientName = payment.client?.name;
     if (!clientName) continue;
+    const firstName = clientName.split(' ')[0];
 
-    // Look for ANY client with matching name who has an active training
-    const correctClient = await prisma.client.findFirst({
+    // Find ANY active training whose name starts with this client's first name
+    const training = await prisma.regularTraining.findFirst({
       where: {
-        name: { equals: clientName, mode: 'insensitive' },
-        id: { not: payment.clientId },
-        regularTrainings: { some: { status: 'active' } },
+        status: 'active',
+        trainerId: { not: null },
+        clientId: { not: null },
+        name: { contains: firstName, mode: 'insensitive' },
       },
-      select: { id: true, name: true },
+      select: { clientId: true, trainerId: true, name: true },
     });
 
-    if (correctClient) {
-      await prisma.payment.update({ where: { id: payment.id }, data: { clientId: correctClient.id } });
+    if (training?.clientId) {
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: { clientId: training.clientId, trainerId: training.trainerId },
+      });
       fixed++;
-      details.push(`${clientName}: re-pointed to client ${correctClient.id}`);
+      details.push(`${clientName} → training "${training.name}"`);
       continue;
     }
 
-    // Same client — find active training for this client and set trainerId at least
-    const training = await prisma.regularTraining.findFirst({
-      where: { clientId: payment.clientId, status: 'active', trainerId: { not: null } },
-      select: { trainerId: true },
+    // Fallback: any client with same first name who has an active training
+    const allMatchingClients = await prisma.client.findMany({
+      where: { name: { contains: firstName, mode: 'insensitive' }, regularTrainings: { some: { status: 'active' } } },
+      select: { id: true, name: true, regularTrainings: { where: { status: 'active' }, select: { trainerId: true }, take: 1 } },
     });
-    if (training?.trainerId) {
-      await prisma.payment.update({ where: { id: payment.id }, data: { trainerId: training.trainerId } });
+    if (allMatchingClients.length > 0) {
+      const c = allMatchingClients[0];
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: { clientId: c.id, trainerId: c.regularTrainings[0]?.trainerId || undefined },
+      });
       fixed++;
-      details.push(`${clientName}: linked trainerId`);
+      details.push(`${clientName} → client "${c.name}"`);
     } else {
-      details.push(`${clientName}: no active training found on either client record`);
+      details.push(`${clientName}: no active training found`);
     }
   }
 
