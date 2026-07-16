@@ -104,11 +104,81 @@ function InlineDuration({ session }: { session: Session }) {
   );
 }
 
+function ReassignClientButton({ trainingId, currentClient }: { trainingId: string; currentClient: { id: string; name: string } | null }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selectedId, setSelectedId] = useState('');
+
+  const { data: clients } = useQuery<{ id: string; name: string; phoneDigits: string | null }[]>({
+    queryKey: ['clients-list'],
+    queryFn: () => api.get('/clients').then((r) => r.data),
+    enabled: open,
+  });
+
+  const filtered = (clients || []).filter((c) =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    (c.phoneDigits || '').includes(search)
+  ).slice(0, 20);
+
+  const save = useMutation({
+    mutationFn: (clientId: string) => api.patch(`/regular-trainings/trainings/${trainingId}`, { clientId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['regular-training', trainingId] });
+      qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] });
+      showToast('Client reassigned');
+      setOpen(false);
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" style={{ fontSize: 11 }}>Reassign client</Button>
+      </DialogTrigger>
+      <DialogContent title="Reassign client">
+        <div className="space-y-3">
+          {currentClient && (
+            <div className="text-[12px] muted">Currently: <strong>{currentClient.name}</strong></div>
+          )}
+          <Input
+            placeholder="Search by name or phone…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setSelectedId(''); }}
+          />
+          <div className="border rounded overflow-y-auto" style={{ maxHeight: 200 }}>
+            {filtered.map((c) => (
+              <button
+                key={c.id}
+                className="w-full text-left px-3 py-2 text-[12px] hover:bg-[var(--brand-surface)] border-b last:border-b-0"
+                style={{ background: selectedId === c.id ? 'var(--brand-surface)' : undefined, fontWeight: selectedId === c.id ? 600 : undefined }}
+                onClick={() => setSelectedId(c.id)}
+              >
+                {c.name} {c.phoneDigits ? <span className="muted">· {c.phoneDigits}</span> : ''}
+              </button>
+            ))}
+            {filtered.length === 0 && <div className="px-3 py-2 muted text-[12px]">No clients found</div>}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button disabled={!selectedId || save.isPending} onClick={() => save.mutate(selectedId)}>
+            {save.isPending ? 'Saving…' : 'Reassign'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function RegularTrainingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const features = useFeatures();
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const user = useAuth((s) => s.user);
 
   const { data, isLoading } = useQuery<TrainingDetail>({
     queryKey: ['regular-training', id],
@@ -182,7 +252,19 @@ export function RegularTrainingDetailPage() {
                 ) : '—'
               }
             />
-            {data.client && <HeaderField label="Client" value={<Link to={`/clients/${data.client.id}`} className="hover:underline">{data.client.name}</Link>} />}
+            <HeaderField
+              label="Client"
+              value={
+                <span className="flex items-center gap-2 flex-wrap">
+                  {data.client
+                    ? <Link to={`/clients/${data.client.id}`} className="hover:underline">{data.client.name}</Link>
+                    : <span className="muted">None linked</span>}
+                  {['founder', 'manager'].includes(user?.role || '') && (
+                    <ReassignClientButton trainingId={data.id} currentClient={data.client} />
+                  )}
+                </span>
+              }
+            />
             {data.trainer && <HeaderField label="Trainer" value={data.trainer.name} />}
             {data.notes && <HeaderField label="Notes" value={data.notes} />}
           </div>
