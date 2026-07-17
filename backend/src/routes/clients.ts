@@ -1737,6 +1737,7 @@ clientsRouter.post('/:id/handover-welcome', async (req: AuthedRequest, res) => {
     senderEmail: me?.gmailAddress || undefined,
     paymentModel: client.paymentModel || undefined,
     cycleEnd: client.cycleEnd || undefined,
+    coordinatorName: (req.body?.coordinatorName as string) || 'Kashish',
   };
   const subject = HANDOVER_SUBJECT(client.name);
   const text = buildHandoverText(vars);

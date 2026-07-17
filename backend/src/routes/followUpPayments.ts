@@ -68,6 +68,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
         take: 10,
       },
       lifecycle: true,
+      mitaliIntroSentAt: true,
       comments: {
         orderBy: { createdAt: 'desc' },
         take: 1,
@@ -146,6 +147,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       latestComment: c.comments[0] || null,
       feedbackNeeded,
       status,
+      mitaliIntroSentAt: (c as any).mitaliIntroSentAt || null,
       paymentCount: c.payments.length,
       payments: c.payments,
       futureDatedPayments: c.payments.filter((p) => p.paymentDate && String(p.paymentDate).slice(0, 10) > today),

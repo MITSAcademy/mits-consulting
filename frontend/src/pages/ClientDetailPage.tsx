@@ -4465,12 +4465,13 @@ function HandoverWelcomeModal({ client, onClose }: any) {
   const hasWA = hasGroup || hasPhone;
   const canSend = toEmail || hasWA;
   const waLabel = hasGroup ? 'WhatsApp group' : hasPhone ? 'WhatsApp direct' : '';
+  const [coordinatorName, setCoordinatorName] = React.useState('Kashish');
 
   const send = useMutation({
     mutationFn: async () => {
       const results: any = {};
-      if (toEmail) results.email = await api.post(`/clients/${client.id}/handover-welcome`, { channel: 'email' }).then(r => r.data);
-      if (hasWA) results.wa = await api.post(`/clients/${client.id}/handover-welcome`, { channel: 'whatsapp' }).then(r => r.data);
+      if (toEmail) results.email = await api.post(`/clients/${client.id}/handover-welcome`, { channel: 'email', coordinatorName }).then(r => r.data);
+      if (hasWA) results.wa = await api.post(`/clients/${client.id}/handover-welcome`, { channel: 'whatsapp', coordinatorName }).then(r => r.data);
       return results;
     },
     onSuccess: (r: any) => {
@@ -4507,8 +4508,20 @@ function HandoverWelcomeModal({ client, onClose }: any) {
         <div className="space-y-2 text-sm">
           <div><strong>To (email):</strong> {toEmail || <span className="text-brand-amber">missing</span>}</div>
           <div><strong>To (WhatsApp):</strong> {hasGroup ? <span style={{ color: '#25D366' }}>Group — {client.whatsappGroupName || 'link saved'}</span> : hasPhone ? `${client.phoneCode || ''} ${client.phoneDigits}` : <span className="text-brand-amber">missing</span>}</div>
+          <div className="mt-3">
+            <label className="text-xs font-semibold block mb-1">Client Coordinator (line 1 of team intro)</label>
+            <select
+              value={coordinatorName}
+              onChange={e => setCoordinatorName(e.target.value)}
+              className="input text-sm w-full"
+            >
+              <option value="Kashish">Kashish</option>
+              <option value="Muskan">Muskan</option>
+              <option value="Bhavneet">Bhavneet</option>
+            </select>
+          </div>
           <div className="text-xs muted bg-bg-input p-2 rounded mt-2">
-            Sends: <em>"Welcome Aboard [Name] — MITS Solution"</em> with MITS Client Playbook link, team intro (Kashish, Bhavneet, Mitali roles), and service agreement note. CC'd to mc.welcome@mitssolution.com.
+            Sends: <em>"Welcome Aboard [Name] — MITS Solution"</em> with MITS Client Playbook link, team intro ({coordinatorName}, Bhavneet, Mitali roles), and service agreement note. CC'd to mc.welcome@mitssolution.com.
           </div>
         </div>
 

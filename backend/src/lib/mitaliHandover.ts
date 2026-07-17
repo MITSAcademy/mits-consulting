@@ -16,6 +16,7 @@ export interface HandoverVars {
   cycleEnd?: string;
   playbookUrl?: string;
   agreementUrl?: string;
+  coordinatorName?: string;
 }
 
 const PLAYBOOK_URL = 'https://drive.google.com/file/d/1v3myXlxmqjctWSL6qqmVofD21IxuGO_7/view?usp=sharing';
@@ -40,7 +41,7 @@ export function buildHandoverText(v: HandoverVars): string {
     ``,
     `Myself (${senderName}) would like to seize this opportunity to introduce my team, who will also be members of the group dedicated to providing you with our services.`,
     ``,
-    `1) Kashish (Client Coordinator) - She will closely coordinate and schedule calls to cater to your service requirements effectively.`,
+    `1) ${v.coordinatorName || 'Kashish'} (Client Coordinator) - She will closely coordinate and schedule calls to cater to your service requirements effectively.`,
     ``,
     `2) Bhavneet (Team Leader) - Should any issues arise, Team Lead will be readily available to assist you with prompt resolutions like Resource change, Timing issues, etc, and Level 1 point of escalation. Also Bhavneet will reach you for very regular verbal feedback as well. [Escalation Response ETA ~24 hrs]`,
     ``,
@@ -95,7 +96,7 @@ export function buildHandoverHtml(v: HandoverVars): string {
           </p>
 
           <p style="margin:0 0 12px;">
-            <b>1) Kashish (Client Coordinator)</b> -&nbsp; She will closely coordinate and <b>schedule calls</b> to cater to your service requirements effectively.
+            <b>1) ${esc(v.coordinatorName || 'Kashish')} (Client Coordinator)</b> -&nbsp; She will closely coordinate and <b>schedule calls</b> to cater to your service requirements effectively.
           </p>
 
           <p style="margin:0 0 12px;">

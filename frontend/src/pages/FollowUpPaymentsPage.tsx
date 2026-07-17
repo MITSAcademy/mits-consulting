@@ -26,7 +26,7 @@ import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { Label, Textarea } from '@/components/ui/input';
 import {
   AlertTriangle, CheckCircle2, Clock, MessageSquare,
-  Send, Pin, Trash2, Users, LayoutList, Table2
+  Send, Pin, Trash2, Users, LayoutList, Table2, Mail
 } from 'lucide-react';
 import DateChangeRequestModal from '@/components/follow-up/DateChangeRequestModal';
 
@@ -62,6 +62,7 @@ interface Row {
   followupNoteAt: string | null;
   latestComment: LatestComment | null;
   feedbackNeeded: boolean;
+  mitaliIntroSentAt: string | null;
   status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'no_date' | 'deferred';
   paymentCount: number;
   payments: { id: string; amount: number; currency: string; paymentDate: string; receivedBy: { name: string } | null }[];
@@ -501,6 +502,49 @@ function IncompleteNagModal({ clients, onDone }: { clients: Row[]; onDone: () =>
   return createPortal(content, document.body);
 }
 
+// ─── welcome email nudge modal ────────────────────────────────────────────────
+
+function WelcomeNudgeModal({ clientId, clientName, clientEmail, onClose }: { clientId: string; clientName: string; clientEmail: string | null; onClose: () => void }) {
+  const showToast = useUI((s) => s.showToast);
+  const qc = useQueryClient();
+  const [coordinator, setCoordinator] = useState('Kashish');
+  const send = useMutation({
+    mutationFn: () => api.post(`/clients/${clientId}/handover-welcome`, { channel: 'email', coordinatorName: coordinator }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
+      showToast(`Welcome email sent to ${clientName} ✓`);
+      onClose();
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent title={`Welcome email · ${clientName}`} description="Send Mitali's handover welcome email to this client." className="max-w-md">
+        <div className="space-y-3 text-sm">
+          <div><strong>To:</strong> {clientEmail || <span className="text-brand-amber">no email on file</span>}</div>
+          <div>
+            <label className="text-xs font-semibold block mb-1">Client Coordinator</label>
+            <select value={coordinator} onChange={e => setCoordinator(e.target.value)} className="input text-sm w-full">
+              <option value="Kashish">Kashish</option>
+              <option value="Muskan">Muskan</option>
+              <option value="Bhavneet">Bhavneet</option>
+            </select>
+          </div>
+          <div className="text-xs muted bg-bg-input p-2 rounded">
+            Sends "Welcome Aboard {clientName}" with playbook link, team intro ({coordinator}, Bhavneet, Mitali), service agreement note.
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!clientEmail || send.isPending} onClick={() => send.mutate()}>
+            <Mail size={12}/> {send.isPending ? 'Sending…' : 'Send welcome email'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── client card ──────────────────────────────────────────────────────────────
 
 function PayRow({ r }: { r: Row }) {
@@ -511,6 +555,8 @@ function PayRow({ r }: { r: Row }) {
 
   const [showComments, setShowComments] = useState(false);
   const [showEditDates, setShowEditDates] = useState(false);
+  const [showWelcomeNudge, setShowWelcomeNudge] = useState(!r.mitaliIntroSentAt);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountDraft, setAmountDraft] = useState('');
   const [currencyDraft, setCurrencyDraft] = useState('');
@@ -565,6 +611,17 @@ function PayRow({ r }: { r: Row }) {
         border: `1px solid ${borderColor}`,
         overflow: 'hidden',
       }}>
+        {/* Welcome email nudge — shown to manager only when intro not yet sent */}
+        {isManager && showWelcomeNudge && (
+          <div className="flex items-center justify-between gap-3 px-4 py-2 text-[12px]" style={{ background: 'rgba(59,130,246,0.08)', borderBottom: '1px solid rgba(59,130,246,0.2)', color: 'var(--brand-text)' }}>
+            <span>📩 Welcome email not sent yet to <strong>{r.name}</strong></span>
+            <div className="flex gap-2 shrink-0">
+              <button className="text-[11px] font-semibold underline" style={{ color: '#3b82f6' }} onClick={() => setShowWelcomeModal(true)}>Send now</button>
+              <button className="text-[11px] muted" onClick={() => setShowWelcomeNudge(false)}>Dismiss</button>
+            </div>
+          </div>
+        )}
+
         {/* Top row: name + status badge + nav links */}
         <div className="flex items-center justify-between gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
           <div className="flex items-center gap-3 min-w-0">
@@ -860,6 +917,7 @@ function PayRow({ r }: { r: Row }) {
 
       {showComments  && <CommentThread clientId={r.id} onClose={() => setShowComments(false)}/>}
       {showEditDates && <DateChangeRequestModal r={r} onClose={() => setShowEditDates(false)}/>}
+      {showWelcomeModal && <WelcomeNudgeModal clientId={r.id} clientName={r.name} clientEmail={r.clientEmail} onClose={() => { setShowWelcomeModal(false); setShowWelcomeNudge(false); }}/>}
       {showEmployerDialog && createPortal(
         <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowEmployerDialog(false); }}>
