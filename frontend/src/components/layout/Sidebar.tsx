@@ -12,7 +12,7 @@ import {
   Notebook, ChartLine, Upload, Inbox, Edit, UsersRound, Mail, Tag, LockKeyhole,
   Building2, History, Settings, LogOut, Moon, Calendar, ChevronsLeft, ChevronsRight,
   TableProperties, CalendarDays, AlertTriangle, Link, BarChart2, BarChart3, ToggleRight,
-  Sparkles, X, Bug, Handshake, ShieldAlert, Search,
+  Sparkles, X, Bug, Handshake, ShieldAlert, Search, ClipboardCheck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -156,6 +156,7 @@ const NAV: NavItem[] = [
   { section: 'clients', page: '/trainers', label: 'My trainers', icon: UserCog, roles: ['account_manager'] },
   { section: 'clients', page: '/dormant', label: 'Dormant clients', icon: Moon, roles: ['founder', 'demo_lead', 'demo_intake', 'sales_closer'] },
   { section: 'clients', page: '/feedback', label: 'Feedback', icon: MessageCircle, roles: ['founder', 'manager', 'lead', 'account_manager'] },
+  { section: 'clients', page: '/feedback-punches', label: 'Feedback compliance', icon: ClipboardCheck, roles: ['founder', 'manager', 'lead', 'account_manager'] },
 
   // ── Coordinator work (Mitali + Bhavneet + AMs) ───────────────────────
   { section: 'work', page: '/team-board', label: 'Client assignment', icon: UsersRound, roles: ['founder', 'manager', 'lead', 'account_manager'] },

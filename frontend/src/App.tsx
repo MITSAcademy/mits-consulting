@@ -74,6 +74,7 @@ const DormantClientsPage = lazy(() => import('@/pages/DormantClientsPage').then(
 const MyCalendarPage = lazy(() => import('@/pages/MyCalendarPage').then((m) => ({ default: m.MyCalendarPage })));
 const HoldClientsPage = lazy(() => import('@/pages/HoldClientsPage').then((m) => ({ default: m.HoldClientsPage })));
 const FeedbackPendingPage = lazy(() => import('@/pages/FeedbackPendingPage').then((m) => ({ default: m.FeedbackPendingPage })));
+const FeedbackPunchesPage = lazy(() => import('@/pages/FeedbackPunchesPage').then((m) => ({ default: m.FeedbackPunchesPage })));
 const RoshniFollowUpsPage = lazy(() => import('@/pages/RoshniFollowUpsPage').then((m) => ({ default: m.RoshniFollowUpsPage })));
 const SessionsDashboardPage = lazy(() => import('@/pages/SessionsDashboardPage'));
 const IssueTrackerPage = lazy(() => import('@/pages/IssueTrackerPage'));
@@ -178,6 +179,7 @@ export default function App() {
           <Route path="/hold" element={<HoldClientsPage />} />
           <Route path="/roshni/follow-ups" element={<RoshniFollowUpsPage />} />
           <Route path="/feedback-pending" element={<FeedbackPendingPage />} />
+          <Route path="/feedback-punches" element={<FeedbackPunchesPage />} />
           <Route path="/sessions" element={<SessionsDashboardPage />} />
           <Route path="/issues" element={<IssueTrackerPage />} />
           <Route path="/freelance-requirements" element={<FreelanceRequirementsPage />} />
