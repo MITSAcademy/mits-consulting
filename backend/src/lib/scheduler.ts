@@ -21,6 +21,7 @@ import { sendSmtpHealthAdvisory } from './smtpHealthAdvisory';
 import { sendDailyReminders } from './dailyReminders';
 import { sendMitaliDailyReport } from './mitaliDailyReport';
 import { sendClientFeedbackEmails } from './clientFeedbackEmail';
+import { sendWeeklyFeedbackReport } from './weeklyFeedbackReport';
 import { prisma } from './prisma';
 
 function safe(label: string, fn: () => Promise<void>) {
@@ -125,6 +126,11 @@ export function initScheduler() {
 
   // Daily proactive reminders — 9:30 AM IST daily → in-app notifications per user
   cron.schedule('30 9 * * *', () => safe('daily-reminders', () => sendDailyReminders()), {
+    timezone: 'Asia/Kolkata',
+  });
+
+  // Saturday 8:00 AM IST — weekly feedback compliance report
+  cron.schedule('0 8 * * 6', () => safe('weekly-feedback-report', () => sendWeeklyFeedbackReport()), {
     timezone: 'Asia/Kolkata',
   });
 

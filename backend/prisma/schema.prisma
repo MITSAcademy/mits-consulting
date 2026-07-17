@@ -183,6 +183,7 @@ model User {
   notifications          Notification[]
   callLogs               CallLog[]
   feedbackActivities     FeedbackActivity[]
+  feedbackPunches        FeedbackPunch[]
   hostedRegularTrainings RegularTraining[]  @relation("RegularTrainingHost")
   tempHostedTrainings    RegularTraining[]  @relation("RegularTrainingTempHost")
   hostedTrainingSessions TrainingSession[]  @relation("TrainingSessionHost")
@@ -488,6 +489,7 @@ model Client {
   issueTrackers    IssueTracker[]
   freelanceRequirements FreelanceRequirement[]
   dateChangeRequests   DateChangeRequest[]
+  feedbackPunches        FeedbackPunch[]
 
   @@index([lifecycle])                                    // every kanban/queue filters by stage
   @@index([nextRenewalDue])                               // RenewalsPage + Roshni queue
@@ -1249,6 +1251,23 @@ model DateChangeRequest {
   @@index([clientId])
   @@index([status])
   @@index([requestedById])
+}
+
+model FeedbackPunch {
+  id          String   @id @default(cuid())
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  punchedById String
+  punchedBy   User     @relation(fields: [punchedById], references: [id], onDelete: Cascade)
+  date        String   // ISO YYYY-MM-DD (IST)
+  type        String   // 'verbal' | 'written'
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@unique([clientId, punchedById, date])
+  @@index([clientId])
+  @@index([punchedById])
+  @@index([date])
 }
 
 model BugReport {

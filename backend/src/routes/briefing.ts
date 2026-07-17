@@ -11,6 +11,7 @@ import { sendTeam1Briefing, sendTeam2Briefing, sendSamitaBriefing, sendRoshniBri
 import { sendMalikaStatusReport } from '../lib/malikaStatusReport';
 import { sendMitaliDailyReport } from '../lib/mitaliDailyReport';
 import { sendClientFeedbackEmails } from '../lib/clientFeedbackEmail';
+import { sendWeeklyFeedbackReport } from '../lib/weeklyFeedbackReport';
 
 export const briefingRouter = Router();
 briefingRouter.use(requireAuth);
@@ -69,6 +70,19 @@ briefingRouter.post('/malika-status', async (req: AuthedRequest, res) => {
   try {
     await sendMalikaStatusReport({ force: true });
     res.json({ ok: true, message: 'Malika status report sent.' });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+// POST /api/briefing/feedback-compliance — trigger weekly feedback compliance report now
+briefingRouter.post('/feedback-compliance', async (req: AuthedRequest, res) => {
+  if (!['founder', 'manager'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  try {
+    await sendWeeklyFeedbackReport();
+    res.json({ ok: true, message: 'Weekly feedback compliance report sent.' });
   } catch (e: any) {
     res.status(500).json({ error: e.message || String(e) });
   }
