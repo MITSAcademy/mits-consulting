@@ -83,6 +83,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
   const [amountExpected, setAmountExpected] = useState(String(r.cycleAmount || ''));
   const [amountActual, setAmountActual] = useState('');
   const [paymentDoneDate, setPaymentDoneDate] = useState(todayISO());
+  const [newNextDueDate, setNewNextDueDate] = useState('');
 
   // Path B — leverage DCR
   const [date1, setDate1] = useState(r.payDate1 || '');
@@ -103,7 +104,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
       const body: any = {
         clientId: r.id,
         type: 'payment_received',
-        proposedDate1: r.payDate1 || null,   // current next due date — Samita will update on approval
+        proposedDate1: newNextDueDate || null,
         proposedDate2: r.payDate2 || null,
         amountExpected: amountExpected ? Number(amountExpected) : null,
         amountActual: amountActual ? Number(amountActual) : null,
@@ -261,6 +262,15 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
                 />
                 <div className="text-[11px] muted mt-1">Cannot be a future date.</div>
               </div>
+              <div className="form-row">
+                <Label>Next payment due date *</Label>
+                <Input
+                  type="date"
+                  value={newNextDueDate}
+                  min={todayISO()}
+                  onChange={e => setNewNextDueDate(e.target.value)}
+                />
+              </div>
               <div>
                 <Label>Payment screenshot *</Label>
                 <div className="mt-1">
@@ -373,7 +383,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
                 variant="primary"
                 disabled={
                   submitPayment.isPending ||
-                  !amountActual || !paymentDoneDate || !screenshot
+                  !amountActual || !paymentDoneDate || !newNextDueDate || !screenshot
                 }
                 onClick={() => submitPayment.mutate()}
                 style={{ background: '#10b981' }}

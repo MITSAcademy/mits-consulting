@@ -68,12 +68,9 @@ function RequestCard({ r, canApprove }: { r: DCR; canApprove: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
   const [rejecting, setRejecting] = useState(false);
-  const [newNextDue, setNewNextDue] = useState('');
-
-  const todayISO = () => new Date().toISOString().slice(0, 10);
 
   const approve = useMutation({
-    mutationFn: (): Promise<any> => api.post(`/date-change-requests/${r.id}/approve`, r.type === 'payment_received' ? { newNextDueDate: newNextDue } : {}),
+    mutationFn: (): Promise<any> => api.post(`/date-change-requests/${r.id}/approve`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['date-change-requests'] }); showToast('Approved — dates updated ✓'); },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
@@ -140,8 +137,8 @@ function RequestCard({ r, canApprove }: { r: DCR; canApprove: boolean }) {
                   <div className="font-semibold" style={{ color: 'var(--brand-text)' }}>{fmtDate(r.paymentDoneDate)}</div>
                 </div>
               </div>
-              <div className="text-[12px]" style={{ color: 'var(--brand-textSecondary)' }}>
-                <span className="muted">New next due date:</span> <strong>{fmtDate(r.proposedDate1)}</strong>
+              <div className="rounded-lg px-3 py-2 text-[12px]" style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                <span className="muted">New next due date (set by Mitali):</span> <strong style={{ color: '#10b981' }}>{fmtDate(r.proposedDate1)}</strong>
               </div>
               {r.screenshotBase64 && (
                 <div>
@@ -181,23 +178,10 @@ function RequestCard({ r, canApprove }: { r: DCR; canApprove: boolean }) {
             <div className="mt-4 flex items-start gap-3 flex-wrap">
               {!rejecting ? (
                 <>
-                  {r.type === 'payment_received' && (
-                    <div className="w-full mb-2">
-                      <div className="text-[11px] font-semibold mb-1" style={{ color: 'var(--brand-textSecondary)' }}>Set new next due date for client *</div>
-                      <input
-                        type="date"
-                        value={newNextDue}
-                        min={todayISO()}
-                        onChange={e => setNewNextDue(e.target.value)}
-                        className="text-[12px] rounded-lg px-3 py-1.5"
-                        style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}
-                      />
-                    </div>
-                  )}
                   <Button variant="primary" size="sm"
-                    disabled={approve.isPending || (r.type === 'payment_received' && !newNextDue)}
+                    disabled={approve.isPending}
                     onClick={() => approve.mutate()}>
-                    <CheckCircle2 size={12} /> {approve.isPending ? 'Approving…' : r.type === 'payment_received' ? 'Confirm payment & update date' : 'Approve & update dates'}
+                    <CheckCircle2 size={12} /> {approve.isPending ? 'Approving…' : r.type === 'payment_received' ? 'Confirm payment ✓' : 'Approve & update dates'}
                   </Button>
                   <Button size="sm" onClick={() => setRejecting(true)}>
                     <XCircle size={12} /> Reject

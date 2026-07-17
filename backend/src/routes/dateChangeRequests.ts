@@ -259,11 +259,10 @@ dateChangeRequestsRouter.post('/:id/approve', async (req: AuthedRequest, res) =>
   if (!allowed.includes(role)) return res.status(403).json({ error: 'Not authorised to approve this type' });
 
   const req_ = request as any;
-  const { newNextDueDate } = req.body || {};
 
   if (request.type === 'payment_received') {
-    // Path A: record the actual payment + update payDate1 to Samita's confirmed next due date
-    if (!newNextDueDate) return res.status(400).json({ error: 'newNextDueDate is required to confirm payment' });
+    // Path A: record the actual payment + update payDate1 to Mitali's proposed next due date
+    if (!request.proposedDate1) return res.status(400).json({ error: 'No proposed next due date on this request' });
     const activeTraining = await prisma.regularTraining.findFirst({
       where: { clientId: request.clientId, status: 'active' },
       select: { trainerId: true },
@@ -274,7 +273,7 @@ dateChangeRequestsRouter.post('/:id/approve', async (req: AuthedRequest, res) =>
       prisma.client.update({
         where: { id: request.clientId },
         data: {
-          payDate1: newNextDueDate,
+          payDate1: request.proposedDate1,
           leverageUntil: null,
           leverageNote: null,
         },
