@@ -59,32 +59,35 @@ export async function sendWeeklyFeedbackReport(): Promise<void> {
     orderBy: { name: 'asc' },
   });
 
-  // All punches this week
-  const punches = await prisma.feedbackPunch.findMany({
-    where: { date: { gte: monday, lte: saturday } },
-    select: { clientId: true, punchedById: true, type: true },
-  });
+  const monStart = new Date(monday + 'T00:00:00+05:30');
+  const satEnd = new Date(saturday + 'T23:59:59+05:30');
 
   const VERBAL_IDS = ['u-mitali', 'u-bhavneet'];
   const WRITTEN_IDS = ['u-kashish', 'u-muskan'];
+  const staffIds = [...VERBAL_IDS, ...WRITTEN_IDS];
 
   const staffNames: Record<string, string> = {
     'u-mitali': 'Mitali', 'u-bhavneet': 'Bhavneet',
     'u-kashish': 'Kashish', 'u-muskan': 'Muskan',
   };
 
-  // Per client: who punched
-  const punchMap: Record<string, Set<string>> = {};
-  for (const p of punches) {
-    if (!punchMap[p.clientId]) punchMap[p.clientId] = new Set();
-    punchMap[p.clientId].add(p.punchedById);
+  // Derive compliance from FeedbackActivity
+  const activities = await prisma.feedbackActivity.findMany({
+    where: { loggedById: { in: staffIds }, loggedAt: { gte: monStart, lte: satEnd } },
+    select: { clientId: true, loggedById: true },
+  });
+
+  const activityMap: Record<string, Set<string>> = {};
+  for (const a of activities) {
+    if (!activityMap[a.clientId]) activityMap[a.clientId] = new Set();
+    activityMap[a.clientId].add(a.loggedById);
   }
 
   const totalClients = clients.length;
   let verbalDone = 0, verbalMissed = 0, writtenDone = 0, writtenMissed = 0;
 
   const rows = clients.map(c => {
-    const who = punchMap[c.id] || new Set();
+    const who = activityMap[c.id] || new Set();
     const gotVerbal = VERBAL_IDS.some(id => who.has(id));
     const gotWritten = WRITTEN_IDS.some(id => who.has(id));
     if (gotVerbal) verbalDone++; else verbalMissed++;
