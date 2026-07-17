@@ -102,15 +102,19 @@ function buildHtml(clientName: string, mitaliName: string, mitaliEmail: string, 
 </html>`;
 }
 
-export async function sendClientFeedbackEmails(opts: { force?: boolean } = {}): Promise<{ sent: number; skipped: number; errors: number }> {
+export async function sendClientFeedbackEmails(opts: { force?: boolean; sample?: boolean } = {}): Promise<{ sent: number; skipped: number; errors: number }> {
   const today = todayIST();
   const targetDate = addDays(today, 2); // payDate1 is 2 days from now
 
-  // Fetch Mitali user (sender)
-  const mitali = await prisma.user.findUnique({
-    where: { id: 'u-mitali' },
+  // Fetch sender (Mitali) + CC recipients (Vaibhav, Samita)
+  const users = await prisma.user.findMany({
+    where: { id: { in: ['u-mitali', 'u-vaibhav', 'u-samita'] } },
     select: { id: true, name: true, email: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true, phone: true },
   });
+  const mitali = users.find((u) => u.id === 'u-mitali');
+  const vaibhav = users.find((u) => u.id === 'u-vaibhav');
+  const samita = users.find((u) => u.id === 'u-samita');
+
   if (!mitali?.gmailAddress || !mitali?.smtpAppPassword) {
     console.warn('[feedback-email] Mitali SMTP not configured — skipping');
     return { sent: 0, skipped: 0, errors: 0 };
@@ -121,6 +125,9 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean } = {}): 
     console.warn('[feedback-email] Could not build fromUser for Mitali — skipping');
     return { sent: 0, skipped: 0, errors: 0 };
   }
+
+  const mitaliEmail = mitali.sendAsAddress || mitali.gmailAddress!;
+  const ccEmails = [mitaliEmail, vaibhav?.email, samita?.email].filter(Boolean).join(', ');
 
   // Find all active clients whose payDate1 = targetDate (2 days away)
   const clients = await prisma.client.findMany({
@@ -135,23 +142,38 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean } = {}): 
     },
   });
 
+  // Sample mode: send one test email to internal team only, no real client emails
+  if (opts.sample) {
+    const sampleClientName = clients[0]?.name || 'Test Client';
+    const html = buildHtml(sampleClientName, mitali.name, mitaliEmail, (mitali as any).phone || '');
+    await sendEmail({
+      to: mitaliEmail,
+      cc: [vaibhav?.email, samita?.email].filter(Boolean).join(', '),
+      subject: `[SAMPLE] We value your feedback - MITS Solution`,
+      body: `[SAMPLE — no client copied]\n\nDear ${sampleClientName.split(' ')[0]},\n\nWe'd love your feedback! Please fill our Client Survey Form: ${FORM_URL}\n\nRegards,\n${mitali.name}`,
+      htmlBody: html,
+      fromUser,
+    });
+    console.log(`[feedback-email] Sample sent to internal team (${clients.length} clients would receive real email)`);
+    return { sent: 1, skipped: 0, errors: 0 };
+  }
+
   let sent = 0, skipped = 0, errors = 0;
 
   for (const client of clients) {
     if (!client.email) { skipped++; continue; }
 
-    // Skip if already sent in this cycle (feedbackEmailSentAt within last 10 days)
+    // Skip if already sent in this cycle (feedbackEmailSentAt within last 7 days)
     if (!opts.force && client.feedbackEmailSentAt) {
       const daysSince = Math.floor((Date.parse(today) - Date.parse(client.feedbackEmailSentAt)) / 86_400_000);
-      if (daysSince < 10) { skipped++; continue; }
+      if (daysSince < 7) { skipped++; continue; }
     }
 
     try {
-      const mitaliEmail = mitali.sendAsAddress || mitali.gmailAddress!;
       const html = buildHtml(client.name, mitali.name, mitaliEmail, (mitali as any).phone || '');
       await sendEmail({
         to: client.email,
-        cc: mitaliEmail,
+        cc: ccEmails,
         subject: 'We value your feedback - MITS Solution',
         body: `Dear ${client.name.split(' ')[0]},\n\nWe'd love your feedback! Please fill our Client Survey Form: ${FORM_URL}\n\nRegards,\n${mitali.name}`,
         htmlBody: html,

@@ -138,8 +138,8 @@ export function initScheduler() {
     timezone: 'Asia/Kolkata',
   });
 
-  // 9:00 AM IST daily — feedback survey emails to clients whose payDate1 is 2 days away
-  cron.schedule('0 9 * * *', () => safe('client-feedback-emails', async () => { await sendClientFeedbackEmails(); }), {
+  // 5:00 AM IST daily — feedback survey emails to clients whose payDate1 is 2 days away
+  cron.schedule('0 5 * * *', () => safe('client-feedback-emails', async () => { await sendClientFeedbackEmails(); }), {
     timezone: 'Asia/Kolkata',
   });
 

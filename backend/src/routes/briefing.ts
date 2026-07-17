@@ -47,13 +47,14 @@ briefingRouter.post('/mitali-daily', async (req: AuthedRequest, res) => {
   }
 });
 
-// POST /api/briefing/feedback-survey  — trigger feedback survey emails now (force mode)
+// POST /api/briefing/feedback-survey  — trigger feedback survey emails now (force or sample mode)
 briefingRouter.post('/feedback-survey', async (req: AuthedRequest, res) => {
   if (!['founder', 'manager'].includes(req.user!.role)) {
     return res.status(403).json({ error: 'Not allowed' });
   }
+  const sample = req.query.sample === 'true' || req.body?.sample === true;
   try {
-    const result = await sendClientFeedbackEmails({ force: true });
+    const result = await sendClientFeedbackEmails({ force: !sample, sample });
     res.json({ ok: true, ...result });
   } catch (e: any) {
     res.status(500).json({ error: e.message || String(e) });

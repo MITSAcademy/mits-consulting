@@ -574,7 +574,12 @@ function MitaliDailyReportButton() {
 
 function FeedbackSurveyButton() {
   const showToast = useUI((s) => s.showToast);
-  const trigger = useMutation({
+  const sample = useMutation({
+    mutationFn: () => api.post('/briefing/feedback-survey', { sample: true }),
+    onSuccess: () => showToast('Sample email sent to Vaibhav, Samita & Mitali ✓'),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Send failed', 'error'),
+  });
+  const force = useMutation({
     mutationFn: () => api.post('/briefing/feedback-survey'),
     onSuccess: (res: any) => {
       const { sent, skipped, errors } = res.data || {};
@@ -582,10 +587,16 @@ function FeedbackSurveyButton() {
     },
     onError: (e: any) => showToast(e.response?.data?.error || 'Send failed', 'error'),
   });
+  const busy = sample.isPending || force.isPending;
   return (
-    <Button size="sm" variant="primary" disabled={trigger.isPending} onClick={() => trigger.mutate()}>
-      <Send size={12} /> {trigger.isPending ? 'Sending…' : 'Send now'}
-    </Button>
+    <div className="flex gap-2">
+      <Button size="sm" variant="secondary" disabled={busy} onClick={() => sample.mutate()}>
+        <Send size={12} /> {sample.isPending ? 'Sending…' : 'Send sample'}
+      </Button>
+      <Button size="sm" variant="primary" disabled={busy} onClick={() => force.mutate()}>
+        <Send size={12} /> {force.isPending ? 'Sending…' : 'Send now (all clients)'}
+      </Button>
+    </div>
   );
 }
 
