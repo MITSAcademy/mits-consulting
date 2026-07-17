@@ -590,7 +590,7 @@ function FeedbackSurveyButton() {
   const busy = sample.isPending || force.isPending;
   return (
     <div className="flex gap-2">
-      <Button size="sm" variant="secondary" disabled={busy} onClick={() => sample.mutate()}>
+      <Button size="sm" variant="default" disabled={busy} onClick={() => sample.mutate()}>
         <Send size={12} /> {sample.isPending ? 'Sending…' : 'Send sample'}
       </Button>
       <Button size="sm" variant="primary" disabled={busy} onClick={() => force.mutate()}>
