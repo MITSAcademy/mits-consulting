@@ -38,7 +38,7 @@ interface DCR {
   approvedByName: string | null;
   approvedAt: string | null;
   rejectionNote: string | null;
-  client: { id: string; name: string; payDate1: string | null; payDate2: string | null };
+  client: { id: string; name: string; currency: string | null; payDate1: string | null; payDate2: string | null };
 }
 
 function fmtDate(d: string | null) {
