@@ -267,7 +267,7 @@ function buildHtml(params: {
       <tr><td>
         <h2 style="margin:0 0 4px;font-size:20px;color:#111827;">💰 Payment Follow-Up — Daily Report</h2>
         <p style="font-size:12px;color:#9ca3af;margin:0 0 12px;">${esc(date)} · Generated at 12:00 PM IST · MITS Consulting Hub</p>
-        <div style="display:inline-block;background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;border-radius:4px;padding:3px 10px;margin-bottom:20px;letter-spacing:.3px;">🔒 CONFIDENTIAL — Vaibhav, Samita, Mitali &amp; Bhavneet only</div>
+        <div style="display:inline-block;background:#fee2e2;color:#991b1b;font-size:11px;font-weight:700;border-radius:4px;padding:3px 10px;margin-bottom:20px;letter-spacing:.3px;">🔒 CONFIDENTIAL — Vaibhav, Samita &amp; Mitali only</div>
 
         ${summaryHtml}
         ${freshSection}
