@@ -125,7 +125,7 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean } = {}): 
   // Find all active clients whose payDate1 = targetDate (2 days away)
   const clients = await prisma.client.findMany({
     where: {
-      lifecycleStatus: 'active',
+      regularTrainings: { some: { status: 'active' } },
       payDate1: targetDate,
     },
     select: {
