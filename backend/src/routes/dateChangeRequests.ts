@@ -119,6 +119,7 @@ dateChangeRequestsRouter.post('/', async (req: AuthedRequest, res) => {
     proposedDate1, proposedDate2,
     // Path A
     linkedPaymentId, screenshotBase64,
+    amountExpected, amountActual, paymentDoneDate,
     // Path B
     summary30d, mitaliF15d, bhavneetF15d, lastSessionDate, issueDetail, leverageScreenshot,
   } = req.body;
@@ -126,12 +127,22 @@ dateChangeRequestsRouter.post('/', async (req: AuthedRequest, res) => {
   if (!clientId || !type) return res.status(400).json({ error: 'clientId and type required' });
   if (!['payment_received', 'leverage'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
 
-  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+  const client = await prisma.client.findUnique({ where: { id: clientId }, select: { id: true, name: true, currency: true, cycleAmount: true } });
   if (!client) return res.status(404).json({ error: 'Client not found' });
 
   // Block if there's already a pending request for this client
   const existing = await prisma.dateChangeRequest.findFirst({ where: { clientId, status: 'pending' } });
   if (existing) return res.status(409).json({ error: 'A pending request already exists for this client. Wait for it to be approved or rejected first.' });
+
+  // Validate Path A required fields
+  if (type === 'payment_received') {
+    if (!paymentDoneDate) return res.status(400).json({ error: 'paymentDoneDate is required' });
+    if (!amountActual) return res.status(400).json({ error: 'amountActual is required' });
+    if (!screenshotBase64) return res.status(400).json({ error: 'Payment screenshot is required' });
+    if (!proposedDate1) return res.status(400).json({ error: 'proposedDate1 (next due date) is required' });
+    // Block future payment dates
+    if (paymentDoneDate > todayIST()) return res.status(400).json({ error: 'Payment done date cannot be in the future' });
+  }
 
   // Validate Path B minimum word count
   if (type === 'leverage' && issueDetail) {
@@ -149,6 +160,9 @@ dateChangeRequestsRouter.post('/', async (req: AuthedRequest, res) => {
       proposedDate2: proposedDate2 || null,
       linkedPaymentId: linkedPaymentId || null,
       screenshotBase64: screenshotBase64 || null,
+      amountExpected: amountExpected != null ? Number(amountExpected) : null,
+      amountActual: amountActual != null ? Number(amountActual) : null,
+      paymentDoneDate: paymentDoneDate || null,
       summary30d: summary30d || null,
       mitaliF15d: mitaliF15d || null,
       bhavneetF15d: bhavneetF15d || null,
@@ -194,6 +208,7 @@ dateChangeRequestsRouter.patch('/:id', async (req: AuthedRequest, res) => {
   const {
     proposedDate1, proposedDate2,
     linkedPaymentId, screenshotBase64,
+    amountExpected, amountActual, paymentDoneDate,
     summary30d, mitaliF15d, bhavneetF15d, lastSessionDate, issueDetail, leverageScreenshot,
   } = req.body;
 
@@ -210,6 +225,9 @@ dateChangeRequestsRouter.patch('/:id', async (req: AuthedRequest, res) => {
       proposedDate2: proposedDate2 ?? request.proposedDate2,
       linkedPaymentId: linkedPaymentId ?? request.linkedPaymentId,
       screenshotBase64: screenshotBase64 ?? request.screenshotBase64,
+      amountExpected: amountExpected != null ? Number(amountExpected) : (request as any).amountExpected,
+      amountActual: amountActual != null ? Number(amountActual) : (request as any).amountActual,
+      paymentDoneDate: paymentDoneDate ?? (request as any).paymentDoneDate,
       summary30d: summary30d ?? request.summary30d,
       mitaliF15d: mitaliF15d ?? request.mitaliF15d,
       bhavneetF15d: bhavneetF15d ?? request.bhavneetF15d,
@@ -231,7 +249,7 @@ dateChangeRequestsRouter.post('/:id/approve', async (req: AuthedRequest, res) =>
   const role = req.user!.role;
   const request = await prisma.dateChangeRequest.findUnique({
     where: { id: req.params.id },
-    include: { client: { select: { id: true, name: true, email: true } } },
+    include: { client: { select: { id: true, name: true, email: true, currency: true, cycleAmount: true } } },
   });
   if (!request) return res.status(404).json({ error: 'Not found' });
   if (request.status !== 'pending') return res.status(400).json({ error: 'Request is not pending' });
@@ -240,14 +258,49 @@ dateChangeRequestsRouter.post('/:id/approve', async (req: AuthedRequest, res) =>
   const allowed = request.type === 'payment_received' ? APPROVERS_A : APPROVERS_B;
   if (!allowed.includes(role)) return res.status(403).json({ error: 'Not authorised to approve this type' });
 
-  // Apply the date change
-  await prisma.client.update({
-    where: { id: request.clientId },
-    data: {
-      ...(request.proposedDate1 !== null ? { payDate1: request.proposedDate1 } : {}),
-      ...(request.proposedDate2 !== null ? { payDate2: request.proposedDate2 } : {}),
-    },
-  });
+  const req_ = request as any;
+  const { newNextDueDate } = req.body || {};
+
+  if (request.type === 'payment_received') {
+    // Path A: record the actual payment + update payDate1 to Samita's confirmed next due date
+    if (!newNextDueDate) return res.status(400).json({ error: 'newNextDueDate is required to confirm payment' });
+    const activeTraining = await prisma.regularTraining.findFirst({
+      where: { clientId: request.clientId, status: 'active' },
+      select: { trainerId: true },
+    });
+    const recordedAmount = req_.amountActual ?? req_.amountExpected ?? request.client.cycleAmount ?? 0;
+    const paymentDate = req_.paymentDoneDate || todayIST();
+    await prisma.$transaction([
+      prisma.client.update({
+        where: { id: request.clientId },
+        data: {
+          payDate1: newNextDueDate,
+          leverageUntil: null,
+          leverageNote: null,
+        },
+      }),
+      prisma.payment.create({
+        data: {
+          clientId: request.clientId,
+          trainerId: activeTraining?.trainerId || null,
+          kind: 'Renewal',
+          amount: Math.round(Number(recordedAmount)),
+          currency: (request.client.currency || 'USD') as any,
+          paymentDate,
+          receivedById: req.user!.id,
+        },
+      }),
+    ]);
+  } else {
+    // Path B: just apply the date change
+    await prisma.client.update({
+      where: { id: request.clientId },
+      data: {
+        ...(request.proposedDate1 !== null ? { payDate1: request.proposedDate1 } : {}),
+        ...(request.proposedDate2 !== null ? { payDate2: request.proposedDate2 } : {}),
+      },
+    });
+  }
 
   await prisma.dateChangeRequest.update({
     where: { id: request.id },
@@ -260,7 +313,9 @@ dateChangeRequestsRouter.post('/:id/approve', async (req: AuthedRequest, res) =>
   });
 
   await audit(req.user!.id, req.user!.name, 'DATE_CHANGE_APPROVED',
-    `${request.client.name}: date change approved — ${request.proposedDate1 || '?'} / ${request.proposedDate2 || '?'}`,
+    request.type === 'payment_received'
+      ? `${request.client.name}: payment approved by ${req.user!.name} — ${req_.amountActual || req_.amountExpected || '?'} recorded, next due ${request.proposedDate1 || '?'}`
+      : `${request.client.name}: leverage approved — ${request.proposedDate1 || '?'} / ${request.proposedDate2 || '?'}`,
     { clientId: request.clientId });
 
   // Notify Mitali

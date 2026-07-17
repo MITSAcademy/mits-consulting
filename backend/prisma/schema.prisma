@@ -1221,8 +1221,11 @@ model DateChangeRequest {
   proposedDate2   String?  // proposed payDate2
 
   // Path A — payment received
-  linkedPaymentId String?  // Payment.id that proves collection
-  screenshotBase64 String? @db.Text  // base64 image
+  linkedPaymentId  String?
+  screenshotBase64 String?  @db.Text
+  amountExpected   Float?   // expected payment amount
+  amountActual     Float?   // actual amount received
+  paymentDoneDate  String?  // ISO date payment was received
 
   // Path B — leverage
   summary30d      String?  @db.Text  // client summary last 30 days

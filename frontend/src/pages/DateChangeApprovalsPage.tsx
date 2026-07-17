@@ -24,6 +24,9 @@ interface DCR {
   // Path A
   linkedPaymentId: string | null;
   screenshotBase64: string | null;
+  amountExpected: number | null;
+  amountActual: number | null;
+  paymentDoneDate: string | null;
   // Path B
   summary30d: string | null;
   mitaliF15d: string | null;
@@ -65,9 +68,12 @@ function RequestCard({ r, canApprove }: { r: DCR; canApprove: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
   const [rejecting, setRejecting] = useState(false);
+  const [newNextDue, setNewNextDue] = useState('');
+
+  const todayISO = () => new Date().toISOString().slice(0, 10);
 
   const approve = useMutation({
-    mutationFn: (): Promise<any> => api.post(`/date-change-requests/${r.id}/approve`),
+    mutationFn: (): Promise<any> => api.post(`/date-change-requests/${r.id}/approve`, r.type === 'payment_received' ? { newNextDueDate: newNextDue } : {}),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['date-change-requests'] }); showToast('Approved — dates updated ✓'); },
     onError: (e: any) => showToast(e.response?.data?.error || 'Failed', 'error'),
   });
@@ -98,26 +104,53 @@ function RequestCard({ r, canApprove }: { r: DCR; canApprove: boolean }) {
       {/* Summary row */}
       <div className="flex flex-wrap gap-4 mt-2 text-[12px]" style={{ color: 'var(--brand-textSecondary)' }}>
         <span>By: <strong>{r.requestedByName}</strong></span>
-        <span>Current dates: <strong>{fmtDate(r.client.payDate1)}</strong> / <strong>{fmtDate(r.client.payDate2)}</strong></span>
-        <span>→ Proposed: <strong>{fmtDate(r.proposedDate1)}</strong> / <strong>{fmtDate(r.proposedDate2)}</strong></span>
+        {r.type === 'payment_received' ? (
+          <>
+            <span>Paid: <strong>{r.amountActual != null ? `${r.client.currency || 'USD'} ${r.amountActual}` : '—'}</strong> on <strong>{fmtDate(r.paymentDoneDate)}</strong></span>
+            <span>→ Next due: <strong>{fmtDate(r.proposedDate1)}</strong></span>
+          </>
+        ) : (
+          <>
+            <span>Current: <strong>{fmtDate(r.client.payDate1)}</strong> / <strong>{fmtDate(r.client.payDate2)}</strong></span>
+            <span>→ Proposed: <strong>{fmtDate(r.proposedDate1)}</strong> / <strong>{fmtDate(r.proposedDate2)}</strong></span>
+          </>
+        )}
       </div>
 
       {/* Expanded detail */}
       {expanded && (
         <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)' }}>
           {r.type === 'payment_received' ? (
-            <div className="space-y-2">
-              {r.linkedPaymentId && (
-                <div className="text-[12px]"><span className="muted">Linked payment ID:</span> <code className="text-[11px]">{r.linkedPaymentId}</code></div>
-              )}
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-3 text-[12px]">
+                <div className="rounded-lg px-3 py-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+                  <div className="text-[10px] uppercase tracking-wider muted mb-1">Expected</div>
+                  <div className="font-mono font-semibold" style={{ color: 'var(--brand-text)' }}>
+                    {r.amountExpected != null ? `${r.client.currency || 'USD'} ${r.amountExpected}` : '—'}
+                  </div>
+                </div>
+                <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
+                  <div className="text-[10px] uppercase tracking-wider muted mb-1">Actual received</div>
+                  <div className="font-mono font-bold" style={{ color: '#10b981' }}>
+                    {r.amountActual != null ? `${r.client.currency || 'USD'} ${r.amountActual}` : '—'}
+                  </div>
+                </div>
+                <div className="rounded-lg px-3 py-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+                  <div className="text-[10px] uppercase tracking-wider muted mb-1">Payment date</div>
+                  <div className="font-semibold" style={{ color: 'var(--brand-text)' }}>{fmtDate(r.paymentDoneDate)}</div>
+                </div>
+              </div>
+              <div className="text-[12px]" style={{ color: 'var(--brand-textSecondary)' }}>
+                <span className="muted">New next due date:</span> <strong>{fmtDate(r.proposedDate1)}</strong>
+              </div>
               {r.screenshotBase64 && (
                 <div>
                   <div className="text-[11px] muted mb-1">Payment screenshot:</div>
                   <img src={r.screenshotBase64} alt="Payment proof" style={{ maxWidth: 400, borderRadius: 8, border: '1px solid var(--brand-border)' }} />
                 </div>
               )}
-              {!r.linkedPaymentId && !r.screenshotBase64 && (
-                <div className="text-[12px] muted italic">No payment proof attached.</div>
+              {!r.screenshotBase64 && (
+                <div className="text-[12px] muted italic">No screenshot attached.</div>
               )}
             </div>
           ) : (
@@ -148,8 +181,23 @@ function RequestCard({ r, canApprove }: { r: DCR; canApprove: boolean }) {
             <div className="mt-4 flex items-start gap-3 flex-wrap">
               {!rejecting ? (
                 <>
-                  <Button variant="primary" size="sm" disabled={approve.isPending} onClick={() => approve.mutate()}>
-                    <CheckCircle2 size={12} /> {approve.isPending ? 'Approving…' : 'Approve & update dates'}
+                  {r.type === 'payment_received' && (
+                    <div className="w-full mb-2">
+                      <div className="text-[11px] font-semibold mb-1" style={{ color: 'var(--brand-textSecondary)' }}>Set new next due date for client *</div>
+                      <input
+                        type="date"
+                        value={newNextDue}
+                        min={todayISO()}
+                        onChange={e => setNewNextDue(e.target.value)}
+                        className="text-[12px] rounded-lg px-3 py-1.5"
+                        style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)' }}
+                      />
+                    </div>
+                  )}
+                  <Button variant="primary" size="sm"
+                    disabled={approve.isPending || (r.type === 'payment_received' && !newNextDue)}
+                    onClick={() => approve.mutate()}>
+                    <CheckCircle2 size={12} /> {approve.isPending ? 'Approving…' : r.type === 'payment_received' ? 'Confirm payment & update date' : 'Approve & update dates'}
                   </Button>
                   <Button size="sm" onClick={() => setRejecting(true)}>
                     <XCircle size={12} /> Reject

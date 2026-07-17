@@ -12,7 +12,7 @@
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Clock, Upload, AlertTriangle } from 'lucide-react';
+import { Clock, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useUI } from '@/store/ui';
 import { Button } from '@/components/ui/button';
@@ -75,14 +75,14 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
     queryKey: ['date-change-requests'],
     queryFn: () => api.get('/date-change-requests').then((d: any) => d.data),
   });
-  const lastRejected = allRequests?.find(req => req.status === 'rejected' && req.type === 'leverage' && (req as any).clientId === r.id);
+  const lastRejected = allRequests?.find(req => req.status === 'rejected' && (req as any).clientId === r.id);
 
   const [path, setPath] = useState<'a' | 'b' | null>(null);
 
-  // Path A — record payment directly
-  const [amountReceived, setAmountReceived] = useState(String(r.cycleAmount || ''));
-  const [newDueDate, setNewDueDate] = useState('');
-  const [confirming, setConfirming] = useState(false);
+  // Path A — payment proof for Samita to approve
+  const [amountExpected, setAmountExpected] = useState(String(r.cycleAmount || ''));
+  const [amountActual, setAmountActual] = useState('');
+  const [paymentDoneDate, setPaymentDoneDate] = useState(todayISO());
 
   // Path B — leverage DCR
   const [date1, setDate1] = useState(r.payDate1 || '');
@@ -97,18 +97,31 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
 
   const wordCount = issueDetail.trim().split(/\s+/).filter(Boolean).length;
 
-  // Path A — directly records payment (no approval needed)
-  const recordPayment = useMutation({
-    mutationFn: () => api.post(`/follow-up-payments/${r.id}/advance-payment`, {
-      newDate2: newDueDate,
-      amountReceived: amountReceived ? Number(amountReceived) : undefined,
-    }),
+  // Path A — submit payment proof DCR for Samita to approve
+  const submitPayment = useMutation({
+    mutationFn: async () => {
+      const body: any = {
+        clientId: r.id,
+        type: 'payment_received',
+        proposedDate1: r.payDate1 || null,   // current next due date — Samita will update on approval
+        proposedDate2: r.payDate2 || null,
+        amountExpected: amountExpected ? Number(amountExpected) : null,
+        amountActual: amountActual ? Number(amountActual) : null,
+        paymentDoneDate: paymentDoneDate || null,
+        screenshotBase64: screenshot || null,
+      };
+      if (lastRejected && lastRejected.type === 'payment_received') {
+        return api.patch(`/date-change-requests/${lastRejected.id}`, body);
+      }
+      return api.post('/date-change-requests', body);
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
-      showToast(`Payment recorded ✓ — ${r.currency} ${amountReceived || r.cycleAmount} · next due ${fmtDate(newDueDate)}`);
+      qc.invalidateQueries({ queryKey: ['date-change-requests'] });
+      qc.invalidateQueries({ queryKey: ['dcr-client', r.id] });
+      showToast('Payment proof submitted — Samita will confirm');
       onClose();
     },
-    onError: (e: any) => showToast(e.response?.data?.error || 'Failed to record payment', 'error'),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Failed to submit', 'error'),
   });
 
   // Path B — submit leverage DCR
@@ -154,7 +167,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
         {/* Header */}
         <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
           <div className="font-bold text-[15px]" style={{ color: 'var(--brand-text)' }}>
-            {path === 'a' ? (confirming ? '✅ Confirm payment' : '💳 Record payment') : path === 'b' ? '⏳ Leverage request' : 'Payment dates'} — {r.name}
+            {path === 'a' ? '💳 Record payment' : path === 'b' ? '⏳ Leverage request' : 'Payment dates'} — {r.name}
           </div>
           <div className="text-[12px] muted mt-0.5">
             Current dates: <strong>{fmtDate(r.payDate1)}</strong> / <strong>{fmtDate(r.payDate2)}</strong>
@@ -164,30 +177,25 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
         <div className="px-5 py-4">
           {isLoading && <div className="muted text-[13px]">Checking existing requests…</div>}
 
-          {/* Pending leverage DCR — locked */}
-          {!isLoading && existing && existing.status === 'pending' && existing.type === 'leverage' && !path && (
-            <div>
-              <div className="rounded-xl px-4 py-4 text-center mb-4" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)' }}>
-                <Clock size={24} style={{ color: '#fbbf24', margin: '0 auto 8px' }} />
-                <div className="font-bold text-[13px]" style={{ color: '#fbbf24' }}>Leverage request pending Vaibhav's approval</div>
-                <div className="text-[12px] muted mt-2">
-                  Proposed: <strong>{fmtDate(existing.proposedDate1)}</strong> / <strong>{fmtDate(existing.proposedDate2)}</strong>
-                </div>
-                <div className="text-[11px] muted mt-3">Deferral dates are locked until approved or rejected.</div>
+          {/* Pending DCR — locked */}
+          {!isLoading && existing && existing.status === 'pending' && !path && (
+            <div className="rounded-xl px-4 py-4 text-center" style={{
+              background: existing.type === 'payment_received' ? 'rgba(16,185,129,0.08)' : 'rgba(251,191,36,0.08)',
+              border: `1px solid ${existing.type === 'payment_received' ? 'rgba(16,185,129,0.3)' : 'rgba(251,191,36,0.3)'}`,
+            }}>
+              <Clock size={24} style={{ color: existing.type === 'payment_received' ? '#10b981' : '#fbbf24', margin: '0 auto 8px' }} />
+              <div className="font-bold text-[13px]" style={{ color: existing.type === 'payment_received' ? '#10b981' : '#fbbf24' }}>
+                {existing.type === 'payment_received' ? 'Payment proof pending Samita\'s confirmation' : 'Leverage request pending Vaibhav\'s approval'}
               </div>
-              <div className="text-[12px] font-semibold mb-2" style={{ color: 'var(--brand-textSecondary)' }}>You can still record a payment:</div>
-              <button onClick={() => setPath('a')}
-                className="rounded-xl p-4 text-left transition-all hover:opacity-90 w-full"
-                style={{ background: 'rgba(16,185,129,0.08)', border: '2px solid rgba(16,185,129,0.3)' }}>
-                <div className="text-[20px] mb-1">💳</div>
-                <div className="font-bold text-[13px]" style={{ color: '#10b981' }}>Client paid — record now</div>
-                <div className="text-[11px] muted mt-0.5">Record amount received and set the next due date</div>
-              </button>
+              <div className="text-[12px] muted mt-2">
+                Proposed next due: <strong>{fmtDate(existing.proposedDate1)}</strong>
+              </div>
+              <div className="text-[11px] muted mt-3">Dates are locked until the request is reviewed.</div>
             </div>
           )}
 
-          {/* Rejected leverage — show resubmit banner */}
-          {!isLoading && !existing && lastRejected && path === 'b' && (
+          {/* Rejected — show resubmit banner */}
+          {!isLoading && !existing && lastRejected && path && (
             <div className="mb-4 rounded-lg px-3 py-2.5 text-[12px]" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#fca5a5' }}>
               <strong>Last request rejected</strong> by {lastRejected.approvedByName}
               {lastRejected.rejectionNote && <div className="mt-1 opacity-80">Reason: {lastRejected.rejectionNote}</div>}
@@ -196,7 +204,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
           )}
 
           {/* Path selector */}
-          {!isLoading && !path && !(existing && existing.status === 'pending' && existing.type === 'leverage') && (
+          {!isLoading && !path && !existing && (
             <div>
               <div className="text-[12px] font-semibold mb-3" style={{ color: 'var(--brand-textSecondary)' }}>What do you want to do?</div>
               <div className="grid grid-cols-2 gap-3">
@@ -205,7 +213,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
                   style={{ background: 'rgba(16,185,129,0.08)', border: '2px solid rgba(16,185,129,0.3)' }}>
                   <div className="text-[20px] mb-2">💳</div>
                   <div className="font-bold text-[13px]" style={{ color: '#10b981' }}>Client paid</div>
-                  <div className="text-[11px] muted mt-1">Record payment received and set next due date</div>
+                  <div className="text-[11px] muted mt-1">Submit payment proof → Samita confirms → dates update</div>
                 </button>
                 <button onClick={() => setPath('b')}
                   className="rounded-xl p-4 text-left transition-all hover:opacity-90"
@@ -218,60 +226,61 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
             </div>
           )}
 
-          {/* Path A — record payment (no approval) */}
-          {path === 'a' && !confirming && (
+          {/* Path A — payment proof for Samita */}
+          {path === 'a' && (
             <div className="space-y-4">
-              <div className="form-row">
-                <Label>Amount received ({r.currency})</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={amountReceived}
-                  onChange={e => setAmountReceived(e.target.value)}
-                  placeholder={String(r.cycleAmount || '')}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="form-row">
+                  <Label>Expected amount ({r.currency})</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={amountExpected}
+                    onChange={e => setAmountExpected(e.target.value)}
+                    placeholder={String(r.cycleAmount || '')}
+                  />
+                </div>
+                <div className="form-row">
+                  <Label>Actual amount received ({r.currency})</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={amountActual}
+                    onChange={e => setAmountActual(e.target.value)}
+                    placeholder="e.g. 650"
+                  />
+                </div>
               </div>
               <div className="form-row">
-                <Label>Next payment due date</Label>
+                <Label>Payment received date</Label>
                 <Input
                   type="date"
-                  value={newDueDate}
-                  min={todayISO()}
-                  onChange={e => setNewDueDate(e.target.value)}
+                  value={paymentDoneDate}
+                  max={todayISO()}
+                  onChange={e => setPaymentDoneDate(e.target.value)}
                 />
-                <div className="text-[11px] muted mt-1">Must be today or a future date.</div>
+                <div className="text-[11px] muted mt-1">Cannot be a future date.</div>
+              </div>
+              <div>
+                <Label>Payment screenshot *</Label>
+                <div className="mt-1">
+                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+                  {screenshot ? (
+                    <div>
+                      <img src={screenshot} alt="Payment proof" style={{ maxWidth: '100%', borderRadius: 8, border: '1px solid var(--brand-border)', maxHeight: 200, objectFit: 'cover' }} />
+                      <button onClick={() => setScreenshot(null)} className="text-[11px] muted mt-1 hover:opacity-70">Remove</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => fileRef.current?.click()}
+                      className="flex items-center gap-2 px-4 py-3 rounded-lg w-full text-[12px] border border-dashed hover:opacity-80 transition-all"
+                      style={{ borderColor: 'rgba(16,185,129,0.4)', color: '#10b981' }}>
+                      <Upload size={14} /> Attach payment screenshot
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="rounded-lg px-3 py-2 text-[11px]" style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)', color: '#6ee7b7' }}>
-                Payment is recorded immediately — no approval needed.
-              </div>
-            </div>
-          )}
-
-          {/* Path A — confirmation step */}
-          {path === 'a' && confirming && (
-            <div className="space-y-3">
-              <div className="rounded-xl px-4 py-4" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)' }}>
-                <div className="flex items-start gap-2 mb-3">
-                  <AlertTriangle size={16} style={{ color: '#fbbf24', marginTop: 1, flexShrink: 0 }} />
-                  <div className="font-bold text-[13px]" style={{ color: '#fbbf24' }}>Please double-check before confirming</div>
-                </div>
-                <div className="space-y-2 text-[12px]" style={{ color: 'var(--brand-textSecondary)' }}>
-                  <div className="flex justify-between">
-                    <span className="muted">Client:</span>
-                    <strong style={{ color: 'var(--brand-text)' }}>{r.name}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="muted">Amount received:</span>
-                    <strong style={{ color: '#10b981' }}>{r.currency} {amountReceived || r.cycleAmount}</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="muted">Next due date:</span>
-                    <strong style={{ color: 'var(--brand-text)' }}>{fmtDate(newDueDate)}</strong>
-                  </div>
-                </div>
-                <div className="mt-3 text-[11px] muted">
-                  Is the amount correct? Is the next due date right? This cannot be undone easily.
-                </div>
+                Samita will review and confirm. Dates update only after her approval.
               </div>
             </div>
           )}
@@ -358,29 +367,19 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
         <div className="px-5 pb-5 flex justify-between items-center gap-3" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: 16 }}>
           <Button onClick={onClose}>Cancel</Button>
           <div className="flex items-center gap-2">
-            {/* Path A step 1: go to confirm */}
-            {path === 'a' && !confirming && (
+            {/* Path A: submit payment proof to Samita */}
+            {path === 'a' && (
               <Button
                 variant="primary"
-                disabled={!newDueDate || !amountReceived}
-                onClick={() => setConfirming(true)}
+                disabled={
+                  submitPayment.isPending ||
+                  !amountActual || !paymentDoneDate || !screenshot
+                }
+                onClick={() => submitPayment.mutate()}
+                style={{ background: '#10b981' }}
               >
-                Review & confirm →
+                {submitPayment.isPending ? 'Submitting…' : '💳 Submit to Samita'}
               </Button>
-            )}
-            {/* Path A step 2: actually record */}
-            {path === 'a' && confirming && (
-              <>
-                <Button onClick={() => setConfirming(false)}>← Edit</Button>
-                <Button
-                  variant="primary"
-                  disabled={recordPayment.isPending}
-                  onClick={() => recordPayment.mutate()}
-                  style={{ background: '#10b981' }}
-                >
-                  {recordPayment.isPending ? 'Recording…' : '✓ Yes, record payment'}
-                </Button>
-              </>
             )}
             {/* Path B: submit leverage DCR */}
             {path === 'b' && (
@@ -397,7 +396,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
               </Button>
             )}
           </div>
-          {path && !confirming && <button className="text-[11px] muted hover:opacity-70" onClick={() => setPath(null)}>← Back</button>}
+          {path && <button className="text-[11px] muted hover:opacity-70" onClick={() => setPath(null)}>← Back</button>}
         </div>
       </div>
     </div>
