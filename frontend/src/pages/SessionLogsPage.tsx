@@ -15,7 +15,7 @@ import { Label, Select, Input } from '@/components/ui/input';
 
 const LOG_ROLES = ['founder', 'manager', 'lead', 'staff', 'account_manager', 'payment_processor'];
 const HOUR_OPTIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-const MINUTE_OPTIONS = [0, 15, 30, 45];
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => i);
 function durationToDecimal(h: number, m: number) { return h + m / 60; }
 function decimalToDuration(d: number) { const h = Math.floor(d); const m = Math.round((d - h) * 60); return { h, m }; }
 type Feedback = 'positive' | 'neutral' | 'negative';
