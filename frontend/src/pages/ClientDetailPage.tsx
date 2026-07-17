@@ -4465,7 +4465,7 @@ function HandoverWelcomeModal({ client, onClose }: any) {
   const hasWA = hasGroup || hasPhone;
   const canSend = toEmail || hasWA;
   const waLabel = hasGroup ? 'WhatsApp group' : hasPhone ? 'WhatsApp direct' : '';
-  const [coordinatorName, setCoordinatorName] = React.useState('Kashish');
+  const [coordinatorName, setCoordinatorName] = useState('Kashish');
 
   const send = useMutation({
     mutationFn: async () => {
