@@ -20,6 +20,7 @@ import { sendBhavneetDailySheet } from './bhavneetDailySheet';
 import { sendSmtpHealthAdvisory } from './smtpHealthAdvisory';
 import { sendDailyReminders } from './dailyReminders';
 import { sendMitaliDailyReport } from './mitaliDailyReport';
+import { sendClientFeedbackEmails } from './clientFeedbackEmail';
 import { prisma } from './prisma';
 
 function safe(label: string, fn: () => Promise<void>) {
@@ -134,6 +135,11 @@ export function initScheduler() {
 
   // 11:30 PM IST daily — Mitali's daily activity report (payments, feedback, active window)
   cron.schedule('30 23 * * *', () => safe('mitali-daily-report', () => sendMitaliDailyReport()), {
+    timezone: 'Asia/Kolkata',
+  });
+
+  // 9:00 AM IST daily — feedback survey emails to clients whose payDate1 is 2 days away
+  cron.schedule('0 9 * * *', () => safe('client-feedback-emails', async () => { await sendClientFeedbackEmails(); }), {
     timezone: 'Asia/Kolkata',
   });
 

@@ -10,6 +10,7 @@ import { requireAuth, AuthedRequest } from '../lib/auth';
 import { sendTeam1Briefing, sendTeam2Briefing, sendSamitaBriefing, sendRoshniBriefing } from '../lib/dailyBriefing';
 import { sendMalikaStatusReport } from '../lib/malikaStatusReport';
 import { sendMitaliDailyReport } from '../lib/mitaliDailyReport';
+import { sendClientFeedbackEmails } from '../lib/clientFeedbackEmail';
 
 export const briefingRouter = Router();
 briefingRouter.use(requireAuth);
@@ -41,6 +42,19 @@ briefingRouter.post('/mitali-daily', async (req: AuthedRequest, res) => {
   try {
     await sendMitaliDailyReport();
     res.json({ ok: true, message: "Mitali's daily report sent." });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+// POST /api/briefing/feedback-survey  — trigger feedback survey emails now (force mode)
+briefingRouter.post('/feedback-survey', async (req: AuthedRequest, res) => {
+  if (!['founder', 'manager'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  try {
+    const result = await sendClientFeedbackEmails({ force: true });
+    res.json({ ok: true, ...result });
   } catch (e: any) {
     res.status(500).json({ error: e.message || String(e) });
   }

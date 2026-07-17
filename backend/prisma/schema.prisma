@@ -468,6 +468,7 @@ model Client {
   certificateUploadedAt      String?
   certificateUploadedById    String?
   certificateEmailSentAt     String?  // ISO date — stamped when cert email sent
+  feedbackEmailSentAt        String?  // ISO date — last feedback survey email sent (reset each cycle)
   notes                    String?
   createdAt                DateTime       @default(now())
 

@@ -359,6 +359,13 @@ export function SettingsPage() {
                 </div>
                 <MitaliDailyReportButton />
               </div>
+              <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
+                <div>
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Send feedback survey emails now</div>
+                  <div className="text-[11px] muted mt-0.5">Sends the client feedback survey email from Mitali to all clients whose payment is due in 2 days (auto-runs daily at 9 AM IST). Force mode — ignores the already-sent guard.</div>
+                </div>
+                <FeedbackSurveyButton />
+              </div>
             </div>
 
             <div className="callout">
@@ -561,6 +568,23 @@ function MitaliDailyReportButton() {
   return (
     <Button size="sm" variant="primary" disabled={report.isPending} onClick={() => report.mutate()}>
       <Send size={12} /> {report.isPending ? 'Sending…' : 'Send now'}
+    </Button>
+  );
+}
+
+function FeedbackSurveyButton() {
+  const showToast = useUI((s) => s.showToast);
+  const trigger = useMutation({
+    mutationFn: () => api.post('/briefing/feedback-survey'),
+    onSuccess: (res: any) => {
+      const { sent, skipped, errors } = res.data || {};
+      showToast(`Feedback emails: ${sent} sent, ${skipped} skipped, ${errors} errors`);
+    },
+    onError: (e: any) => showToast(e.response?.data?.error || 'Send failed', 'error'),
+  });
+  return (
+    <Button size="sm" variant="primary" disabled={trigger.isPending} onClick={() => trigger.mutate()}>
+      <Send size={12} /> {trigger.isPending ? 'Sending…' : 'Send now'}
     </Button>
   );
 }
