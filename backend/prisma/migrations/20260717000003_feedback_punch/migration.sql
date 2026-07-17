@@ -1,5 +1,3 @@
-ALTER TABLE "FeedbackPunch" ADD COLUMN IF NOT EXISTS "id" TEXT NOT NULL;
-
 CREATE TABLE IF NOT EXISTS "FeedbackPunch" (
     "id" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
