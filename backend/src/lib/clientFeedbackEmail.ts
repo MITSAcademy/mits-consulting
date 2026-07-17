@@ -64,17 +64,17 @@ function buildHtml(clientName: string, mitaliName: string, mitaliEmail: string, 
   <div class="body">
     <p>Dear ${firstName},</p>
 
-    <p>I hope this email finds you well. At MITS, we continuously strive to enhance our services and ensure the utmost satisfaction for our <strong>valued clients</strong> like you.</p>
+    <p style="margin:0 0 16px;">I hope this email finds you well. At MITS, we continuously strive to enhance our services and ensure the utmost satisfaction for our <strong>valued clients</strong> like you.</p>
 
-    <p>Your <span class="highlight">feedback</span> is vital to us, and we would be incredibly grateful if you could take a few minutes to complete our <strong>Client Survey Form</strong>. This form has been designed to gather your valuable insights and opinions on your experience with our company.</p>
+    <p style="margin:0 0 16px;">Your <span style="background:#fff8e1;font-weight:bold;">feedback</span> is vital to us, and we would be incredibly grateful if you could take a few minutes to complete our <strong>Client Survey Form</strong>. This form has been designed to gather your valuable insights and opinions on your experience with our company.</p>
 
-    <p style="text-align:center;">
-      <a href="${FORM_URL}" class="cta-btn">📋 Fill Client Survey Form</a>
+    <p style="text-align:center;margin:0 0 16px;">
+      <a href="${FORM_URL}" style="display:inline-block;background:#1a1a2e;color:#ffffff;text-decoration:none;padding:13px 28px;border-radius:6px;font-weight:700;font-size:15px;letter-spacing:0.3px;margin:8px 0 20px;">📋 Fill Client Survey Form</a>
     </p>
 
-    <p>We genuinely <strong>value</strong> your honest <span class="highlight">feedback</span>, as it will help us identify areas of <strong>improvement</strong> and tailor our services to <strong>better meet</strong> your needs.</p>
+    <p style="margin:0 0 16px;">We genuinely <strong>value</strong> your honest <span style="background:#fff8e1;font-weight:bold;">feedback</span>, as it will help us identify areas of <strong>improvement</strong> and tailor our services to <strong>better meet</strong> your needs.</p>
 
-    <p>Rest assured that all <strong>responses</strong> will remain <strong>confidential</strong>, and your participation in the <strong>survey</strong> is entirely <strong>voluntary</strong>.</p>
+    <p style="margin:0 0 16px;">Rest assured that all <strong>responses</strong> will remain <strong>confidential</strong>, and your participation in the <strong>survey</strong> is entirely <strong>voluntary</strong>.</p>
 
     <hr class="divider"/>
 
