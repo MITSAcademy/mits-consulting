@@ -59,8 +59,10 @@ export async function sendWeeklyFeedbackReport(): Promise<void> {
     orderBy: { name: 'asc' },
   });
 
-  const monStart = new Date(monday + 'T00:00:00+05:30');
-  const satEnd = new Date(saturday + 'T23:59:59+05:30');
+  const monStart = new Date(monday + 'T00:00:00.000Z');
+  monStart.setUTCMinutes(monStart.getUTCMinutes() - 330);
+  const satEnd = new Date(saturday + 'T23:59:59.999Z');
+  satEnd.setUTCMinutes(satEnd.getUTCMinutes() - 330);
 
   const VERBAL_IDS = ['u-mitali', 'u-bhavneet'];
   const WRITTEN_IDS = ['u-kashish', 'u-muskan'];

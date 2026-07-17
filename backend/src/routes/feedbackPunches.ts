@@ -34,8 +34,11 @@ feedbackPunchRouter.get('/compliance', async (req: AuthedRequest, res) => {
   const weekParam = req.query.week as string | undefined;
   const { monday, saturday } = weekBoundsIST(weekParam);
 
-  const monStart = new Date(monday + 'T00:00:00+05:30');
-  const satEnd = new Date(saturday + 'T23:59:59+05:30');
+  // IST = UTC+5:30, so IST midnight = UTC 18:30 previous day
+  const monStart = new Date(monday + 'T00:00:00.000Z');
+  monStart.setUTCMinutes(monStart.getUTCMinutes() - 330); // shift back 5h30m to get IST midnight in UTC
+  const satEnd = new Date(saturday + 'T23:59:59.999Z');
+  satEnd.setUTCMinutes(satEnd.getUTCMinutes() - 330);
 
   const VERBAL_IDS = ['u-mitali', 'u-bhavneet'];
   const WRITTEN_IDS = ['u-kashish', 'u-muskan'];
