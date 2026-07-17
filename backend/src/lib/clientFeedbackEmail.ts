@@ -110,8 +110,8 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean; sample?:
     const sampleClientName = clients[0]?.name || 'Test Client';
     const html = buildHtml(sampleClientName, mitali.name);
     await sendEmail({
-      to: mitaliEmail,
-      cc: [vaibhav?.email, samita?.email].filter(Boolean).join(', '),
+      to: [vaibhav?.email, samita?.email].filter(Boolean).join(', '),
+      cc: mitaliEmail,
       subject: `[SAMPLE] We value your feedback - MITS Solution`,
       body: `[SAMPLE — no client copied]\n\nDear ${sampleClientName.split(' ')[0]},\n\nWe'd love your feedback! Please fill our Client Survey Form: ${FORM_URL}\n\nRegards,\n${mitali.name}`,
       htmlBody: html,
