@@ -89,8 +89,8 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean; sample?:
     return { sent: 0, skipped: 0, errors: 0 };
   }
 
-  const mitaliEmail = mitali.sendAsAddress || mitali.gmailAddress!;
-  const ccEmails = [mitaliEmail, vaibhav?.email, samita?.email].filter(Boolean).join(', ');
+  // CC: Vaibhav + Samita only (Mitali is the sender — don't CC her on her own email)
+  const ccEmails = [vaibhav?.email, samita?.email].filter(Boolean).join(', ');
 
   // Find all active clients whose payDate1 = targetDate (2 days away)
   const clients = await prisma.client.findMany({
@@ -109,9 +109,14 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean; sample?:
   if (opts.sample) {
     const sampleClientName = clients[0]?.name || 'Test Client';
     const html = buildHtml(sampleClientName, mitali.name);
+    const sampleTo = [vaibhav?.email, samita?.email].filter(Boolean).join(', ');
+    if (!sampleTo) {
+      console.warn('[feedback-email] Sample skipped — no internal recipient emails configured');
+      return { sent: 0, skipped: 0, errors: 0 };
+    }
     await sendEmail({
-      to: [vaibhav?.email, samita?.email].filter(Boolean).join(', '),
-      cc: mitaliEmail,
+      to: sampleTo,
+      cc: undefined,
       subject: `[SAMPLE] We value your feedback - MITS Solution`,
       body: `[SAMPLE — no client copied]\n\nDear ${sampleClientName.split(' ')[0]},\n\nWe'd love your feedback! Please fill our Client Survey Form: ${FORM_URL}\n\nRegards,\n${mitali.name}`,
       htmlBody: html,

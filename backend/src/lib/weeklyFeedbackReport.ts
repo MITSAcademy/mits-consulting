@@ -28,7 +28,7 @@ function fmt(iso: string) {
   return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-export async function sendWeeklyFeedbackReport(): Promise<void> {
+export async function sendWeeklyFeedbackReport(triggeredBy?: { id: string; name: string }): Promise<void> {
   const { monday, saturday } = weekBoundsIST();
 
   const vaibhav = await prisma.user.findUnique({
@@ -47,6 +47,10 @@ export async function sendWeeklyFeedbackReport(): Promise<void> {
     select: { email: true },
   });
   const toEmails = recipients.map(u => u.email).filter(Boolean).join(', ');
+  if (!toEmails) {
+    console.warn('[weekly-feedback-report] No recipient emails configured — skipping');
+    return;
+  }
 
   // Active clients
   const clients = await prisma.client.findMany({
@@ -181,6 +185,7 @@ export async function sendWeeklyFeedbackReport(): Promise<void> {
     fromUser,
   });
 
-  await audit('u-vaibhav', 'System', 'WEEKLY_FEEDBACK_REPORT', `Sent weekly feedback compliance report: ${totalClients} clients, ${missedRows.length} with gaps`, {});
+  const actor = triggeredBy ?? { id: 'u-vaibhav', name: 'System' };
+  await audit(actor.id, actor.name, 'WEEKLY_FEEDBACK_REPORT', `Sent weekly feedback compliance report: ${totalClients} clients, ${missedRows.length} with gaps`, {});
   console.log(`[weekly-feedback-report] Sent — ${totalClients} clients, ${missedRows.length} with gaps`);
 }

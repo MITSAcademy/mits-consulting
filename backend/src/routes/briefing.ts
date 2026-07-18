@@ -81,7 +81,7 @@ briefingRouter.post('/feedback-compliance', async (req: AuthedRequest, res) => {
     return res.status(403).json({ error: 'Not allowed' });
   }
   try {
-    await sendWeeklyFeedbackReport();
+    await sendWeeklyFeedbackReport({ id: req.user!.id, name: req.user!.name });
     res.json({ ok: true, message: 'Weekly feedback compliance report sent.' });
   } catch (e: any) {
     res.status(500).json({ error: e.message || String(e) });

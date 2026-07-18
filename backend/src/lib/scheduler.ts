@@ -104,10 +104,7 @@ export function initScheduler() {
     timezone: 'Asia/Kolkata',
   });
 
-  // Malika — daily payments status report at 5:30 PM IST
-  cron.schedule('30 17 * * *', () => safe('malika-status-report', () => sendMalikaStatusReport()), {
-    timezone: 'Asia/Kolkata',
-  });
+  // Malika status report disabled
 
   // Payment Follow-Up Report — 12:00 PM IST → Vaibhav, Samita, Mitali, Areena
   cron.schedule('0 12 * * *', () => safe('payment-followup-report', () => sendPaymentFollowUpReport({ force: true })), {

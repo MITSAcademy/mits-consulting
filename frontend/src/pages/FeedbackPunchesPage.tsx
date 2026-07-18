@@ -180,7 +180,7 @@ export function FeedbackPunchesPage() {
                       days.map((d, di) => {
                         const done = writtenSet.has(`${c.id}:${s.id}:${d}`);
                         return (
-                          <td key={`${s.id}:${d}`} className={`py-2.5 px-1 text-center ${di === 0 && si === 0 ? 'border-l border-gray-100' : ''}`}>
+                          <td key={`${s.id}:${d}`} className={`py-2.5 px-1 text-center ${di === 0 ? 'border-l border-gray-100' : ''}`}>
                             <div className={`w-5 h-5 rounded-full mx-auto ${done ? 'bg-purple-500' : 'bg-gray-100'}`} />
                           </td>
                         );

@@ -555,7 +555,8 @@ function PayRow({ r }: { r: Row }) {
 
   const [showComments, setShowComments] = useState(false);
   const [showEditDates, setShowEditDates] = useState(false);
-  const [showWelcomeNudge, setShowWelcomeNudge] = useState(!r.mitaliIntroSentAt);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const showWelcomeNudge = !r.mitaliIntroSentAt && !welcomeDismissed;
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [editingAmount, setEditingAmount] = useState(false);
   const [amountDraft, setAmountDraft] = useState('');
@@ -617,7 +618,7 @@ function PayRow({ r }: { r: Row }) {
             <span>📩 Welcome email not sent yet to <strong>{r.name}</strong></span>
             <div className="flex gap-2 shrink-0">
               <button className="text-[11px] font-semibold underline" style={{ color: '#3b82f6' }} onClick={() => setShowWelcomeModal(true)}>Send now</button>
-              <button className="text-[11px] muted" onClick={() => setShowWelcomeNudge(false)}>Dismiss</button>
+              <button className="text-[11px] muted" onClick={() => setWelcomeDismissed(true)}>Dismiss</button>
             </div>
           </div>
         )}
@@ -917,7 +918,7 @@ function PayRow({ r }: { r: Row }) {
 
       {showComments  && <CommentThread clientId={r.id} onClose={() => setShowComments(false)}/>}
       {showEditDates && <DateChangeRequestModal r={r} onClose={() => setShowEditDates(false)}/>}
-      {showWelcomeModal && <WelcomeNudgeModal clientId={r.id} clientName={r.name} clientEmail={r.clientEmail} onClose={() => { setShowWelcomeModal(false); setShowWelcomeNudge(false); }}/>}
+      {showWelcomeModal && <WelcomeNudgeModal clientId={r.id} clientName={r.name} clientEmail={r.clientEmail} onClose={() => { setShowWelcomeModal(false); setWelcomeDismissed(true); }}/>}
       {showEmployerDialog && createPortal(
         <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowEmployerDialog(false); }}>

@@ -29,9 +29,13 @@ function toISTDate(dt: Date): string {
 // GET /api/feedback-punches/compliance?week=YYYY-MM-DD
 // Derives compliance from FeedbackActivity — no manual punching needed
 feedbackPunchRouter.get('/compliance', async (req: AuthedRequest, res) => {
+  try {
   const role = req.user!.role;
   const userId = req.user!.id;
   const weekParam = req.query.week as string | undefined;
+  if (weekParam && !/^\d{4}-\d{2}-\d{2}$/.test(weekParam)) {
+    return res.status(400).json({ error: 'week must be YYYY-MM-DD' });
+  }
   const { monday, saturday } = weekBoundsIST(weekParam);
 
   // IST = UTC+5:30, so IST midnight = UTC 18:30 previous day
@@ -111,11 +115,19 @@ feedbackPunchRouter.get('/compliance', async (req: AuthedRequest, res) => {
   if (role === 'lead') visibleStaffIds = ['u-bhavneet', 'u-kashish', 'u-muskan'];
   else if (role === 'account_manager') visibleStaffIds = [userId];
 
+  // Filter compliance arrays to only include entries for visible staff
+  const visibleSet = new Set(visibleStaffIds);
+  const filteredVerbalDone = verbalDone.filter(v => visibleSet.has(v.staffId));
+  const filteredWrittenDone = writtenDone.filter(w => visibleSet.has(w.staffId));
+
   res.json({
     week: { monday, saturday },
     clients,
-    verbalDone,
-    writtenDone,
+    verbalDone: filteredVerbalDone,
+    writtenDone: filteredWrittenDone,
     staff: staff.filter(s => visibleStaffIds.includes(s.id)),
   });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'Internal error' });
+  }
 });
