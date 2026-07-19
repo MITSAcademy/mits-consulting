@@ -10,6 +10,7 @@ import { formatPhone, readAvailabilitySlots, formatAvailabilitySlots, fmtTrainer
 import { AvailabilitySlotsEditor } from '@/components/AvailabilitySlotsEditor';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
+import { useAuth } from '@/store/auth';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
@@ -26,6 +27,9 @@ export function TrainerDetailPage() {
     queryKey: ['trainer', id],
     queryFn: () => api.get(`/trainers/${id}`).then((r) => r.data),
   });
+  const { user } = useAuth();
+  const canEditFinance = ['founder', 'manager'].includes(user?.role || '');
+  const FINANCE_FIELDS = ['paymentMethod', 'upiId', 'bankAccount', 'bankHolderName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankBranchName', 'bankAccountType', 'bankChequeUrl'];
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState<any>({});
   const [sendOpen, setSendOpen] = useState<'Email' | 'WhatsApp' | null>(null);
@@ -88,7 +92,12 @@ export function TrainerDetailPage() {
                   <UserPlus size={14}/> Save contact
                 </Button>
               )}
-              <Button onClick={() => { setForm({ ...t }); setEdit(true); }}>Edit</Button>
+              <Button onClick={() => {
+                const f = { ...t };
+                if (!canEditFinance) FINANCE_FIELDS.forEach(k => delete f[k]);
+                setForm(f);
+                setEdit(true);
+              }}>Edit</Button>
             </>
           )
         }
@@ -138,11 +147,13 @@ export function TrainerDetailPage() {
                   <div className="form-row"><Label>Default rate ₹</Label><Input type="number" value={form.defaultRateInr || 0} onChange={(e) => setForm({ ...form, defaultRateInr: +e.target.value })} /></div>
                 </div>
                 <div className="form-row"><Label>Experience (years)</Label><Input type="number" value={form.experienceYears || 0} onChange={(e) => setForm({ ...form, experienceYears: +e.target.value })} /></div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="form-row"><Label>Payment method</Label><Input value={form.paymentMethod || ''} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })} placeholder="UPI / Bank / …" /></div>
-                  <div className="form-row"><Label>UPI ID</Label><Input value={form.upiId || ''} onChange={(e) => setForm({ ...form, upiId: e.target.value })} placeholder="name@bank" /></div>
-                </div>
-                <div className="form-row"><Label>Bank account (optional)</Label><Input value={form.bankAccount || ''} onChange={(e) => setForm({ ...form, bankAccount: e.target.value })} placeholder="A/c · IFSC" /></div>
+                {canEditFinance && <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="form-row"><Label>Payment method</Label><Input value={form.paymentMethod || ''} onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })} placeholder="UPI / Bank / …" /></div>
+                    <div className="form-row"><Label>UPI ID</Label><Input value={form.upiId || ''} onChange={(e) => setForm({ ...form, upiId: e.target.value })} placeholder="name@bank" /></div>
+                  </div>
+                  <div className="form-row"><Label>Bank account (optional)</Label><Input value={form.bankAccount || ''} onChange={(e) => setForm({ ...form, bankAccount: e.target.value })} placeholder="A/c · IFSC" /></div>
+                </>}
                 <div className="form-row"><Label>WhatsApp group link</Label><Input value={form.whatsappGroupLink || ''} onChange={(e) => setForm({ ...form, whatsappGroupLink: e.target.value })} placeholder="https://chat.whatsapp.com/…" /></div>
                 <div className="form-row">
                   <Label>Availability (IST)</Label>
