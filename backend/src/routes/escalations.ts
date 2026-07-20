@@ -24,7 +24,7 @@ escalationsRouter.get('/', async (_req: AuthedRequest, res) => {
   res.json(escalations);
 });
 
-// PATCH /:id/status — update escalationStatus and/or escalationActionsTaken
+// PATCH /:id/status — update escalationStatus, escalationActionsTaken, demo ack
 escalationsRouter.patch('/:id/status', async (req: AuthedRequest, res) => {
   const { escalationStatus, escalationActionsTaken, escalationDemoAck } = req.body || {};
   const training = await prisma.regularTraining.findUnique({ where: { id: req.params.id } });
@@ -34,6 +34,12 @@ escalationsRouter.patch('/:id/status', async (req: AuthedRequest, res) => {
   if (escalationStatus !== undefined) data.escalationStatus = escalationStatus;
   if (escalationActionsTaken !== undefined) data.escalationActionsTaken = escalationActionsTaken;
   if (escalationDemoAck !== undefined) data.escalationDemoAck = escalationDemoAck;
+
+  // Samita acknowledges with a timestamp
+  if (req.user!.id === 'u-samita' && req.body.escalationDemoAckAt !== undefined) {
+    data.escalationDemoAckAt = req.body.escalationDemoAckAt ? new Date(req.body.escalationDemoAckAt) : new Date();
+  }
+
   const updated = await prisma.regularTraining.update({ where: { id: req.params.id }, data });
   res.json(updated);
 });

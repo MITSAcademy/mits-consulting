@@ -68,23 +68,44 @@ issueTrackerRouter.post('/', async (req: AuthedRequest, res) => {
 
 // PATCH /:id — update issue
 issueTrackerRouter.patch('/:id', async (req: AuthedRequest, res) => {
-  if (!WRITE_ROLES.includes(req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
+  const userId = req.user!.id;
+  const userRole = req.user!.role;
 
-  const ALLOWED_FIELDS = [
-    'title', 'description', 'status', 'resolutionNotes',
-    'closedById', 'closedAt', 'clientId', 'trainerId',
-  ];
+  // Mitali (u-mitali) can acknowledge operational issues; regular write roles handle all else
+  const isMitali = userId === 'u-mitali';
+  const isSamita = userId === 'u-samita';
+  const hasWriteAccess = WRITE_ROLES.includes(userRole);
+
+  if (!hasWriteAccess && !isMitali && !isSamita) return res.status(403).json({ error: 'Forbidden' });
 
   const data: any = {};
-  for (const f of ALLOWED_FIELDS) {
-    if (f in req.body) data[f] = req.body[f];
+
+  if (hasWriteAccess) {
+    const ALLOWED_FIELDS = [
+      'title', 'description', 'status', 'resolutionNotes',
+      'closedById', 'closedAt', 'clientId', 'trainerId',
+    ];
+    for (const f of ALLOWED_FIELDS) {
+      if (f in req.body) data[f] = req.body[f];
+    }
+    // Auto-close: set closedById + closedAt when status moves to Closed/Resolved
+    if (data.status === 'Closed' || data.status === 'Resolved') {
+      if (!data.closedById) data.closedById = userId;
+      if (!data.closedAt)   data.closedAt   = new Date();
+    }
   }
 
-  // Auto-close: set closedById + closedAt when status moves to Closed/Resolved
-  if (data.status === 'Closed' || data.status === 'Resolved') {
-    if (!data.closedById) data.closedById = req.user!.id;
-    if (!data.closedAt)   data.closedAt   = new Date();
+  // Mitali acknowledges operational issues
+  if (isMitali && 'acknowledgedByMitaliAt' in req.body) {
+    data.acknowledgedByMitaliAt = req.body.acknowledgedByMitaliAt ? new Date(req.body.acknowledgedByMitaliAt) : new Date();
   }
+
+  // Samita acknowledges demo escalations
+  if (isSamita && 'acknowledgedBySamitaAt' in req.body) {
+    data.acknowledgedBySamitaAt = req.body.acknowledgedBySamitaAt ? new Date(req.body.acknowledgedBySamitaAt) : new Date();
+  }
+
+  if (Object.keys(data).length === 0) return res.status(400).json({ error: 'Nothing to update' });
 
   const issue = await prisma.issueTracker.update({
     where: { id: req.params.id },
@@ -92,7 +113,7 @@ issueTrackerRouter.patch('/:id', async (req: AuthedRequest, res) => {
     include,
   });
 
-  await audit(req.user!.id, req.user!.name, 'ISSUE_UPDATE', issue.title);
+  await audit(userId, req.user!.name, 'ISSUE_UPDATE', issue.title);
   res.json(issue);
 });
 

@@ -721,6 +721,7 @@ model RegularTraining {
   escalationActionsTaken   String?                         // notes logged by demo team on actions taken
   escalationFlaggedAt      String?                         // ISO date when escalation was first flagged
   escalationDemoAck        String?                         // acknowledgment/response from demo team
+  escalationDemoAckAt      DateTime?                       // when Samita acknowledged this escalation
   trainerReplacementReason String?                         // reason recorded when trainer is changed
   clientMood               String?                         // "happy" | "neutral" | "at_risk"
   trainerAttendance        String?                         // "present" | "late" | "no_show"
@@ -814,6 +815,8 @@ model IssueTracker {
   escalationLevel  Int       @default(0)  // 0=unescalated, 1=Bhavneet, 2=Mitali, 3=Vaibhav
   escalatedAt      DateTime?             // when last escalation happened
   escalationLog    String?               // JSON array of {level, at, reason}
+  acknowledgedByMitaliAt  DateTime?     // Mitali acks operational issues
+  acknowledgedBySamitaAt  DateTime?     // Samita acks demo escalations
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

@@ -29,6 +29,8 @@ interface Issue {
   coordinator?: { id: string; name: string };
   client?: { id: string; name: string } | null;
   trainer?: { id: string; name: string } | null;
+  acknowledgedByMitaliAt?: string | null;
+  acknowledgedBySamitaAt?: string | null;
 }
 
 interface Escalation {
@@ -38,6 +40,7 @@ interface Escalation {
   escalationStatus: string | null;
   escalationActionsTaken: string | null;
   escalationDemoAck: string | null;
+  escalationDemoAckAt: string | null;
   client: { id: string; name: string; lifecycle: string } | null;
   trainer: { id: string; name: string } | null;
   hostedByDefault: { id: string; name: string } | null;
@@ -90,6 +93,43 @@ function StatusBadge({ status }: { status: IssueStatus }) {
       <Icon size={11} style={{ color: m.color }} />
       {m.label}
     </span>
+  );
+}
+
+// ── Acknowledge button ───────────────────────────────────────────────────────
+
+function AckButton({ issueId, ackedAt, field, label }: {
+  issueId: string;
+  ackedAt?: string | null;
+  field: 'acknowledgedByMitaliAt' | 'acknowledgedBySamitaAt';
+  label: string;
+}) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const ack = useMutation({
+    mutationFn: () => api.patch(`/issue-tracker/${issueId}`, { [field]: new Date().toISOString() }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['issue-tracker'] }); showToast(`Acknowledged by ${label}`); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  if (ackedAt) {
+    const dt = new Date(ackedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return (
+      <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--status-green)' }}>
+        <CheckCircle2 size={11} />
+        <span>{dt}</span>
+      </div>
+    );
+  }
+  return (
+    <button
+      onClick={() => ack.mutate()}
+      disabled={ack.isPending}
+      className="text-[11px] px-2 py-1 rounded font-medium"
+      style={{ background: 'rgba(234,179,8,0.12)', color: '#ca8a04', border: '1px solid rgba(234,179,8,0.3)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+    >
+      {ack.isPending ? 'Saving…' : `Acknowledge`}
+    </button>
   );
 }
 
@@ -156,6 +196,12 @@ function EscalationRow({ esc }: { esc: Escalation }) {
     onSuccess: () => { showToast('Escalation resolved'); qc.invalidateQueries({ queryKey: ['escalations'] }); },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to resolve', 'error'),
   });
+  const ackSamita = useMutation({
+    mutationFn: () => api.patch(`/escalations/${esc.id}/status`, { escalationDemoAckAt: new Date().toISOString() }),
+    onSuccess: () => { showToast('Acknowledged'); qc.invalidateQueries({ queryKey: ['escalations'] }); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+  const isSamita = user?.id === 'u-samita';
 
   const dateStr = esc.escalationFlaggedAt
     ? new Date(esc.escalationFlaggedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -226,6 +272,32 @@ function EscalationRow({ esc }: { esc: Escalation }) {
           <div className="text-[12px]" style={{ color: actions ? 'var(--brand-text)' : 'var(--brand-textSecondary)', cursor: isMgmt ? 'pointer' : 'default' }} onClick={() => isMgmt && setActionsEditing(true)} title={isMgmt ? 'Click to edit' : undefined}>
             {actions || <span className="italic">—</span>}
           </div>
+        )}
+      </td>
+      <td className="py-3 px-3">
+        {isSamita ? (
+          esc.escalationDemoAckAt ? (
+            <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--status-green)' }}>
+              <CheckCircle2 size={11} />
+              <span>{new Date(esc.escalationDemoAckAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+          ) : (
+            <button
+              onClick={() => ackSamita.mutate()}
+              disabled={ackSamita.isPending}
+              className="text-[11px] px-2 py-1 rounded font-medium"
+              style={{ background: 'rgba(234,179,8,0.12)', color: '#ca8a04', border: '1px solid rgba(234,179,8,0.3)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              {ackSamita.isPending ? 'Saving…' : 'Acknowledge'}
+            </button>
+          )
+        ) : esc.escalationDemoAckAt ? (
+          <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--status-green)' }}>
+            <CheckCircle2 size={11} />
+            <span>{new Date(esc.escalationDemoAckAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+        ) : (
+          <span className="text-[11px]" style={{ color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>Pending</span>
         )}
       </td>
       <td className="py-3 px-3 text-right">
@@ -430,6 +502,8 @@ export default function IssueTrackerPage() {
 
   const [tab, setTab] = useState<Tab>('issues');
   const [statusFilter, setStatusFilter] = useState('Open');
+  const [ackFilter, setAckFilter] = useState<'all' | 'pending' | 'acked'>('all');
+  const [escAckFilter, setEscAckFilter] = useState<'all' | 'pending' | 'acked'>('all');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate]     = useState('');
   const [purgeOpen, setPurgeOpen]   = useState(false);
@@ -477,14 +551,23 @@ export default function IssueTrackerPage() {
   const filtered = useMemo(() => {
     let rows = issues || [];
     if (statusFilter !== 'All') rows = rows.filter((i) => i.status === statusFilter);
+    if (ackFilter === 'pending') rows = rows.filter((i) => !i.acknowledgedByMitaliAt);
+    if (ackFilter === 'acked')   rows = rows.filter((i) => !!i.acknowledgedByMitaliAt);
     if (fromDate) rows = rows.filter((i) => i.date >= fromDate);
     if (toDate)   rows = rows.filter((i) => i.date <= toDate);
     return rows;
-  }, [issues, statusFilter, fromDate, toDate]);
+  }, [issues, statusFilter, ackFilter, fromDate, toDate]);
+
+  const filteredEscalations = useMemo(() => {
+    let rows = escalations;
+    if (escAckFilter === 'pending') rows = rows.filter((e) => !e.escalationDemoAckAt);
+    if (escAckFilter === 'acked')   rows = rows.filter((e) => !!e.escalationDemoAckAt);
+    return rows;
+  }, [escalations, escAckFilter]);
 
   const openCount = (issues || []).filter((i) => i.status === 'Open').length;
   const inProgressCount = (issues || []).filter((i) => i.status === 'InProgress').length;
-  const pendingAck = escalations.filter((e) => !e.escalationDemoAck).length;
+  const pendingAck = escalations.filter((e) => !e.escalationDemoAckAt).length;
 
   return (
     <>
@@ -584,6 +667,26 @@ export default function IssueTrackerPage() {
                 })}
               </div>
               <div className="h-5 w-px" style={{ background: 'var(--brand-borderSoft)' }} />
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  { value: 'all', label: 'All acks' },
+                  { value: 'pending', label: '⏳ Pending' },
+                  { value: 'acked', label: '✓ Acknowledged' },
+                ] as { value: 'all' | 'pending' | 'acked'; label: string }[]).map((af) => {
+                  const active = ackFilter === af.value;
+                  return (
+                    <button
+                      key={af.value}
+                      onClick={() => setAckFilter(af.value)}
+                      className="px-3 py-1 rounded-full text-[12px] font-medium transition-all"
+                      style={{ background: active ? 'rgba(234,179,8,0.15)' : 'var(--bg-input)', color: active ? '#ca8a04' : 'var(--brand-textSecondary)', border: active ? '1px solid rgba(234,179,8,0.4)' : '1px solid var(--brand-borderSoft)', fontWeight: active ? 700 : 500 }}
+                    >
+                      {af.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="h-5 w-px" style={{ background: 'var(--brand-borderSoft)' }} />
               <div className="flex items-center gap-2">
                 <span className="text-[11px] muted uppercase tracking-wider font-semibold">From</span>
                 <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-36 text-[12px] py-1" />
@@ -616,6 +719,7 @@ export default function IssueTrackerPage() {
                       <th>Trainer</th>
                       <th>Title</th>
                       <th>Status</th>
+                      <th>Ack by Mitali</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -635,6 +739,18 @@ export default function IssueTrackerPage() {
                           {issue.resolutionNotes && <div className="text-[11px] mt-0.5 max-w-xs truncate" style={{ color: 'var(--status-green)' }}>✓ {issue.resolutionNotes}</div>}
                         </td>
                         <td><StatusBadge status={issue.status} /></td>
+                        <td>
+                          {user.id === 'u-mitali' ? (
+                            <AckButton issueId={issue.id} ackedAt={issue.acknowledgedByMitaliAt} field="acknowledgedByMitaliAt" label="Mitali" />
+                          ) : issue.acknowledgedByMitaliAt ? (
+                            <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--status-green)' }}>
+                              <CheckCircle2 size={11} />
+                              <span>{new Date(issue.acknowledgedByMitaliAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                          ) : (
+                            <span className="text-[11px]" style={{ color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>Pending</span>
+                          )}
+                        </td>
                         <td>
                           <div className="flex items-center gap-1.5">
                             <UpdateIssueModal issue={issue} />
@@ -675,6 +791,28 @@ export default function IssueTrackerPage() {
                 </span>
               )}
             </div>
+            {/* Ack filter */}
+            {!escLoading && escalations.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {([
+                  { value: 'all', label: 'All' },
+                  { value: 'pending', label: '⏳ Pending ack' },
+                  { value: 'acked', label: '✓ Acknowledged' },
+                ] as { value: 'all' | 'pending' | 'acked'; label: string }[]).map((af) => {
+                  const active = escAckFilter === af.value;
+                  return (
+                    <button
+                      key={af.value}
+                      onClick={() => setEscAckFilter(af.value)}
+                      className="px-3 py-1 rounded-full text-[12px] font-medium transition-all"
+                      style={{ background: active ? 'rgba(234,179,8,0.15)' : 'var(--bg-input)', color: active ? '#ca8a04' : 'var(--brand-textSecondary)', border: active ? '1px solid rgba(234,179,8,0.4)' : '1px solid var(--brand-borderSoft)', fontWeight: active ? 700 : 500 }}
+                    >
+                      {af.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {escLoading ? (
               <div className="muted text-[13px] py-12 text-center">Loading escalations…</div>
             ) : escalations.length === 0 ? (
@@ -688,13 +826,13 @@ export default function IssueTrackerPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--bg-card)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--brand-border)' }}>
                   <thead>
                     <tr style={{ background: 'var(--bg-tableHeader, var(--bg-card))', borderBottom: '2px solid var(--brand-border)' }}>
-                      {['Date', 'Client Name', 'Status', 'Title', 'Demo Team Response', 'Actions Taken', ''].map((h) => (
+                      {['Date', 'Client Name', 'Status', 'Title', 'Demo Team Response', 'Actions Taken', 'Ack by Samita', ''].map((h) => (
                         <th key={h} className="py-3 px-3 text-left text-[12px] font-semibold muted">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {escalations.map((e) => <EscalationRow key={e.id} esc={e} />)}
+                    {filteredEscalations.map((e) => <EscalationRow key={e.id} esc={e} />)}
                   </tbody>
                 </table>
               </div>
