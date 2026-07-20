@@ -345,7 +345,7 @@ function exportCSV(logs: Log[], weekLabel: string) {
     const key = l.trainer.id;
     if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rate: l.rateSnapshot, total: 0, comments: [] });
     const t = byTrainer.get(key)!;
-    t.days += l.hours;
+    t.days += toSessions(l);
     t.total += l.amountInr;
     if (l.comments) t.comments.push(l.comments);
   });
@@ -376,7 +376,7 @@ function exportWhatsApp(logs: Log[], weekLabel: string) {
     const key = l.trainer.id;
     if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rate: l.rateSnapshot, total: 0 });
     const t = byTrainer.get(key)!;
-    t.days += l.hours;
+    t.days += toSessions(l);
     t.total += l.amountInr;
   });
 
@@ -650,8 +650,12 @@ function bankDetail(t: TrainerInfo): string {
   return parts.join(' · ') || '—';
 }
 
-function ExcelView({ logs, canMarkStatus, canEdit, onRefresh }: {
+type PayWeekRow = { id: string; trainerId: string; weekStart: string; mitaliAckAt: string | null; bhavneetVerification: string | null };
+
+function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStart, user, onUpdatePayWeek }: {
   logs: Log[]; canMarkStatus: boolean; canEdit: boolean; onRefresh: () => void;
+  payWeeks: PayWeekRow[]; weekStart: string; user: { id: string; role: string };
+  onUpdatePayWeek: (trainerId: string, data: any) => void;
 }) {
   const showToast = useUI((s) => s.showToast);
   const [editingAmount, setEditingAmount] = useState<string | null>(null);
@@ -723,6 +727,9 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh }: {
             <th style={{ ...thStyle, textAlign: 'center' }}>
               Actions {!canMarkStatus && <span style={{ fontSize: 9, fontWeight: 400, color: 'var(--brand-textMuted)' }}>(Samita only)</span>}
             </th>
+            <th style={thStyle}>Bank Details</th>
+            <th style={thStyle}>Ack by Mitali</th>
+            <th style={thStyle}>Bhavneet Verification</th>
           </tr>
         </thead>
         <tbody>
@@ -732,6 +739,8 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh }: {
               return l?.status === 'Paid';
             });
             const isEditing = editingAmount === r.trainer.id;
+
+            const pw = payWeeks.find(w => w.trainerId === r.trainer.id);
 
             return (
               <tr key={r.trainer.id} style={{ background: isPaid ? 'rgba(34,197,94,0.04)' : undefined }}>
@@ -815,6 +824,47 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh }: {
                     </span>
                   )}
                 </td>
+                <td style={tdStyle}>
+                  {(r.trainer.bankAccountNumber || r.trainer.upiId)
+                    ? <span style={{ color: 'var(--status-green)' }}>✅ Added</span>
+                    : <span style={{ color: 'var(--status-red)' }}>❌ Pending</span>}
+                </td>
+                <td style={tdStyle}>
+                  {user?.id === 'u-mitali' && !pw?.mitaliAckAt ? (
+                    <button onClick={() => onUpdatePayWeek(r.trainer.id, { mitaliAckAt: new Date().toISOString() })}
+                      style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: 'rgba(234,179,8,0.12)', color: '#ca8a04', border: '1px solid rgba(234,179,8,0.3)', cursor: 'pointer' }}>
+                      Acknowledge
+                    </button>
+                  ) : pw?.mitaliAckAt ? (
+                    <span style={{ color: 'var(--status-green)', fontSize: 12 }}>
+                      ✅ {new Date(pw.mitaliAckAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--brand-textMuted)', fontSize: 12, fontStyle: 'italic' }}>⏳ Pending</span>
+                  )}
+                </td>
+                <td style={tdStyle}>
+                  {user?.id === 'u-bhavneet' ? (
+                    <select
+                      value={pw?.bhavneetVerification || ''}
+                      onChange={e => onUpdatePayWeek(r.trainer.id, { bhavneetVerification: e.target.value })}
+                      style={{ fontSize: 12, padding: '2px 6px', borderRadius: 4, border: '1px solid var(--brand-border)', background: 'var(--bg-input)', color: 'var(--brand-text)' }}>
+                      <option value="">— Select —</option>
+                      <option value="Correct">✅ Correct</option>
+                      <option value="Incorrect">❌ Incorrect</option>
+                      <option value="Hold">⏸ Hold</option>
+                      <option value="Issue">⚠ Issue</option>
+                    </select>
+                  ) : pw?.bhavneetVerification ? (
+                    <span style={{ fontSize: 12 }}>{
+                      pw.bhavneetVerification === 'Correct' ? '✅ Correct' :
+                      pw.bhavneetVerification === 'Incorrect' ? '❌ Incorrect' :
+                      pw.bhavneetVerification === 'Hold' ? '⏸ Hold' : '⚠ Issue'
+                    }</span>
+                  ) : (
+                    <span style={{ color: 'var(--brand-textMuted)', fontSize: 12, fontStyle: 'italic' }}>—</span>
+                  )}
+                </td>
               </tr>
             );
           })}
@@ -825,6 +875,9 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh }: {
             <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 800, fontSize: 14, color: 'var(--status-green)' }}>
               ₹{grandTotal.toLocaleString()}
             </td>
+            <td style={tdStyle} />
+            <td style={tdStyle} />
+            <td style={tdStyle} />
             <td style={tdStyle} />
           </tr>
         </tfoot>
@@ -899,6 +952,18 @@ export function TrainerPaySheetPage() {
   const { data: logs, isLoading } = useQuery({
     queryKey: ['session-logs', { weekStart }],
     queryFn: () => api.get('/session-logs', { params: { weekStart } }).then((r) => r.data as Log[]),
+  });
+
+  const { data: payWeeks = [] } = useQuery<PayWeekRow[]>({
+    queryKey: ['trainer-pay-weeks', weekStart],
+    queryFn: () => api.get(`/trainer-pay-weeks?weekStart=${weekStart}`).then(r => r.data),
+  });
+
+  const updatePayWeek = useMutation({
+    mutationFn: ({ trainerId, data }: { trainerId: string; data: any }) =>
+      api.patch(`/trainer-pay-weeks/${trainerId}`, { weekStart, ...data }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['trainer-pay-weeks', weekStart] }),
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['session-logs'] });
@@ -1096,7 +1161,7 @@ export function TrainerPaySheetPage() {
               : 'Navigate to a different week, or log sessions via Session logs.'}
           />
         ) : viewMode === 'excel' ? (
-          <ExcelView logs={filtered} canMarkStatus={canMarkStatus} canEdit={canEdit} onRefresh={refresh} />
+          <ExcelView logs={filtered} canMarkStatus={canMarkStatus} canEdit={canEdit} onRefresh={refresh} payWeeks={payWeeks} weekStart={weekStart} user={user} onUpdatePayWeek={(trainerId, data) => updatePayWeek.mutate({ trainerId, data })} />
         ) : (
           <div className="table-card">
             <table>

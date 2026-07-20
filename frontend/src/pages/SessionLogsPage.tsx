@@ -335,7 +335,7 @@ export function SessionLogsPage() {
         clientId: cr.clientId,
         date: row.date,
         hours,
-        rateSnapshot: defaultRate || 1200,
+        rateSnapshot: defaultRate || 0,
         rateModel,
         amountInr: undefined,
         feedback: row.sessionHappened ? row.feedback : undefined,

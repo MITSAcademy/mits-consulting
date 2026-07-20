@@ -652,6 +652,19 @@ model SessionLog {
   createdAt        DateTime      @default(now())
 }
 
+model TrainerPayWeek {
+  id                   String    @id @default(cuid())
+  trainerId            String
+  weekStart            String    // YYYY-MM-DD Monday
+  mitaliAckAt          DateTime?
+  bhavneetVerification String?   // 'Correct' | 'Incorrect' | 'Hold' | 'Issue'
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@unique([trainerId, weekStart])
+  @@index([weekStart])
+}
+
 // -------- LEVERAGE --------
 model LeverageRequest {
   id                String         @id @default(cuid())
