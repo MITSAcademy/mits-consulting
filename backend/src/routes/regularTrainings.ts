@@ -181,6 +181,20 @@ regularTrainingsRouter.patch('/trainings/:id', async (req: AuthedRequest, res) =
   res.json(updated);
 });
 
+// Toggle Regular Team coordinator flag
+regularTrainingsRouter.post('/trainings/:id/coordinator-flag', async (req: AuthedRequest, res) => {
+  if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  const training = await prisma.regularTraining.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, name: true, coordinatorFlagged: true },
+  });
+  if (!training) return res.status(404).json({ error: 'Not found' });
+  const flag = !training.coordinatorFlagged;
+  const updated = await prisma.regularTraining.update({ where: { id: req.params.id }, data: { coordinatorFlagged: flag } });
+  await audit(req.user!.id, req.user!.name, flag ? 'COORDINATOR_FLAG_SET' : 'COORDINATOR_FLAG_CLEARED', training.name);
+  res.json(updated);
+});
+
 // Toggle Demo Team escalation flag — only available while ownerTeam is still demo_team
 regularTrainingsRouter.post('/trainings/:id/escalate', async (req: AuthedRequest, res) => {
   if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
@@ -471,7 +485,7 @@ regularTrainingsRouter.get('/my-sessions', async (req: AuthedRequest, res) => {
       meetingMode: true, lastSessionStatus: true, lastSessionComment: true,
       lastClientFeedback: true, lastTrainerFeedback: true,
       lastSessionDate: true, weeklySessionCount: true, notes: true,
-      completedSessionCount: true, ownerTeam: true, demoEscalationRequested: true,
+      completedSessionCount: true, ownerTeam: true, demoEscalationRequested: true, coordinatorFlagged: true,
       hostedByDefault: { select: { id: true, name: true } },
       temporaryHost:   { select: { id: true, name: true } },
       client:  { select: { id: true, name: true, whatsappGroupLink: true, phoneCode: true, phoneDigits: true, lastFeedbackTakenAt: true } },

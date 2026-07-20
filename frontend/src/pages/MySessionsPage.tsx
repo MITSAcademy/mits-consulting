@@ -993,7 +993,8 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers, clientNameCounts }: { t
                     Coordinator
                   </span>
                   <span className="text-[10px]" style={{ opacity: 0.6 }}>{t.completedSessionCount ?? 0}/4</span>
-                  {t.demoEscalationRequested && <span className="inline-block px-1.5 py-0 rounded text-[10px] font-bold" style={{ background: 'rgba(239,68,68,0.25)', color: '#f87171' }}>⚠ Escalated</span>}
+                  {t.demoEscalationRequested && <span className="inline-flex items-center gap-0.5 px-1.5 py-0 rounded text-[10px] font-bold" style={{ background: 'rgba(239,68,68,0.25)', color: '#f87171' }}>⚠ Demo Escalated</span>}
+                  {t.coordinatorFlagged && <span className="inline-flex items-center gap-0.5 px-1.5 py-0 rounded text-[10px] font-bold" style={{ background: 'rgba(239,68,68,0.25)', color: '#f87171' }}>🚩 Regular Team Flagged</span>}
                 </div>
               </div>
               <InlineEditIcon field="client" />
@@ -1274,12 +1275,19 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers, clientNameCounts }: { t
                     </button>
                   )}
 
-                  {/* Flag for Regular Team → goes to Issues */}
+                  {/* Flag for Regular Team → toggle banner + goes to Issues */}
+                  <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.coordinatorFlagged ? '#f87171' : '#fb923c', textAlign: 'left' }}
+                    onClick={() => { api.post(`/regular-trainings/trainings/${t.id}/coordinator-flag`).then(() => { onChanged(); qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); }); setMenuOpen(false); }}>
+                    <Flag size={13} /> {t.coordinatorFlagged ? 'Clear Regular Team flag' : 'Flag for Regular Team'}
+                  </button>
+                  {!t.coordinatorFlagged && (
                   <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fb923c', textAlign: 'left' }}
                     onClick={() => { setFlagIssueId(t.id); setMenuOpen(false); }}>
-                    <Flag size={13} /> Flag for Regular Team
+                    <Flag size={13} /> Flag for Regular Team (log issue)
                   </button>
+                  )}
 
                   {/* Flag for Freelance Team → goes to Freelance Requirements */}
                   <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"

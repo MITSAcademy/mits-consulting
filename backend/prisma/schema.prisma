@@ -730,6 +730,7 @@ model RegularTraining {
   completedSessionCount    Int      @default(0)            // total completed sessions — auto-incremented on session end
   ownerTeam                String   @default("demo_team")  // demo_team | coordinator_team — auto-switches at 4 completed sessions
   demoEscalationRequested  Boolean  @default(false)        // coordinator flagged a trainer issue needing Demo Team intervention
+  coordinatorFlagged       Boolean  @default(false)        // regular team flagged an issue for Bhavneet/Mitali
   escalationStatus         String?                         // "Work in Progress" | "Not Resolved" | "Resolved"
   escalationActionsTaken   String?                         // notes logged by demo team on actions taken
   escalationFlaggedAt      String?                         // ISO date when escalation was first flagged
