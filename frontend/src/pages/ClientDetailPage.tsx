@@ -584,6 +584,24 @@ export function ClientDetailPage() {
                     </div>
                   ))}
                 </div>
+                {(intake.attachments as { name: string; url: string }[] | undefined)?.length ? (
+                  <div className="mt-3">
+                    <div className="text-[10px] uppercase tracking-wider text-brand-textMuted font-semibold mb-1.5">Attachments</div>
+                    <div className="flex flex-wrap gap-2">
+                      {(intake.attachments as { name: string; url: string }[]).map((a, i) => (
+                        <a
+                          key={i}
+                          href={fileUrl(a.url)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1.5 bg-bg-input border border-brand-border rounded px-2 py-1 text-xs text-brand-blue underline hover:opacity-80 max-w-[200px] truncate"
+                        >
+                          📎 {a.name}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )}
 
