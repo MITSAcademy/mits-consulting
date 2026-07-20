@@ -1189,7 +1189,7 @@ export function TrainerPaySheetPage() {
                     <td className="mono text-[11px] text-center muted">{i + 1}</td>
                     <td className="mono text-[12px]">{l.date}</td>
                     <td className="font-medium text-sm"><a href={`/trainers/${l.trainer.id}`} className="hover:underline" style={{ color: 'inherit' }}>{l.trainer.name}</a></td>
-                    <td className="muted text-[12px]">{l.client?.name || '—'}</td>
+                    <td className="muted text-[12px]">{l.client ? <a href={`/clients/${l.client.id}`} className="hover:underline" style={{ color: 'inherit' }}>{l.client.name}</a> : '—'}</td>
                     <td>
                       {canEdit
                         ? <EditableNumber value={l.hours} logId={l.id} field="hours" onSaved={refresh} />
