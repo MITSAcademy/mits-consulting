@@ -7,7 +7,19 @@ import { requireAuth, AuthedRequest } from '../lib/auth';
 
 export const uploadsRouter = Router();
 
-// Local disk storage. For prod, swap with S3 / Cloudinary multer-s3 adapter.
+// ── Cloudinary (persistent storage) — used when CLOUDINARY_URL env var is set.
+// Falls back to local disk when not configured (dev / no-cloud env).
+const CLOUDINARY_URL = process.env.CLOUDINARY_URL;
+
+let cloudinary: any = null;
+if (CLOUDINARY_URL) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { v2 } = require('cloudinary');
+  v2.config({ cloudinary_url: CLOUDINARY_URL });
+  cloudinary = v2;
+}
+
+// ── Local disk fallback ──────────────────────────────────────────────────────
 const UPLOAD_DIR = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -28,15 +40,14 @@ const ALLOWED_MIME = new Set([
   'application/msword',                                                       // doc
 ]);
 
-// File extensions to allow as a fallback when the browser sends a generic
-// mimetype (e.g. application/octet-stream for some WhatsApp .ogg/.opus exports).
 const ALLOWED_EXT = new Set([
   '.mp3', '.mp4', '.m4a', '.ogg', '.opus', '.wav', '.webm', '.aac', '.amr', '.3gp',
   '.png', '.jpg', '.jpeg', '.webp', '.gif',
   '.pdf', '.xlsx', '.xls', '.csv', '.docx', '.doc',
 ]);
 
-const storage = multer.diskStorage({
+// Always buffer to memory so we can re-upload to Cloudinary without a temp file path issue
+const storage = cloudinary ? multer.memoryStorage() : multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname) || '';
@@ -47,12 +58,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB — WhatsApp voice notes can be long
+  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    // Strip MIME parameters: "audio/ogg; codecs=opus" → "audio/ogg"
     const baseMime = (file.mimetype || '').split(';')[0].trim().toLowerCase();
     if (ALLOWED_MIME.has(baseMime)) return cb(null, true);
-    // Generic browser-sent MIME on mobile uploads → fall back to file extension
     const ext = path.extname(file.originalname || '').toLowerCase();
     if (ALLOWED_EXT.has(ext)) return cb(null, true);
     return cb(new Error(`Unsupported file type: ${file.mimetype || 'unknown'} (.${ext.replace('.', '') || '?'})`));
@@ -61,16 +70,51 @@ const upload = multer({
 
 uploadsRouter.use(requireAuth);
 
-uploadsRouter.post('/', upload.single('file'), (req: AuthedRequest, res) => {
+uploadsRouter.post('/', upload.single('file'), async (req: AuthedRequest, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const url = `/uploads/${req.file.filename}`;
-  res.status(201).json({
-    url,
-    filename: req.file.filename,
-    originalName: req.file.originalname,
-    size: req.file.size,
-    mime: req.file.mimetype,
-  });
+
+  try {
+    if (cloudinary && req.file.buffer) {
+      // Upload buffer to Cloudinary
+      const ext = path.extname(req.file.originalname || '').toLowerCase().replace('.', '');
+      const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext);
+      const isPdf   = ext === 'pdf';
+      const resourceType = isImage ? 'image' : isPdf ? 'image' : 'raw';
+
+      const result = await new Promise<any>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: 'mits-consulting',
+            resource_type: resourceType,
+            use_filename: false,
+            unique_filename: true,
+          },
+          (err: any, res: any) => err ? reject(err) : resolve(res),
+        );
+        stream.end(req.file!.buffer);
+      });
+
+      return res.status(201).json({
+        url: result.secure_url,
+        filename: result.public_id,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        mime: req.file.mimetype,
+      });
+    }
+
+    // Disk fallback
+    const url = `/uploads/${req.file.filename}`;
+    return res.status(201).json({
+      url,
+      filename: req.file.filename,
+      originalName: req.file.originalname,
+      size: req.file.size,
+      mime: req.file.mimetype,
+    });
+  } catch (e: any) {
+    return res.status(500).json({ error: 'Upload failed: ' + (e.message || String(e)) });
+  }
 });
 
 // Friendly error handler for multer
