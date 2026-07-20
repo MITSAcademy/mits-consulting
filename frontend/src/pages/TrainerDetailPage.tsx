@@ -239,9 +239,9 @@ export function TrainerDetailPage() {
         <div className="card mb-4">
           <div className="card-h">
             Bank details
-            {!edit && <Button size="sm" onClick={() => { setForm({ ...t }); setEdit(true); }} className="ml-auto">Edit</Button>}
+            {!edit && canEditFinance && <Button size="sm" onClick={() => { setForm({ ...t }); setEdit(true); }} className="ml-auto">Edit</Button>}
           </div>
-          {edit ? (
+          {edit && canEditFinance ? (
             <div className="grid md:grid-cols-2 gap-2">
               <div className="form-row"><Label>Name (as per bank records)</Label><Input value={form.bankHolderName || ''} onChange={(e) => setForm({ ...form, bankHolderName: e.target.value })} placeholder="Full name on bank account" /></div>
               <div className="form-row"><Label>Bank name</Label><Input value={form.bankName || ''} onChange={(e) => setForm({ ...form, bankName: e.target.value })} placeholder="e.g. HDFC Bank" /></div>
