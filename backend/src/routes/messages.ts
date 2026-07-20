@@ -134,18 +134,33 @@ messagesRouter.post('/email', async (req: AuthedRequest, res) => {
       };
     }
 
-    // CC Samita on every email sent by her reporting team (demo_intake, recruiter, sales_closer).
-    // This keeps Samita in the loop on all client-facing outreach without her needing to be CCed manually.
-    const SAMITA_CC_ROLES = ['demo_intake', 'recruiter', 'sales_closer'];
+    // CC the sender's manager on every outbound email (recruiter → Samita, etc.)
+    // Uses reportsToId first, then falls back to demo_lead role lookup.
     let ccAddresses: string[] = [];
-    if (me && SAMITA_CC_ROLES.includes(me.role)) {
-      const samita = await prisma.user.findFirst({
-        where: { role: 'demo_lead', active: true },
-        select: { gmailAddress: true, sendAsAddress: true, email: true },
+    const CC_ROLES = ['demo_intake', 'recruiter', 'sales_closer', 'account_manager', 'lead'];
+    if (me && CC_ROLES.includes(me.role)) {
+      const sender = await prisma.user.findUnique({
+        where: { id: me.id },
+        select: { reportsToId: true },
       });
-      const samitaEmail = samita?.sendAsAddress || samita?.gmailAddress || samita?.email;
-      if (samitaEmail && samitaEmail !== to) {
-        ccAddresses.push(samitaEmail);
+      let managerEmail: string | null = null;
+      if (sender?.reportsToId) {
+        const manager = await prisma.user.findUnique({
+          where: { id: sender.reportsToId },
+          select: { sendAsAddress: true, gmailAddress: true, email: true },
+        });
+        managerEmail = manager?.sendAsAddress || manager?.gmailAddress || manager?.email || null;
+      }
+      // Fallback: find Samita by role if reportsToId not set or manager has no email
+      if (!managerEmail) {
+        const samita = await prisma.user.findFirst({
+          where: { role: 'demo_lead', active: true },
+          select: { sendAsAddress: true, gmailAddress: true, email: true },
+        });
+        managerEmail = samita?.sendAsAddress || samita?.gmailAddress || samita?.email || null;
+      }
+      if (managerEmail && managerEmail !== to) {
+        ccAddresses.push(managerEmail);
       }
     }
 
