@@ -745,7 +745,9 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
             return (
               <tr key={r.trainer.id} style={{ background: isPaid ? 'rgba(34,197,94,0.04)' : undefined }}>
                 <td style={{ ...tdStyle, color: 'var(--brand-textMuted)', fontFamily: 'monospace', fontSize: 11 }}>{i + 1}</td>
-                <td style={{ ...tdStyle, fontWeight: 600 }}>{r.trainer.name}</td>
+                <td style={{ ...tdStyle, fontWeight: 600 }}>
+                  <a href={`/trainers/${r.trainer.id}`} style={{ color: 'inherit', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')} onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}>{r.trainer.name}</a>
+                </td>
                 <td style={{ ...tdStyle, fontSize: 11, color: 'var(--brand-textMuted)', maxWidth: 220 }}>
                   <span title={bankDetail(r.trainer)}>{bankDetail(r.trainer)}</span>
                 </td>
@@ -1186,7 +1188,7 @@ export function TrainerPaySheetPage() {
                   <tr key={l.id}>
                     <td className="mono text-[11px] text-center muted">{i + 1}</td>
                     <td className="mono text-[12px]">{l.date}</td>
-                    <td className="font-medium text-sm">{l.trainer.name}</td>
+                    <td className="font-medium text-sm"><a href={`/trainers/${l.trainer.id}`} className="hover:underline" style={{ color: 'inherit' }}>{l.trainer.name}</a></td>
                     <td className="muted text-[12px]">{l.client?.name || '—'}</td>
                     <td>
                       {canEdit
