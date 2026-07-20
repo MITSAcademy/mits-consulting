@@ -28,7 +28,7 @@ export function TrainerDetailPage() {
     queryFn: () => api.get(`/trainers/${id}`).then((r) => r.data),
   });
   const { user } = useAuth();
-  const canEditFinance = ['founder', 'manager'].includes(user?.role || '');
+  const canEditFinance = ['founder', 'manager', 'lead'].includes(user?.role || '');
   const FINANCE_FIELDS = ['paymentMethod', 'upiId', 'bankAccount', 'bankHolderName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankBranchName', 'bankAccountType', 'bankChequeUrl'];
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState<any>({});

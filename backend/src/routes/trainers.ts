@@ -280,8 +280,8 @@ trainersRouter.patch('/:id', async (req: AuthedRequest, res) => {
   const FINANCE_FIELDS = ['bankAccount', 'paymentMethod', 'upiId',
     'bankHolderName', 'bankName', 'bankAccountNumber', 'bankIfscCode', 'bankBranchName', 'bankAccountType', 'bankChequeUrl'];
   const touchingFinance = FINANCE_FIELDS.some((f) => f in req.body);
-  if (touchingFinance && !['founder', 'manager'].includes(req.user!.role)) {
-    return res.status(403).json({ error: 'Only founder / manager can change trainer bank / UPI / payment fields.' });
+  if (touchingFinance && !['founder', 'manager', 'lead'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Only founder / manager / lead can change trainer bank / UPI / payment fields.' });
   }
   const data: any = {};
   for (const f of fields) if (f in req.body) data[f] = req.body[f];
