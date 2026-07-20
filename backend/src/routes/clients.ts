@@ -64,6 +64,7 @@ function redactClient<T extends Record<string, any>>(c: T, viewer: { id: string;
       trainer_preference: id.trainer_preference || null,
       meeting_tool: id.meeting_tool || null,
       additional_notes: id.additional_notes || null,
+      attachments: id.attachments || null,  // documents/images needed to source the right trainer
       // omit client_email only
     };
   }
