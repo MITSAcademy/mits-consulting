@@ -871,9 +871,6 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers, clientNameCounts }: { t
   const [removeReason, setRemoveReason] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [showSchedule, setShowSchedule] = useState(false);
-  const [flagIssueId, setFlagIssueId] = useState<string | null>(null);
-  const [flagTitle, setFlagTitle] = useState('');
-  const [flagDesc, setFlagDesc] = useState('');
   const [flagFreelanceId, setFlagFreelanceId] = useState<string | null>(null);
   const [flagFreelanceSkill, setFlagFreelanceSkill] = useState('');
   const [flagFreelanceTimings, setFlagFreelanceTimings] = useState('');
@@ -1275,19 +1272,22 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers, clientNameCounts }: { t
                     </button>
                   )}
 
-                  {/* Flag for Regular Team → toggle banner + goes to Issues */}
+                  {/* Flag for Regular Team → toggle banner AND auto-log issue */}
                   <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: t.coordinatorFlagged ? '#f87171' : '#fb923c', textAlign: 'left' }}
-                    onClick={() => { api.post(`/regular-trainings/trainings/${t.id}/coordinator-flag`).then(() => { onChanged(); qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] }); }); setMenuOpen(false); }}>
+                    onClick={() => {
+                      api.post(`/regular-trainings/trainings/${t.id}/coordinator-flag`)
+                        .then(() => {
+                          onChanged();
+                          qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] });
+                          qc.invalidateQueries({ queryKey: ['issues'] });
+                          if (!t.coordinatorFlagged) showToast('Flagged — issue logged in Issues & Escalations');
+                        })
+                        .catch((e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'));
+                      setMenuOpen(false);
+                    }}>
                     <Flag size={13} /> {t.coordinatorFlagged ? 'Clear Regular Team flag' : 'Flag for Regular Team'}
                   </button>
-                  {!t.coordinatorFlagged && (
-                  <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fb923c', textAlign: 'left' }}
-                    onClick={() => { setFlagIssueId(t.id); setMenuOpen(false); }}>
-                    <Flag size={13} /> Flag for Regular Team (log issue)
-                  </button>
-                  )}
 
                   {/* Flag for Freelance Team → goes to Freelance Requirements */}
                   <button className="flex w-full items-center gap-2.5 px-3 py-2 text-[12px] hover:bg-[var(--bg-input)] transition-colors"
@@ -1414,51 +1414,6 @@ function AMSheetRow({ t, onChanged, coordinatorTrainers, clientNameCounts }: { t
             <div className="text-[10px] mt-1.5" style={{ opacity: 0.6 }}>Auto-saves on blur.</div>
           </td>
         </tr>
-      )}
-
-      {/* Flag for Regular Team dialog */}
-      {flagIssueId && (
-        <Dialog open onOpenChange={(v) => { if (!v) { setFlagIssueId(null); setFlagTitle(''); setFlagDesc(''); } }}>
-          <DialogContent title="Flag issue for Regular Team" description="Describe the issue clearly — this title will appear in the Issues inbox.">
-            <div className="space-y-3">
-              <div className="form-row">
-                <Label>Issue title *</Label>
-                <input
-                  className="input w-full"
-                  placeholder="e.g. Trainer arriving late to sessions"
-                  value={flagTitle}
-                  onChange={(e) => setFlagTitle(e.target.value)}
-                  autoFocus
-                />
-              </div>
-              <div className="form-row">
-                <Label>Additional details (optional)</Label>
-                <textarea
-                  className="input w-full resize-none text-[13px]"
-                  rows={3}
-                  placeholder="Any context, frequency, impact…"
-                  value={flagDesc}
-                  onChange={(e) => setFlagDesc(e.target.value)}
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={() => { setFlagIssueId(null); setFlagTitle(''); setFlagDesc(''); }}>Cancel</Button>
-              <Button
-                variant="primary"
-                disabled={!flagTitle.trim()}
-                onClick={() => {
-                  api.post(`/regular-trainings/trainings/${flagIssueId}/flag-issue`, { title: flagTitle.trim(), description: flagDesc.trim() || undefined })
-                    .then(() => { onChanged(); qc.invalidateQueries({ queryKey: ['issues'] }); showToast('Flagged — issue created in Issues inbox'); })
-                    .catch((e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'));
-                  setFlagIssueId(null); setFlagTitle(''); setFlagDesc('');
-                }}
-              >
-                Create issue
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       )}
 
       {/* Flag for Freelance Team dialog */}

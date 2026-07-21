@@ -186,12 +186,29 @@ regularTrainingsRouter.post('/trainings/:id/coordinator-flag', async (req: Authe
   if (!canWrite(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const training = await prisma.regularTraining.findUnique({
     where: { id: req.params.id },
-    select: { id: true, name: true, coordinatorFlagged: true },
+    select: { id: true, name: true, coordinatorFlagged: true, clientId: true, trainerId: true, client: { select: { name: true } } },
   });
   if (!training) return res.status(404).json({ error: 'Not found' });
   const flag = !training.coordinatorFlagged;
   const updated = await prisma.regularTraining.update({ where: { id: req.params.id }, data: { coordinatorFlagged: flag } });
   await audit(req.user!.id, req.user!.name, flag ? 'COORDINATOR_FLAG_SET' : 'COORDINATOR_FLAG_CLEARED', training.name);
+  // When setting the flag, auto-log an issue in Issues & Escalations
+  if (flag) {
+    const today = new Date().toISOString().slice(0, 10);
+    const issue = await prisma.issueTracker.create({
+      data: {
+        title: `Issue flagged by ${req.user!.name} — ${training.client?.name || training.name}`,
+        date: today,
+        coordinatorId: req.user!.id,
+        coordinatorName: req.user!.name,
+        ...(training.clientId ? { clientId: training.clientId } : {}),
+        ...(training.trainerId ? { trainerId: training.trainerId } : {}),
+        status: 'Open',
+      },
+    });
+    await audit(req.user!.id, req.user!.name, 'ISSUE_FLAGGED', `${training.client?.name || training.name} → issue #${issue.id}`);
+    return res.json({ ...updated, issueId: issue.id });
+  }
   res.json(updated);
 });
 
