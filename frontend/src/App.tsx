@@ -32,6 +32,7 @@ const PipelinePage = lazy(() => import('@/pages/PipelinePage').then((m) => ({ de
 const MoneyFlowPage = lazy(() => import('@/pages/MoneyFlowPage').then((m) => ({ default: m.MoneyFlowPage })));
 const FinancePage = lazy(() => import('@/pages/FinancePage').then((m) => ({ default: m.FinancePage })));
 const VaibhavQueuePage = lazy(() => import('@/pages/VaibhavQueuePage').then((m) => ({ default: m.VaibhavQueuePage })));
+const SecondBrainPage = lazy(() => import('@/pages/SecondBrainPage').then((m) => ({ default: m.SecondBrainPage })));
 const ClientsPage = lazy(() => import('@/pages/ClientsPage').then((m) => ({ default: m.ClientsPage })));
 const ClientDetailPage = lazy(() => import('@/pages/ClientDetailPage').then((m) => ({ default: m.ClientDetailPage })));
 const TrainersPage = lazy(() => import('@/pages/TrainersPage').then((m) => ({ default: m.TrainersPage })));
@@ -133,6 +134,7 @@ export default function App() {
           <Route path="/money-flow" element={<MoneyFlowPage />} />
           <Route path="/finance" element={<FinancePage />} />
           <Route path="/vaibhav-queue" element={<VaibhavQueuePage />} />
+          <Route path="/second-brain" element={<SecondBrainPage />} />
           <Route path="/clients" element={<ClientsPage />} />
           <Route path="/clients/:id" element={<ClientDetailPage />} />
           <Route path="/trainers" element={<TrainersPage />} />

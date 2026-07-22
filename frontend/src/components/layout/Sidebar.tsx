@@ -12,7 +12,7 @@ import {
   Notebook, ChartLine, Upload, Inbox, Edit, UsersRound, Mail, Tag, LockKeyhole,
   Building2, History, Settings, LogOut, Moon, Calendar, ChevronsLeft, ChevronsRight,
   TableProperties, CalendarDays, AlertTriangle, Link, BarChart2, BarChart3, ToggleRight,
-  Sparkles, X, Bug, Handshake, ShieldAlert, Search, ClipboardCheck,
+  Sparkles, X, Bug, Handshake, ShieldAlert, Search, ClipboardCheck, Brain,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -124,6 +124,7 @@ const NAV: NavItem[] = [
   { section: 'overview', page: '/money-flow', label: 'Money flow', icon: ArrowRightLeft, roles: ['founder', 'accounts'] },
   { section: 'overview', page: '/finance', label: 'Finance dashboard', icon: BarChart3, roles: ['founder'] },
   { section: 'overview', page: '/vaibhav-queue', label: 'Vaibhav queue', icon: AlertCircle, roles: ['founder', 'accounts'] },
+  { section: 'overview', page: '/second-brain', label: 'Second Brain', icon: Brain, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor'] },
   { section: 'overview', page: '/pipeline', label: 'Pipeline overview', icon: Target, roles: ['founder', 'demo_lead'] },
   { section: 'overview', page: '/reports/demo-team', label: 'Demo team report', icon: ChartLine, roles: ['founder', 'demo_lead'] },
 

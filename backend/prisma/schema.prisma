@@ -197,6 +197,7 @@ model User {
   freelanceFlagged       FreelanceRequirement[] @relation("FreelanceRequirementFlagged")
   freelanceUpdated       FreelanceRequirement[] @relation("FreelanceRequirementUpdated")
   bugReports             BugReport[]            @relation("BugReports")
+  brainNotes             BrainNote[]            @relation("BrainNoteAuthor")
 }
 
 // -------- NOTIFICATIONS --------
@@ -1303,4 +1304,19 @@ model BugReport {
 
   @@index([status])
   @@index([reportedById])
+}
+
+// -------- SECOND BRAIN / KNOWLEDGE BASE --------
+model BrainNote {
+  id          String   @id @default(cuid())
+  title       String
+  content     String   @db.Text
+  category    String   @default("general")  // "general" | "decision" | "sop" | "meeting" | "strategy"
+  tags        String[] @default([])
+  visibleTo   String[] @default([])  // role names; empty = founder only
+  isPinned    Boolean  @default(false)
+  authorId    String
+  author      User     @relation("BrainNoteAuthor", fields: [authorId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
