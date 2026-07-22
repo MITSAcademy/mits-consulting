@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Brain, Plus, Pin, PinOff, Search, Tag, Trash2, Edit3, X, BookOpen,
   Lightbulb, FileText, Users, Zap, ChevronRight, Clock, Eye, EyeOff,
-  CheckCircle, AlertCircle,
+  CheckCircle, AlertCircle, MessageCircle, Send, BookMarked,
 } from 'lucide-react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -500,6 +500,202 @@ function NoteEditDialog({
   );
 }
 
+// ── Ask (AI chat) tab ─────────────────────────────────────────────────────────
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+function AskTab() {
+  const { showToast } = useUI();
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || loading) return;
+    const history = messages.map((m) => ({ role: m.role, content: m.content }));
+    const next: ChatMessage[] = [...messages, { role: 'user', content: text }];
+    setMessages(next);
+    setInput('');
+    setLoading(true);
+    try {
+      const r = await api.post('/brain-notes/ask', { message: text, history });
+      setMessages([...next, { role: 'assistant', content: r.data.answer }]);
+    } catch (e: any) {
+      const msg = e?.response?.data?.error || 'Something went wrong';
+      if (e?.response?.data?.code === 'NO_AI_PROVIDER') {
+        showToast('AI not configured — ask Vaibhav to set ANTHROPIC_API_KEY in Render', 'error');
+      } else {
+        showToast(msg, 'error');
+      }
+      setMessages(next); // leave user message, remove loading state
+    } finally {
+      setLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  };
+
+  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Message list */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {messages.length === 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--brand-textMuted)' }}>
+            <MessageCircle size={40} style={{ opacity: 0.25 }} />
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--brand-textSecondary)' }}>Ask anything</p>
+            <p style={{ fontSize: 12, maxWidth: 400, textAlign: 'center', lineHeight: 1.6 }}>
+              I know Vaibhav&apos;s notes, portal SOPs, and live data. Try asking about processes, decisions, or live counts.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
+              {[
+                "What are Vaibhav's pinned decisions?",
+                "Explain Roshni's SaleClosing steps",
+                'How many clients are in active stage?',
+              ].map((q) => (
+                <button
+                  key={q}
+                  onClick={() => { setInput(q); setTimeout(() => inputRef.current?.focus(), 50); }}
+                  style={{
+                    padding: '6px 12px', borderRadius: 20, fontSize: 11, cursor: 'pointer',
+                    background: 'rgba(229,178,76,0.06)',
+                    color: 'var(--brand-textSecondary)',
+                    border: '1px solid rgba(229,178,76,0.2)',
+                  }}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              flexDirection: m.role === 'user' ? 'row-reverse' : 'row',
+              gap: 10, alignItems: 'flex-start',
+            }}
+          >
+            <div
+              style={{
+                width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                background: m.role === 'user' ? 'var(--accent-gold)' : 'rgba(99,102,241,0.2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 11, fontWeight: 700,
+                color: m.role === 'user' ? '#0F1115' : '#818cf8',
+              }}
+            >
+              {m.role === 'user' ? 'Y' : 'AI'}
+            </div>
+            <div
+              style={{
+                maxWidth: '75%',
+                padding: '10px 14px',
+                borderRadius: m.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+                background: m.role === 'user'
+                  ? 'rgba(229,178,76,0.1)'
+                  : 'var(--bg-card)',
+                border: '1px solid ' + (m.role === 'user' ? 'rgba(229,178,76,0.25)' : 'var(--brand-borderSoft)'),
+                fontSize: 13,
+                lineHeight: 1.65,
+                color: 'var(--brand-text)',
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {m.content}
+            </div>
+          </div>
+        ))}
+
+        {loading && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, background: 'rgba(99,102,241,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#818cf8' }}>AI</div>
+            <div style={{ padding: '10px 14px', borderRadius: '14px 14px 14px 4px', background: 'var(--bg-card)', border: '1px solid var(--brand-borderSoft)', display: 'flex', gap: 5, alignItems: 'center' }}>
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  style={{
+                    width: 6, height: 6, borderRadius: '50%', background: 'var(--brand-textMuted)',
+                    animation: 'brain-dot-bounce 1.2s ease-in-out infinite',
+                    animationDelay: `${i * 0.2}s`,
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input area */}
+      <div
+        style={{
+          padding: '12px 20px',
+          borderTop: '1px solid var(--brand-borderSoft)',
+          background: 'var(--bg-card)',
+          display: 'flex', gap: 10, alignItems: 'flex-end',
+        }}
+      >
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKey}
+          placeholder="Ask anything… (Enter to send, Shift+Enter for newline)"
+          rows={1}
+          style={{
+            flex: 1, resize: 'none', padding: '10px 14px', borderRadius: 10,
+            background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)',
+            color: 'var(--brand-text)', fontSize: 13, lineHeight: 1.5,
+            outline: 'none', fontFamily: 'inherit',
+            maxHeight: 140, overflowY: 'auto',
+          }}
+        />
+        <button
+          onClick={send}
+          disabled={!input.trim() || loading}
+          style={{
+            width: 38, height: 38, borderRadius: 10, border: 'none', cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+            background: input.trim() && !loading ? 'var(--accent-gold)' : 'rgba(229,178,76,0.15)',
+            color: input.trim() && !loading ? '#0F1115' : 'var(--brand-textMuted)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 150ms',
+            flexShrink: 0,
+          }}
+        >
+          <Send size={15} />
+        </button>
+      </div>
+
+      <style>{`
+        @keyframes brain-dot-bounce {
+          0%, 80%, 100% { transform: scale(0.8); opacity: 0.4; }
+          40% { transform: scale(1.2); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function SecondBrainPage() {
@@ -508,6 +704,7 @@ export function SecondBrainPage() {
   const qc = useQueryClient();
   const isFounder = user?.role === 'founder';
 
+  const [activeTab, setActiveTab] = useState<'notes' | 'ask'>('notes');
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState<NoteCategory | 'all'>('all');
   const [filterTag, setFilterTag] = useState('');
@@ -572,14 +769,45 @@ export function SecondBrainPage() {
         title="Second Brain"
         subtitle={isFounder ? 'Your private knowledge base — share what matters with the team' : "Vaibhav's shared knowledge base"}
         actions={
-          isFounder ? (
-            <Button variant="primary" onClick={() => setEditNote({})}>
-              <Plus size={14} /> New note
-            </Button>
-          ) : undefined
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {/* Tab switcher */}
+            <div style={{ display: 'flex', background: 'var(--bg-input)', borderRadius: 8, padding: 2, border: '1px solid var(--brand-borderSoft)' }}>
+              {([
+                { key: 'notes', label: 'Knowledge Base', icon: BookMarked },
+                { key: 'ask',   label: 'Ask',            icon: MessageCircle },
+              ] as const).map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
+                    background: activeTab === key ? 'var(--bg-card)' : 'transparent',
+                    color: activeTab === key ? 'var(--brand-text)' : 'var(--brand-textMuted)',
+                    boxShadow: activeTab === key ? '0 1px 3px rgba(0,0,0,0.2)' : 'none',
+                    transition: 'all 150ms',
+                  }}
+                >
+                  <Icon size={12} /> {label}
+                </button>
+              ))}
+            </div>
+            {isFounder && activeTab === 'notes' && (
+              <Button variant="primary" onClick={() => setEditNote({})}>
+                <Plus size={14} /> New note
+              </Button>
+            )}
+          </div>
         }
       />
 
+      {activeTab === 'ask' && (
+        <div style={{ height: 'calc(100vh - 130px)', display: 'flex', flexDirection: 'column' }}>
+          <AskTab />
+        </div>
+      )}
+
+      {activeTab === 'notes' && <>
       {/* Decisions strip */}
       {notes.some((n) => n.category === 'decision' && n.isPinned) && (
         <div style={{ padding: '0 24px 0', marginBottom: 0 }}>
@@ -791,6 +1019,8 @@ export function SecondBrainPage() {
           )}
         </div>
       </div>
+
+      </>}
 
       {/* Edit / Create dialog */}
       {editNote !== null && (
