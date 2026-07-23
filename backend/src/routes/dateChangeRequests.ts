@@ -17,8 +17,8 @@ export const dateChangeRequestsRouter = Router();
 dateChangeRequestsRouter.use(requireAuth);
 
 const SUBMITTERS = ['accounts', 'manager', 'founder'];
-const APPROVERS_A  = ['demo_lead', 'manager', 'founder']; // Samita or above
-const APPROVERS_B  = ['founder', 'manager'];              // Vaibhav only
+const APPROVERS_A  = ['demo_lead', 'manager', 'founder']; // payment_received: Samita, Mitali, or founder
+const APPROVERS_B  = ['founder', 'demo_lead'];            // leverage: Vaibhav or Samita only
 
 function todayIST() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });

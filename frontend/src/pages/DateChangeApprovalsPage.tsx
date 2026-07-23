@@ -230,7 +230,11 @@ export default function DateChangeApprovalsPage() {
     queryFn: () => api.get('/date-change-requests').then((r: any) => r.data),
   });
 
-  const canApprove = ['founder', 'manager', 'demo_lead'].includes(user?.role || '');
+  // payment_received → Samita (demo_lead), Mitali (manager), or founder can approve
+  // leverage        → only Vaibhav (founder) or Samita (demo_lead) can approve
+  const role = user?.role || '';
+  const canApprovePayment = ['founder', 'manager', 'demo_lead'].includes(role);
+  const canApproveLeverage = ['founder', 'demo_lead'].includes(role);
 
   const pending = data.filter(r => r.status === 'pending');
   const history = data.filter(r => r.status !== 'pending');
@@ -280,7 +284,7 @@ export default function DateChangeApprovalsPage() {
           </div>
         )}
         {shown.map((r: DCR) => (
-          <RequestCard key={r.id} r={r} canApprove={canApprove} />
+          <RequestCard key={r.id} r={r} canApprove={r.type === 'leverage' ? canApproveLeverage : canApprovePayment} />
         ))}
       </Page>
     </>
