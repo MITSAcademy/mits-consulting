@@ -230,10 +230,9 @@ export default function DateChangeApprovalsPage() {
     queryFn: () => api.get('/date-change-requests').then((r: any) => r.data),
   });
 
-  // payment_received → Samita (demo_lead), Mitali (manager), or founder can approve
-  // leverage        → only Vaibhav (founder) or Samita (demo_lead) can approve
+  // Both types: only Vaibhav (founder) or Samita (demo_lead) can approve
   const role = user?.role || '';
-  const canApprovePayment = ['founder', 'manager', 'demo_lead'].includes(role);
+  const canApprovePayment = ['founder', 'demo_lead'].includes(role);
   const canApproveLeverage = ['founder', 'demo_lead'].includes(role);
 
   const pending = data.filter(r => r.status === 'pending');
