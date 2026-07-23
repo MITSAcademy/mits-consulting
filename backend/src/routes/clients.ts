@@ -2872,15 +2872,16 @@ clientsRouter.post('/:id/mitali-welcome-email', async (req: AuthedRequest, res) 
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
   if (!toEmail) return res.status(400).json({ error: 'No email on file for this client' });
 
-  const coordinatorName = client.assignedAm?.name || 'Muskan';
   const today = new Date().toISOString().slice(0, 10);
-  const { playbookUrl, agreementUrl } = req.body || {};
+  const { playbookUrl, agreementUrl, coordinatorName: coordinatorOverride } = req.body || {};
+  const coordinatorName = coordinatorOverride?.trim() || client.assignedAm?.name || 'Muskan';
 
   const subject = HANDOVER_SUBJECT(client.name);
   const vars = {
     clientName: client.name,
     playbookUrl: playbookUrl || undefined,
     agreementUrl: agreementUrl || undefined,
+    coordinatorName,
   };
   const htmlBody = buildHandoverHtml({ ...vars, senderName: 'Mitali' });
   const textBody = buildHandoverText({ ...vars, senderName: 'Mitali' });

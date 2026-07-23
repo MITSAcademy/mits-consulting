@@ -4704,11 +4704,17 @@ function MitaliWelcomeEmailModal({ client, onClose }: { client: any; onClose: ()
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
+  const defaultCoordinator = client.assignedAm?.name || 'Muskan';
+  const [coordinatorName, setCoordinatorName] = useState(defaultCoordinator);
   const [playbookUrl, setPlaybookUrl] = useState('https://drive.google.com/file/d/1v3myXlxmqjctWSL6qqmVofD21IxuGO_7/view?usp=sharing');
   const [agreementUrl, setAgreementUrl] = useState('');
 
   const send = useMutation({
-    mutationFn: () => api.post(`/clients/${client.id}/mitali-welcome-email`, { playbookUrl: playbookUrl || undefined, agreementUrl: agreementUrl || undefined }),
+    mutationFn: () => api.post(`/clients/${client.id}/mitali-welcome-email`, {
+      coordinatorName: coordinatorName.trim() || undefined,
+      playbookUrl: playbookUrl || undefined,
+      agreementUrl: agreementUrl || undefined,
+    }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['client', client.id] }); showToast('Welcome email sent'); onClose(); },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
@@ -4720,10 +4726,20 @@ function MitaliWelcomeEmailModal({ client, onClose }: { client: any; onClose: ()
           <div className="font-semibold mb-1">To: {toEmail || <span className="text-red-400">No email on file</span>}</div>
           <div className="muted">CC: vaibhav.aggarwal@mitssolution.com</div>
           <div className="mt-1 muted">Subject: Welcome Aboard {client.name} -- MITS Solution</div>
-          <div className="mt-2 text-[11px] muted">Full template: welcome message · Muskan (Coordinator) · Bhavneet (Team Leader) · Mitali (CSM) · escalation ETAs · playbook + agreement links.</div>
+          <div className="mt-2 text-[11px] muted">Template: welcome message · {coordinatorName || 'Coordinator'} (Coordinator) · Bhavneet (Team Leader) · Mitali (CSM) · escalation ETAs · playbook + agreement links.</div>
         </div>
 
         <div className="form-row mt-3">
+          <Label>Client Coordinator <span className="muted font-normal">(name shown in email)</span></Label>
+          <input
+            className="input text-[12px]"
+            placeholder="e.g. Muskan or Kashish"
+            value={coordinatorName}
+            onChange={(e) => setCoordinatorName(e.target.value)}
+          />
+        </div>
+
+        <div className="form-row">
           <Label>Client Playbook URL <span className="muted font-normal">(paste Google Drive link)</span></Label>
           <input
             className="input text-[12px]"

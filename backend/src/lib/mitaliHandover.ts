@@ -100,15 +100,15 @@ export function buildHandoverHtml(v: HandoverVars): string {
           </p>
 
           <p style="margin:0 0 12px;">
-            <b>2) <a href="mailto:bhavneet@mitssolution.com" style="color:#1A6CDF;text-decoration:underline;">Bhavneet</a> (Team Leader)</b> -&nbsp; Should any issues arise, Team Lead will be readily available to assist you with <b>prompt resolutions</b> like Resource change, Timing issues, etc, and <b>Level 1</b> point of escalation. Also Bhavneet will reach you for very regular verbal feedback as well. [Escalation Response ETA ~24 hrs]
+            <b>2) Bhavneet (Team Leader)</b> -&nbsp; Should any issues arise, Team Lead will be readily available to assist you with <b>prompt resolutions</b> like Resource change, Timing issues, etc, and <b>Level 1</b> point of escalation. Also Bhavneet will reach you for very regular verbal feedback as well. [Escalation Response ETA ~24 hrs]
           </p>
 
           <p style="margin:0 0 16px;">
-            <b>3) ${esc(senderName)} (Customer Success Manager)</b> -&nbsp; I will be your dedicated <b>Customer Success Manager</b>, overseeing and ensuring your satisfaction throughout our collaboration. I will be the <b>Level L2</b> point of escalation and a further point of contact for recurring <b>Payments</b>. [Escalation Response ETA ~48 hrs]
+            <b>3) ${esc(senderName)} (Customer Success Manager)</b> -&nbsp; I will be your dedicated <b>Customer Success Manager</b>, overseeing and ensuring your satisfaction throughout our collaboration. I will be the <b>Level L2</b> point of escalation and a further point of contact for recurring <b>Payments</b>. [Escalation Response ETA ~24 hrs]
           </p>
 
           <p style="margin:0 0 16px;">
-            To get the <b>services started</b>, you need to sign the <a href="#" style="color:#1A6CDF;text-decoration:underline;">agreement</a> containing all the <b>terms and conditions</b> related to the services. Please take the time to <b>review the document</b> thoroughly and <b>sign it</b> to signify your agreement.
+            To get the <b>services started</b>, you need to sign the Service Agreement containing all the <b>terms and conditions</b> related to the services. Please take the time to <b>review the document</b> thoroughly and <b>sign it</b> to signify your agreement.
           </p>
 
           <p style="margin:0 0 6px;"><b>P.S - Please find the documents links below:-</b></p>
