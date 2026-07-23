@@ -2826,8 +2826,27 @@ async function sendDemoInvite(
     select: { sendAsAddress: true, gmailAddress: true, email: true },
   });
   const samitaEmail = samitaUser?.sendAsAddress || samitaUser?.gmailAddress || samitaUser?.email || 'samita@mitssolution.com';
-  // Don't CC someone on their own send
-  const samitaCc = [samitaEmail].filter((a) => a !== orgEmail);
+
+  // Also CC the intake partner of whoever is sending (Taran↔Kanchan, Anjali↔Aman)
+  // so the intake person always sees the demo confirmation their recruiter partner sent.
+  const INTAKE_PARTNER_FOR: Record<string, string> = {
+    'u-aman':    'u-anjali',
+    'u-kanchan': 'u-taran',
+  };
+  const intakePartnerId = INTAKE_PARTNER_FOR[req.user!.id];
+  let intakePartnerEmail: string | null = null;
+  if (intakePartnerId) {
+    const partner = await prisma.user.findUnique({
+      where: { id: intakePartnerId },
+      select: { sendAsAddress: true, gmailAddress: true, email: true },
+    });
+    intakePartnerEmail = partner?.sendAsAddress || partner?.gmailAddress || partner?.email || null;
+  }
+
+  // Don't CC someone on their own send; dedupe
+  const samitaCc = [samitaEmail, intakePartnerEmail]
+    .filter((a): a is string => !!a && a !== orgEmail)
+    .filter((a, i, arr) => arr.indexOf(a) === i);
 
   const sentTo: string[] = [];
   if (clientEmail) {
