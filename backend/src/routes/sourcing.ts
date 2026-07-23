@@ -882,11 +882,17 @@ sourcingRouter.post('/proposals/:id/outreach/email', async (req: AuthedRequest, 
     };
   }
 
-  // CC Samita (demo_lead) on every trainer outreach so she can see what
-  // Aman/Kanchan are sending. Follow reportsToId chain first; fall back
-  // to the demo_lead role if the recruiter has no manager set.
+  // CC two people on every trainer outreach email:
+  //   1. Samita (demo_lead / manager) — resolves via reportsToId chain, falls back to demo_lead role
+  //   2. The intake partner paired with this recruiter (Taran↔Kanchan, Anjali↔Aman)
+  //      so they can see exactly what's going out to the trainer for their client
+  const INTAKE_PARTNER_FOR: Record<string, string> = {
+    'u-aman':    'u-anjali',
+    'u-kanchan': 'u-taran',
+  };
   const ccAddresses: string[] = [];
   {
+    // 1. Samita / manager via reportsToId chain
     let managerEmail: string | null = null;
     if (me?.id) {
       const recruiterRow = await prisma.user.findUnique({
@@ -909,6 +915,19 @@ sourcingRouter.post('/proposals/:id/outreach/email', async (req: AuthedRequest, 
       managerEmail = samita?.sendAsAddress || samita?.gmailAddress || samita?.email || null;
     }
     if (managerEmail && managerEmail !== toEmail) ccAddresses.push(managerEmail);
+
+    // 2. Intake partner (Taran for Kanchan, Anjali for Aman)
+    const intakePartnerId = me?.id ? INTAKE_PARTNER_FOR[me.id] : undefined;
+    if (intakePartnerId) {
+      const partner = await prisma.user.findUnique({
+        where: { id: intakePartnerId },
+        select: { sendAsAddress: true, gmailAddress: true, email: true },
+      });
+      const partnerEmail = partner?.sendAsAddress || partner?.gmailAddress || partner?.email || null;
+      if (partnerEmail && partnerEmail !== toEmail && !ccAddresses.includes(partnerEmail)) {
+        ccAddresses.push(partnerEmail);
+      }
+    }
   }
 
   // Persist + send
