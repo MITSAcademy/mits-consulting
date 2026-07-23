@@ -4,7 +4,7 @@ import { checkMilestone, incrementCount } from '@/lib/milestones';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/EmptyState';
-import { ClipboardList, Download, ThumbsUp, ThumbsDown, Minus } from 'lucide-react';
+import { ClipboardList, Download, ThumbsUp, ThumbsDown, Minus, Search } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useUI } from '@/store/ui';
 import { todayISO, minPastDate, maxTodayDate } from '@/lib/utils';
@@ -260,9 +260,21 @@ export function SessionLogsPage() {
     enabled: canLog,
   });
 
-  // History pagination
+  // History search + pagination
+  const [historySearch, setHistorySearch] = useState('');
   const [historyPage, setHistoryPage] = useState(1);
   const HISTORY_PAGE_SIZE = 30;
+
+  const filteredLogs = useMemo(() => {
+    const all = logs || [];
+    const q = historySearch.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((l: any) =>
+      l.client?.name?.toLowerCase().includes(q) ||
+      l.trainer?.name?.toLowerCase().includes(q) ||
+      (l.date || '').includes(q)
+    );
+  }, [logs, historySearch]);
 
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -556,10 +568,26 @@ export function SessionLogsPage() {
 
         {/* ── Section 2: Existing session logs ───────────────────────────── */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 12, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--brand-textMuted)' }}>
-              Session history {(logs || []).length > 0 && <span style={{ fontWeight: 400 }}>· {(logs || []).length} entries</span>}
+              Session history {(logs || []).length > 0 && (
+                <span style={{ fontWeight: 400 }}>
+                  · {historySearch ? `${filteredLogs.length} of ${(logs || []).length}` : `${(logs || []).length}`} entries
+                </span>
+              )}
             </div>
+            {(logs || []).length > 0 && (
+              <div style={{ position: 'relative' }}>
+                <Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--brand-textMuted)', pointerEvents: 'none' }} />
+                <input
+                  className="input"
+                  value={historySearch}
+                  onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(1); }}
+                  placeholder="Search client, trainer, date…"
+                  style={{ paddingLeft: 26, fontSize: 12, width: 220 }}
+                />
+              </div>
+            )}
           </div>
           {logsLoading ? (
             <div className="table-card" style={{ padding: '16px 20px' }}>
@@ -572,9 +600,12 @@ export function SessionLogsPage() {
                 </div>
               ))}
             </div>
-          ) : (logs || []).length === 0 ? (
-            <EmptyState icon={ClipboardList} tone="grey" title="Ready to log your first session?"
-              description="Pick a client from the table above and tap 'Log session' — it takes under 30 seconds." />
+          ) : filteredLogs.length === 0 ? (
+            (logs || []).length === 0
+              ? <EmptyState icon={ClipboardList} tone="grey" title="Ready to log your first session?"
+                  description="Pick a client from the table above and tap 'Log session' — it takes under 30 seconds." />
+              : <EmptyState icon={Search} tone="grey" title="No matching logs"
+                  description={`No session logs match "${historySearch}". Try a different client name, trainer name, or date.`} />
           ) : (
             <>
               <div className="table-card" style={{ overflowX: 'auto' }}>
@@ -594,7 +625,7 @@ export function SessionLogsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(logs || []).slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE).map((l: any) => {
+                    {filteredLogs.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE).map((l: any) => {
                       const { h, m } = decimalToDuration(l.hours || 0);
                       const dur = l.sessionHappened === false
                         ? '—'
@@ -650,13 +681,13 @@ export function SessionLogsPage() {
                 </table>
               </div>
               {/* Pagination */}
-              {(logs || []).length > HISTORY_PAGE_SIZE && (
+              {filteredLogs.length > HISTORY_PAGE_SIZE && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 }}>
                   <Button size="sm" variant="ghost" onClick={() => setHistoryPage(p => Math.max(1, p - 1))} disabled={historyPage === 1}>← Prev</Button>
                   <span style={{ fontSize: 12, color: 'var(--brand-textMuted)' }}>
-                    Page {historyPage} of {Math.ceil((logs || []).length / HISTORY_PAGE_SIZE)}
+                    Page {historyPage} of {Math.ceil(filteredLogs.length / HISTORY_PAGE_SIZE)}
                   </span>
-                  <Button size="sm" variant="ghost" onClick={() => setHistoryPage(p => Math.min(Math.ceil((logs || []).length / HISTORY_PAGE_SIZE), p + 1))} disabled={historyPage >= Math.ceil((logs || []).length / HISTORY_PAGE_SIZE)}>Next →</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setHistoryPage(p => Math.min(Math.ceil(filteredLogs.length / HISTORY_PAGE_SIZE), p + 1))} disabled={historyPage >= Math.ceil(filteredLogs.length / HISTORY_PAGE_SIZE)}>Next →</Button>
                 </div>
               )}
             </>
