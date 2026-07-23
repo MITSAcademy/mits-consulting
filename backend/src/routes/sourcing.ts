@@ -882,6 +882,35 @@ sourcingRouter.post('/proposals/:id/outreach/email', async (req: AuthedRequest, 
     };
   }
 
+  // CC Samita (demo_lead) on every trainer outreach so she can see what
+  // Aman/Kanchan are sending. Follow reportsToId chain first; fall back
+  // to the demo_lead role if the recruiter has no manager set.
+  const ccAddresses: string[] = [];
+  {
+    let managerEmail: string | null = null;
+    if (me?.id) {
+      const recruiterRow = await prisma.user.findUnique({
+        where: { id: me.id },
+        select: { reportsToId: true },
+      });
+      if (recruiterRow?.reportsToId) {
+        const mgr = await prisma.user.findUnique({
+          where: { id: recruiterRow.reportsToId },
+          select: { sendAsAddress: true, gmailAddress: true, email: true },
+        });
+        managerEmail = mgr?.sendAsAddress || mgr?.gmailAddress || mgr?.email || null;
+      }
+    }
+    if (!managerEmail) {
+      const samita = await prisma.user.findFirst({
+        where: { role: 'demo_lead', active: true },
+        select: { sendAsAddress: true, gmailAddress: true, email: true },
+      });
+      managerEmail = samita?.sendAsAddress || samita?.gmailAddress || samita?.email || null;
+    }
+    if (managerEmail && managerEmail !== toEmail) ccAddresses.push(managerEmail);
+  }
+
   // Persist + send
   const msg = await prisma.outboundMessage.create({
     data: {
@@ -897,7 +926,7 @@ sourcingRouter.post('/proposals/:id/outreach/email', async (req: AuthedRequest, 
     },
   });
   try {
-    const r = await sendEmail({ to: toEmail, subject, body: text, htmlBody: html, fromUser });
+    const r = await sendEmail({ to: toEmail, subject, body: text, htmlBody: html, fromUser, cc: ccAddresses.length ? ccAddresses : undefined });
     await prisma.outboundMessage.update({
       where: { id: msg.id },
       data: { status: 'Sent', providerMessageId: r.id, provider: r.provider },
