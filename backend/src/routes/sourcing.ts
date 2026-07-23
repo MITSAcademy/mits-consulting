@@ -883,38 +883,22 @@ sourcingRouter.post('/proposals/:id/outreach/email', async (req: AuthedRequest, 
   }
 
   // CC two people on every trainer outreach email:
-  //   1. Samita (demo_lead / manager) — resolves via reportsToId chain, falls back to demo_lead role
+  //   1. Samita (demo_lead) — looked up directly by role, not via reportsToId
+  //      (Aman/Kanchan report to Vaibhav, so the reportsToId chain never reached Samita)
   //   2. The intake partner paired with this recruiter (Taran↔Kanchan, Anjali↔Aman)
-  //      so they can see exactly what's going out to the trainer for their client
   const INTAKE_PARTNER_FOR: Record<string, string> = {
     'u-aman':    'u-anjali',
     'u-kanchan': 'u-taran',
   };
   const ccAddresses: string[] = [];
   {
-    // 1. Samita / manager via reportsToId chain
-    let managerEmail: string | null = null;
-    if (me?.id) {
-      const recruiterRow = await prisma.user.findUnique({
-        where: { id: me.id },
-        select: { reportsToId: true },
-      });
-      if (recruiterRow?.reportsToId) {
-        const mgr = await prisma.user.findUnique({
-          where: { id: recruiterRow.reportsToId },
-          select: { sendAsAddress: true, gmailAddress: true, email: true },
-        });
-        managerEmail = mgr?.sendAsAddress || mgr?.gmailAddress || mgr?.email || null;
-      }
-    }
-    if (!managerEmail) {
-      const samita = await prisma.user.findFirst({
-        where: { role: 'demo_lead', active: true },
-        select: { sendAsAddress: true, gmailAddress: true, email: true },
-      });
-      managerEmail = samita?.sendAsAddress || samita?.gmailAddress || samita?.email || null;
-    }
-    if (managerEmail && managerEmail !== toEmail) ccAddresses.push(managerEmail);
+    // 1. Samita — always by demo_lead role
+    const samita = await prisma.user.findFirst({
+      where: { role: 'demo_lead', active: true },
+      select: { sendAsAddress: true, gmailAddress: true, email: true },
+    });
+    const samitaEmail = samita?.sendAsAddress || samita?.gmailAddress || samita?.email || null;
+    if (samitaEmail && samitaEmail !== toEmail) ccAddresses.push(samitaEmail);
 
     // 2. Intake partner (Taran for Kanchan, Anjali for Aman)
     const intakePartnerId = me?.id ? INTAKE_PARTNER_FOR[me.id] : undefined;
