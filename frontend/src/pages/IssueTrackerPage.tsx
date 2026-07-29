@@ -26,7 +26,8 @@ interface Issue {
   escalationLevel: number;
   escalatedAt?: string | null;
   escalationLog?: string | null;
-  coordinator?: { id: string; name: string };
+  coordinatorName?: string | null;
+  raisedByName?: string | null;
   client?: { id: string; name: string } | null;
   trainer?: { id: string; name: string } | null;
   acknowledgedByMitaliAt?: string | null;
@@ -316,6 +317,106 @@ function EscalationRow({ esc }: { esc: Escalation }) {
             <Button variant="primary" onClick={() => setResolving(true)}>Resolve</Button>
           )
         )}
+      </td>
+    </tr>
+  );
+}
+
+// ── Issue row (with inline-editable title) ───────────────────────────────────
+
+function IssueRow({ issue, canDelete, deleteConfirm, setDeleteConfirm, onDelete }: {
+  issue: Issue;
+  canDelete: boolean;
+  deleteConfirm: string | null;
+  setDeleteConfirm: (id: string | null) => void;
+  onDelete: (id: string) => void;
+}) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const user = useAuth((s) => s.user)!;
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleVal, setTitleVal] = useState(issue.title);
+
+  const canWrite = ['founder', 'manager', 'lead', 'account_manager'].includes(user.role);
+
+  const saveTitle = useMutation({
+    mutationFn: () => api.patch(`/issue-tracker/${issue.id}`, { title: titleVal.trim() }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['issue-tracker'] }); setEditingTitle(false); showToast('Title updated'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  return (
+    <tr className="clickable">
+      <td className="mono text-[12px] whitespace-nowrap">{issue.date}</td>
+      <td className="text-[13px]">{issue.raisedByName || <span className="muted">—</span>}</td>
+      <td className="text-[13px]">{issue.coordinatorName || <span className="muted">—</span>}</td>
+      <td className="text-[13px]">{issue.client?.name    || <span className="muted">—</span>}</td>
+      <td className="text-[13px]">{issue.trainer?.name   || <span className="muted">—</span>}</td>
+      <td style={{ minWidth: 200, maxWidth: 280 }}>
+        {editingTitle && canWrite ? (
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              className="text-[12px] rounded px-1.5 py-1 flex-1"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)', color: 'var(--brand-text)', outline: 'none' }}
+              value={titleVal}
+              onChange={(e) => setTitleVal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && titleVal.trim()) saveTitle.mutate();
+                if (e.key === 'Escape') { setEditingTitle(false); setTitleVal(issue.title); }
+              }}
+            />
+            <button onClick={() => { if (titleVal.trim()) saveTitle.mutate(); }} style={{ color: '#90ff90', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✓</button>
+            <button onClick={() => { setEditingTitle(false); setTitleVal(issue.title); }} style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>✕</button>
+          </div>
+        ) : (
+          <div
+            className="group/t flex items-start gap-1"
+            onClick={() => canWrite && setEditingTitle(true)}
+            style={{ cursor: canWrite ? 'pointer' : 'default' }}
+          >
+            <div>
+              <span className="text-[13px] font-medium">{issue.title}</span>
+              <EscalationBadge level={issue.escalationLevel || 0} />
+              {issue.description && <div className="muted text-[11px] mt-0.5 max-w-xs truncate">{issue.description}</div>}
+              {issue.resolutionNotes && <div className="text-[11px] mt-0.5 max-w-xs truncate" style={{ color: 'var(--status-green)' }}>✓ {issue.resolutionNotes}</div>}
+            </div>
+            {canWrite && <span className="opacity-0 group-hover/t:opacity-40 transition-opacity text-[10px] mt-0.5 shrink-0">✏</span>}
+          </div>
+        )}
+      </td>
+      <td><StatusBadge status={issue.status} /></td>
+      <td>
+        {user.id === 'u-mitali' ? (
+          <AckButton issueId={issue.id} ackedAt={issue.acknowledgedByMitaliAt} field="acknowledgedByMitaliAt" label="Mitali" />
+        ) : issue.acknowledgedByMitaliAt ? (
+          <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--status-green)' }}>
+            <CheckCircle2 size={11} />
+            <span>{new Date(issue.acknowledgedByMitaliAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+        ) : (
+          <span className="text-[11px]" style={{ color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>Pending</span>
+        )}
+      </td>
+      <td>
+        <div className="flex items-center gap-1.5">
+          <UpdateIssueModal issue={issue} />
+          {canDelete && deleteConfirm !== issue.id && (
+            <button
+              onClick={() => setDeleteConfirm(issue.id)}
+              className="text-[11px] px-2 py-1 rounded"
+              style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--status-red)', border: '1px solid rgba(239,68,68,0.2)', cursor: 'pointer' }}
+              title="Delete issue"
+            >✕</button>
+          )}
+          {canDelete && deleteConfirm === issue.id && (
+            <span className="flex items-center gap-1">
+              <span className="text-[11px]" style={{ color: 'var(--status-red)' }}>Delete?</span>
+              <button onClick={() => { onDelete(issue.id); setDeleteConfirm(null); }} className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--status-red)', border: '1px solid rgba(239,68,68,0.3)', cursor: 'pointer', fontWeight: 600 }}>Yes</button>
+              <button onClick={() => setDeleteConfirm(null)} className="text-[11px] px-2 py-1 rounded" style={{ background: 'var(--bg-input)', color: 'var(--brand-textMuted)', border: '1px solid var(--brand-borderSoft)', cursor: 'pointer' }}>No</button>
+            </span>
+          )}
+        </div>
       </td>
     </tr>
   );
@@ -714,6 +815,7 @@ export default function IssueTrackerPage() {
                   <thead>
                     <tr>
                       <th>Date</th>
+                      <th>Raised By</th>
                       <th>Coordinator</th>
                       <th>Client</th>
                       <th>Trainer</th>
@@ -725,53 +827,7 @@ export default function IssueTrackerPage() {
                   </thead>
                   <tbody>
                     {filtered.map((issue) => (
-                      <tr key={issue.id} className="clickable">
-                        <td className="mono text-[12px] whitespace-nowrap">{issue.date}</td>
-                        <td className="text-[13px]">{issue.coordinator?.name || <span className="muted">—</span>}</td>
-                        <td className="text-[13px]">{issue.client?.name    || <span className="muted">—</span>}</td>
-                        <td className="text-[13px]">{issue.trainer?.name   || <span className="muted">—</span>}</td>
-                        <td>
-                          <div className="text-[13px] font-medium">
-                            {issue.title}
-                            <EscalationBadge level={issue.escalationLevel || 0} />
-                          </div>
-                          {issue.description && <div className="muted text-[11px] mt-0.5 max-w-xs truncate">{issue.description}</div>}
-                          {issue.resolutionNotes && <div className="text-[11px] mt-0.5 max-w-xs truncate" style={{ color: 'var(--status-green)' }}>✓ {issue.resolutionNotes}</div>}
-                        </td>
-                        <td><StatusBadge status={issue.status} /></td>
-                        <td>
-                          {user.id === 'u-mitali' ? (
-                            <AckButton issueId={issue.id} ackedAt={issue.acknowledgedByMitaliAt} field="acknowledgedByMitaliAt" label="Mitali" />
-                          ) : issue.acknowledgedByMitaliAt ? (
-                            <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--status-green)' }}>
-                              <CheckCircle2 size={11} />
-                              <span>{new Date(issue.acknowledgedByMitaliAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-                            </div>
-                          ) : (
-                            <span className="text-[11px]" style={{ color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>Pending</span>
-                          )}
-                        </td>
-                        <td>
-                          <div className="flex items-center gap-1.5">
-                            <UpdateIssueModal issue={issue} />
-                            {canDelete && deleteConfirm !== issue.id && (
-                              <button
-                                onClick={() => setDeleteConfirm(issue.id)}
-                                className="text-[11px] px-2 py-1 rounded"
-                                style={{ background: 'rgba(239,68,68,0.1)', color: 'var(--status-red)', border: '1px solid rgba(239,68,68,0.2)', cursor: 'pointer' }}
-                                title="Delete issue"
-                              >✕</button>
-                            )}
-                            {canDelete && deleteConfirm === issue.id && (
-                              <span className="flex items-center gap-1">
-                                <span className="text-[11px]" style={{ color: 'var(--status-red)' }}>Delete?</span>
-                                <button onClick={() => { deleteIssue.mutate(issue.id); setDeleteConfirm(null); }} className="text-[11px] px-2 py-1 rounded" style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--status-red)', border: '1px solid rgba(239,68,68,0.3)', cursor: 'pointer', fontWeight: 600 }}>Yes</button>
-                                <button onClick={() => setDeleteConfirm(null)} className="text-[11px] px-2 py-1 rounded" style={{ background: 'var(--bg-input)', color: 'var(--brand-textMuted)', border: '1px solid var(--brand-borderSoft)', cursor: 'pointer' }}>No</button>
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                      <IssueRow key={issue.id} issue={issue} canDelete={canDelete} deleteConfirm={deleteConfirm} setDeleteConfirm={setDeleteConfirm} onDelete={(id) => deleteIssue.mutate(id)} />
                     ))}
                   </tbody>
                 </table>

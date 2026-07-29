@@ -16,6 +16,13 @@ const include = {
   closedBy: { select: { id: true, name: true } },
 };
 
+// Fields returned in every list/detail response (coordinatorName + raisedByName are plain strings)
+const SELECT_EXTRA = {
+  coordinatorName: true,
+  raisedById: true,
+  raisedByName: true,
+};
+
 // GET / — list all issues
 issueTrackerRouter.get('/', async (req: AuthedRequest, res) => {
   if (!READ_ROLES.includes(req.user!.role)) return res.status(403).json({ error: 'Forbidden' });
@@ -54,6 +61,8 @@ issueTrackerRouter.post('/', async (req: AuthedRequest, res) => {
       date,
       coordinatorId:   coordinatorId   ?? req.user!.id,
       coordinatorName: coordinatorName ?? req.user!.name,
+      raisedById:   req.user!.id,
+      raisedByName: req.user!.name,
       ...(clientId    ? { clientId }    : {}),
       ...(trainerId   ? { trainerId }   : {}),
       ...(description ? { description } : {}),

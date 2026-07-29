@@ -815,6 +815,8 @@ model IssueTracker {
   date             String
   coordinatorId    String?
   coordinatorName  String?
+  raisedById       String?
+  raisedByName     String?
   clientId         String?
   client           Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
   trainerId        String?
