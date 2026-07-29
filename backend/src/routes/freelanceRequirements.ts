@@ -280,6 +280,89 @@ freelanceRequirementsRouter.post('/:id/proposals/:idx/notify', requireRole(...RE
   res.json({ ok: true });
 });
 
+// POST /:id/re-raise — clone a requirement for the next day, preserving all details
+// Proposals are cleared so the recruiter team starts fresh sourcing.
+freelanceRequirementsRouter.post('/:id/re-raise', requireRole(...REGULAR_ROLES), async (req: AuthedRequest, res) => {
+  const source = await (prisma as any).freelanceRequirement.findUnique({
+    where: { id: req.params.id },
+  });
+  if (!source) return res.status(404).json({ error: 'Requirement not found' });
+
+  const clone = await (prisma as any).freelanceRequirement.create({
+    data: {
+      clientName:       source.clientName,
+      skillRequired:    source.skillRequired,
+      currentTrainer:   source.currentTrainer,
+      clientTimings:    source.clientTimings,
+      trainersUsed:     source.trainersUsed,
+      clientId:         source.clientId,
+      priority:         source.priority,
+      status:           'Open',
+      isEscalated:      false,
+      proposals:        [],
+      flaggedById:      req.user!.id,
+      lastUpdatedById:  req.user!.id,
+    },
+    include,
+  });
+
+  await audit(req.user!.id, req.user!.name, 'FREELANCE_REQ_RERAISE', `${source.clientName} · cloned from ${source.id}`);
+
+  // Notify recruiters about the re-raised requirement
+  try {
+    const [fromUser, recruiters] = await Promise.all([getFromUser(), getRecruiters()]);
+    if (fromUser && recruiters.length) {
+      const rows = [
+        ['Client', source.clientName],
+        ['Skill required', source.skillRequired],
+        ['Current trainer', source.currentTrainer || '—'],
+        ['Client timings', source.clientTimings || '—'],
+        ['Trainers tried', source.trainersUsed || '—'],
+        ['Priority', source.priority || 'Medium'],
+        ['Re-raised by', req.user!.name],
+      ];
+      const tableRows = rows.map(([k, v]) =>
+        `<tr><td style="padding:6px 12px;font-size:13px;color:#6b7280;white-space:nowrap;">${k}</td><td style="padding:6px 12px;font-size:13px;color:#111827;font-weight:500;">${v}</td></tr>`
+      ).join('');
+      const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
+  <tr><td align="center">
+    <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;border:1px solid #e4e4e7;">
+      <tr><td style="background:#1A1B1E;padding:24px 32px;border-radius:12px 12px 0 0;">
+        <div style="font-size:18px;font-weight:700;color:#FBBF24;">MITS Consulting Hub</div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:2px;">Trainer Requirement Re-Raised</div>
+      </td></tr>
+      <tr><td style="padding:28px 32px;">
+        <p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 8px;">A requirement has been re-raised for today</p>
+        <p style="font-size:13px;color:#6b7280;margin:0 0 16px;">This requirement was not fulfilled and has been re-posted. Please source a trainer as soon as possible.</p>
+        <table cellpadding="0" cellspacing="0" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;border-collapse:collapse;">
+          ${tableRows}
+        </table>
+        <p style="margin:20px 0 0;"><a href="https://mits-frontend.onrender.com/freelance-requirements" style="display:inline-block;background:#FBBF24;color:#1A1B1E;font-weight:600;font-size:13px;padding:10px 20px;border-radius:6px;text-decoration:none;">View Requirements</a></p>
+      </td></tr>
+      <tr><td style="background:#f9fafb;padding:14px 32px;border-top:1px solid #e5e7eb;border-radius:0 0 12px 12px;">
+        <div style="font-size:11px;color:#9ca3af;text-align:center;">MITS Solution · Internal notification</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table></body></html>`;
+      for (const r of recruiters) {
+        await sendEmail({
+          fromUser,
+          to: r.email,
+          subject: `Re-raised requirement: ${source.skillRequired} for ${source.clientName}`,
+          body: `Requirement re-raised by ${req.user!.name}: ${source.skillRequired} for ${source.clientName}.`,
+          htmlBody: html,
+        });
+      }
+    }
+  } catch (e: any) {
+    console.error('[freelance-reraise-notify] email failed (non-fatal):', e?.message);
+  }
+
+  res.status(201).json(clone);
+});
+
 freelanceRequirementsRouter.delete('/:id', requireRole('founder', 'manager', 'lead'), async (req: AuthedRequest, res) => {
   await (prisma as any).freelanceRequirement.delete({ where: { id: req.params.id } });
   await audit(req.user!.id, req.user!.name, 'FREELANCE_REQ_DELETE', req.params.id);

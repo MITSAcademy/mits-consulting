@@ -22,6 +22,7 @@ import { sendDailyReminders } from './dailyReminders';
 import { sendMitaliDailyReport } from './mitaliDailyReport';
 import { sendClientFeedbackEmails } from './clientFeedbackEmail';
 import { sendWeeklyFeedbackReport } from './weeklyFeedbackReport';
+import { sendDemoEscalationDigest } from './demoEscalationDigest';
 import { prisma } from './prisma';
 
 function safe(label: string, fn: () => Promise<void>) {
@@ -101,6 +102,11 @@ export function initScheduler() {
 
   // Issue escalation — runs every hour
   cron.schedule('0 * * * *', () => safe('issue-escalation', () => runIssueEscalation()), {
+    timezone: 'Asia/Kolkata',
+  });
+
+  // Demo escalation digest — 11:00 AM IST daily → Samita, Anjali, Taran
+  cron.schedule('0 11 * * *', () => safe('demo-escalation-digest', () => sendDemoEscalationDigest()), {
     timezone: 'Asia/Kolkata',
   });
 

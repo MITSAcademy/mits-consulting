@@ -7,7 +7,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { Dialog, DialogContent, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
-import { MessageSquare, Plus, Trash2, AlertTriangle, Clock, Pencil, X, Send } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, AlertTriangle, Clock, Pencil, X, Send, RefreshCw } from 'lucide-react';
 
 interface Comment {
   id: string;
@@ -382,6 +382,15 @@ function ReqCard({ req }: { req: FreelanceReq }) {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  const reRaise = useMutation({
+    mutationFn: () => api.post(`/freelance-requirements/${req.id}/re-raise`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['freelance-requirements'] });
+      showToast('Requirement re-raised for today — recruiters notified');
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to re-raise', 'error'),
+  });
+
   const notifyTrainer = useMutation({
     mutationFn: (idx: number) => api.post(`/freelance-requirements/${req.id}/proposals/${idx}/notify`),
     onSuccess: () => showToast('Notification sent to trainer'),
@@ -437,6 +446,17 @@ function ReqCard({ req }: { req: FreelanceReq }) {
             <Button size="sm" variant="primary" onClick={() => setShowPropose(true)}>
               <Plus size={12} /> {proposals.length > 0 ? 'Add more' : 'Propose trainers'}
             </Button>
+            {!isRecruiter && (
+              <button
+                onClick={() => { if (confirm(`Re-raise this requirement for ${req.clientName} today? Recruiters will be notified.`)) reRaise.mutate(); }}
+                disabled={reRaise.isPending}
+                title="Re-raise for today"
+                style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 11, fontWeight: 600, color: '#ca8a04' }}
+              >
+                <RefreshCw size={11} />
+                {reRaise.isPending ? 'Re-raising…' : 'Re-raise'}
+              </button>
+            )}
             {canDelete && (
               <button onClick={() => del.mutate()} title="Delete" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-red)', padding: 4 }}>
                 <Trash2 size={14} />
