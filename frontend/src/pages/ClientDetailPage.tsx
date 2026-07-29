@@ -1694,7 +1694,7 @@ function InternalSearchModal({ client, onClose }: any) {
                   return hay.includes(q);
                 })
               : results.slice(0, 12);
-            if (q && filtered.length === 0) return <div className="muted text-center py-6">No trainers match "{trainerSearch}".</div>;
+            if (q && filtered.length === 0) return [<div key="no-match" className="muted text-center py-6">No trainers match &ldquo;{trainerSearch}&rdquo;.</div>];
             return filtered;
           })().map(({ trainer: t, total, breakdown }: any) => {
             const rate = rateById[t.id] ?? t.defaultRateInr;
