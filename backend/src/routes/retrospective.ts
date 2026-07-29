@@ -38,6 +38,22 @@ retrospectiveRouter.post('/', async (req: any, res) => {
   res.json(entry);
 });
 
+// POST /retrospective/:id/restore — move training back to active sessions
+retrospectiveRouter.post('/:id/restore', async (req: any, res) => {
+  const role = req.user.role;
+  if (!['founder', 'manager', 'lead', 'account_manager'].includes(role)) return res.status(403).json({ error: 'Forbidden' });
+  const entry = await prisma.retrospective.findUnique({ where: { id: req.params.id } });
+  if (!entry) return res.status(404).json({ error: 'Not found' });
+  if (entry.sourceType === 'training' && entry.sourceId) {
+    await prisma.regularTraining.update({
+      where: { id: entry.sourceId },
+      data: { status: 'active' },
+    }).catch(() => null); // source may have been deleted; ignore
+  }
+  await prisma.retrospective.delete({ where: { id: req.params.id } });
+  res.json({ ok: true });
+});
+
 // DELETE /retrospective/:id — lead/manager/founder
 retrospectiveRouter.delete('/:id', async (req: any, res) => {
   const role = req.user.role;

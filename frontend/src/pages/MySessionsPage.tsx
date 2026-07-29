@@ -1820,6 +1820,16 @@ function RetrospectiveSection({ rows }: { rows: any[] }) {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  const restoreRow = useMutation({
+    mutationFn: (id: string) => api.post(`/retrospective/${id}/restore`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['retrospective'] });
+      qc.invalidateQueries({ queryKey: ['my-sessions-sheet'] });
+      showToast('Session restored to My calls & sessions');
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to restore', 'error'),
+  });
+
   const purgeDuplicates = useMutation({
     mutationFn: () => api.delete('/retrospective/purge-duplicates'),
     onSuccess: (r: any) => { qc.invalidateQueries({ queryKey: ['retrospective'] }); showToast(`Deleted ${r.data.deleted} duplicate entries`); setPurgeDupConfirm(false); },
@@ -1877,7 +1887,7 @@ function RetrospectiveSection({ rows }: { rows: any[] }) {
             </thead>
             <tbody>
               {rows.map((r: any) => (
-                <RetrospectiveRow key={r.id} r={r} users={allUsers || []} onUpdate={(data) => updateRow.mutate({ id: r.id, data })} onDelete={canDelete ? () => deleteRow.mutate(r.id) : undefined} />
+                <RetrospectiveRow key={r.id} r={r} users={allUsers || []} onUpdate={(data) => updateRow.mutate({ id: r.id, data })} onDelete={canDelete ? () => deleteRow.mutate(r.id) : undefined} onRestore={() => restoreRow.mutate(r.id)} />
               ))}
             </tbody>
           </table>
@@ -1887,7 +1897,7 @@ function RetrospectiveSection({ rows }: { rows: any[] }) {
   );
 }
 
-function RetrospectiveRow({ r, users, onUpdate, onDelete }: { r: any; users: any[]; onUpdate: (data: any) => void; onDelete?: () => void }) {
+function RetrospectiveRow({ r, users, onUpdate, onDelete, onRestore }: { r: any; users: any[]; onUpdate: (data: any) => void; onDelete?: () => void; onRestore?: () => void }) {
   const [editingReason, setEditingReason] = useState(false);
   const [editingComments, setEditingComments] = useState(false);
   const [reasonVal, setReasonVal] = useState(r.reason || '');
@@ -1957,14 +1967,23 @@ function RetrospectiveRow({ r, users, onUpdate, onDelete }: { r: any; users: any
         )}
       </td>
       <td style={cellStyle} className="text-[11px]">{r.removedBy?.name || <span style={{ opacity: 0.4 }}>—</span>}</td>
-      <td style={{ ...cellStyle, width: 32 }}>
-        {onDelete && (
-          <button
-            onClick={() => { if (confirm('Delete this entry?')) onDelete(); }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-red)', opacity: 0.5, fontSize: 14, padding: '0 4px' }}
-            title="Delete"
-          >✕</button>
-        )}
+      <td style={{ ...cellStyle, width: 64 }}>
+        <div className="flex items-center gap-1">
+          {onRestore && r.sourceType === 'training' && r.sourceId && (
+            <button
+              onClick={() => { if (confirm('Restore this session back to My calls & sessions?')) onRestore(); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#4ade80', opacity: 0.7, fontSize: 13, padding: '0 4px' }}
+              title="Restore to active sessions"
+            >↩</button>
+          )}
+          {onDelete && (
+            <button
+              onClick={() => { if (confirm('Delete this entry?')) onDelete(); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-red)', opacity: 0.5, fontSize: 14, padding: '0 4px' }}
+              title="Delete"
+            >✕</button>
+          )}
+        </div>
       </td>
     </tr>
   );
