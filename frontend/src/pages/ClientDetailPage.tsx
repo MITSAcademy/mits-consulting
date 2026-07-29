@@ -1686,20 +1686,19 @@ function InternalSearchModal({ client, onClose }: any) {
         <div className="max-h-[460px] overflow-y-auto space-y-2">
           {isLoading && <div className="muted text-center py-4">Scoring…</div>}
           {!isLoading && results.length === 0 && <div className="muted text-center py-6">No active trainers in pool.</div>}
-          {(() => {
+          {!isLoading && (() => {
             const q = trainerSearch.trim().toLowerCase();
-            const filtered = q
+            const filtered: any[] = q
               ? results.filter(({ trainer: t }: any) => {
                   const hay = `${t.name || ''} ${t.skills || ''} ${t.phoneDigits || ''} ${t.email || ''}`.toLowerCase();
                   return hay.includes(q);
                 })
               : results.slice(0, 12);
-            if (q && filtered.length === 0) return [<div key="no-match" className="muted text-center py-6">No trainers match &ldquo;{trainerSearch}&rdquo;.</div>];
-            return filtered;
-          })().map(({ trainer: t, total, breakdown }: any) => {
-            const rate = rateById[t.id] ?? t.defaultRateInr;
-            return (
-              <div key={t.id} className={`border rounded-md p-3 ${total >= 60 ? 'border-brand-green bg-brand-green/5' : 'border-brand-border'}`}>
+            if (q && filtered.length === 0) return <div className="muted text-center py-6">No trainers match &ldquo;{trainerSearch}&rdquo;.</div>;
+            return filtered.map(({ trainer: t, total, breakdown }: any) => {
+              const rate = rateById[t.id] ?? t.defaultRateInr;
+              return (
+                <div key={t.id} className={`border rounded-md p-3 ${total >= 60 ? 'border-brand-green bg-brand-green/5' : 'border-brand-border'}`}>
                 <div className="flex justify-between items-start gap-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -1737,8 +1736,9 @@ function InternalSearchModal({ client, onClose }: any) {
                   </div>
                 </div>
               </div>
-            );
-          })}
+              );
+            });
+          })()}
         </div>
         <DialogFooter>
           <Button onClick={onClose}>Cancel</Button>

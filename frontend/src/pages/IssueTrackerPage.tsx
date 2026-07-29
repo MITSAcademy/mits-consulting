@@ -556,7 +556,7 @@ function UpdateIssueModal({ issue }: { issue: Issue }) {
           {issue.escalationLevel > 0 && (
             <div className="rounded-xl px-3 py-2.5 text-[12px]" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
               <div className="muted mb-1.5 text-[10px] uppercase tracking-wider font-semibold flex items-center gap-1"><ChevronsUp size={10} /> Escalation history</div>
-              {(issue.escalationLog ? JSON.parse(issue.escalationLog) : []).map((entry: any, i: number) => (
+              {(issue.escalationLog ? (() => { try { return JSON.parse(issue.escalationLog!); } catch { return []; } })() : []).map((entry: any, i: number) => (
                 <div key={i} className="flex items-start gap-2 text-[11px] mb-1">
                   <span className="px-1 py-0.5 rounded text-[10px] font-bold shrink-0" style={{ background: 'var(--accent-gold-soft)', color: 'var(--accent-gold)' }}>L{entry.level}</span>
                   <span style={{ color: 'var(--brand-textSecondary)' }}>{entry.reason}<span className="muted ml-1">· {new Date(entry.at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</span></span>

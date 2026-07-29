@@ -57,7 +57,7 @@ export async function runIssueEscalation() {
   });
 
   for (const issue of toL2) {
-    const existingLog = issue.escalationLog ? JSON.parse(issue.escalationLog) : [];
+    const existingLog = issue.escalationLog ? (() => { try { return JSON.parse(issue.escalationLog!); } catch { return []; } })() : [];
     const log = [...existingLog, { level: 2, at: now.toISOString(), reason: `No action after ${HOURS_TO_L2}h at L1 — escalated to Mitali` }];
     await prisma.issueTracker.update({
       where: { id: issue.id },
@@ -81,7 +81,7 @@ export async function runIssueEscalation() {
   });
 
   for (const issue of toL3) {
-    const existingLog = issue.escalationLog ? JSON.parse(issue.escalationLog) : [];
+    const existingLog = issue.escalationLog ? (() => { try { return JSON.parse(issue.escalationLog!); } catch { return []; } })() : [];
     const log = [...existingLog, { level: 3, at: now.toISOString(), reason: `No action after ${HOURS_TO_L3}h at L2 — escalated to Vaibhav` }];
     await prisma.issueTracker.update({
       where: { id: issue.id },
