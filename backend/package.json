@@ -10,6 +10,7 @@
     "prisma:migrate": "prisma migrate deploy",
     "prisma:push": "prisma db push",
     "seed:rishi": "tsx src/seed/addRishi.ts",
+    "seed:fix-pay-dates": "tsx src/seed/fixPayDates.ts",
     "seed:brain": "tsx src/seed/brainNotesSeed.ts",
     "seed:contacts": "tsx src/seed/updateTeamContacts.ts",
     "seed": "tsx src/seed/index.ts",
