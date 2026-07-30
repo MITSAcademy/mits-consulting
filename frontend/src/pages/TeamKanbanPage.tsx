@@ -17,7 +17,7 @@ import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
-import { ExternalLink, UserPlus, AlertTriangle, Clock, CheckCircle2, MessageSquare, ChevronDown, Phone } from 'lucide-react';
+import { ExternalLink, UserPlus, AlertTriangle, Clock, CheckCircle2, MessageSquare, ChevronDown, Phone, Pencil, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createPortal } from 'react-dom';
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog';
@@ -326,15 +326,33 @@ function CallLogModal({ client, onClose }: { client: Client; onClose: () => void
 
 // ─── training card ────────────────────────────────────────────────────────────
 
-function TrainingCard({ training, canReassignHost, isAllColumn = false, teamMembers }: {
+function TrainingCard({ training, canReassignHost, canEditName = false, isAllColumn = false, teamMembers }: {
   training: Training;
   canReassignHost: boolean;
+  canEditName?: boolean;
   isAllColumn?: boolean;
   teamMembers: TeamMember[];
 }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
   const fbAge = daysAgo(training.lastSessionDate);
   const feedbackWarn = !training.client?.lastFeedbackTakenAt && training.lastClientFeedback === null;
   const host = training.hostedByDefault;
+  const displayName = training.client?.name ?? training.name;
+
+  const [editingName, setEditingName] = useState(false);
+  const [nameVal, setNameVal] = useState(displayName);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const saveName = useMutation({
+    mutationFn: () => api.patch(`/clients/${training.client?.id}`, { name: nameVal.trim() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['trainings', 'team-kanban'] });
+      showToast('Client name updated');
+      setEditingName(false);
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to update name', 'error'),
+  });
 
   // Fake RT shape for HostChip
   const rtForChip = { id: training.id, status: 'active', hostedByDefault: host };
@@ -346,12 +364,50 @@ function TrainingCard({ training, canReassignHost, isAllColumn = false, teamMemb
     }}>
       {/* Header row */}
       <div className="flex items-start justify-between gap-1">
-        <Link to={`/clients/${training.client?.id}`}
-          className="font-semibold text-[12px] hover:underline flex items-center gap-1 leading-tight"
-          style={{ color: 'var(--brand-text)' }}>
-          {training.client?.name ?? training.name}
-          <ExternalLink size={9} className="opacity-0 group-hover:opacity-60"/>
-        </Link>
+        {editingName ? (
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <input
+              ref={nameInputRef}
+              autoFocus
+              className="text-[12px] font-semibold rounded px-1.5 py-0.5 flex-1 min-w-0 outline-none"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--accent-gold)', color: 'var(--brand-text)' }}
+              value={nameVal}
+              onChange={(e) => setNameVal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && nameVal.trim() && nameVal.trim() !== displayName) saveName.mutate();
+                else if (e.key === 'Enter') setEditingName(false);
+                if (e.key === 'Escape') { setNameVal(displayName); setEditingName(false); }
+              }}
+            />
+            <button onClick={() => { if (nameVal.trim() && nameVal.trim() !== displayName) saveName.mutate(); else setEditingName(false); }}
+              style={{ color: 'var(--status-green)' }} title="Save">
+              <Check size={12}/>
+            </button>
+            <button onClick={() => { setNameVal(displayName); setEditingName(false); }}
+              style={{ color: 'var(--brand-textMuted)' }} title="Cancel">
+              <X size={12}/>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <Link to={`/clients/${training.client?.id}`}
+              className="font-semibold text-[12px] hover:underline flex items-center gap-1 leading-tight truncate"
+              style={{ color: 'var(--brand-text)' }}>
+              {displayName}
+              <ExternalLink size={9} className="opacity-0 group-hover:opacity-60 shrink-0"/>
+            </Link>
+            {canEditName && training.client?.id && (
+              <button
+                onClick={(e) => { e.preventDefault(); setNameVal(displayName); setEditingName(true); }}
+                className="opacity-0 group-hover:opacity-60 hover:!opacity-100 shrink-0 ml-0.5"
+                style={{ color: 'var(--brand-textMuted)' }}
+                title="Edit client name"
+              >
+                <Pencil size={10}/>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Trainer */}
@@ -387,7 +443,7 @@ function TrainingCard({ training, canReassignHost, isAllColumn = false, teamMemb
 // ─── column ───────────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  title, subtitle, color, clients, canReassignHost, isAllColumn, teamMembers,
+  title, subtitle, color, clients, canReassignHost, canEditName, isAllColumn, teamMembers,
 }: {
   title: string;
   subtitle: string;
@@ -395,6 +451,7 @@ function KanbanColumn({
   clients: Training[];
   canAssign?: boolean;
   canReassignHost: boolean;
+  canEditName?: boolean;
   showAmount?: boolean;
   canLogCall?: boolean;
   isUnassigned?: boolean;
@@ -438,7 +495,7 @@ function KanbanColumn({
         {clients.length === 0 ? (
           <div className="text-[11px] muted text-center py-8">No active clients</div>
         ) : (
-          clients.map(t => <TrainingCard key={t.id} training={t} canReassignHost={canReassignHost} isAllColumn={isAllColumn} teamMembers={teamMembers}/>)
+          clients.map(t => <TrainingCard key={t.id} training={t} canReassignHost={canReassignHost} canEditName={canEditName} isAllColumn={isAllColumn} teamMembers={teamMembers}/>)
         )}
       </div>
     </div>
@@ -486,6 +543,7 @@ export function TeamKanbanPage() {
 
   const role = user?.role || '';
   const canReassignHost = role === 'lead';
+  const canEditName = ['founder', 'manager', 'demo_lead'].includes(role);
 
   const columns = useMemo(() => {
     const unassigned = trainings.filter(t => !t.hostedByDefault);
@@ -579,6 +637,7 @@ export function TeamKanbanPage() {
                 color={col.color}
                 clients={col.clients}
                 canReassignHost={canReassignHost}
+                canEditName={canEditName}
                 isAllColumn={col.id === 'all'}
                 teamMembers={TEAM_MEMBERS}
               />
