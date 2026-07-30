@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { sendTeam1Briefing, sendTeam2Briefing, sendSamitaBriefing, sendRoshniBriefing } from '../lib/dailyBriefing';
+import { sendDemoEscalationDigest } from '../lib/demoEscalationDigest';
 import { sendMalikaStatusReport } from '../lib/malikaStatusReport';
 import { sendMitaliDailyReport } from '../lib/mitaliDailyReport';
 import { sendClientFeedbackEmails } from '../lib/clientFeedbackEmail';
@@ -83,6 +84,19 @@ briefingRouter.post('/feedback-compliance', async (req: AuthedRequest, res) => {
   try {
     await sendWeeklyFeedbackReport({ id: req.user!.id, name: req.user!.name });
     res.json({ ok: true, message: 'Weekly feedback compliance report sent.' });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+// POST /api/briefing/demo-escalation-digest — trigger demo escalation digest now
+briefingRouter.post('/demo-escalation-digest', async (req: AuthedRequest, res) => {
+  if (!['founder', 'manager', 'lead'].includes(req.user!.role)) {
+    return res.status(403).json({ error: 'Not allowed' });
+  }
+  try {
+    await sendDemoEscalationDigest();
+    res.json({ ok: true, message: 'Demo escalation digest sent.' });
   } catch (e: any) {
     res.status(500).json({ error: e.message || String(e) });
   }
