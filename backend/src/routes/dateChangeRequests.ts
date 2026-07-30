@@ -274,6 +274,7 @@ dateChangeRequestsRouter.post('/:id/approve', async (req: AuthedRequest, res) =>
         where: { id: request.clientId },
         data: {
           payDate1: request.proposedDate1,
+          ...(request.proposedDate2 ? { payDate2: request.proposedDate2 } : {}),
           leverageUntil: null,
           leverageNote: null,
         },

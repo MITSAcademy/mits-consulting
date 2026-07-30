@@ -84,6 +84,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
   const [amountActual, setAmountActual] = useState('');
   const [paymentDoneDate, setPaymentDoneDate] = useState(todayISO());
   const [newNextDueDate, setNewNextDueDate] = useState('');
+  const [newDate2, setNewDate2] = useState('');
 
   // Path B — leverage DCR
   const [date1, setDate1] = useState(r.payDate1 || '');
@@ -105,7 +106,7 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
         clientId: r.id,
         type: 'payment_received',
         proposedDate1: newNextDueDate || null,
-        proposedDate2: r.payDate2 || null,
+        proposedDate2: newDate2 || null,
         amountExpected: amountExpected ? Number(amountExpected) : null,
         amountActual: amountActual ? Number(amountActual) : null,
         paymentDoneDate: paymentDoneDate || null,
@@ -262,14 +263,28 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
                 />
                 <div className="text-[11px] muted mt-1">Cannot be a future date.</div>
               </div>
-              <div className="form-row">
-                <Label>Next payment due date *</Label>
-                <Input
-                  type="date"
-                  value={newNextDueDate}
-                  min={todayISO()}
-                  onChange={e => setNewNextDueDate(e.target.value)}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="form-row">
+                  <Label>Pay Date 1 — new next due *</Label>
+                  <Input
+                    type="date"
+                    value={newNextDueDate}
+                    min={todayISO()}
+                    onChange={e => setNewNextDueDate(e.target.value)}
+                  />
+                </div>
+                <div className="form-row">
+                  <Label>Pay Date 2 — one after that *</Label>
+                  <Input
+                    type="date"
+                    value={newDate2}
+                    min={newNextDueDate || todayISO()}
+                    onChange={e => setNewDate2(e.target.value)}
+                  />
+                  {newDate2 && newNextDueDate && newDate2 <= newNextDueDate && (
+                    <div className="text-[10px] mt-0.5" style={{ color: '#ef4444' }}>Must be after Pay Date 1</div>
+                  )}
+                </div>
               </div>
               <div>
                 <Label>Payment screenshot *</Label>
@@ -383,7 +398,9 @@ export default function DateChangeRequestModal({ r, onClose }: { r: Row; onClose
                 variant="primary"
                 disabled={
                   submitPayment.isPending ||
-                  !amountActual || !paymentDoneDate || !newNextDueDate || !screenshot
+                  !amountActual || !paymentDoneDate || !newNextDueDate || !newDate2 ||
+                  (!!newDate2 && !!newNextDueDate && newDate2 <= newNextDueDate) ||
+                  !screenshot
                 }
                 onClick={() => submitPayment.mutate()}
                 style={{ background: '#10b981' }}
