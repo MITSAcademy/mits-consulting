@@ -61,24 +61,23 @@ function canEditClient(role: string, cat: 'identity' | 'contact' | 'engagement' 
   return m[role]?.[cat] || false;
 }
 
-// ── Email nudge banner ──────────────────────────────────────────────────────
-// Shown when the current user owns this client (demo/intake/host/am) and
-// no email is on file. Soft — dismissible per-client for 7 days.
+// ── Email nudge modal ────────────────────────────────────────────────────────
+// Shown when the owning user visits a client with no email on file.
+// Options: add now | remind tomorrow | dismiss for 7 days.
 function EmailNudgeBanner({ client, userId }: { client: any; userId: string }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
-  const storageKey = `email-nudge-dismissed-${client.id}`;
+  const snoozeKey = `email-nudge-dismissed-${client.id}`;
 
-  const isDismissed = () => {
+  const isSnoozed = () => {
     try {
-      const raw = localStorage.getItem(storageKey);
+      const raw = localStorage.getItem(snoozeKey);
       if (!raw) return false;
       return Date.now() < Number(raw);
     } catch { return false; }
   };
 
-  const [dismissed, setDismissed] = useState(isDismissed);
-  const [editing, setEditing] = useState(false);
+  const [open, setOpen] = useState(!isSnoozed());
   const [val, setVal] = useState('');
 
   const isOwner =
@@ -95,63 +94,109 @@ function EmailNudgeBanner({ client, userId }: { client: any; userId: string }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['client', client.id] });
       showToast('Email saved — thank you!');
-      setEditing(false);
+      setOpen(false);
     },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to save', 'error'),
   });
 
-  const dismiss = () => {
-    try { localStorage.setItem(storageKey, String(Date.now() + 7 * 24 * 60 * 60 * 1000)); } catch {}
-    setDismissed(true);
+  const snooze = (ms: number) => {
+    try { localStorage.setItem(snoozeKey, String(Date.now() + ms)); } catch {}
+    setOpen(false);
   };
 
-  if (hasEmail || !isOwner || dismissed) return null;
+  if (hasEmail || !isOwner || !open) return null;
 
   return (
-    <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{
-      background: 'linear-gradient(90deg, rgba(92,143,240,0.08) 0%, rgba(92,143,240,0.04) 100%)',
-      border: '1px solid rgba(92,143,240,0.25)',
-    }}>
-      <AtSign size={16} style={{ color: 'var(--status-blue)', flexShrink: 0, marginTop: 2 }} />
-      <div className="flex-1 min-w-0">
-        <div className="font-semibold text-[13px]" style={{ color: 'var(--status-blue)' }}>
-          No email on file for {client.name}
-        </div>
-        <div className="text-[12px] muted mt-0.5">
-          An email helps with welcome messages, feedback surveys, and future follow-ups.{' '}
-          {!editing && (
-            <button className="underline" style={{ color: 'var(--status-blue)' }} onClick={() => setEditing(true)}>
-              Add it now
-            </button>
-          )}
-        </div>
-        {editing && (
-          <div className="flex items-center gap-2 mt-2">
-            <input
-              autoFocus
-              type="email"
-              className="input text-[13px]"
-              style={{ maxWidth: 280 }}
-              placeholder="client@email.com"
-              value={val}
-              onChange={(e) => setVal(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && val.trim()) save.mutate(); if (e.key === 'Escape') setEditing(false); }}
-            />
-            <button
-              className="btn btn-primary btn-sm"
-              disabled={!val.trim() || save.isPending}
-              onClick={() => save.mutate()}
-            >
-              {save.isPending ? 'Saving…' : 'Save'}
-            </button>
-            <button className="btn btn-sm" onClick={() => setEditing(false)}>Cancel</button>
+    <>
+      {/* Backdrop */}
+      <div
+        style={{
+          position: 'fixed', inset: 0, zIndex: 1200,
+          background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)',
+        }}
+        onClick={() => snooze(7 * 24 * 60 * 60 * 1000)}
+      />
+      {/* Modal */}
+      <div
+        style={{
+          position: 'fixed', zIndex: 1201,
+          top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+          width: 420, maxWidth: 'calc(100vw - 32px)',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--brand-borderSoft)',
+          borderRadius: 16,
+          padding: '28px 28px 22px',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+        }}
+      >
+        {/* Close */}
+        <button
+          onClick={() => snooze(7 * 24 * 60 * 60 * 1000)}
+          style={{ position: 'absolute', top: 14, right: 14, color: 'var(--brand-textMuted)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+        >
+          <X size={16} />
+        </button>
+
+        {/* Icon + heading */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+            background: 'rgba(92,143,240,0.12)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <AtSign size={18} style={{ color: 'var(--status-blue)' }} />
           </div>
-        )}
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--brand-text)' }}>
+              No email for {client.name}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--brand-textMuted)', marginTop: 2 }}>
+              Helps with welcome emails, feedback &amp; follow-ups
+            </div>
+          </div>
+        </div>
+
+        {/* Input */}
+        <input
+          autoFocus
+          type="email"
+          className="input w-full"
+          style={{ fontSize: 13, marginBottom: 14 }}
+          placeholder="client@email.com"
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && val.trim()) save.mutate(); }}
+        />
+
+        {/* Primary CTA */}
+        <button
+          className="btn btn-primary w-full"
+          style={{ fontSize: 13, marginBottom: 10 }}
+          disabled={!val.trim() || save.isPending}
+          onClick={() => save.mutate()}
+        >
+          {save.isPending ? 'Saving…' : 'Save email'}
+        </button>
+
+        {/* Secondary actions */}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn w-full"
+            style={{ fontSize: 12, color: 'var(--brand-textSecondary)' }}
+            onClick={() => snooze(24 * 60 * 60 * 1000)}
+          >
+            🕐 I'll add tomorrow
+          </button>
+          <button
+            className="btn w-full"
+            style={{ fontSize: 12, color: 'var(--brand-textMuted)' }}
+            onClick={() => snooze(7 * 24 * 60 * 60 * 1000)}
+          >
+            Skip for a week
+          </button>
+        </div>
       </div>
-      <button onClick={dismiss} style={{ color: 'var(--brand-textMuted)', flexShrink: 0 }} title="Dismiss for 7 days">
-        <X size={14} />
-      </button>
-    </div>
+    </>
   );
 }
 
