@@ -1,10 +1,10 @@
 /**
  * One-off: add Rishi as a founder-role user (dev.rishi@mitssolution.com).
+ * SSO-only — no password. Login via Google with dev.rishi@mitssolution.com.
  * Run with: npm run seed:rishi
  */
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -17,19 +17,19 @@ async function main() {
     return;
   }
 
-  const passwordHash = await bcrypt.hash('password123', 10);
   const u = await prisma.user.create({
     data: {
       id: 'u-rishi',
       name: 'Rishi',
       email: 'dev.rishi@mitssolution.com',
-      passwordHash,
+      passwordHash: '',
       role: 'founder',
       reportsToId: null,
       active: true,
     },
   });
   console.log('Created:', u.id, u.name, u.email, u.role);
+  console.log('Rishi can log in via Google SSO with dev.rishi@mitssolution.com');
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect());
