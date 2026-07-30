@@ -1320,7 +1320,7 @@ export function FollowUpPaymentsPage() {
   }, [data]);
 
   const showNag = !nagDismissed && !isLoading && incompleteClients.length > 0
-    && ['manager', 'founder'].includes(pageUser?.role || '');
+    && pageUser?.id === 'u-mitali';
 
   // Fetch active training count to detect sync gap with Bhavneet's sheet
   const { data: trainingsData } = useQuery<any[]>({
