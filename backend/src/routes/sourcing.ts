@@ -367,6 +367,7 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
       body: `${req.user!.name} proposed candidates — review on the verifications page.`,
       link: `/verifications`,
       email: true,
+      fromUserId: req.user!.id,
     });
   }
   res.status(201).json(created);

@@ -32,6 +32,8 @@ export interface NotifyArgs {
    * Defaults to false so internal pings stay quiet.
    */
   email?: boolean;
+  /** When set, send the email FROM this user's SMTP instead of Vaibhav's. */
+  fromUserId?: string;
 }
 
 const FRONTEND_BASE = (process.env.CLIENT_ORIGIN || '').trim().replace(/\/+$/, '');
@@ -64,7 +66,10 @@ export async function notify(args: NotifyArgs): Promise<void> {
       console.warn(`[notify] no email address for user ${args.userId} (${user?.name}) — skipping email for "${args.title}"`);
       return;
     }
-    const fromUser = await getSystemFromUser();
+    let fromUser = args.fromUserId
+      ? safeBuildFromUser(await prisma.user.findUnique({ where: { id: args.fromUserId }, select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true } }) as any)
+      : null;
+    if (!fromUser) fromUser = await getSystemFromUser();
     if (!fromUser) {
       console.warn(`[notify] no SMTP sender configured — skipping email to ${to} for "${args.title}"`);
       return;
