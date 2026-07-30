@@ -366,6 +366,13 @@ export function SettingsPage() {
                 </div>
                 <FeedbackSurveyButton />
               </div>
+              <div className="flex items-center justify-between gap-4 flex-wrap mt-4" style={{ borderTop: '1px solid var(--brand-borderSoft)', paddingTop: '12px' }}>
+                <div>
+                  <div className="text-[13px] font-semibold" style={{ color: 'var(--brand-text)' }}>Send demo escalation digest now</div>
+                  <div className="text-[11px] muted mt-0.5">Sends pending training escalations + unacknowledged issues to Samita, Anjali &amp; Taran (auto-sends daily at 11:00 AM IST).</div>
+                </div>
+                <DemoEscalationDigestButton />
+              </div>
             </div>
 
             <div className="callout">
@@ -568,6 +575,20 @@ function MitaliDailyReportButton() {
   return (
     <Button size="sm" variant="primary" disabled={report.isPending} onClick={() => report.mutate()}>
       <Send size={12} /> {report.isPending ? 'Sending…' : 'Send now'}
+    </Button>
+  );
+}
+
+function DemoEscalationDigestButton() {
+  const showToast = useUI((s) => s.showToast);
+  const mut = useMutation({
+    mutationFn: () => api.post('/briefing/demo-escalation-digest'),
+    onSuccess: () => showToast('Demo escalation digest sent ✓'),
+    onError: (e: any) => showToast(e.response?.data?.error || 'Send failed', 'error'),
+  });
+  return (
+    <Button size="sm" variant="primary" disabled={mut.isPending} onClick={() => mut.mutate()}>
+      <Send size={12} /> {mut.isPending ? 'Sending…' : 'Send now'}
     </Button>
   );
 }
