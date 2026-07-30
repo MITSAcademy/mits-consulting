@@ -461,7 +461,7 @@ export async function sendPaymentFollowUpReport({ force = false }: { force?: boo
 
   // Recipients: Vaibhav + Samita + Mitali + Areena (NOT Bhavneet — she gets her own 2 PM sheet)
   const recipients = await prisma.user.findMany({
-    where: { id: { in: ['u-vaibhav', 'u-samita', 'u-mitali'] } },
+    where: { id: { in: ['u-samita', 'u-mitali'] } },
     select: { email: true, gmailAddress: true },
   });
 
