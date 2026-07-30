@@ -1158,12 +1158,14 @@ function TableView({ rows }: { rows: Row[] }) {
                   <td style={{ ...tdStyle, fontFamily: 'monospace', whiteSpace: 'nowrap',
                     color: isOverdue ? 'var(--status-red)' : isDueSoon ? 'var(--status-amber)' : 'var(--brand-text)',
                     fontWeight: isOverdue || isDueSoon ? 700 : 400 }}>
-                    {r.payDate1 ? fmtDate(r.payDate1) : <span style={{ color: 'var(--brand-textMuted)' }}>NA</span>}
+                    {r.payDate1 ? fmtDate(r.payDate1) : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
                   </td>
 
                   {/* Pay Date 2 (after that) */}
                   <td style={{ ...tdStyle, fontFamily: 'monospace', whiteSpace: 'nowrap', color: 'var(--brand-textMuted)' }}>
-                    {r.paymentFrequency === 'na' || r.paymentFrequency === 'monthly'
+                    {r.paymentFrequency === 'na'
+                      ? <span style={{ color: 'var(--brand-textMuted)' }}>NA</span>
+                      : r.paymentFrequency === 'monthly'
                       ? <span style={{ color: 'var(--brand-textMuted)' }}>NA</span>
                       : r.payDate2 ? fmtDate(r.payDate2) : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
                   </td>

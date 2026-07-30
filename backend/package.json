@@ -12,6 +12,7 @@
     "seed:rishi": "tsx src/seed/addRishi.ts",
     "seed:fix-pay-dates": "tsx src/seed/fixPayDates.ts",
     "seed:fix-pay-dates-2": "tsx src/seed/fixPayDates2.ts",
+    "seed:fix-payment-frequency": "tsx src/seed/fixPaymentFrequency.ts",
     "seed:brain": "tsx src/seed/brainNotesSeed.ts",
     "seed:contacts": "tsx src/seed/updateTeamContacts.ts",
     "seed": "tsx src/seed/index.ts",
