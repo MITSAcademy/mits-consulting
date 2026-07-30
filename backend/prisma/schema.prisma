@@ -448,6 +448,7 @@ model Client {
   isEmployerCall             Boolean  @default(false)  // bulk-invoice employer call (pink highlight)
   payDate1                   String?  // ISO date — last payment date (= most recent collected)
   payDate2                   String?  // ISO date — next due date (the date Mitali is chasing)
+  paymentFrequency           String   @default("biweekly")  // "biweekly" | "monthly" | "na"
   // When a client can't pay, Mitali grants leverage — extends payDate2 by max 3 days.
   leverageUntil              String?  // ISO date — latest date leverage was extended to
   leverageNote               String?  // why leverage was granted

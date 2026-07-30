@@ -46,7 +46,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       id: true, name: true,
       currency: true, cycleAmount: true,
       engagementType: true,
-      payDate1: true, payDate2: true,
+      payDate1: true, payDate2: true, paymentFrequency: true,
       leverageUntil: true, leverageNote: true,
       followupNote: true, followupNoteAt: true,
       lastFeedbackTakenAt: true, lastLeverageAskedAt: true,
@@ -121,6 +121,7 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       engagementType: c.engagementType,
       payDate1,
       payDate2,
+      paymentFrequency: (c as any).paymentFrequency || 'biweekly',
       daysUntilDue,
       leverageUntil: c.leverageUntil,
       leverageNote: c.leverageNote,
@@ -155,8 +156,13 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
   });
 
   // Sort by payDate1 ascending (soonest due first = most urgent at top).
-  // no_date rows (NA) always go last.
+  // na-frequency rows always go last, then no_date rows.
   rows.sort((a, b) => {
+    const aIsNa = (a as any).paymentFrequency === 'na';
+    const bIsNa = (b as any).paymentFrequency === 'na';
+    if (aIsNa && !bIsNa) return 1;
+    if (!aIsNa && bIsNa) return -1;
+    if (aIsNa && bIsNa) return a.name.localeCompare(b.name);
     const aIsNoDate = a.status === 'no_date';
     const bIsNoDate = b.status === 'no_date';
     if (aIsNoDate && !bIsNoDate) return 1;
@@ -168,6 +174,34 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
   });
 
   res.json(rows);
+});
+
+// ─────────────────────────────────────────
+// PATCH /:id/payment-frequency
+// Set paymentFrequency for a client: "biweekly" | "monthly" | "na"
+// Only Mitali (u-mitali) can call this.
+// ─────────────────────────────────────────
+followUpPaymentsRouter.patch('/:id/payment-frequency', async (req: AuthedRequest, res) => {
+  if (req.user!.id !== 'u-mitali') return res.status(403).json({ error: 'Only Mitali can change payment frequency.' });
+  const { frequency } = req.body as { frequency: string };
+  if (!['biweekly', 'monthly', 'na'].includes(frequency)) {
+    return res.status(400).json({ error: 'Invalid frequency. Must be biweekly, monthly, or na.' });
+  }
+  const client = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true } });
+  if (!client) return res.status(404).json({ error: 'Client not found.' });
+
+  const updated = await prisma.client.update({
+    where: { id: req.params.id },
+    data: {
+      paymentFrequency: frequency,
+      // If marking as NA, clear both dates
+      ...(frequency === 'na' ? { payDate1: null, payDate2: null } : {}),
+      // If switching to monthly, clear payDate2
+      ...(frequency === 'monthly' ? { payDate2: null } : {}),
+    },
+    select: { id: true, name: true, paymentFrequency: true, payDate1: true, payDate2: true },
+  });
+  res.json(updated);
 });
 
 // ─────────────────────────────────────────

@@ -64,6 +64,7 @@ interface Row {
   feedbackNeeded: boolean;
   mitaliIntroSentAt: string | null;
   status: 'pending_vaibhav' | 'paid' | 'overdue' | 'due_soon' | 'no_date' | 'deferred';
+  paymentFrequency: 'biweekly' | 'monthly' | 'na';
   paymentCount: number;
   payments: { id: string; amount: number; currency: string; paymentDate: string; receivedBy: { name: string } | null }[];
   futureDatedPayments: { id: string; amount: number; currency: string; paymentDate: string; receivedBy: { name: string } | null }[];
@@ -280,18 +281,35 @@ function CommentThread({ clientId, onClose }: { clientId: string; onClose: () =>
 function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
+  const currentUser = useAuth((s) => s.user);
+  const isMitali = currentUser?.id === 'u-mitali';
+
+  const [freq, setFreq] = useState<'biweekly' | 'monthly' | 'na'>(r.paymentFrequency || 'biweekly');
   const [date1, setDate1] = useState(r.payDate1 || '');
   const [date2, setDate2] = useState(r.payDate2 || '');
 
   const today = new Date().toISOString().slice(0, 10);
-  const validationError =
+
+  const isNa = freq === 'na';
+  const isMonthly = freq === 'monthly';
+
+  const validationError = isNa ? null :
     (date1 && date1 < today) ? 'Pay Date 1 cannot be in the past.' :
-    (date2 && date2 < today) ? 'Pay Date 2 cannot be in the past.' :
-    (date1 && date2 && date2 <= date1) ? 'Pay Date 2 must be after Pay Date 1.' :
+    (!isMonthly && date2 && date2 < today) ? 'Pay Date 2 cannot be in the past.' :
+    (!isMonthly && date1 && date2 && date2 <= date1) ? 'Pay Date 2 must be after Pay Date 1.' :
     null;
 
-  const save = useMutation({
-    mutationFn: () => api.post(`/follow-up-payments/${r.id}/set-pay-dates`, { date1: date1 || null, date2: date2 || null }),
+  const saveFreq = useMutation({
+    mutationFn: (f: string) => api.patch(`/follow-up-payments/${r.id}/payment-frequency`, { frequency: f }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['follow-up-payments'] }),
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const saveDates = useMutation({
+    mutationFn: () => api.post(`/follow-up-payments/${r.id}/set-pay-dates`, {
+      date1: isNa ? null : (date1 || null),
+      date2: (isNa || isMonthly) ? null : (date2 || null),
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
       showToast('Dates updated');
@@ -300,26 +318,67 @@ function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  async function handleSave() {
+    if (isMitali && freq !== r.paymentFrequency) await saveFreq.mutateAsync(freq);
+    if (!isNa) await saveDates.mutateAsync();
+    else {
+      qc.invalidateQueries({ queryKey: ['follow-up-payments'] });
+      showToast('Marked as NA');
+      onClose();
+    }
+  }
+
+  const isPending = saveFreq.isPending || saveDates.isPending;
+
   const content = (
     <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999, background: 'rgba(0,0,0,0.6)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="rounded-2xl p-5 w-[340px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
+      <div className="rounded-2xl p-5 w-[360px]" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
         <div className="font-bold text-sm mb-3">Edit payment dates — {r.name}</div>
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="form-row">
-            <Label>Pay Date 1 (next due)</Label>
-            <Input type="date" value={date1} onChange={(e) => setDate1(e.target.value)} />
+
+        {isMitali && (
+          <div className="mb-4">
+            <div className="text-[11px] uppercase tracking-wider muted mb-1.5">Payment frequency</div>
+            <div className="flex gap-2">
+              {(['biweekly', 'monthly', 'na'] as const).map((f) => (
+                <button key={f} onClick={() => setFreq(f)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all"
+                  style={{
+                    background: freq === f ? 'var(--accent-gold)' : 'transparent',
+                    color: freq === f ? '#000' : 'var(--brand-text)',
+                    borderColor: freq === f ? 'var(--accent-gold)' : 'var(--brand-border)',
+                  }}>
+                  {f === 'biweekly' ? 'Bi-weekly' : f === 'monthly' ? 'Monthly' : 'NA (already paid)'}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="form-row">
-            <Label>Pay Date 2 (after that)</Label>
-            <Input type="date" value={date2} onChange={(e) => setDate2(e.target.value)} />
+        )}
+
+        {!isNa && (
+          <div className={`grid gap-3 mb-4 ${isMonthly ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            <div className="form-row">
+              <Label>Pay Date 1 (next due)</Label>
+              <Input type="date" value={date1} onChange={(e) => setDate1(e.target.value)} />
+            </div>
+            {!isMonthly && (
+              <div className="form-row">
+                <Label>Pay Date 2 (after that)</Label>
+                <Input type="date" value={date2} onChange={(e) => setDate2(e.target.value)} />
+              </div>
+            )}
           </div>
-        </div>
+        )}
+
+        {isNa && (
+          <p className="text-xs mb-4 muted">Both payment dates will be cleared. Client stays on the list at the bottom.</p>
+        )}
+
         {validationError && <p className="text-xs mb-3" style={{ color: 'var(--color-error, #ef4444)' }}>{validationError}</p>}
         <div className="flex gap-2 justify-end">
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={save.isPending || !!validationError} onClick={() => save.mutate()}>
-            {save.isPending ? 'Saving…' : 'Save'}
+          <Button variant="primary" disabled={isPending || !!validationError} onClick={handleSave}>
+            {isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </div>
@@ -400,7 +459,7 @@ function IncompleteNagModal({ clients, onDone }: { clients: Row[]; onDone: () =>
           {clients.map((c) => {
             const s = state[c.id];
             const isDone = s.promised;
-            const missingDate = !c.payDate2;
+            const missingDate = !c.payDate1 || (c.paymentFrequency === 'biweekly' && !c.payDate2);
             const missingAmount = !c.cycleAmount || c.cycleAmount === 0;
             return (
               <div key={c.id} className="rounded-xl p-3" style={{
@@ -745,9 +804,13 @@ function PayRow({ r }: { r: Row }) {
           {/* Pay Date 2 */}
           <div className="px-4 py-3" style={{ borderRight: '1px solid var(--brand-borderSoft)' }}>
             <div className="text-[10px] uppercase tracking-wider muted mb-1">After that</div>
-            <div className="font-mono text-[13px]">
-              {fmtDate(r.payDate2)}
-            </div>
+            {r.paymentFrequency === 'na' || r.paymentFrequency === 'monthly' ? (
+              <div className="font-mono text-[13px] muted">NA</div>
+            ) : (
+              <div className="font-mono text-[13px]">
+                {fmtDate(r.payDate2)}
+              </div>
+            )}
             {r.leverageUntil && r.leverageUntil === r.payDate2 && (
               <div className="text-[10px] mt-0.5" style={{ color: 'var(--status-amber)' }}>⟳ leverage</div>
             )}
@@ -1100,7 +1163,9 @@ function TableView({ rows }: { rows: Row[] }) {
 
                   {/* Pay Date 2 (after that) */}
                   <td style={{ ...tdStyle, fontFamily: 'monospace', whiteSpace: 'nowrap', color: 'var(--brand-textMuted)' }}>
-                    {r.payDate2 ? fmtDate(r.payDate2) : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
+                    {r.paymentFrequency === 'na' || r.paymentFrequency === 'monthly'
+                      ? <span style={{ color: 'var(--brand-textMuted)' }}>NA</span>
+                      : r.payDate2 ? fmtDate(r.payDate2) : <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}
                   </td>
 
                   {/* Currency */}
@@ -1316,7 +1381,13 @@ export function FollowUpPaymentsPage() {
   // Clients with missing next-due-date OR missing amount — shown in nag modal
   const incompleteClients = useMemo(() => {
     if (!data) return [];
-    return data.filter((r) => !r.payDate2 || !r.cycleAmount || r.cycleAmount === 0);
+    return data.filter((r) => {
+      if (r.paymentFrequency === 'na') return false; // NA clients need no dates
+      if (!r.cycleAmount || r.cycleAmount === 0) return true; // missing amount always flagged
+      if (!r.payDate1) return true; // always need pay date 1
+      if (r.paymentFrequency === 'monthly') return false; // monthly only needs date1
+      return !r.payDate2; // biweekly needs both
+    });
   }, [data]);
 
   const showNag = !nagDismissed && !isLoading && incompleteClients.length > 0
