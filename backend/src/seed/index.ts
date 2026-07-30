@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 
 const TEAM = [
   { id: 'u-vaibhav',  name: 'Vaibhav Aggarwal',   email: 'vaibhav.aggarwal@mitssolution.com', role: 'founder' as Role,           reportsToId: null,        phone: '+91 99999 00001' },
+  { id: 'u-rishi',    name: 'Rishi',              email: 'dev.rishi@mitssolution.com',        role: 'founder' as Role,           reportsToId: null,        phone: null },
   { id: 'u-samita',   name: 'Samita Gupta',       email: 'samita@mitssolution.com',           role: 'demo_lead' as Role,         reportsToId: 'u-vaibhav', phone: '+91 73476 13659' },
   { id: 'u-anjali',   name: 'Anjali Maini',       email: 'anjali.maini@mitssolution.com',     role: 'demo_intake' as Role,       reportsToId: 'u-samita',  phone: '+91 90566 77384' },
   { id: 'u-taran',    name: 'Taranpreet Kaur',    email: 'tarkau@mitssolution.com',           role: 'demo_intake' as Role,       reportsToId: 'u-samita',  phone: '+91 70879 83742' },
