@@ -741,6 +741,15 @@ export function SecondBrainPage() {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
+  const seedMut = useMutation({
+    mutationFn: () => api.post('/brain-notes/seed-defaults'),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['brain-notes'] });
+      showToast(`Knowledge base populated — ${r.data.created} notes added!`);
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Seed failed', 'error'),
+  });
+
   const selected = notes.find((n) => n.id === selectedId) || null;
 
   // auto-select first on load
@@ -896,8 +905,20 @@ export function SecondBrainPage() {
             {isLoading ? (
               <div style={{ padding: 20, textAlign: 'center', color: 'var(--brand-textMuted)', fontSize: 12 }}>Loading…</div>
             ) : notes.length === 0 ? (
-              <div style={{ padding: 20, textAlign: 'center', color: 'var(--brand-textMuted)', fontSize: 12 }}>
-                {isFounder ? 'No notes yet. Press N to create one.' : 'No notes shared with you yet.'}
+              <div style={{ padding: 20, textAlign: 'center', fontSize: 12, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+                <span style={{ color: 'var(--brand-textMuted)' }}>
+                  {isFounder ? 'No notes yet.' : 'No notes shared with you yet.'}
+                </span>
+                {isFounder && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ fontSize: 12 }}
+                    disabled={seedMut.isPending}
+                    onClick={() => seedMut.mutate()}
+                  >
+                    {seedMut.isPending ? 'Populating…' : '✨ Populate with MITS knowledge base'}
+                  </button>
+                )}
               </div>
             ) : (
               notes.map((n) => (
@@ -1010,9 +1031,14 @@ export function SecondBrainPage() {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--brand-textMuted)' }}>
               <Brain size={40} style={{ opacity: 0.3 }} />
               <p style={{ fontSize: 13 }}>Select a note to read it</p>
+              {isFounder && notes.length === 0 && (
+                <Button variant="primary" disabled={seedMut.isPending} onClick={() => seedMut.mutate()}>
+                  {seedMut.isPending ? 'Populating…' : '✨ Populate with MITS knowledge base'}
+                </Button>
+              )}
               {isFounder && (
-                <Button variant="primary" onClick={() => setEditNote({})}>
-                  <Plus size={14} /> Create first note
+                <Button onClick={() => setEditNote({})}>
+                  <Plus size={14} /> Create note
                 </Button>
               )}
             </div>
