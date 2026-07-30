@@ -233,12 +233,10 @@ followUpPaymentsRouter.post('/:id/advance-payment', async (req: AuthedRequest, r
 followUpPaymentsRouter.post('/:id/set-pay-dates', async (req: AuthedRequest, res) => {
   if (!ALLOWED.includes(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const { date1, date2 } = req.body || {};
-  if (date1) {
-    const minAllowed = new Date();
-    minAllowed.setDate(minAllowed.getDate() - 3);
-    minAllowed.setHours(0, 0, 0, 0);
-    if (new Date(date1) < minAllowed) return res.status(400).json({ error: 'Last paid date cannot be more than 3 days in the past.' });
-  }
+  const today = todayISO();
+  if (date1 && date1 < today) return res.status(400).json({ error: 'Pay Date 1 cannot be in the past — it must be a future expected payment date.' });
+  if (date2 && date2 < today) return res.status(400).json({ error: 'Pay Date 2 cannot be in the past — it must be a future expected payment date.' });
+  if (date1 && date2 && date2 <= date1) return res.status(400).json({ error: 'Pay Date 2 must be after Pay Date 1.' });
   const c = await prisma.client.findUnique({ where: { id: req.params.id }, select: { id: true, name: true } });
   if (!c) return res.status(404).json({ error: 'Client not found' });
   await prisma.client.update({

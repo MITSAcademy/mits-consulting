@@ -283,6 +283,13 @@ function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
   const [date1, setDate1] = useState(r.payDate1 || '');
   const [date2, setDate2] = useState(r.payDate2 || '');
 
+  const today = new Date().toISOString().slice(0, 10);
+  const validationError =
+    (date1 && date1 < today) ? 'Pay Date 1 cannot be in the past.' :
+    (date2 && date2 < today) ? 'Pay Date 2 cannot be in the past.' :
+    (date1 && date2 && date2 <= date1) ? 'Pay Date 2 must be after Pay Date 1.' :
+    null;
+
   const save = useMutation({
     mutationFn: () => api.post(`/follow-up-payments/${r.id}/set-pay-dates`, { date1: date1 || null, date2: date2 || null }),
     onSuccess: () => {
@@ -308,9 +315,10 @@ function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
             <Input type="date" value={date2} onChange={(e) => setDate2(e.target.value)} />
           </div>
         </div>
+        {validationError && <p className="text-xs mb-3" style={{ color: 'var(--color-error, #ef4444)' }}>{validationError}</p>}
         <div className="flex gap-2 justify-end">
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={save.isPending} onClick={() => save.mutate()}>
+          <Button variant="primary" disabled={save.isPending || !!validationError} onClick={() => save.mutate()}>
             {save.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
