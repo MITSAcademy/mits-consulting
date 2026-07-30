@@ -88,17 +88,16 @@ export async function sendMitaliDailyReport() {
     return;
   }
 
-  // IST day window
-  const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const todayStr = fmtIST(nowIST);
-  const dayStart = new Date(nowIST);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(nowIST);
-  dayEnd.setHours(23, 59, 59, 999);
-  // Convert IST bounds to UTC for DB query
+  // IST day window — derive today's date directly in IST from UTC
+  const now = new Date();
+  const todayStr = now.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
   const istOffset = 5.5 * 60 * 60 * 1000;
-  const utcStart = new Date(dayStart.getTime() - istOffset);
-  const utcEnd = new Date(dayEnd.getTime() - istOffset);
+  // Compute midnight IST in UTC: get IST date string, parse as a local midnight, then subtract the offset
+  const istDateStr = new Date(now.getTime() + istOffset).toISOString().slice(0, 10); // YYYY-MM-DD in IST
+  const dayStartUTC = new Date(`${istDateStr}T00:00:00+05:30`);
+  const dayEndUTC = new Date(`${istDateStr}T23:59:59.999+05:30`);
+  const utcStart = dayStartUTC;
+  const utcEnd = dayEndUTC;
 
   // Fetch all audit logs for Mitali today
   const logs = await prisma.auditLog.findMany({
