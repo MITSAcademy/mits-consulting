@@ -128,7 +128,11 @@ app.get('/api/health', async (_req, res) => {
 
 // Serve uploaded files (audio recordings, screenshots, skill matrices).
 // In production, replace with S3/Cloudinary + signed URLs.
-app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
+app.use('/uploads', (req: any, res, next) => {
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.cookies?.token;
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  next();
+}, express.static(UPLOAD_DIR, { maxAge: '7d' }));
 
 app.use('/api/auth', authRouter);
 app.use('/api/users', usersRouter);

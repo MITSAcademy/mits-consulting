@@ -9,7 +9,7 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-metricsRouter.get('/home', async (_req, res) => {
+metricsRouter.get('/home', requireRole('founder', 'manager', 'lead', 'demo_lead', 'sales_closer', 'accounts', 'account_manager'), async (_req, res) => {
   try {
   const today = todayISO();
   const monthStart = today.slice(0, 8) + '01';

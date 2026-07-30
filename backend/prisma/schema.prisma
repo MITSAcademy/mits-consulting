@@ -651,6 +651,8 @@ model SessionLog {
   sessionHappened  Boolean       @default(true)  // false = client no-show
   cancelledBy      String?       // 'trainer' | 'client' — only set when sessionHappened=false
   createdAt        DateTime      @default(now())
+
+  @@index([trainerId, date])
 }
 
 model TrainerPayWeek {

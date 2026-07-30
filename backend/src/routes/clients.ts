@@ -6,7 +6,7 @@ import { SourcingStatus, DemoStatus, Lifecycle } from '@prisma/client';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 import { notify } from '../lib/notify';
-import { sendEmail, decryptSecret } from '../lib/mailer';
+import { sendEmail, decryptSecret, formatSendError } from '../lib/mailer';
 import { buildIcsInvite } from '../lib/ical';
 import { buildWelcomeEmailHtml, WELCOME_EMAIL_SUBJECT } from '../lib/welcomeEmail';
 import { buildSkillMatrixHtml, buildSkillMatrixText, istToUsZones, DEFAULT_SOFT_SKILLS } from '../lib/skillMatrix';
@@ -385,7 +385,7 @@ function canEditFields(role: string, fields: string[]): { ok: boolean; blocked?:
   for (const f of fields) {
     if (role === 'lead' && LEAD_ALLOWED_FIELDS.has(f)) continue;
     const cat = FIELD_CATEGORY[f];
-    if (!cat) continue;
+    if (!cat) { blocked.push(`${f} (uncategorized)`); continue; }
     if (!perms[cat]) blocked.push(`${f} (${cat})`);
   }
   return blocked.length === 0 ? { ok: true } : { ok: false, blocked };
@@ -2399,7 +2399,8 @@ clientsRouter.post('/:id/welcome-email', async (req: AuthedRequest, res) => {
       where: { id: msg.id },
       data: { status: 'Failed', errorText: e.message || String(e) },
     });
-    res.status(502).json({ error: 'Welcome email send failed: ' + (e.message || String(e)), code: (e as any)?.code, messageId: msg.id });
+    const fe = formatSendError('welcome-email', e);
+    res.status(502).json({ ...fe, messageId: msg.id });
   }
 });
 
@@ -2920,7 +2921,8 @@ clientsRouter.post('/:id/mitali-welcome-email', async (req: AuthedRequest, res) 
     await audit(req.user!.id, req.user!.name, 'MITALI_WELCOME_EMAIL', `${client.name} → ${toEmail}`, { clientId: client.id });
     res.json({ ok: true });
   } catch (err: any) {
-    res.status(500).json({ error: err?.message || 'Email send failed' });
+    const fe = formatSendError('mitali-welcome-email', err);
+    res.status(502).json(fe);
   }
 });
 

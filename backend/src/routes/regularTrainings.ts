@@ -355,13 +355,16 @@ regularTrainingsRouter.post('/weekly-summary/submit', async (req: AuthedRequest,
 
   // Apply any AM overrides to weeklySessionCount
   if (Array.isArray(overrides)) {
-    for (const o of overrides) {
-      if (o.trainingId && typeof o.sessionCount === 'number') {
-        await prisma.regularTraining.update({
-          where: { id: o.trainingId },
-          data: { weeklySessionCount: o.sessionCount },
-        });
-      }
+    const validOverrides = overrides.filter((o) => o.trainingId && typeof o.sessionCount === 'number');
+    if (validOverrides.length > 0) {
+      await prisma.$transaction(
+        validOverrides.map((o) =>
+          prisma.regularTraining.update({
+            where: { id: o.trainingId },
+            data: { weeklySessionCount: o.sessionCount },
+          })
+        )
+      );
     }
   }
 
