@@ -399,7 +399,7 @@ regularTrainingsRouter.post('/my-sessions/send-daily', async (req: AuthedRequest
 
   // Fixed recipient list
   const recipientIds = ['u-kashish', 'u-muskan'];
-  const ccIds = ['u-samita', 'u-vaibhav', 'u-mitali', 'u-kashish', 'u-muskan'];
+  const ccIds = ['u-vaibhav', 'u-mitali', 'u-kashish', 'u-muskan'];
   const allIds = [...new Set([...recipientIds, ...ccIds])];
 
   const users = await prisma.user.findMany({
@@ -691,7 +691,6 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
   }
   // Always CC these stakeholders on every session invite
   const fixedCc = [
-    'samita@mitssolution.com',
     'mitagg@mitssolution.com',       // Mitali
     'bhavneet.kaur@mitssolution.com', // Bhavneet
   ];
