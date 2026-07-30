@@ -310,18 +310,22 @@ freelanceRequirementsRouter.post('/:id/re-raise', requireRole(...REGULAR_ROLES),
 
   // Notify recruiters (To), raiser + their manager (CC) about the re-raised requirement
   try {
-    const [fromUser, recruiters] = await Promise.all([getFromUser(), getRecruiters()]);
-    if (fromUser && recruiters.length) {
-      // Fetch raiser + their manager for CC
-      const raiser = await prisma.user.findUnique({
+    const recruiters = await getRecruiters();
+    if (recruiters.length) {
+      // Fetch raiser (with SMTP creds) + their manager for CC
+      const raiserRow = await prisma.user.findUnique({
         where: { id: req.user!.id },
-        select: { email: true, gmailAddress: true, reportsToId: true },
+        select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true, email: true, reportsToId: true },
       });
-      const raiserEmail = raiser?.gmailAddress || raiser?.email || null;
+      // Send from the raiser's own Gmail; fall back to Vaibhav if not configured
+      const fromUser = (raiserRow ? safeBuildFromUser(raiserRow) : null) || await getFromUser();
+      if (!fromUser) { console.warn('[freelance-reraise-notify] no SMTP sender available'); return; }
+
+      const raiserEmail = raiserRow?.gmailAddress || raiserRow?.email || null;
       let managerEmail: string | null = null;
-      if (raiser?.reportsToId) {
+      if (raiserRow?.reportsToId) {
         const mgr = await prisma.user.findUnique({
-          where: { id: raiser.reportsToId },
+          where: { id: raiserRow.reportsToId },
           select: { email: true, gmailAddress: true },
         });
         managerEmail = mgr?.gmailAddress || mgr?.email || null;
