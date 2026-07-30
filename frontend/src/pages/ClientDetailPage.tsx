@@ -14,7 +14,7 @@ import { formatPhone, waLink, todayISO, stageLabel, backStagesFor, addDays, fmtC
 import { useUI } from '@/store/ui';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/store/auth';
-import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play, X, Download, Users, FileText, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Send, ClipboardCheck, Search, CalendarPlus, Check, FileCheck, ArrowRight, Wallet, Clock, HandMetal, Edit as EditIcon, MessageCircle, UserPlus, Mail, Undo2, Moon, Play, X, Download, Users, FileText, CheckCircle2, AtSign } from 'lucide-react';
 import { SendMessageModal, MessagesHistoryCard } from '@/components/SendMessageModal';
 import { DemoHistoryCard } from '@/components/DemoHistoryCard';
 import { CallHistoryCard } from '@/components/CallHistoryCard';
@@ -59,6 +59,100 @@ function canEditClient(role: string, cat: 'identity' | 'contact' | 'engagement' 
     accounts:     { identity: false, contact: false, engagement: false, pipeline: false, financial: true,  sensitive: false },
   };
   return m[role]?.[cat] || false;
+}
+
+// ── Email nudge banner ──────────────────────────────────────────────────────
+// Shown when the current user owns this client (demo/intake/host/am) and
+// no email is on file. Soft — dismissible per-client for 7 days.
+function EmailNudgeBanner({ client, userId }: { client: any; userId: string }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const storageKey = `email-nudge-dismissed-${client.id}`;
+
+  const isDismissed = () => {
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return false;
+      return Date.now() < Number(raw);
+    } catch { return false; }
+  };
+
+  const [dismissed, setDismissed] = useState(isDismissed);
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState('');
+
+  const isOwner =
+    client.intakeOwnerId === userId ||
+    client.leadOwnerId === userId ||
+    client.hostOwnerId === userId ||
+    client.salesOwnerId === userId ||
+    client.assignedAmId === userId;
+
+  const hasEmail = !!(client.email || client.intakeData?.client_email);
+
+  const save = useMutation({
+    mutationFn: () => api.patch(`/clients/${client.id}`, { email: val.trim() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['client', client.id] });
+      showToast('Email saved — thank you!');
+      setEditing(false);
+    },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to save', 'error'),
+  });
+
+  const dismiss = () => {
+    try { localStorage.setItem(storageKey, String(Date.now() + 7 * 24 * 60 * 60 * 1000)); } catch {}
+    setDismissed(true);
+  };
+
+  if (hasEmail || !isOwner || dismissed) return null;
+
+  return (
+    <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{
+      background: 'linear-gradient(90deg, rgba(92,143,240,0.08) 0%, rgba(92,143,240,0.04) 100%)',
+      border: '1px solid rgba(92,143,240,0.25)',
+    }}>
+      <AtSign size={16} style={{ color: 'var(--status-blue)', flexShrink: 0, marginTop: 2 }} />
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-[13px]" style={{ color: 'var(--status-blue)' }}>
+          No email on file for {client.name}
+        </div>
+        <div className="text-[12px] muted mt-0.5">
+          An email helps with welcome messages, feedback surveys, and future follow-ups.{' '}
+          {!editing && (
+            <button className="underline" style={{ color: 'var(--status-blue)' }} onClick={() => setEditing(true)}>
+              Add it now
+            </button>
+          )}
+        </div>
+        {editing && (
+          <div className="flex items-center gap-2 mt-2">
+            <input
+              autoFocus
+              type="email"
+              className="input text-[13px]"
+              style={{ maxWidth: 280 }}
+              placeholder="client@email.com"
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && val.trim()) save.mutate(); if (e.key === 'Escape') setEditing(false); }}
+            />
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={!val.trim() || save.isPending}
+              onClick={() => save.mutate()}
+            >
+              {save.isPending ? 'Saving…' : 'Save'}
+            </button>
+            <button className="btn btn-sm" onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+        )}
+      </div>
+      <button onClick={dismiss} style={{ color: 'var(--brand-textMuted)', flexShrink: 0 }} title="Dismiss for 7 days">
+        <X size={14} />
+      </button>
+    </div>
+  );
 }
 
 type ModalKind =
@@ -508,6 +602,9 @@ export function ClientDetailPage() {
             }}
           />
         )}
+
+        {/* Email nudge — soft prompt for the owning user to add client email */}
+        <EmailNudgeBanner client={client} userId={user.id} />
 
         {/* State-specific callouts */}
         {client.lifecycle === 'WithRecruiters' && (
