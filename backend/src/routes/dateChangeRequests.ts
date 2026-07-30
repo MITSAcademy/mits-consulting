@@ -286,7 +286,7 @@ dateChangeRequestsRouter.post('/:id/approve', async (req: AuthedRequest, res) =>
           amount: Math.round(Number(recordedAmount)),
           currency: (request.client.currency || 'USD') as any,
           paymentDate,
-          receivedById: req.user!.id,
+          receivedById: request.requestedById,
         },
       }),
     ]);
