@@ -148,6 +148,12 @@ export async function sendDemoEscalationDigest(): Promise<void> {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata',
   });
 
+  const ccUsers = await prisma.user.findMany({
+    where: { id: { in: ['u-mitali', 'u-bhavneet'] } },
+    select: { email: true, gmailAddress: true, sendAsAddress: true },
+  });
+  const ccEmails = ccUsers.map((u) => u.sendAsAddress || u.gmailAddress || u.email).filter(Boolean) as string[];
+
   const toEmails = demoTeam.map((u) => u.sendAsAddress || u.gmailAddress || u.email).filter(Boolean) as string[];
   if (toEmails.length === 0) {
     console.warn('[demo-escalation-digest] No valid email addresses for demo team — skipping');
@@ -259,10 +265,11 @@ export async function sendDemoEscalationDigest(): Promise<void> {
 
   const fromUser = safeBuildFromUser(vaibhav);
   const [primaryTo, ...ccRest] = toEmails;
+  const allCc = [...ccRest, ...ccEmails];
 
   await sendEmail({
     to: primaryTo,
-    cc: ccRest.length > 0 ? ccRest : undefined,
+    cc: allCc.length > 0 ? allCc : undefined,
     subject: `⚠️ Demo Escalation Digest — ${totalPending} pending · ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' })}`,
     body: `Demo Escalation Digest — ${totalPending} pending items (${pendingTrainings.length} training escalations, ${pendingIssues.length} issues). Please view in the portal.`,
     htmlBody: html,
