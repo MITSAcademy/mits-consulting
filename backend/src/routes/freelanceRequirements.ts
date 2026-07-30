@@ -308,10 +308,26 @@ freelanceRequirementsRouter.post('/:id/re-raise', requireRole(...REGULAR_ROLES),
 
   await audit(req.user!.id, req.user!.name, 'FREELANCE_REQ_RERAISE', `${source.clientName} · cloned from ${source.id}`);
 
-  // Notify recruiters about the re-raised requirement
+  // Notify recruiters (To), raiser + their manager (CC) about the re-raised requirement
   try {
     const [fromUser, recruiters] = await Promise.all([getFromUser(), getRecruiters()]);
     if (fromUser && recruiters.length) {
+      // Fetch raiser + their manager for CC
+      const raiser = await prisma.user.findUnique({
+        where: { id: req.user!.id },
+        select: { email: true, gmailAddress: true, reportsToId: true },
+      });
+      const raiserEmail = raiser?.gmailAddress || raiser?.email || null;
+      let managerEmail: string | null = null;
+      if (raiser?.reportsToId) {
+        const mgr = await prisma.user.findUnique({
+          where: { id: raiser.reportsToId },
+          select: { email: true, gmailAddress: true },
+        });
+        managerEmail = mgr?.gmailAddress || mgr?.email || null;
+      }
+      const ccList = [raiserEmail, managerEmail].filter((e): e is string => !!e);
+
       const rows = [
         ['Client', source.clientName],
         ['Skill required', source.skillRequired],
@@ -346,15 +362,17 @@ freelanceRequirementsRouter.post('/:id/re-raise', requireRole(...REGULAR_ROLES),
     </table>
   </td></tr>
 </table></body></html>`;
-      for (const r of recruiters) {
-        await sendEmail({
-          fromUser,
-          to: r.email,
-          subject: `Re-raised requirement: ${source.skillRequired} for ${source.clientName}`,
-          body: `Requirement re-raised by ${req.user!.name}: ${source.skillRequired} for ${source.clientName}.`,
-          htmlBody: html,
-        });
-      }
+
+      // Send one email: first recruiter in To, rest + raiser + manager in CC
+      const [primaryTo, ...ccRecruiters] = recruiters.map((r: any) => r.email);
+      await sendEmail({
+        fromUser,
+        to: primaryTo,
+        cc: [...ccRecruiters, ...ccList],
+        subject: `Re-raised requirement: ${source.skillRequired} for ${source.clientName}`,
+        body: `Requirement re-raised by ${req.user!.name}: ${source.skillRequired} for ${source.clientName}.`,
+        htmlBody: html,
+      });
     }
   } catch (e: any) {
     console.error('[freelance-reraise-notify] email failed (non-fatal):', e?.message);
