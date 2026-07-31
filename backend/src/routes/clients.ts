@@ -366,7 +366,7 @@ const CLIENT_PERMS: Record<string, Record<string, boolean>> = {
   founder:           { identity: true,  contact: true,  engagement: true,  pipeline: true,  workflow: true,  financial: true,  sensitive: true  },
   demo_lead:         { identity: true,  contact: true,  engagement: true,  pipeline: true,  workflow: true,  financial: false, sensitive: false },
   manager:           { identity: true,  contact: true,  engagement: true,  pipeline: true,  workflow: true,  financial: true,  sensitive: true  },
-  demo_intake:       { identity: false, contact: false, engagement: false, pipeline: false, workflow: true,  financial: false, sensitive: false },
+  demo_intake:       { identity: true,  contact: true,  engagement: false, pipeline: false, workflow: true,  financial: false, sensitive: false },
   recruiter:         { identity: false, contact: false, engagement: false, pipeline: false, workflow: false, financial: false, sensitive: false },
   sales_closer:      { identity: false, contact: false, engagement: true,  pipeline: false, workflow: false, financial: true,  sensitive: false },
   accounts:          { identity: false, contact: false, engagement: false, pipeline: false, workflow: false, financial: true,  sensitive: false },
