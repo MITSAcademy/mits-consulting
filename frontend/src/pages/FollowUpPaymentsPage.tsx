@@ -798,7 +798,7 @@ function PayRow({ r }: { r: Row }) {
                 {r.daysUntilDue < 0 ? `${Math.abs(r.daysUntilDue)}d overdue` : r.daysUntilDue === 0 ? 'today' : `in ${r.daysUntilDue}d`}
               </div>
             )}
-            {!r.payDate1 && <div className="text-[10px] muted mt-0.5">—</div>}
+            {!r.payDate1 && <div className="text-[10px] muted mt-0.5">{r.paymentFrequency === 'na' ? 'NA' : '—'}</div>}
           </div>
 
           {/* Pay Date 2 */}
@@ -807,8 +807,8 @@ function PayRow({ r }: { r: Row }) {
             {r.paymentFrequency === 'na' || r.paymentFrequency === 'monthly' ? (
               <div className="font-mono text-[13px] muted">NA</div>
             ) : (
-              <div className="font-mono text-[13px]">
-                {fmtDate(r.payDate2)}
+              <div className={`font-mono text-[13px]${!r.payDate2 ? ' muted' : ''}`}>
+                {r.payDate2 ? fmtDate(r.payDate2) : 'NA'}
               </div>
             )}
             {r.leverageUntil && r.leverageUntil === r.payDate2 && (
