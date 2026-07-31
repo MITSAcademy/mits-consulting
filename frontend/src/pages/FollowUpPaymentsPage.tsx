@@ -393,18 +393,18 @@ function IncompleteNagModal({ clients, onDone }: { clients: Row[]; onDone: () =>
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
 
-  // Per-client inline state: date2 + amount + currency + promised
-  const [state, setState] = useState<Record<string, { date2: string; amount: string; currency: string; promised: boolean }>>(() => {
-    const s: Record<string, { date2: string; amount: string; currency: string; promised: boolean }> = {};
+  // Per-client inline state: date1 (next due = Pay Date 1) + amount + currency + promised
+  const [state, setState] = useState<Record<string, { date1: string; amount: string; currency: string; promised: boolean }>>(() => {
+    const s: Record<string, { date1: string; amount: string; currency: string; promised: boolean }> = {};
     for (const c of clients) {
-      s[c.id] = { date2: c.payDate2 || '', amount: c.cycleAmount ? String(c.cycleAmount) : '', currency: c.currency || 'USD', promised: false };
+      s[c.id] = { date1: c.payDate1 || '', amount: c.cycleAmount ? String(c.cycleAmount) : '', currency: c.currency || 'USD', promised: false };
     }
     return s;
   });
 
   const saveDate = useMutation({
-    mutationFn: ({ id, date2 }: { id: string; date2: string }) =>
-      api.post(`/follow-up-payments/${id}/set-pay-dates`, { date1: null, date2 }),
+    mutationFn: ({ id, date1 }: { id: string; date1: string }) =>
+      api.post(`/follow-up-payments/${id}/set-pay-dates`, { date1, date2: null }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['follow-up-payments'] }),
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to save date', 'error'),
   });
@@ -421,7 +421,7 @@ function IncompleteNagModal({ clients, onDone }: { clients: Row[]; onDone: () =>
   async function handleSave(c: Row) {
     const s = state[c.id];
     const promises: Promise<any>[] = [];
-    if (s.date2 && s.date2 !== c.payDate2) promises.push(saveDate.mutateAsync({ id: c.id, date2: s.date2 }));
+    if (s.date1 && s.date1 !== c.payDate1) promises.push(saveDate.mutateAsync({ id: c.id, date1: s.date1 }));
     if (s.amount && Number(s.amount) > 0 && Number(s.amount) !== c.cycleAmount)
       promises.push(saveAmount.mutateAsync({ id: c.id, amount: Number(s.amount), currency: s.currency }));
     if (promises.length) await Promise.all(promises);
@@ -479,15 +479,15 @@ function IncompleteNagModal({ clients, onDone }: { clients: Row[]; onDone: () =>
                 </div>
                 {!isDone && (
                   <div className="grid grid-cols-2 gap-2 mb-2">
-                    {/* Next due date — always shown */}
+                    {/* Pay Date 1 — next due date */}
                     <div>
                       <div className="text-[10px] font-semibold mb-1" style={{ color: missingDate ? '#b91c1c' : '#6b7280' }}>
-                        {missingDate ? '⚠ Next Due Date' : 'Next Due Date'}
+                        {missingDate ? '⚠ Pay Date 1 (next due)' : 'Pay Date 1 (next due)'}
                       </div>
                       <input
                         type="date"
-                        value={s.date2}
-                        onChange={(e) => setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], date2: e.target.value } }))}
+                        value={s.date1}
+                        onChange={(e) => setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], date1: e.target.value } }))}
                         className="w-full text-[12px] px-2 py-1.5 rounded-lg"
                         style={{ background: 'var(--bg-input)', border: `1px solid ${missingDate ? '#f87171' : 'var(--brand-border)'}`, color: 'var(--brand-text)' }}
                       />
