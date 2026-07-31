@@ -299,7 +299,7 @@ clientsRouter.get('/:id', async (req: AuthedRequest, res) => {
 const allowedFields = [
   'name', 'email', 'phoneCode', 'phoneDigits', 'whatsappGroupName', 'whatsappGroupLink',
   'country', 'engagementType', 'paymentModel', 'currency', 'cycleAmount',
-  'lifecycle', 'funderType', 'partnerId', 'source',
+  'lifecycle', 'funderType', 'partnerId', 'source', 'referredBy',
   'leadOwnerId', 'intakeOwnerId', 'salesOwnerId', 'hostOwnerId', 'assignedAmId',
   'primaryTrainerId', 'engagementTrainerRateInr', 'preferredTimeIst',
   'feedbackDay', 'bankAccountId', 'accountNameRaw',
@@ -329,7 +329,7 @@ const allowedFields = [
 const FIELD_CATEGORY: Record<string, string> = {
   name: 'identity', whatsappGroupName: 'identity',
   phoneCode: 'contact', phoneDigits: 'contact', email: 'contact', whatsappGroupLink: 'contact',
-  source: 'engagement', engagementType: 'engagement', currency: 'engagement',
+  source: 'engagement', referredBy: 'engagement', engagementType: 'engagement', currency: 'engagement',
   cycleAmount: 'engagement', funderType: 'engagement', partnerId: 'engagement',
   paymentModel: 'engagement', country: 'engagement', notes: 'engagement',
   lifecycle: 'pipeline',

@@ -351,6 +351,7 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
     phoneDigits: '',
     engagementType: 'Support',
     source: '',
+    referredBy: '',
     funderType: 'Self',
     intakeSkillHint: '',
     notes: '',
@@ -381,7 +382,7 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
     },
   });
 
-  const ok = f.name.trim() && (f.whatsappGroupName.trim() || f.phoneDigits.trim());
+  const ok = f.name.trim() && (f.whatsappGroupName.trim() || f.phoneDigits.trim()) && f.referredBy;
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -453,6 +454,20 @@ function NewLeadModal({ onClose }: { onClose: () => void }) {
             <Select value={f.source} onChange={(e) => setF({ ...f, source: e.target.value })}>
               <option value="">— select —</option>
               {(sources || []).map((s: any) => <option key={s.id} value={s.name}>{s.name}</option>)}
+            </Select>
+          </div>
+          <div className="form-row">
+            <Label>Demo reference <span className="text-brand-textMuted normal-case ml-1">(who referred?)</span></Label>
+            <Select value={f.referredBy} onChange={(e) => setF({ ...f, referredBy: e.target.value })}
+              style={{ borderColor: !f.referredBy ? 'var(--status-amber)' : undefined }}>
+              <option value="">— required —</option>
+              <option value="Vaibhav">Vaibhav</option>
+              <option value="Samita">Samita</option>
+              <option value="Mitali">Mitali</option>
+              <option value="Saikiran">Saikiran</option>
+              <option value="Roshni">Roshni</option>
+              <option value="Direct">Direct start</option>
+              <option value="Others">Others</option>
             </Select>
           </div>
           <div className="form-row"><Label>Funder</Label>

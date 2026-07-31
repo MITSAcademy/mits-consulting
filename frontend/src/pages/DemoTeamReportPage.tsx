@@ -38,6 +38,8 @@ interface ReportData {
   conversion7: { total: number; reachedDemo: number; reachedSale: number; demoRate: number; saleRate: number };
   conversion30: { total: number; reachedDemo: number; reachedSale: number; demoRate: number; saleRate: number };
   demosByDay: Record<string, number>;
+  referralBreakdown: { referredBy: string; total: number; reachedDemo: number; converted: number; demoRate: number; conversionRate: number }[];
+  pipelineByReferral: { referredBy: string; count: number }[];
 }
 
 const STAGE_COLORS: Record<string, string> = {
@@ -95,6 +97,7 @@ export function DemoTeamReportPage() {
             </div>
             <DemoScheduleStrip demosByDay={data.demosByDay} />
             <ConversionCard c7={data.conversion7} c30={data.conversion30} />
+            <ReferralCard breakdown={data.referralBreakdown || []} pipeline={data.pipelineByReferral || []} />
           </>
         )}
       </Page>
@@ -464,6 +467,59 @@ function ConvCol({ title, c }: { title: string; c: ReportData['conversion7'] }) 
           <div className="text-[10px] muted">{c.reachedSale} clients</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ──────────────────────────── Referral breakdown ─────────────────────────── */
+
+function ReferralCard({
+  breakdown,
+  pipeline,
+}: {
+  breakdown: ReportData['referralBreakdown'];
+  pipeline: ReportData['pipelineByReferral'];
+}) {
+  if (!breakdown.length && !pipeline.length) return null;
+  const pipelineMap = Object.fromEntries(pipeline.map((p) => [p.referredBy, p.count]));
+  return (
+    <div className="card mb-3">
+      <div className="card-h"><span><BarChart3 size={12} className="inline mr-1" /> Demo reference — leads vs conversion</span></div>
+      <div className="overflow-x-auto">
+        <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
+              {['Referred by', 'In pipeline', 'All time leads', 'Reached demo', 'Converted', 'Demo %', 'Conversion %'].map((h) => (
+                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--brand-textMuted)' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {breakdown.map((r) => (
+              <tr key={r.referredBy} style={{ borderBottom: '1px solid var(--brand-borderSoft)' }}>
+                <td style={{ padding: '7px 10px', fontWeight: 600 }}>{r.referredBy}</td>
+                <td style={{ padding: '7px 10px' }}>{pipelineMap[r.referredBy] ?? 0}</td>
+                <td style={{ padding: '7px 10px' }}>{r.total}</td>
+                <td style={{ padding: '7px 10px' }}>{r.reachedDemo}</td>
+                <td style={{ padding: '7px 10px', color: 'var(--status-green)', fontWeight: 600 }}>{r.converted}</td>
+                <td style={{ padding: '7px 10px' }}>
+                  <span style={{ color: r.demoRate >= 50 ? 'var(--status-green)' : r.demoRate >= 25 ? 'var(--status-amber)' : 'var(--brand-textMuted)' }}>
+                    {r.demoRate}%
+                  </span>
+                </td>
+                <td style={{ padding: '7px 10px' }}>
+                  <span style={{ color: r.conversionRate >= 30 ? 'var(--status-green)' : r.conversionRate >= 10 ? 'var(--status-amber)' : 'var(--brand-textMuted)' }}>
+                    {r.conversionRate}%
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {breakdown.length === 0 && (
+        <div className="text-[12px] muted p-4 text-center">No referral data yet — start tagging leads when adding them.</div>
+      )}
     </div>
   );
 }

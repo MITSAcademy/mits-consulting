@@ -61,7 +61,7 @@ demoTeamReportRouter.get('/', async (req: AuthedRequest, res) => {
     select: {
       id: true, name: true,
       lifecycle: true,
-      engagementType: true, source: true,
+      engagementType: true, source: true, referredBy: true,
       currency: true, cycleAmount: true,
       stageEnteredAt: true,
       demoDate: true, demoTimeIst: true,
@@ -265,7 +265,39 @@ demoTeamReportRouter.get('/', async (req: AuthedRequest, res) => {
   const conversion7  = conversion(d7Start);
   const conversion30 = conversion(d30Start);
 
-  // ── 9. Demo schedule next 7 days (counts per day) ─────────────────────
+  // ── 9. Referral breakdown — leads grouped by referredBy, with conversion ─
+  const REFERRED_BY_OPTIONS = ['Vaibhav', 'Samita', 'Mitali', 'Saikiran', 'Roshni', 'Direct', 'Others'];
+  const allClientsForReferral = await prisma.client.findMany({
+    where: { lifecycle: { not: 'Lead' as any } }, // exclude raw un-processed leads? No — include all
+    select: { referredBy: true, lifecycle: true, createdAt: true },
+  });
+  const allWithReferral = await prisma.client.findMany({
+    select: { referredBy: true, lifecycle: true },
+  });
+  const CONVERTED_STAGES = ['SaleClosing', 'SaleWon', 'Active', 'LeverageGranted', 'Completed'];
+  const DEMO_REACHED_STAGES = ['DemoScheduled', 'DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon', 'Active', 'LeverageGranted', 'Completed'];
+  const referralBreakdown = REFERRED_BY_OPTIONS.map((ref) => {
+    const leads = allWithReferral.filter((c) => (c.referredBy || 'Others') === ref);
+    const total = leads.length;
+    const reachedDemo = leads.filter((c) => DEMO_REACHED_STAGES.includes(c.lifecycle)).length;
+    const converted = leads.filter((c) => CONVERTED_STAGES.includes(c.lifecycle)).length;
+    return {
+      referredBy: ref,
+      total,
+      reachedDemo,
+      converted,
+      demoRate: total ? Math.round((reachedDemo / total) * 100) : 0,
+      conversionRate: total ? Math.round((converted / total) * 100) : 0,
+    };
+  }).filter((r) => r.total > 0);
+
+  // Also include pipeline (active leads) grouped by referredBy
+  const pipelineByReferral = REFERRED_BY_OPTIONS.map((ref) => ({
+    referredBy: ref,
+    count: clients.filter((c) => (c as any).referredBy === ref || (!( c as any).referredBy && ref === 'Others')).length,
+  })).filter((r) => r.count > 0);
+
+  // ── 10. Demo schedule next 7 days (counts per day) ─────────────────────
   const demosByDay: Record<string, number> = {};
   for (let i = 0; i < 7; i++) {
     const d = new Date(); d.setDate(d.getDate() + i);
@@ -302,6 +334,8 @@ demoTeamReportRouter.get('/', async (req: AuthedRequest, res) => {
     recommendations,
     conversion7, conversion30,
     demosByDay,
+    referralBreakdown,
+    pipelineByReferral,
   };
   cache.set(cacheKey, { data, builtAt: Date.now() });
   res.json(data);

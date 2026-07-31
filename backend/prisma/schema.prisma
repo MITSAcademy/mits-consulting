@@ -337,6 +337,7 @@ model Client {
   partnerId                String?
   partner                  Partner?       @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   source                   String?
+  referredBy               String?  // who referred this lead: "Vaibhav"|"Samita"|"Mitali"|"Saikiran"|"Roshni"|"Direct"|"Others"
   leadOwnerId              String?
   leadOwner                User?          @relation("LeadOwner", fields: [leadOwnerId], references: [id], onDelete: SetNull)
   intakeOwnerId            String?
