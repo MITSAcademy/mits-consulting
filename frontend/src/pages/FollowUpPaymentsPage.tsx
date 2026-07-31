@@ -788,17 +788,22 @@ function PayRow({ r }: { r: Row }) {
           {/* Pay Date 1 */}
           <div className="px-4 py-3" style={{ borderRight: '1px solid var(--brand-borderSoft)' }}>
             <div className="text-[10px] uppercase tracking-wider muted mb-1">Next due</div>
-            <div className={`font-mono text-[13px] font-bold ${
-              r.status === 'overdue' ? 'text-red-400' :
-              r.status === 'due_soon' ? 'text-amber-400' : ''}`}>
-              {fmtDate(r.payDate1)}
-            </div>
-            {r.payDate1 && r.daysUntilDue !== null && (
-              <div className="text-[10px] muted mt-0.5">
-                {r.daysUntilDue < 0 ? `${Math.abs(r.daysUntilDue)}d overdue` : r.daysUntilDue === 0 ? 'today' : `in ${r.daysUntilDue}d`}
-              </div>
+            {r.paymentFrequency === 'na' ? (
+              <div className="font-mono text-[13px] muted">NA</div>
+            ) : (
+              <>
+                <div className={`font-mono text-[13px] font-bold ${
+                  r.status === 'overdue' ? 'text-red-400' :
+                  r.status === 'due_soon' ? 'text-amber-400' : ''}`}>
+                  {r.payDate1 ? fmtDate(r.payDate1) : '—'}
+                </div>
+                {r.payDate1 && r.daysUntilDue !== null && (
+                  <div className="text-[10px] muted mt-0.5">
+                    {r.daysUntilDue < 0 ? `${Math.abs(r.daysUntilDue)}d overdue` : r.daysUntilDue === 0 ? 'today' : `in ${r.daysUntilDue}d`}
+                  </div>
+                )}
+              </>
             )}
-            {!r.payDate1 && <div className="text-[10px] muted mt-0.5">{r.paymentFrequency === 'na' ? 'NA' : '—'}</div>}
           </div>
 
           {/* Pay Date 2 */}
