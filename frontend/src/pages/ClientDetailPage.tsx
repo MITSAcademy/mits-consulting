@@ -1226,6 +1226,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function EditContactModal({ client, onClose, emailOnly = false }: any) {
   const qc = useQueryClient(); const showToast = useUI((s) => s.showToast);
   const [f, setF] = useState({
+    name: client.name || '',
     whatsappGroupName: client.whatsappGroupName || '',
     whatsappGroupLink: client.whatsappGroupLink || '',
     phoneCode: client.phoneCode || '+1',
@@ -1244,6 +1245,7 @@ function EditContactModal({ client, onClose, emailOnly = false }: any) {
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent title={`Edit contact · ${client.name}`} description={emailOnly ? 'Update client email address.' : 'WhatsApp group is primary. Direct phone is backup.'}>
         {!emailOnly && <>
+          <div className="form-row"><Label>Client name</Label><Input value={f.name} onChange={(e) => setF({...f, name: e.target.value})} /></div>
           <div className="form-row"><Label>WhatsApp group name</Label><Input value={f.whatsappGroupName} onChange={(e) => setF({...f, whatsappGroupName: e.target.value})} /></div>
           <div className="form-row"><Label>WhatsApp group invite link</Label><Input value={f.whatsappGroupLink} onChange={(e) => setF({...f, whatsappGroupLink: e.target.value})} placeholder="https://chat.whatsapp.com/..." /></div>
           <div className="form-row"><Label>Direct phone (backup)</Label>
