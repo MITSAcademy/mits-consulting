@@ -91,15 +91,13 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       daysUntilDue = Math.floor((Date.parse(payDate1) - Date.parse(today)) / 86_400_000);
     }
 
-    // Feedback gate: feedback must be taken within 3 days before payDate1, OR after payDate1 (overdue case)
+    // Feedback gate: Mitali must take feedback with each client at least once every 7 days
     let feedbackNeeded = false;
-    if (payDate1 && c.lastFeedbackTakenAt) {
-      // Feedback is valid if taken after payDate1, or within 3 days before it
-      const feedbackAfterDue = c.lastFeedbackTakenAt >= payDate1;
+    if (c.lastFeedbackTakenAt) {
       const daysSinceFeedback = Math.floor((Date.parse(today) - Date.parse(c.lastFeedbackTakenAt)) / 86_400_000);
-      feedbackNeeded = daysUntilDue !== null && daysUntilDue <= 3 && !feedbackAfterDue && daysSinceFeedback > 3;
-    } else if (payDate1) {
-      feedbackNeeded = daysUntilDue !== null && daysUntilDue <= 3;
+      feedbackNeeded = daysSinceFeedback > 7;
+    } else {
+      feedbackNeeded = true; // never taken
     }
 
     // Deferred: client is in LeverageGranted lifecycle OR has an active leverageUntil in the future
