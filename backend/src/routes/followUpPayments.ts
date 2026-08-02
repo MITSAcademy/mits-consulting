@@ -91,11 +91,13 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       daysUntilDue = Math.floor((Date.parse(payDate1) - Date.parse(today)) / 86_400_000);
     }
 
-    // Feedback gate: feedback must be taken within 3 days before payDate1
+    // Feedback gate: feedback must be taken within 3 days before payDate1, OR after payDate1 (overdue case)
     let feedbackNeeded = false;
     if (payDate1 && c.lastFeedbackTakenAt) {
+      // Feedback is valid if taken after payDate1, or within 3 days before it
+      const feedbackAfterDue = c.lastFeedbackTakenAt >= payDate1;
       const daysSinceFeedback = Math.floor((Date.parse(today) - Date.parse(c.lastFeedbackTakenAt)) / 86_400_000);
-      feedbackNeeded = daysUntilDue !== null && daysUntilDue <= 3 && daysSinceFeedback > 3;
+      feedbackNeeded = daysUntilDue !== null && daysUntilDue <= 3 && !feedbackAfterDue && daysSinceFeedback > 3;
     } else if (payDate1) {
       feedbackNeeded = daysUntilDue !== null && daysUntilDue <= 3;
     }
