@@ -10,7 +10,7 @@ import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
 import { todayISO, minPastDate, maxTodayDate } from '@/lib/utils';
 import { useState, useMemo } from 'react';
-import { AlertTriangle, CheckCircle2, Clock, XCircle, ChevronsUp, ChevronUp, Minus } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, XCircle, ChevronsUp, ChevronUp, Minus, ChevronDown } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -131,6 +131,26 @@ function AckButton({ issueId, ackedAt, field, label }: {
       style={{ background: 'rgba(234,179,8,0.12)', color: '#ca8a04', border: '1px solid rgba(234,179,8,0.3)', cursor: 'pointer', whiteSpace: 'nowrap' }}
     >
       {ack.isPending ? 'Saving…' : `Acknowledge`}
+    </button>
+  );
+}
+
+function AckAllButton({ issueIds }: { issueIds: string[] }) {
+  const qc = useQueryClient();
+  const showToast = useUI((s) => s.showToast);
+  const ackAll = useMutation({
+    mutationFn: () =>
+      Promise.all(issueIds.map((id) => api.patch(`/issue-tracker/${id}`, { acknowledgedBySamitaAt: new Date().toISOString() }))),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['issue-tracker'] }); showToast(`All ${issueIds.length} issues acknowledged`); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+  return (
+    <button
+      onClick={() => ackAll.mutate()}
+      disabled={ackAll.isPending}
+      style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, background: 'rgba(234,179,8,0.18)', color: '#ca8a04', border: '1px solid rgba(234,179,8,0.45)', borderRadius: 8, padding: '4px 14px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+    >
+      {ackAll.isPending ? 'Acknowledging…' : `Acknowledge All (${issueIds.length})`}
     </button>
   );
 }
@@ -615,6 +635,7 @@ export default function IssueTrackerPage() {
   const showToast = useUI((s) => s.showToast);
 
   const [tab, setTab] = useState<Tab>('issues');
+  const [demoPendingOpen, setDemoPendingOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState('Open');
   const [ackFilter, setAckFilter] = useState<'all' | 'pending' | 'acked'>('all');
   const [escAckFilter, setEscAckFilter] = useState<'all' | 'pending' | 'acked'>('all');
@@ -770,13 +791,24 @@ export default function IssueTrackerPage() {
             {/* Demo Team Pending section — visible only to demo roles */}
             {isDemoUser && demoPendingIssues.length > 0 && (
               <div style={{ marginBottom: 20, border: '1px solid rgba(234,179,8,0.35)', borderRadius: 12, overflow: 'hidden', background: 'rgba(234,179,8,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid rgba(234,179,8,0.2)', background: 'rgba(234,179,8,0.08)' }}>
+                <div
+                  onClick={() => setDemoPendingOpen((o) => !o)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: demoPendingOpen ? '1px solid rgba(234,179,8,0.2)' : undefined, background: 'rgba(234,179,8,0.08)', cursor: 'pointer', userSelect: 'none' }}
+                >
                   <AlertTriangle size={14} style={{ color: '#ca8a04', flexShrink: 0 }} />
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#ca8a04' }}>Demo Team — Pending Acknowledgment</span>
                   <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(234,179,8,0.2)', color: '#ca8a04', borderRadius: 20, padding: '1px 8px', border: '1px solid rgba(234,179,8,0.4)', marginLeft: 2 }}>{demoPendingIssues.length}</span>
-                  <span style={{ fontSize: 11, color: '#a16207', marginLeft: 4 }}>Open issues awaiting your acknowledgment</span>
+                  <span style={{ fontSize: 11, color: '#a16207', marginLeft: 4 }}>Click to {demoPendingOpen ? 'collapse' : 'expand'}</span>
+                  {user.id === 'u-samita' && demoPendingOpen && (
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <AckAllButton issueIds={demoPendingIssues.map((i) => i.id)} />
+                    </span>
+                  )}
+                  <span style={{ marginLeft: 'auto', color: '#ca8a04' }}>
+                    {demoPendingOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                  </span>
                 </div>
-                <div style={{ overflowX: 'auto' }}>
+                {demoPendingOpen && (<div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid rgba(234,179,8,0.15)' }}>
@@ -807,7 +839,7 @@ export default function IssueTrackerPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </div>)}
               </div>
             )}
 
