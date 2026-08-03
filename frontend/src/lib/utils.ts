@@ -22,7 +22,7 @@ export function addDays(iso: string, n: number) {
 
 /** Earliest date allowed for "things that happened" — max 3 days in the past. */
 export function minPastDate() {
-  return addDays(todayISO(), -3);
+  return addDays(todayISO(), -2);
 }
 
 /** Latest date allowed for "things that happened" — today (can't record future events). */
