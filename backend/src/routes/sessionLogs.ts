@@ -57,6 +57,8 @@ sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req: AuthedR
 
 const LEAD_TEAM_IDS = ['u-bhavneet', 'u-kashish', 'u-muskan'];
 
+function hoursToSessions(h: number): number { return h <= 1.0 ? 0.5 : 1; }
+
 sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const { trainerId, clientId, date, hours, rateSnapshot, rateModel, notes, amountInr: amountOverride, feedback, sessionHappened, cancelledBy } = req.body;
   const didHappen = sessionHappened !== false && sessionHappened !== 'false';
@@ -109,8 +111,6 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
   }
   // No-show: hours=0, amount=0, regardless of what was sent
   const actualHours = didHappen ? (hours || 0) : 0;
-  // Session bucketing: ≤1h = 0.5 session (half), >1h = 1 session (full)
-  function hoursToSessions(h: number): number { return h <= 1.0 ? 0.5 : 1; }
   const sessions = didHappen ? hoursToSessions(actualHours) : 0;
   const defaultAmount = effectiveRateModel === 'per_session'
     ? Math.round(sessions * effectiveRate)
@@ -159,8 +159,7 @@ sessionLogsRouter.patch('/:id', requireRole(...SESSION_LOG_WRITE), async (req: A
       if (!didHappen) {
         data.amountInr = 0;
       } else if (rateModel === 'per_session') {
-        const sessions = h <= 1.0 ? 0.5 : 1;
-        data.amountInr = Math.round(sessions * rate);
+        data.amountInr = Math.round(hoursToSessions(h) * rate);
       } else {
         data.amountInr = Math.round(h * rate);
       }

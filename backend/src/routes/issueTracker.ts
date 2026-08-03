@@ -126,6 +126,20 @@ issueTrackerRouter.patch('/:id', async (req: AuthedRequest, res) => {
   res.json(issue);
 });
 
+// POST /bulk-ack — Samita acknowledges all pending issues in one request
+issueTrackerRouter.post('/bulk-ack', async (req: AuthedRequest, res) => {
+  if (req.user!.id !== 'u-samita') return res.status(403).json({ error: 'Forbidden' });
+  const { ids } = req.body as { ids: string[] };
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids required' });
+  const now = new Date();
+  const { count } = await prisma.issueTracker.updateMany({
+    where: { id: { in: ids }, acknowledgedBySamitaAt: null },
+    data: { acknowledgedBySamitaAt: now },
+  });
+  await audit(req.user!.id, req.user!.name, 'ISSUE_BULK_ACK', `${count} issues acknowledged`);
+  res.json({ ok: true, count });
+});
+
 // DELETE /:id — founder/manager/lead
 issueTrackerRouter.delete('/:id', async (req: AuthedRequest, res) => {
   if (!ADMIN_ROLES.includes(req.user!.role)) return res.status(403).json({ error: 'Forbidden' });

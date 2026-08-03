@@ -1,27 +1,28 @@
 import { PrismaClient } from '@prisma/client';
 const p = new PrismaClient();
 
+function hoursToSessions(h: number): number { return h <= 1.0 ? 0.5 : 1; }
+
 async function main() {
   const logs = await p.sessionLog.findMany({
     where: { sessionHappened: true },
     select: { id: true, hours: true, rateSnapshot: true, rateModel: true, amountInr: true },
   });
 
-  let updated = 0;
+  const updates: { id: string; amountInr: number }[] = [];
   for (const log of logs) {
-    if (!log.rateSnapshot || log.rateSnapshot === 0) continue;
-    let correct: number;
-    if (log.rateModel === 'per_session') {
-      const sessions = log.hours <= 1.0 ? 0.5 : 1;
-      correct = Math.round(sessions * log.rateSnapshot);
-    } else {
-      correct = Math.round(log.hours * log.rateSnapshot);
-    }
-    if (correct !== log.amountInr) {
-      await p.sessionLog.update({ where: { id: log.id }, data: { amountInr: correct } });
-      updated++;
-    }
+    if (!log.rateSnapshot) continue;
+    const correct = log.rateModel === 'per_session'
+      ? Math.round(hoursToSessions(log.hours) * log.rateSnapshot)
+      : Math.round(log.hours * log.rateSnapshot);
+    if (correct !== log.amountInr) updates.push({ id: log.id, amountInr: correct });
   }
-  console.log(`Updated ${updated} / ${logs.length} session logs`);
+
+  if (updates.length > 0) {
+    await p.$transaction(updates.map(({ id, amountInr }) =>
+      p.sessionLog.update({ where: { id }, data: { amountInr } })
+    ));
+  }
+  console.log(`Updated ${updates.length} / ${logs.length} session logs`);
 }
 main().finally(() => p.$disconnect());

@@ -32,7 +32,6 @@ interface Issue {
   trainer?: { id: string; name: string } | null;
   acknowledgedByMitaliAt?: string | null;
   acknowledgedBySamitaAt?: string | null;
-  ownerTeam?: string | null;
 }
 
 interface Escalation {
@@ -135,13 +134,12 @@ function AckButton({ issueId, ackedAt, field, label }: {
   );
 }
 
-function AckAllButton({ issueIds }: { issueIds: string[] }) {
+function AckAllButton({ issueIds, label }: { issueIds: string[]; label: string }) {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
   const ackAll = useMutation({
-    mutationFn: () =>
-      Promise.all(issueIds.map((id) => api.patch(`/issue-tracker/${id}`, { acknowledgedBySamitaAt: new Date().toISOString() }))),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['issue-tracker'] }); showToast(`All ${issueIds.length} issues acknowledged`); },
+    mutationFn: () => api.post('/issue-tracker/bulk-ack', { ids: issueIds }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['issue-tracker'] }); showToast(`All ${issueIds.length} issues acknowledged by ${label}`); },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
   return (
@@ -153,6 +151,19 @@ function AckAllButton({ issueIds }: { issueIds: string[] }) {
       {ackAll.isPending ? 'Acknowledging…' : `Acknowledge All (${issueIds.length})`}
     </button>
   );
+}
+
+function AckCell({ issue, userId, field, label }: { issue: Issue; userId: string; field: 'acknowledgedByMitaliAt' | 'acknowledgedBySamitaAt'; label: string }) {
+  const user = useAuth((s) => s.user)!;
+  const ackedAt = issue[field];
+  if (user.id === userId) return <AckButton issueId={issue.id} ackedAt={ackedAt} field={field} label={label} />;
+  if (ackedAt) return (
+    <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--status-green)' }}>
+      <CheckCircle2 size={11} />
+      <span>{new Date(ackedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+    </div>
+  );
+  return <span className="text-[11px]" style={{ color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>Pending</span>;
 }
 
 // ── Escalation inbox helpers ─────────────────────────────────────────────────
@@ -407,30 +418,8 @@ function IssueRow({ issue, canDelete, deleteConfirm, setDeleteConfirm, onDelete 
         )}
       </td>
       <td><StatusBadge status={issue.status} /></td>
-      <td>
-        {user.id === 'u-mitali' ? (
-          <AckButton issueId={issue.id} ackedAt={issue.acknowledgedByMitaliAt} field="acknowledgedByMitaliAt" label="Mitali" />
-        ) : issue.acknowledgedByMitaliAt ? (
-          <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--status-green)' }}>
-            <CheckCircle2 size={11} />
-            <span>{new Date(issue.acknowledgedByMitaliAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-          </div>
-        ) : (
-          <span className="text-[11px]" style={{ color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>Pending</span>
-        )}
-      </td>
-      <td>
-        {user.id === 'u-samita' ? (
-          <AckButton issueId={issue.id} ackedAt={issue.acknowledgedBySamitaAt} field="acknowledgedBySamitaAt" label="Samita" />
-        ) : issue.acknowledgedBySamitaAt ? (
-          <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--status-green)' }}>
-            <CheckCircle2 size={11} />
-            <span>{new Date(issue.acknowledgedBySamitaAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-          </div>
-        ) : (
-          <span className="text-[11px]" style={{ color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>Pending</span>
-        )}
-      </td>
+      <td><AckCell issue={issue} userId="u-mitali" field="acknowledgedByMitaliAt" label="Mitali" /></td>
+      <td><AckCell issue={issue} userId="u-samita" field="acknowledgedBySamitaAt" label="Samita" /></td>
       <td>
         <div className="flex items-center gap-1.5">
           <UpdateIssueModal issue={issue} />
@@ -704,8 +693,10 @@ export default function IssueTrackerPage() {
   const inProgressCount = (issues || []).filter((i) => i.status === 'InProgress').length;
   const pendingAck = escalations.filter((e) => !e.escalationDemoAckAt).length;
   const isDemoUser = DEMO_ROLES.includes(user.role);
-  const demoPendingIssues = useMemo(() => {
-    return (issues || []).filter((i) => !i.acknowledgedBySamitaAt && ['Open', 'InProgress'].includes(i.status));
+  const isSamita = user.id === 'u-samita';
+  const { demoPendingIssues, demoPendingIds } = useMemo(() => {
+    const demoPendingIssues = (issues || []).filter((i) => !i.acknowledgedBySamitaAt && ['Open', 'InProgress'].includes(i.status));
+    return { demoPendingIssues, demoPendingIds: demoPendingIssues.map((i) => i.id) };
   }, [issues]);
 
   return (
@@ -799,16 +790,17 @@ export default function IssueTrackerPage() {
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#ca8a04' }}>Demo Team — Pending Acknowledgment</span>
                   <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(234,179,8,0.2)', color: '#ca8a04', borderRadius: 20, padding: '1px 8px', border: '1px solid rgba(234,179,8,0.4)', marginLeft: 2 }}>{demoPendingIssues.length}</span>
                   <span style={{ fontSize: 11, color: '#a16207', marginLeft: 4 }}>Click to {demoPendingOpen ? 'collapse' : 'expand'}</span>
-                  {user.id === 'u-samita' && demoPendingOpen && (
+                  {isSamita && (
                     <span onClick={(e) => e.stopPropagation()}>
-                      <AckAllButton issueIds={demoPendingIssues.map((i) => i.id)} />
+                      <AckAllButton issueIds={demoPendingIds} label="Samita" />
                     </span>
                   )}
                   <span style={{ marginLeft: 'auto', color: '#ca8a04' }}>
                     {demoPendingOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                   </span>
                 </div>
-                {demoPendingOpen && (<div style={{ overflowX: 'auto' }}>
+                {demoPendingOpen && (
+                <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid rgba(234,179,8,0.15)' }}>
@@ -829,17 +821,17 @@ export default function IssueTrackerPage() {
                           </td>
                           <td style={{ padding: '10px 12px' }}><StatusBadge status={issue.status} /></td>
                           <td style={{ padding: '10px 12px' }}>
-                            {user.id === 'u-samita' ? (
-                              <AckButton issueId={issue.id} ackedAt={issue.acknowledgedBySamitaAt} field="acknowledgedBySamitaAt" label="Samita" />
-                            ) : (
-                              <span style={{ fontSize: 11, color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>Pending</span>
-                            )}
+                            {isSamita
+                              ? <AckButton issueId={issue.id} ackedAt={issue.acknowledgedBySamitaAt} field="acknowledgedBySamitaAt" label="Samita" />
+                              : <span style={{ fontSize: 11, color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>Pending</span>
+                            }
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>)}
+                </div>
+                )}
               </div>
             )}
 
