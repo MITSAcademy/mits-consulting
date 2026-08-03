@@ -43,7 +43,7 @@ export function TrainerDetailPage() {
       setEdit(false);
       showToast('Saved');
     },
-    onError: () => showToast('Failed to save trainer', 'error'),
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to save trainer', 'error'),
   });
 
   if (!t) return (

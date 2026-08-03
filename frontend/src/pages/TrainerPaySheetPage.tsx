@@ -49,10 +49,11 @@ type Log = {
 };
 
 /** Convert raw hours to "sessions" for display/export.
- *  per_session: 1 session = 2 hours (trainer charges per-session, not per-hour)
- *  per_hour: hours = sessions directly */
+ *  per_session: ≤1h = 0.5 session, >1h = 1 session
+ *  per_hour: hours directly */
 function toSessions(log: Log): number {
-  return log.rateModel === 'per_hour' ? log.hours : log.hours / 2;
+  if (log.rateModel === 'per_hour') return log.hours;
+  return log.hours <= 1.0 ? 0.5 : 1;
 }
 
 /* ── Status config ────────────────────────────────────────────────────────── */
@@ -759,7 +760,14 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace' }}>
                   {canEdit ? (
-                    <EditableNumber value={r.perSession} logId={r.logIds[0]} field="rateSnapshot" prefix="₹" onSaved={onRefresh} />
+                    <EditableNumber value={r.perSession} logId={r.logIds[0]} field="rateSnapshot" prefix="₹" onSaved={async () => {
+                      // Also update all other logs for this trainer in the same week
+                      if (r.logIds.length > 1) {
+                        const latest = await api.get(`/session-logs/${r.logIds[0]}`).then(res => res.data.rateSnapshot);
+                        await Promise.all(r.logIds.slice(1).map((id: string) => api.patch(`/session-logs/${id}`, { rateSnapshot: latest })));
+                      }
+                      onRefresh();
+                    }} />
                   ) : `₹${r.perSession.toLocaleString()}`}
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 600 }}>

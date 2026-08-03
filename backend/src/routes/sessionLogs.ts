@@ -102,8 +102,12 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
 
   // No-show: hours=0, amount=0, regardless of what was sent
   const actualHours = didHappen ? (hours || 0) : 0;
-  const effectiveHourlyRate = rateModel === 'per_session' ? (rateSnapshot || 0) / 2 : (rateSnapshot || 0);
-  const defaultAmount = didHappen ? Math.round(actualHours * effectiveHourlyRate) : 0;
+  // Session bucketing: ≤1h = 0.5 session (half), >1h = 1 session (full)
+  function hoursToSessions(h: number): number { return h <= 1.0 ? 0.5 : 1; }
+  const sessions = didHappen ? hoursToSessions(actualHours) : 0;
+  const defaultAmount = rateModel === 'per_session'
+    ? Math.round(sessions * (rateSnapshot || 0))
+    : Math.round(actualHours * (rateSnapshot || 0));
   const amount = didHappen && amountOverride != null && !isNaN(Number(amountOverride))
     ? Math.round(Number(amountOverride)) : defaultAmount;
 
@@ -139,13 +143,20 @@ sessionLogsRouter.patch('/:id', requireRole(...SESSION_LOG_WRITE), async (req: A
 
   // Auto-recalculate amountInr when rate or hours change (unless explicitly overridden)
   if (('rateSnapshot' in req.body || 'hours' in req.body) && !('amountInr' in req.body)) {
-    const existing = await prisma.sessionLog.findUnique({ where: { id: req.params.id }, select: { hours: true, rateSnapshot: true, rateModel: true } });
+    const existing = await prisma.sessionLog.findUnique({ where: { id: req.params.id }, select: { hours: true, rateSnapshot: true, rateModel: true, sessionHappened: true } });
     if (existing) {
-      const hours = data.hours ?? existing.hours;
+      const h = data.hours ?? existing.hours;
       const rate = data.rateSnapshot ?? existing.rateSnapshot ?? 0;
       const rateModel = existing.rateModel;
-      const hourlyRate = rateModel === 'per_session' ? rate / 2 : rate;
-      data.amountInr = Math.round(hours * hourlyRate);
+      const didHappen = existing.sessionHappened !== false;
+      if (!didHappen) {
+        data.amountInr = 0;
+      } else if (rateModel === 'per_session') {
+        const sessions = h <= 1.0 ? 0.5 : 1;
+        data.amountInr = Math.round(sessions * rate);
+      } else {
+        data.amountInr = Math.round(h * rate);
+      }
     }
   }
 
