@@ -152,6 +152,11 @@ export function initScheduler() {
     timezone: 'Asia/Kolkata',
   });
 
+  // Keep-alive ping every 9 minutes to prevent Render free tier sleep
+  cron.schedule('*/9 * * * *', () => {
+    fetch('http://localhost:' + (process.env.PORT || 3001) + '/api/health').catch(() => {});
+  });
+
   console.log('[scheduler] Daily briefing crons registered (Asia/Kolkata timezone)');
   console.log('[scheduler]   Team 2 (Anjali + Taran) → 06:00 + 18:00 IST');
   console.log('[scheduler]   Team 1 (Aman + Kanchan) → 09:00 + 16:00 IST (CC Samita + Vaibhav)');
