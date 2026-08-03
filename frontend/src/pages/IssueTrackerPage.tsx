@@ -32,6 +32,7 @@ interface Issue {
   trainer?: { id: string; name: string } | null;
   acknowledgedByMitaliAt?: string | null;
   acknowledgedBySamitaAt?: string | null;
+  ownerTeam?: string | null;
 }
 
 interface Escalation {
@@ -399,6 +400,18 @@ function IssueRow({ issue, canDelete, deleteConfirm, setDeleteConfirm, onDelete 
         )}
       </td>
       <td>
+        {user.id === 'u-samita' ? (
+          <AckButton issueId={issue.id} ackedAt={issue.acknowledgedBySamitaAt} field="acknowledgedBySamitaAt" label="Samita" />
+        ) : issue.acknowledgedBySamitaAt ? (
+          <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--status-green)' }}>
+            <CheckCircle2 size={11} />
+            <span>{new Date(issue.acknowledgedBySamitaAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+          </div>
+        ) : (
+          <span className="text-[11px]" style={{ color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>Pending</span>
+        )}
+      </td>
+      <td>
         <div className="flex items-center gap-1.5">
           <UpdateIssueModal issue={issue} />
           {canDelete && deleteConfirm !== issue.id && (
@@ -669,6 +682,10 @@ export default function IssueTrackerPage() {
   const openCount = (issues || []).filter((i) => i.status === 'Open').length;
   const inProgressCount = (issues || []).filter((i) => i.status === 'InProgress').length;
   const pendingAck = escalations.filter((e) => !e.escalationDemoAckAt).length;
+  const isDemoUser = DEMO_ROLES.includes(user.role);
+  const demoPendingIssues = useMemo(() => {
+    return (issues || []).filter((i) => !i.acknowledgedBySamitaAt && ['Open', 'InProgress'].includes(i.status));
+  }, [issues]);
 
   return (
     <>
@@ -750,6 +767,50 @@ export default function IssueTrackerPage() {
               Log new problems as they arise and update status as they progress to resolution.
             </div>
 
+            {/* Demo Team Pending section — visible only to demo roles */}
+            {isDemoUser && demoPendingIssues.length > 0 && (
+              <div style={{ marginBottom: 20, border: '1px solid rgba(234,179,8,0.35)', borderRadius: 12, overflow: 'hidden', background: 'rgba(234,179,8,0.04)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid rgba(234,179,8,0.2)', background: 'rgba(234,179,8,0.08)' }}>
+                  <AlertTriangle size={14} style={{ color: '#ca8a04', flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#ca8a04' }}>Demo Team — Pending Acknowledgment</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(234,179,8,0.2)', color: '#ca8a04', borderRadius: 20, padding: '1px 8px', border: '1px solid rgba(234,179,8,0.4)', marginLeft: 2 }}>{demoPendingIssues.length}</span>
+                  <span style={{ fontSize: 11, color: '#a16207', marginLeft: 4 }}>Open issues awaiting your acknowledgment</span>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid rgba(234,179,8,0.15)' }}>
+                        {['Date', 'Raised By', 'Client', 'Title', 'Status', 'Acknowledge'].map((h) => (
+                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--brand-textMuted)', whiteSpace: 'nowrap' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {demoPendingIssues.map((issue) => (
+                        <tr key={issue.id} style={{ borderBottom: '1px solid rgba(234,179,8,0.1)' }}>
+                          <td style={{ padding: '10px 12px', fontSize: 12, fontFamily: 'monospace', whiteSpace: 'nowrap', color: 'var(--brand-textSecondary)' }}>{issue.date}</td>
+                          <td style={{ padding: '10px 12px', fontSize: 13 }}>{issue.raisedByName || <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}</td>
+                          <td style={{ padding: '10px 12px', fontSize: 13 }}>{issue.client?.name || <span style={{ color: 'var(--brand-textMuted)' }}>—</span>}</td>
+                          <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 500, maxWidth: 280 }}>
+                            <div>{issue.title}</div>
+                            {issue.description && <div style={{ fontSize: 11, color: 'var(--brand-textMuted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>{issue.description}</div>}
+                          </td>
+                          <td style={{ padding: '10px 12px' }}><StatusBadge status={issue.status} /></td>
+                          <td style={{ padding: '10px 12px' }}>
+                            {user.id === 'u-samita' ? (
+                              <AckButton issueId={issue.id} ackedAt={issue.acknowledgedBySamitaAt} field="acknowledgedBySamitaAt" label="Samita" />
+                            ) : (
+                              <span style={{ fontSize: 11, color: 'var(--brand-textMuted)', fontStyle: 'italic' }}>Pending</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Filter bar */}
             <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-2xl mb-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
               <div className="flex flex-wrap gap-1.5">
@@ -822,6 +883,7 @@ export default function IssueTrackerPage() {
                       <th>Title</th>
                       <th>Status</th>
                       <th>Ack by Mitali</th>
+                      <th>Ack by Samita</th>
                       <th></th>
                     </tr>
                   </thead>
