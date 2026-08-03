@@ -100,20 +100,27 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
     });
   }
 
+  // Auto-fetch trainer's defaultRateInr if rateSnapshot not provided
+  let effectiveRate = rateSnapshot || 0;
+  let effectiveRateModel = rateModel || 'per_session';
+  if (!effectiveRate) {
+    const trainer = await prisma.trainer.findUnique({ where: { id: trainerId }, select: { defaultRateInr: true, rateModel: true } });
+    if (trainer?.defaultRateInr) { effectiveRate = trainer.defaultRateInr; effectiveRateModel = trainer.rateModel || 'per_session'; }
+  }
   // No-show: hours=0, amount=0, regardless of what was sent
   const actualHours = didHappen ? (hours || 0) : 0;
   // Session bucketing: ≤1h = 0.5 session (half), >1h = 1 session (full)
   function hoursToSessions(h: number): number { return h <= 1.0 ? 0.5 : 1; }
   const sessions = didHappen ? hoursToSessions(actualHours) : 0;
-  const defaultAmount = rateModel === 'per_session'
-    ? Math.round(sessions * (rateSnapshot || 0))
-    : Math.round(actualHours * (rateSnapshot || 0));
+  const defaultAmount = effectiveRateModel === 'per_session'
+    ? Math.round(sessions * effectiveRate)
+    : Math.round(actualHours * effectiveRate);
   const amount = didHappen && amountOverride != null && !isNaN(Number(amountOverride))
     ? Math.round(Number(amountOverride)) : defaultAmount;
 
   const data: any = {
-    trainerId, clientId, regularTrainingId: linkedTraining.id, date, hours: actualHours, rateSnapshot: rateSnapshot || 0,
-    rateModel: rateModel || 'per_session', amountInr: amount, status: 'Logged',
+    trainerId, clientId, regularTrainingId: linkedTraining.id, date, hours: actualHours, rateSnapshot: effectiveRate,
+    rateModel: effectiveRateModel, amountInr: amount, status: 'Logged',
     notes: notes || null, feedback: feedback || null, loggedById: req.user!.id,
     sessionHappened: didHappen,
     cancelledBy: !didHappen ? (cancelledBy || null) : null,
