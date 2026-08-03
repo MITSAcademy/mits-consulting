@@ -24,6 +24,7 @@ import { prisma } from './prisma';
 
 interface CachedContext { text: string; builtAt: number; }
 const CACHE_TTL_MS = 60_000;
+const CACHE_MAX = 20;
 const cacheByUser = new Map<string, CachedContext>();
 
 type Role = string;
@@ -322,6 +323,17 @@ export async function buildMitsContext(user: { id: string; role: Role; name: str
 
   const text = lines.join('\n');
   cacheByUser.set(cacheKey, { text, builtAt: Date.now() });
+  // Evict stale + overflow entries to prevent unbounded growth
+  if (cacheByUser.size > CACHE_MAX) {
+    const now = Date.now();
+    for (const [k, v] of cacheByUser) {
+      if (now - v.builtAt > CACHE_TTL_MS * 2) cacheByUser.delete(k);
+    }
+    if (cacheByUser.size > CACHE_MAX) {
+      const sorted = [...cacheByUser.entries()].sort((a, b) => a[1].builtAt - b[1].builtAt);
+      for (const [k] of sorted.slice(0, cacheByUser.size - CACHE_MAX)) cacheByUser.delete(k);
+    }
+  }
   return text;
 }
 

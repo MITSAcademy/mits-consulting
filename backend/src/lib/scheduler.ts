@@ -123,7 +123,7 @@ export function initScheduler() {
   });
 
   // SMTP health advisory — 9:00 AM IST daily → emails broken users urgently, working users get a reminder
-  cron.schedule('0 9 * * *', () => safe('smtp-health-advisory', () => sendSmtpHealthAdvisory()), {
+  cron.schedule('5 9 * * *', () => safe('smtp-health-advisory', () => sendSmtpHealthAdvisory()), {
     timezone: 'Asia/Kolkata',
   });
 
