@@ -91,11 +91,16 @@ followUpPaymentsRouter.get('/', async (req: AuthedRequest, res) => {
       daysUntilDue = Math.floor((Date.parse(payDate1) - Date.parse(today)) / 86_400_000);
     }
 
-    // Feedback gate: Mitali must take feedback with each client at least once every 7 days
+    // Feedback gate: Mitali must take feedback at least once in the current Mon-Sun week
     let feedbackNeeded = false;
+    const todayDate = new Date(today);
+    const dayOfWeek = todayDate.getUTCDay(); // 0=Sun, 1=Mon ... 6=Sat
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const weekStart = new Date(todayDate);
+    weekStart.setUTCDate(todayDate.getUTCDate() - daysFromMonday);
+    const weekStartStr = weekStart.toISOString().slice(0, 10);
     if (c.lastFeedbackTakenAt) {
-      const daysSinceFeedback = Math.floor((Date.parse(today) - Date.parse(c.lastFeedbackTakenAt)) / 86_400_000);
-      feedbackNeeded = daysSinceFeedback > 7;
+      feedbackNeeded = c.lastFeedbackTakenAt < weekStartStr;
     } else {
       feedbackNeeded = true; // never taken
     }
