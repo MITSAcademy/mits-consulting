@@ -271,7 +271,8 @@ export function MarketingCampaignsPage() {
                     <div style={{ fontSize: 12, color: 'var(--brand-textSecondary)', marginBottom: 6 }}>Subject: {c.subject}</div>
                     <div className="flex flex-wrap gap-3 text-[11px] muted">
                       <span>
-                        {c.recipientMode === 'all_active' ? '→ All active clients' :
+                        {c.recipientMode === 'all_clients' ? '→ All clients (any stage)' :
+                         c.recipientMode === 'all_active' ? '→ Active clients only' :
                          c.recipientMode === 'by_lifecycle' ? `→ ${c.lifecycles.join(', ')}` :
                          `→ ${c.clientIds.length} individual client${c.clientIds.length !== 1 ? 's' : ''}`}
                       </span>
@@ -385,7 +386,8 @@ export function MarketingCampaignsPage() {
                   <Label>Recipients</Label>
                   <div className="flex gap-2 mt-1 flex-wrap">
                     {[
-                      { value: 'all_active', label: 'All active clients' },
+                      { value: 'all_clients', label: 'All clients (any stage)' },
+                      { value: 'all_active', label: 'Active clients only' },
                       { value: 'by_lifecycle', label: 'By lifecycle stage' },
                       { value: 'individual', label: 'Individual clients' },
                     ].map((opt) => (
@@ -485,7 +487,7 @@ export function MarketingCampaignsPage() {
               <div style={{ marginTop: 10, padding: '10px 14px', background: 'var(--bg-input)', borderRadius: 8, fontSize: 12 }}>
                 <div><strong>Subject:</strong> {sendTarget.subject}</div>
                 <div><strong>From:</strong> {sendTarget.fromName} &lt;{sendTarget.fromEmail}&gt;</div>
-                <div><strong>Recipients:</strong> {sendTarget.recipientMode === 'all_active' ? 'All active clients' : sendTarget.recipientMode === 'by_lifecycle' ? sendTarget.lifecycles.join(', ') : `${sendTarget.clientIds.length} individual`}</div>
+                <div><strong>Recipients:</strong> {sendTarget.recipientMode === 'all_clients' ? 'All clients (any stage)' : sendTarget.recipientMode === 'all_active' ? 'Active clients only' : sendTarget.recipientMode === 'by_lifecycle' ? sendTarget.lifecycles.join(', ') : `${sendTarget.clientIds.length} individual`}</div>
               </div>
               <DialogFooter>
                 <div style={{ marginTop: 16 }} className="flex justify-end gap-2">

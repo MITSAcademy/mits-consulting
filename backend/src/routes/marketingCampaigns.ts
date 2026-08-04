@@ -29,6 +29,8 @@ async function resolveRecipients(campaign: any): Promise<{ id: string; name: str
   const where: any = { email: { not: null } };
   if (campaign.recipientMode === 'all_active') {
     where.lifecycle = 'Active';
+  } else if (campaign.recipientMode === 'all_clients') {
+    // no lifecycle filter — every client with an email
   } else if (campaign.recipientMode === 'by_lifecycle' && campaign.lifecycles?.length) {
     where.lifecycle = { in: campaign.lifecycles };
   } else if (campaign.recipientMode === 'individual' && campaign.clientIds?.length) {
