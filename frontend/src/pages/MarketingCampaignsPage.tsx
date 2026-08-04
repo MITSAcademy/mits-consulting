@@ -108,7 +108,7 @@ function RecipientPreviewModal({ campaignId, onClose }: { campaignId: string; on
   });
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent style={{ maxWidth: 520 }}>
+      <DialogContent className="!max-w-[520px]">
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>
           <Users size={14} style={{ display: 'inline', marginRight: 6 }} />
           Recipients preview {data ? `(${data.count})` : ''}
@@ -335,7 +335,7 @@ export function MarketingCampaignsPage() {
         {/* Composer dialog */}
         {composerOpen && (
           <Dialog open onOpenChange={(o) => { if (!o) { setComposerOpen(false); setEditingId(null); setF({ ...EMPTY_DRAFT }); } }}>
-            <DialogContent style={{ maxWidth: 780, maxHeight: '90vh', overflowY: 'auto' }}>
+            <DialogContent className="!max-w-[780px]">
               <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>
                 <Mail size={15} style={{ display: 'inline', marginRight: 6 }} />
                 {editingId ? 'Edit campaign' : 'New campaign'}
@@ -455,7 +455,8 @@ export function MarketingCampaignsPage() {
                 </div>
               </div>
 
-              <DialogFooter style={{ marginTop: 20 }}>
+              <DialogFooter>
+                <div style={{ marginTop: 20 }} className="flex justify-end gap-2">
                 <Button onClick={() => { setComposerOpen(false); setEditingId(null); setF({ ...EMPTY_DRAFT }); }}>Cancel</Button>
                 <Button
                   variant="primary"
@@ -464,6 +465,7 @@ export function MarketingCampaignsPage() {
                 >
                   {(createCampaign.isPending || updateCampaign.isPending) ? 'Saving…' : 'Save draft'}
                 </Button>
+                </div>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -472,7 +474,7 @@ export function MarketingCampaignsPage() {
         {/* Send confirmation */}
         {sendConfirm && sendTarget && (
           <Dialog open onOpenChange={(o) => { if (!o) setSendConfirm(null); }}>
-            <DialogContent style={{ maxWidth: 440 }}>
+            <DialogContent className="!max-w-[440px]">
               <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>
                 <Send size={14} style={{ display: 'inline', marginRight: 6, color: 'var(--status-green)' }} />
                 Send campaign?
@@ -485,7 +487,8 @@ export function MarketingCampaignsPage() {
                 <div><strong>From:</strong> {sendTarget.fromName} &lt;{sendTarget.fromEmail}&gt;</div>
                 <div><strong>Recipients:</strong> {sendTarget.recipientMode === 'all_active' ? 'All active clients' : sendTarget.recipientMode === 'by_lifecycle' ? sendTarget.lifecycles.join(', ') : `${sendTarget.clientIds.length} individual`}</div>
               </div>
-              <DialogFooter style={{ marginTop: 16 }}>
+              <DialogFooter>
+                <div style={{ marginTop: 16 }} className="flex justify-end gap-2">
                 <Button onClick={() => setSendConfirm(null)}>Cancel</Button>
                 <Button
                   variant="primary"
@@ -495,6 +498,7 @@ export function MarketingCampaignsPage() {
                 >
                   {sendCampaign.isPending ? 'Starting…' : <><Send size={12} className="mr-1" />Yes, send now</>}
                 </Button>
+                </div>
               </DialogFooter>
             </DialogContent>
           </Dialog>
