@@ -77,6 +77,7 @@ import { integrityCheckRouter } from './routes/integrityCheck';
 import { trainerPayWeeksRouter } from './routes/trainerPayWeeks';
 import { brainNotesRouter } from './routes/brainNotes';
 import { demosRouter } from './routes/demos';
+import { marketingCampaignsRouter } from './routes/marketingCampaigns';
 import { prisma } from './lib/prisma';
 
 const app = express();
@@ -188,6 +189,7 @@ app.use('/api/integrity-check', requireAuth, integrityCheckRouter);
 app.use('/api/trainer-pay-weeks', trainerPayWeeksRouter);
 app.use('/api/brain-notes', brainNotesRouter);
 app.use('/api/demos', demosRouter);
+app.use('/api/marketing-campaigns', marketingCampaignsRouter);
 
 // One-time: send welcome emails to Areena and Mohini from Vaibhav
 app.post('/api/internal/send-welcome-staff', requireAuth, requireRole('founder'), async (_req, res) => {

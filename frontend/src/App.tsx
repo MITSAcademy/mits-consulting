@@ -90,6 +90,7 @@ const FeatureFlagsPage = lazy(() => import('@/pages/FeatureFlagsPage'));
 const RolePermissionsPage = lazy(() => import('@/pages/RolePermissionsPage').then((m) => ({ default: m.RolePermissionsPage })));
 const MonthlyReportPage = lazy(() => import('@/pages/MonthlyReportPage').then((m) => ({ default: m.MonthlyReportPage })));
 const IntegrityCheckPage = lazy(() => import('@/pages/IntegrityCheckPage').then((m) => ({ default: m.IntegrityCheckPage })));
+const MarketingCampaignsPage = lazy(() => import('@/pages/MarketingCampaignsPage').then((m) => ({ default: m.MarketingCampaignsPage })));
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const user = useAuth((s) => s.user);
@@ -152,6 +153,7 @@ export default function App() {
           <Route path="/date-change-approvals" element={<DateChangeApprovalsPage />} />
           <Route path="/my-sessions" element={<MySessionsPage />} />
           <Route path="/my-demos" element={<MyDemosPage />} />
+          <Route path="/marketing-campaigns" element={<MarketingCampaignsPage />} />
           <Route path="/reports/demo-team" element={<DemoTeamReportPage />} />
           <Route path="/regular-trainings" element={<RegularTrainingsPage />} />
           <Route path="/regular-trainings/:id" element={<RegularTrainingDetailPage />} />

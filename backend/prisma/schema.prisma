@@ -198,6 +198,8 @@ model User {
   freelanceUpdated       FreelanceRequirement[] @relation("FreelanceRequirementUpdated")
   bugReports             BugReport[]            @relation("BugReports")
   brainNotes             BrainNote[]            @relation("BrainNoteAuthor")
+  campaignsSent          MarketingCampaign[]    @relation("CampaignSentBy")
+  campaignsCreated       MarketingCampaign[]    @relation("CampaignCreatedBy")
 }
 
 // -------- NOTIFICATIONS --------
@@ -1310,6 +1312,37 @@ model BugReport {
 
   @@index([status])
   @@index([reportedById])
+}
+
+// -------- MARKETING CAMPAIGNS --------
+model MarketingCampaign {
+  id              String   @id @default(cuid())
+  name            String                          // internal label e.g. "Aug newsletter"
+  subject         String
+  htmlBody        String   @db.Text              // full HTML of the email
+  fromName        String   @default("MITS Consulting")
+  fromEmail       String   @default("sales.mc@mitssolution.com")
+  // recipient targeting (stored at draft time; snapshot taken at send time)
+  recipientMode   String   @default("all_active") // all_active | by_lifecycle | individual
+  lifecycles      String[] @default([])           // used when recipientMode=by_lifecycle
+  clientIds       String[] @default([])           // used when recipientMode=individual
+  // send state
+  status          String   @default("Draft")      // Draft | Sending | Sent | Failed
+  sentAt          DateTime?
+  sentById        String?
+  sentBy          User?    @relation("CampaignSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  totalRecipients Int      @default(0)
+  sentCount       Int      @default(0)
+  failedCount     Int      @default(0)
+  // SMTP provider used
+  provider        String?  // 'brevo' | 'smtp-system'
+  createdById     String?
+  createdBy       User?    @relation("CampaignCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
 }
 
 // -------- SECOND BRAIN / KNOWLEDGE BASE --------

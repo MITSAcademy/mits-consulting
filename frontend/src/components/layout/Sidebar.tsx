@@ -194,6 +194,7 @@ const NAV: NavItem[] = [
   { section: 'admin', page: '/team', label: 'Team', icon: UsersRound, roles: ['founder'] },
   { section: 'admin', page: '/partners', label: 'Partners', icon: Handshake, roles: ['founder'] },
   { section: 'admin', page: '/templates', label: 'Email templates', icon: Mail, roles: ['founder', 'demo_lead'] },
+  { section: 'admin', page: '/marketing-campaigns', label: 'Marketing campaigns', icon: Mail, roles: ['founder'] },
   { section: 'admin', page: '/sources', label: 'Lead sources', icon: Tag, roles: ['founder', 'demo_lead'] },
   { section: 'admin', page: '/feature-flags', label: 'Feature flags', icon: ToggleRight, roles: ['founder'] },
   { section: 'admin', page: '/permissions', label: 'Edit permissions', icon: LockKeyhole, roles: ['founder'] },
