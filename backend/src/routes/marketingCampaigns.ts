@@ -154,6 +154,7 @@ marketingCampaignsRouter.post('/:id/send', requireRole(...ALLOWED), async (req: 
           await sendEmail({
             to: r.email,
             subject: campaign.subject,
+            body: r.name,
             htmlBody: personalised,
           });
         }
