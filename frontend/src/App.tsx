@@ -81,6 +81,7 @@ const SessionsDashboardPage = lazy(() => import('@/pages/SessionsDashboardPage')
 const IssueTrackerPage = lazy(() => import('@/pages/IssueTrackerPage'));
 const FreelanceRequirementsPage = lazy(() => import('@/pages/FreelanceRequirementsPage'));
 const MeetingLinksPage = lazy(() => import('@/pages/MeetingLinksPage'));
+const MyDemosPage = lazy(() => import('@/pages/MyDemosPage').then((m) => ({ default: m.MyDemosPage })));
 const CoordinatorDashboardPage = lazy(() => import('@/pages/CoordinatorDashboardPage'));
 const TeamKanbanPage = lazy(() => import('@/pages/TeamKanbanPage').then((m) => ({ default: m.TeamKanbanPage })));
 const MyTimesheetPage = lazy(() => import('@/pages/MyTimesheetPage').then((m) => ({ default: m.MyTimesheetPage })));
@@ -150,6 +151,7 @@ export default function App() {
           <Route path="/follow-up-payments" element={<FollowUpPaymentsPage />} />
           <Route path="/date-change-approvals" element={<DateChangeApprovalsPage />} />
           <Route path="/my-sessions" element={<MySessionsPage />} />
+          <Route path="/my-demos" element={<MyDemosPage />} />
           <Route path="/reports/demo-team" element={<DemoTeamReportPage />} />
           <Route path="/regular-trainings" element={<RegularTrainingsPage />} />
           <Route path="/regular-trainings/:id" element={<RegularTrainingDetailPage />} />

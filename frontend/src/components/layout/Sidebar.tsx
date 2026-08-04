@@ -130,6 +130,7 @@ const NAV: NavItem[] = [
 
   // ── Demo intake (Samita + intake team) ────────────────────────────────
   { section: 'intake', page: '/demo-intake', label: 'Demo intake', icon: MessageSquare, roles: ['founder', 'demo_lead', 'demo_intake'] },
+  { section: 'intake', page: '/my-demos', label: 'My demo referrals', icon: Video, roles: ['founder', 'demo_lead'] },
   { section: 'intake', page: '/verifications', label: 'Verifications', icon: ShieldCheck, roles: ['founder', 'demo_lead', 'demo_intake'] },
   { section: 'intake', page: '/demos', label: 'Demo schedule', icon: Video, roles: ['founder', 'demo_lead', 'demo_intake'] },
   { section: 'intake', page: '/feedback-pending', label: 'Feedback queue (Samita)', icon: MessageCircle, roles: ['founder', 'demo_lead'] },
