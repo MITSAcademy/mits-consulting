@@ -24,43 +24,105 @@ const LIFECYCLE_OPTIONS = [
 const TEMPLATES = [
   {
     name: 'Newsletter',
-    subject: 'Monthly Update from MITS Consulting',
-    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#222;">
-  <div style="background:#0a0c12;padding:24px 32px;border-radius:8px 8px 0 0;">
-    <img src="https://mits-frontend.onrender.com/logo.png" alt="MITS" style="height:36px;" onerror="this.style.display='none'" />
-    <h1 style="color:#fff;font-size:22px;margin:12px 0 0;">MITS Consulting</h1>
+    subject: 'Monthly Update from MITS Edge',
+    html: `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#f4f6f9;">
+  <!-- Header -->
+  <div style="background:#1B5FAA;padding:28px 36px;border-radius:10px 10px 0 0;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td>
+          <span style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">MITS <span style="color:#1B5FAA;">EDGE</span></span>
+          <div style="font-size:10px;color:rgba(255,255,255,0.45);letter-spacing:2px;text-transform:uppercase;margin-top:2px;">Powered by MITS Group</div>
+        </td>
+        <td align="right">
+          <span style="font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:1px;text-transform:uppercase;">Live Online Tech Training</span>
+        </td>
+      </tr>
+    </table>
   </div>
-  <div style="padding:32px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;">
-    <p style="font-size:16px;">Dear {{name}},</p>
-    <p>We hope your training is going well. Here's a quick update from the MITS team:</p>
-    <p>[Your message here]</p>
-    <p>If you have any questions, feel free to reply to this email.</p>
-    <p style="margin-top:32px;">Warm regards,<br/><strong>The MITS Consulting Team</strong></p>
+  <!-- Gold accent bar -->
+  <div style="background:#4A90D9;height:4px;"></div>
+  <!-- Hero -->
+  <div style="background:#ffffff;padding:36px 36px 28px;">
+    <p style="font-size:15px;color:#444;margin:0 0 6px;">Hi {{name}},</p>
+    <h2 style="font-size:24px;font-weight:800;color:#1B5FAA;margin:0 0 16px;line-height:1.3;">[Your headline here]</h2>
+    <p style="font-size:14px;color:#555;line-height:1.7;margin:0 0 20px;">[Your message here. MITS Edge delivers live, instructor-led online courses with expert mentors, hands-on projects, and dedicated placement support.]</p>
+    <!-- CTA button -->
+    <div style="margin:24px 0;">
+      <a href="https://www.mitsedge.com" style="display:inline-block;background:#1B5FAA;color:#ffffff;font-size:13px;font-weight:700;padding:12px 28px;border-radius:6px;text-decoration:none;letter-spacing:0.3px;">Explore Programs →</a>
+    </div>
   </div>
-  <div style="padding:16px 32px;text-align:center;font-size:11px;color:#9ca3af;">
-    MITS Consulting · sales.mc@mitssolution.com<br/>
-    You received this because you are a valued client of MITS.
+  <!-- Stats bar -->
+  <div style="background:#f8f9fb;border-top:1px solid #e8eaf0;border-bottom:1px solid #e8eaf0;padding:20px 36px;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center" style="border-right:1px solid #e0e3eb;padding:0 12px;">
+          <div style="font-size:20px;font-weight:800;color:#1B5FAA;">10,000+</div>
+          <div style="font-size:10px;color:#888;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Learners</div>
+        </td>
+        <td align="center" style="border-right:1px solid #e0e3eb;padding:0 12px;">
+          <div style="font-size:20px;font-weight:800;color:#1B5FAA;">200+</div>
+          <div style="font-size:10px;color:#888;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Hiring Partners</div>
+        </td>
+        <td align="center" style="padding:0 12px;">
+          <div style="font-size:20px;font-weight:800;color:#1B5FAA;">22+</div>
+          <div style="font-size:10px;color:#888;letter-spacing:1px;text-transform:uppercase;margin-top:2px;">Programs</div>
+        </td>
+      </tr>
+    </table>
+  </div>
+  <!-- Body -->
+  <div style="background:#ffffff;padding:28px 36px 36px;">
+    <p style="font-size:14px;color:#555;line-height:1.7;margin:0 0 24px;">[Additional content goes here — course updates, announcements, tips, etc.]</p>
+    <p style="font-size:14px;color:#444;margin:0;">Warm regards,<br/><strong style="color:#1B5FAA;">The MITS Edge Team</strong></p>
+  </div>
+  <!-- Footer -->
+  <div style="background:#1B5FAA;padding:20px 36px;border-radius:0 0 10px 10px;text-align:center;">
+    <p style="font-size:11px;color:rgba(255,255,255,0.45);margin:0 0 6px;">
+      <a href="https://www.mitsedge.com" style="color:#ffffff;text-decoration:none;font-weight:600;">mitsedge.com</a> &nbsp;·&nbsp; sales.mc@mitssolution.com
+    </p>
+    <p style="font-size:10px;color:rgba(255,255,255,0.3);margin:0;">You received this because you are a valued client of MITS. © 2026 MITS Group.</p>
   </div>
 </div>`,
   },
   {
     name: 'Follow-up',
     subject: 'Checking in — How is your training going?',
-    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#222;padding:32px;">
-  <p style="font-size:16px;">Hi {{name}},</p>
-  <p>We wanted to check in and see how your training sessions are going.</p>
-  <p>Your progress matters a lot to us, and we'd love to hear your feedback.</p>
-  <p>Please feel free to reach out if you need anything or if you have suggestions for improvement.</p>
-  <p style="margin-top:32px;">Best regards,<br/><strong>MITS Consulting Team</strong></p>
+    html: `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#f4f6f9;">
+  <div style="background:#1B5FAA;padding:24px 36px;border-radius:10px 10px 0 0;">
+    <span style="font-size:20px;font-weight:800;color:#ffffff;">MITS <span style="color:#1B5FAA;">EDGE</span></span>
+  </div>
+  <div style="background:#4A90D9;height:4px;"></div>
+  <div style="background:#ffffff;padding:36px;border-radius:0 0 10px 10px;">
+    <p style="font-size:15px;color:#444;margin:0 0 16px;">Hi {{name}},</p>
+    <p style="font-size:14px;color:#555;line-height:1.7;">We wanted to check in and see how your training sessions are going.</p>
+    <p style="font-size:14px;color:#555;line-height:1.7;">Your progress matters a lot to us, and we'd love to hear your feedback. Please feel free to reply to this email if you need anything or have suggestions.</p>
+    <div style="margin:28px 0;">
+      <a href="https://www.mitsedge.com" style="display:inline-block;background:#1B5FAA;color:#ffffff;font-size:13px;font-weight:700;padding:12px 28px;border-radius:6px;text-decoration:none;">Visit MITS Edge →</a>
+    </div>
+    <p style="font-size:14px;color:#444;margin:0;">Best regards,<br/><strong style="color:#1B5FAA;">MITS Edge Team</strong></p>
+    <div style="margin-top:28px;padding-top:20px;border-top:1px solid #f0f0f0;font-size:11px;color:#aaa;text-align:center;">
+      <a href="https://www.mitsedge.com" style="color:#1B5FAA;text-decoration:none;">mitsedge.com</a> · sales.mc@mitssolution.com · © 2026 MITS Group
+    </div>
+  </div>
 </div>`,
   },
   {
     name: 'Blank',
     subject: '',
-    html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#222;padding:32px;">
-  <p>Dear {{name}},</p>
-  <p>[Your message here]</p>
-  <p>Best regards,<br/>MITS Consulting Team</p>
+    html: `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#f4f6f9;">
+  <div style="background:#1B5FAA;padding:24px 36px;border-radius:10px 10px 0 0;">
+    <span style="font-size:20px;font-weight:800;color:#ffffff;">MITS <span style="color:#1B5FAA;">EDGE</span></span>
+  </div>
+  <div style="background:#4A90D9;height:4px;"></div>
+  <div style="background:#ffffff;padding:36px;border-radius:0 0 10px 10px;">
+    <p style="font-size:15px;color:#444;">Dear {{name}},</p>
+    <p style="font-size:14px;color:#555;line-height:1.7;">[Your message here]</p>
+    <p style="font-size:14px;color:#444;margin-top:32px;">Best regards,<br/><strong style="color:#1B5FAA;">MITS Edge Team</strong></p>
+    <div style="margin-top:28px;padding-top:20px;border-top:1px solid #f0f0f0;font-size:11px;color:#aaa;text-align:center;">
+      <a href="https://www.mitsedge.com" style="color:#1B5FAA;text-decoration:none;">mitsedge.com</a> · sales.mc@mitssolution.com · © 2026 MITS Group
+    </div>
+  </div>
 </div>`,
   },
 ];
