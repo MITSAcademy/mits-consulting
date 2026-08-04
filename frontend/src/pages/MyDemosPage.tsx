@@ -61,6 +61,7 @@ function StatusPill({ status }: { status: string }) {
 export function MyDemosPage() {
   const user = useAuth((s) => s.user)!;
   const isFounder = user.role === 'founder';
+  const canPickConductor = isFounder;
 
   const [conductedById, setConductedById] = useState(isFounder ? '' : user.id);
   const [from, setFrom] = useState('');
@@ -81,7 +82,7 @@ export function MyDemosPage() {
   const { data: users = [] } = useQuery<{ id: string; name: string }[]>({
     queryKey: ['users', 'id-name'],
     queryFn: () => api.get('/users').then((r) => (r.data as any[]).map((u) => ({ id: u.id, name: u.name }))),
-    enabled: isFounder,
+    enabled: canPickConductor,
   });
 
   const filtered = useMemo(() => {
@@ -109,7 +110,7 @@ export function MyDemosPage() {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-2xl mb-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-border)' }}>
-          {isFounder && (
+          {canPickConductor && (
             <select
               value={conductedById}
               onChange={(e) => setConductedById(e.target.value)}

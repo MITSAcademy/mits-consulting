@@ -14,7 +14,9 @@ demosRouter.get('/', async (req: AuthedRequest, res) => {
   const { conductedById, from, to, status } = req.query as Record<string, string | undefined>;
 
   const where: any = {};
-  if (conductedById) where.conductedById = conductedById;
+  // Non-founders default to their own demos unless they explicitly pass a conductedById
+  const effectiveConductedById = conductedById || (req.user!.role !== 'founder' ? req.user!.id : undefined);
+  if (effectiveConductedById) where.conductedById = effectiveConductedById;
   if (status) where.status = status;
   if (from || to) {
     where.scheduledDate = {};
