@@ -146,7 +146,7 @@ clientsRouter.get('/', async (req: AuthedRequest, res) => {
     ]);
     return res.json({ data: clients.map((c) => redactClient(c, req.user!)), total, page: pg, pageSize: ps });
   }
-  const clients = await prisma.client.findMany({ where, include, orderBy: { createdAt: 'desc' } });
+  const clients = await prisma.client.findMany({ where, include, orderBy: { createdAt: 'desc' }, take: 500 });
   res.json(clients.map((c) => redactClient(c, req.user!)));
 });
 

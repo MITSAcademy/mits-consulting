@@ -51,7 +51,7 @@ sessionLogsRouter.get('/', requireRole(...SESSION_LOG_READ), async (req: AuthedR
   if (req.user!.role === 'lead') {
     where.client = { regularTrainings: { some: { status: 'active' } } };
   }
-  const logs = await prisma.sessionLog.findMany({ where, include, orderBy: { date: 'desc' } });
+  const logs = await prisma.sessionLog.findMany({ where, include, orderBy: { date: 'desc' }, take: 1000 });
   res.json(logs);
 });
 
