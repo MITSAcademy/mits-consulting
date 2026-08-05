@@ -425,7 +425,11 @@ function IncompleteNagModal({ clients, onDone }: { clients: Row[]; onDone: () =>
     if (s.amount && Number(s.amount) > 0 && Number(s.amount) !== c.cycleAmount)
       promises.push(saveAmount.mutateAsync({ id: c.id, amount: Number(s.amount), currency: s.currency }));
     if (promises.length) await Promise.all(promises);
-    setState((prev) => ({ ...prev, [c.id]: { ...prev[c.id], promised: true } }));
+    const next = { ...state, [c.id]: { ...state[c.id], promised: true } };
+    setState(next);
+    // auto-close if all clients are now addressed
+    const stillPending = clients.filter((cl) => !next[cl.id]?.promised);
+    if (stillPending.length === 0) onDone();
   }
 
   function handlePromise(id: string) {
