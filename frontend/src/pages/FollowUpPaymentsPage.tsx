@@ -293,9 +293,9 @@ function EditDatesModal({ r, onClose }: { r: Row; onClose: () => void }) {
   const isNa = freq === 'na';
   const isMonthly = freq === 'monthly';
 
+  // date1 = last collected (can be past); date2 = next due (must be future)
   const validationError = isNa ? null :
-    (date1 && date1 < today) ? 'Pay Date 1 cannot be in the past.' :
-    (!isMonthly && date2 && date2 < today) ? 'Pay Date 2 cannot be in the past.' :
+    (!isMonthly && date2 && date2 < today) ? 'Pay Date 2 (next due) cannot be in the past.' :
     (!isMonthly && date1 && date2 && date2 <= date1) ? 'Pay Date 2 must be after Pay Date 1.' :
     null;
 
