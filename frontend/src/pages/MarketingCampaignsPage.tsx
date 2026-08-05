@@ -489,7 +489,7 @@ export function MarketingCampaignsPage() {
                       {c.createdBy && <span>by {c.createdBy.name}</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end" style={{ position: 'relative', zIndex: 2 }}>
                     {c.status !== 'Sending' && (
                       <button onClick={() => setPreviewId(c.id)} className="text-[11px] px-2.5 py-1 rounded" style={{ background: 'var(--bg-input)', color: 'var(--brand-textSecondary)', border: '1px solid var(--brand-borderSoft)', cursor: 'pointer' }}>
                         <Users size={11} style={{ display: 'inline', marginRight: 3 }} />Recipients
@@ -501,7 +501,7 @@ export function MarketingCampaignsPage() {
                       </button>
                     )}
                     {c.status === 'Draft' && (
-                      <button onClick={() => setSendConfirm(c.id)} className="text-[11px] px-2.5 py-1 rounded font-semibold" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)', border: '1px solid rgba(34,197,94,0.3)', cursor: 'pointer' }}>
+                      <button onClick={() => setSendConfirm(c.id)} className="text-[11px] px-2.5 py-1 rounded font-semibold" style={{ background: 'rgba(34,197,94,0.12)', color: 'var(--status-green)', border: '1px solid rgba(34,197,94,0.3)', cursor: 'pointer', pointerEvents: 'all', position: 'relative', zIndex: 3 }}>
                         <Send size={10} style={{ display: 'inline', marginRight: 3 }} />Send
                       </button>
                     )}
