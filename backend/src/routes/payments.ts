@@ -18,7 +18,13 @@ paymentsRouter.get('/', async (req: AuthedRequest, res) => {
   const { from, to, clientId } = req.query as any;
   const where: any = {};
   if (clientId) where.clientId = clientId;
-  if (from || to) where.paymentDate = { gte: from, lte: to };
+  if (from || to) {
+    where.paymentDate = { gte: from, lte: to };
+  } else if (!clientId) {
+    // No filters at all — default to last 90 days to avoid full-table dump
+    const d = new Date(); d.setDate(d.getDate() - 90);
+    where.paymentDate = { gte: d.toISOString().slice(0, 10) };
+  }
   const payments = await prisma.payment.findMany({ where, include, orderBy: { paymentDate: 'desc' } });
   res.json(payments);
 });

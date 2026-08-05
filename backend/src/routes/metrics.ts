@@ -16,7 +16,13 @@ metricsRouter.get('/home', requireRole('founder', 'manager', 'lead', 'demo_lead'
 
   const [payments, clients, sessions, leverage, activeTrainings] = await Promise.all([
     prisma.payment.findMany({ where: { paymentDate: { gte: monthStart } } }),
-    prisma.client.findMany(),
+    prisma.client.findMany({ select: {
+      id: true, lifecycle: true, churnRisk: true, nextRenewalDue: true,
+      dormantCheckBackOn: true, paymentPendingVaibhav: true,
+      name: true, email: true, currency: true, cycleAmount: true,
+      engagementType: true, payDate1: true, payDate2: true,
+      accountNameRaw: true,
+    } }),
     prisma.sessionLog.findMany({ where: { date: { gte: monthStart } } }),
     prisma.leverageRequest.findMany({ where: { status: 'PendingVaibhav' } }),
     prisma.regularTraining.findMany({ where: { status: 'active', clientId: { not: null } }, select: { clientId: true } }),
@@ -96,7 +102,10 @@ metricsRouter.get('/pipeline', requireRole('founder', 'manager', 'lead', 'demo_l
       'VerificationPending', 'TrainerMatched', 'DemoScheduled', 'DemoDone',
       'SaleClosing', 'SaleWon', 'Active',
     ];
-    const all = await prisma.client.findMany({ orderBy: { createdAt: 'desc' } });
+    const all = await prisma.client.findMany({
+      select: { id: true, lifecycle: true, name: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
     const grouped: Record<string, any[]> = {};
     LIFECYCLE.forEach((s) => (grouped[s] = []));
     all.forEach((c) => {
