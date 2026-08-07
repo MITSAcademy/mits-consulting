@@ -82,6 +82,7 @@ export async function sendDemoEscalationDigest(): Promise<void> {
     where: {
       demoEscalationRequested: true,
       escalationDemoAckAt:     null,
+      status:                  'active',
     },
     select: {
       id: true,
