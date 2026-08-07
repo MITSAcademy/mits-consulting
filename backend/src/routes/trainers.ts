@@ -290,6 +290,29 @@ trainersRouter.patch('/:id', async (req: AuthedRequest, res) => {
     if (existing) return res.status(409).json({ error: `Phone ${data.phoneDigits} already belongs to trainer "${existing.name}".` });
   }
   const t = await prisma.trainer.update({ where: { id: req.params.id }, data, include });
+
+  // When defaultRateInr changes, propagate to all unpaid session logs so the
+  // payment sheet reflects the new rate without manual edits.
+  if ('defaultRateInr' in data && data.defaultRateInr) {
+    const newRate = Number(data.defaultRateInr);
+    const newRateModel = data.rateModel || t.rateModel || 'per_session';
+    const unpaidLogs = await prisma.sessionLog.findMany({
+      where: { trainerId: req.params.id, status: { in: ['Logged', 'ReadyForFinal'] }, sessionHappened: true },
+      select: { id: true, hours: true },
+    });
+    await Promise.all(unpaidLogs.map((log) => {
+      const sessions = log.hours <= 1.0 ? 0.5 : 1;
+      const amountInr = newRateModel === 'per_session'
+        ? Math.round(sessions * newRate)
+        : Math.round(log.hours * newRate);
+      return prisma.sessionLog.update({ where: { id: log.id }, data: { rateSnapshot: newRate, amountInr } });
+    }));
+    if (unpaidLogs.length > 0) {
+      await audit(req.user!.id, req.user!.name, 'TRAINER_RATE_SYNC',
+        `${t.name} rate → ₹${newRate} · synced ${unpaidLogs.length} unpaid log(s)`, { trainerId: t.id });
+    }
+  }
+
   await audit(req.user!.id, req.user!.name, 'TRAINER_UPDATE', t.name, { trainerId: t.id });
   res.json(t);
 });
