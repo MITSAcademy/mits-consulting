@@ -402,6 +402,23 @@ function IncompleteNagModal({ clients, onDone }: { clients: Row[]; onDone: () =>
     return s;
   });
 
+  // When server refetches and a client is removed from the list (payDate1 now set),
+  // mark them as promised so the modal doesn't keep showing them.
+  useEffect(() => {
+    setState((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const id of Object.keys(next)) {
+        const stillIncomplete = clients.some((c) => c.id === id);
+        if (!stillIncomplete && !next[id].promised) {
+          next[id] = { ...next[id], promised: true };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [clients]);
+
   const saveDate = useMutation({
     mutationFn: ({ id, date1 }: { id: string; date1: string }) =>
       api.post(`/follow-up-payments/${id}/set-pay-dates`, { date1, date2: null }),
