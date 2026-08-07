@@ -637,12 +637,34 @@ function PayRow({ r }: { r: Row }) {
   const [employerNameDraft, setEmployerNameDraft] = useState('');
   const [editingAccount, setEditingAccount] = useState(false);
   const [accountDraft, setAccountDraft] = useState('');
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [phoneDraft, setPhoneDraft] = useState('');
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [emailDraft, setEmailDraft] = useState('');
 
   const canEditAmountAccount = ['founder', 'manager'].includes(user?.role || '');
+  const canEditContact = ['founder', 'manager', 'sales_closer'].includes(user?.role || '');
 
   const saveAccount = useMutation({
     mutationFn: () => api.patch(`/follow-up-payments/${r.id}/account-name`, { accountName: accountDraft }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingAccount(false); showToast('Account name saved'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const savePhone = useMutation({
+    mutationFn: () => {
+      const raw = phoneDraft.replace(/\D/g, '');
+      const code = raw.length > 10 ? raw.slice(0, raw.length - 10) : '1';
+      const digits = raw.slice(-10);
+      return api.patch(`/clients/${r.id}`, { phoneCode: `+${code}`, phoneDigits: digits });
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingPhone(false); showToast('Phone saved'); },
+    onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
+  });
+
+  const saveEmail = useMutation({
+    mutationFn: () => api.patch(`/clients/${r.id}`, { email: emailDraft.trim() }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['follow-up-payments'] }); setEditingEmail(false); showToast('Email saved'); },
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed', 'error'),
   });
 
@@ -955,15 +977,47 @@ function PayRow({ r }: { r: Row }) {
         <div className="flex items-center gap-6 px-4 py-2 flex-wrap" style={{ borderTop: '1px solid var(--brand-borderSoft)', background: 'rgba(255,255,255,0.02)' }}>
           <div className="flex items-center gap-1.5 text-[11px]">
             <span className="muted">Phone:</span>
-            {r.clientPhone
-              ? <a href={`tel:+${r.clientPhone}`} className="hover:underline font-mono" style={{ color: 'var(--brand-text)' }}>{r.clientPhone}</a>
-              : <span className="muted">—</span>}
+            {editingPhone ? (
+              <div className="flex items-center gap-1">
+                <input autoFocus value={phoneDraft} onChange={e => setPhoneDraft(e.target.value)} placeholder="+1xxxxxxxxxx"
+                  onKeyDown={e => { if (e.key === 'Enter') savePhone.mutate(); if (e.key === 'Escape') setEditingPhone(false); }}
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', borderRadius: 4, padding: '1px 6px', fontSize: 11, width: 140 }}
+                />
+                <button onClick={() => savePhone.mutate()} style={{ color: 'var(--status-green)', fontSize: 13 }}>✓</button>
+                <button onClick={() => setEditingPhone(false)} style={{ color: 'var(--brand-textMuted)', fontSize: 13 }}>✕</button>
+              </div>
+            ) : r.clientPhone ? (
+              <span className="flex items-center gap-1">
+                <a href={`tel:+${r.clientPhone}`} className="hover:underline font-mono" style={{ color: 'var(--brand-text)' }}>{r.clientPhone}</a>
+                {canEditContact && <button onClick={() => { setPhoneDraft(r.clientPhone || ''); setEditingPhone(true); }} style={{ color: 'var(--accent-gold)', fontSize: 10, opacity: 0.6 }}>edit</button>}
+              </span>
+            ) : (
+              <span className="muted italic cursor-pointer hover:underline" onClick={() => canEditContact && (setPhoneDraft(''), setEditingPhone(true))}>
+                {canEditContact ? '— add' : '—'}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5 text-[11px]">
             <span className="muted">Email:</span>
-            {r.clientEmail
-              ? <a href={`mailto:${r.clientEmail}`} className="hover:underline" style={{ color: 'var(--brand-text)' }}>{r.clientEmail}</a>
-              : <span className="muted">—</span>}
+            {editingEmail ? (
+              <div className="flex items-center gap-1">
+                <input autoFocus value={emailDraft} onChange={e => setEmailDraft(e.target.value)} placeholder="email@example.com"
+                  onKeyDown={e => { if (e.key === 'Enter') saveEmail.mutate(); if (e.key === 'Escape') setEditingEmail(false); }}
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-border)', color: 'var(--brand-text)', borderRadius: 4, padding: '1px 6px', fontSize: 11, width: 180 }}
+                />
+                <button onClick={() => saveEmail.mutate()} style={{ color: 'var(--status-green)', fontSize: 13 }}>✓</button>
+                <button onClick={() => setEditingEmail(false)} style={{ color: 'var(--brand-textMuted)', fontSize: 13 }}>✕</button>
+              </div>
+            ) : r.clientEmail ? (
+              <span className="flex items-center gap-1">
+                <a href={`mailto:${r.clientEmail}`} className="hover:underline" style={{ color: 'var(--brand-text)' }}>{r.clientEmail}</a>
+                {canEditContact && <button onClick={() => { setEmailDraft(r.clientEmail || ''); setEditingEmail(true); }} style={{ color: 'var(--accent-gold)', fontSize: 10, opacity: 0.6 }}>edit</button>}
+              </span>
+            ) : (
+              <span className="muted italic cursor-pointer hover:underline" onClick={() => canEditContact && (setEmailDraft(''), setEditingEmail(true))}>
+                {canEditContact ? '— add' : '—'}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5 text-[11px]">
             <span className="muted">Feedback date:</span>
