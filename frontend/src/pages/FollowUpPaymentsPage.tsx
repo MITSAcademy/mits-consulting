@@ -463,8 +463,8 @@ function IncompleteNagModal({ clients, onDone }: { clients: Row[]; onDone: () =>
           {clients.map((c) => {
             const s = state[c.id];
             const isDone = s.promised;
-            const missingDate = !c.payDate1 || (c.paymentFrequency === 'biweekly' && !c.payDate2);
-            const missingAmount = !c.cycleAmount || c.cycleAmount === 0;
+            const missingDate = !s.date1 || (c.paymentFrequency === 'biweekly' && !c.payDate2);
+            const missingAmount = !s.amount || s.amount === '0';
             return (
               <div key={c.id} className="rounded-xl p-3" style={{
                 background: isDone ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.05)',
