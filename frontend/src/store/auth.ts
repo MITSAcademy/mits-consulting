@@ -36,8 +36,15 @@ export const useAuth = create<AuthState>()(
         try {
           const r = await api.get('/auth/me');
           set({ user: r.data.user, loading: false });
-        } catch {
-          set({ user: null, loading: false });
+        } catch (err: any) {
+          // Only clear session on explicit 401 (invalid/expired token).
+          // Network errors and timeouts (backend cold start on Render free tier)
+          // should NOT log the user out — keep existing session intact.
+          if (err?.response?.status === 401) {
+            set({ user: null, loading: false });
+          } else {
+            set({ loading: false });
+          }
         }
       },
       login: async (email, password) => {
