@@ -196,6 +196,36 @@ sessionLogsRouter.delete('/purge-before', requireRole('founder'), async (req: Au
   res.json({ ok: true, deleted: count });
 });
 
+// POST /recalc-amounts — fix logs where rateSnapshot > 0 but amountInr = 0 (or force-recalc all unpaid)
+sessionLogsRouter.post('/recalc-amounts', requireRole('founder', 'manager', 'lead'), async (req: AuthedRequest, res) => {
+  const { trainerId, forceAll } = req.body;
+  const where: any = { sessionHappened: true };
+  if (trainerId) where.trainerId = trainerId;
+  if (!forceAll) {
+    // Only fix logs with a valid rate but zero amount
+    where.rateSnapshot = { gt: 0 };
+    where.amountInr = 0;
+  } else {
+    // Recalc all unpaid logs (keeps paid logs intact)
+    where.status = { in: ['Logged', 'ReadyForFinal'] };
+    where.rateSnapshot = { gt: 0 };
+  }
+  const logs = await prisma.sessionLog.findMany({ where, select: { id: true, hours: true, rateSnapshot: true, rateModel: true } });
+  let fixed = 0;
+  await Promise.all(logs.map(async (log) => {
+    const sessions = log.hours <= 1.0 ? 0.5 : 1;
+    const amountInr = (log.rateModel || 'per_session') === 'per_session'
+      ? Math.round(sessions * log.rateSnapshot)
+      : Math.round(log.hours * log.rateSnapshot);
+    if (amountInr > 0) {
+      await prisma.sessionLog.update({ where: { id: log.id }, data: { amountInr } });
+      fixed++;
+    }
+  }));
+  await audit(req.user!.id, req.user!.name, 'SESSION_RECALC', `Fixed ${fixed}/${logs.length} logs${trainerId ? ` for trainer ${trainerId}` : ''}`);
+  res.json({ ok: true, checked: logs.length, fixed });
+});
+
 sessionLogsRouter.post('/bulk-status', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const { ids, status } = req.body;
   if (!Array.isArray(ids) || !status) return res.status(400).json({ error: 'ids + status required' });

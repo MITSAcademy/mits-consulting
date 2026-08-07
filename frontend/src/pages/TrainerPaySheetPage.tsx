@@ -1074,6 +1074,18 @@ export function TrainerPaySheetPage() {
               <FileSpreadsheet size={12} />
               {exportingMonthly ? 'Exporting…' : `Export ${new Date(exportMonth + '-01').toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })} Sheet`}
             </Button>
+            {['founder', 'manager', 'lead'].includes(user.role) && (
+              <Button size="sm" title="Fix session logs where rate > 0 but amount shows ₹0"
+                onClick={async () => {
+                  try {
+                    const r = await api.post('/session-logs/recalc-amounts', { forceAll: false });
+                    showToast(`Recalculated: ${r.data.fixed} log(s) fixed`);
+                    qc.invalidateQueries({ queryKey: ['pay-sheet'] });
+                  } catch (e: any) { showToast(e?.response?.data?.error || 'Recalc failed', 'error'); }
+                }}>
+                🔁 Fix ₹0 amounts
+              </Button>
+            )}
             {filtered.length > 0 && (
               <>
                 <Button size="sm" onClick={() => exportCSV(filtered, fmtWeek(weekStart))} title="Download CSV (grouped by trainer with bank details)">
