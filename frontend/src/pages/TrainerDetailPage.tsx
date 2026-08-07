@@ -93,7 +93,14 @@ export function TrainerDetailPage() {
                 </Button>
               )}
               <Button onClick={() => {
-                const f = { ...t };
+                const EDITABLE = [
+                  'name', 'email', 'phoneCode', 'phoneDigits', 'skills', 'rateModel', 'defaultRateInr',
+                  'experienceYears', 'paymentMethod', 'upiId', 'bankAccount', 'whatsappGroupLink',
+                  'availabilitySlots', 'bankHolderName', 'bankName', 'bankAccountNumber',
+                  'bankIfscCode', 'bankBranchName', 'bankAccountType', 'bankChequeUrl',
+                ];
+                const f: any = {};
+                EDITABLE.forEach((k) => { if (k in t) f[k] = (t as any)[k]; });
                 if (!canEditFinance) FINANCE_FIELDS.forEach(k => delete f[k]);
                 setForm(f);
                 setEdit(true);
@@ -239,7 +246,11 @@ export function TrainerDetailPage() {
         <div className="card mb-4">
           <div className="card-h">
             Bank details
-            {!edit && canEditFinance && <Button size="sm" onClick={() => { setForm({ ...t }); setEdit(true); }} className="ml-auto">Edit</Button>}
+            {!edit && canEditFinance && <Button size="sm" onClick={() => {
+              const EDITABLE = ['name','email','phoneCode','phoneDigits','skills','rateModel','defaultRateInr','experienceYears','paymentMethod','upiId','bankAccount','whatsappGroupLink','availabilitySlots','bankHolderName','bankName','bankAccountNumber','bankIfscCode','bankBranchName','bankAccountType','bankChequeUrl'];
+              const f: any = {}; EDITABLE.forEach((k) => { if (k in t) f[k] = (t as any)[k]; });
+              setForm(f); setEdit(true);
+            }} className="ml-auto">Edit</Button>}
           </div>
           {edit && canEditFinance ? (
             <div className="grid md:grid-cols-2 gap-2">
