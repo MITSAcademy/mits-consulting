@@ -1422,7 +1422,11 @@ export function FollowUpPaymentsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'due_soon' | 'pending_vaibhav' | 'deferred'>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
-  const [nagDismissed, setNagDismissed] = useState(false);
+  // Persist nag dismissal across page reloads — keyed by the set of incomplete client IDs
+  // so it re-shows if genuinely new clients appear with missing data.
+  const [nagDismissedKey, setNagDismissedKey] = useState<string>(() =>
+    localStorage.getItem('nagDismissedKey') || ''
+  );
   const showToast = useUI((s) => s.showToast);
   const pageUser = useAuth((s) => s.user);
 
@@ -1472,6 +1476,8 @@ export function FollowUpPaymentsPage() {
     });
   }, [data]);
 
+  const incompleteKey = incompleteClients.map((c) => c.id).sort().join(',');
+  const nagDismissed = nagDismissedKey === incompleteKey && incompleteKey !== '';
   const showNag = !nagDismissed && !isLoading && incompleteClients.length > 0
     && pageUser?.id === 'u-mitali';
 
@@ -1487,7 +1493,10 @@ export function FollowUpPaymentsPage() {
 
   return (
     <>
-      {showNag && <IncompleteNagModal clients={incompleteClients} onDone={() => setNagDismissed(true)} />}
+      {showNag && <IncompleteNagModal clients={incompleteClients} onDone={() => {
+        localStorage.setItem('nagDismissedKey', incompleteKey);
+        setNagDismissedKey(incompleteKey);
+      }} />}
       <Topbar
         title="Payment follow-up"
         subtitle={`${clientCount} active clients`}
