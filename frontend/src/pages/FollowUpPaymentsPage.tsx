@@ -1422,8 +1422,8 @@ export function FollowUpPaymentsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'due_soon' | 'pending_vaibhav' | 'deferred'>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
-  // Persist nag dismissal across page reloads — keyed by the set of incomplete client IDs
-  // so it re-shows if genuinely new clients appear with missing data.
+  // Persist nag dismissal — stores comma-sorted IDs the user already acknowledged.
+  // Re-shows only when a client appears that was NOT in the dismissed set.
   const [nagDismissedKey, setNagDismissedKey] = useState<string>(() =>
     localStorage.getItem('nagDismissedKey') || ''
   );
@@ -1477,7 +1477,10 @@ export function FollowUpPaymentsPage() {
   }, [data]);
 
   const incompleteKey = incompleteClients.map((c) => c.id).sort().join(',');
-  const nagDismissed = nagDismissedKey === incompleteKey && incompleteKey !== '';
+  // Dismissed if every current incomplete client was already acknowledged (subset check).
+  // This prevents re-showing when a subset remains after some clients were saved.
+  const dismissedIds = new Set(nagDismissedKey ? nagDismissedKey.split(',') : []);
+  const nagDismissed = incompleteKey !== '' && incompleteClients.every((c) => dismissedIds.has(c.id));
   const showNag = !nagDismissed && !isLoading && incompleteClients.length > 0
     && pageUser?.id === 'u-mitali';
 
@@ -1494,8 +1497,10 @@ export function FollowUpPaymentsPage() {
   return (
     <>
       {showNag && <IncompleteNagModal clients={incompleteClients} onDone={() => {
-        localStorage.setItem('nagDismissedKey', incompleteKey);
-        setNagDismissedKey(incompleteKey);
+        // Merge newly acknowledged IDs into the stored set so subset checks keep working
+        const merged = Array.from(new Set([...Array.from(dismissedIds), ...incompleteClients.map((c) => c.id)])).sort().join(',');
+        localStorage.setItem('nagDismissedKey', merged);
+        setNagDismissedKey(merged);
       }} />}
       <Topbar
         title="Payment follow-up"
