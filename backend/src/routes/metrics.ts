@@ -176,9 +176,11 @@ metricsRouter.get('/nav-badges', async (req: AuthedRequest, res) => {
       ? prisma.leverageRequest.count({ where: { status: 'PendingVaibhav' } })
       : Promise.resolve(0),
 
-    // sourcing open — founder/recruiter
-    ['founder', 'recruiter'].includes(role)
+    // sourcing open — founder sees all; recruiter sees only theirs
+    role === 'founder'
       ? prisma.sourcingRequest.count({ where: { status: 'Open' } })
+      : role === 'recruiter'
+      ? prisma.sourcingRequest.count({ where: { status: 'Open', sentToId: userId } })
       : Promise.resolve(0),
 
     // verifications pending — founder/demo_lead/demo_intake
