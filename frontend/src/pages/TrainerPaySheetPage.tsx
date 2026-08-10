@@ -755,9 +755,13 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 12 }}>{r.date}</td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', textAlign: 'center' }}>
-                  {canEdit ? (
+                  {canEdit && r.logIds.length === 1 ? (
                     <EditableNumber value={r.days} logId={r.logIds[0]} field="hours" onSaved={onRefresh} />
-                  ) : r.days}
+                  ) : (
+                    <span title={r.logIds.length > 1 ? `${r.logIds.length} logs — edit individual sessions in Session logs` : undefined}>
+                      {r.days}
+                    </span>
+                  )}
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace' }}>
                   {canEdit ? (
