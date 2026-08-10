@@ -638,7 +638,8 @@ function SummaryCard({ label, value, color }: { label: string; value: string; co
 type TrainerRow = {
   trainer: TrainerInfo;
   date: string;       // latest session date for this week
-  days: number;       // total sessions (hours)
+  days: number;       // raw hours sum across logs
+  rateModel: string;  // per_session or per_hour
   perSession: number; // rate snapshot
   amount: number;     // total amount
   logIds: string[];   // underlying log ids (for status ops)
@@ -668,10 +669,10 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
     for (const l of logs) {
       const key = l.trainer.id;
       if (!map.has(key)) {
-        map.set(key, { trainer: l.trainer, date: l.date, days: 0, perSession: l.rateSnapshot, amount: 0, logIds: [], status: 'Paid' });
+        map.set(key, { trainer: l.trainer, date: l.date, days: 0, rateModel: l.rateModel || 'per_session', perSession: l.rateSnapshot, amount: 0, logIds: [], status: 'Paid' });
       }
       const r = map.get(key)!;
-      r.days += toSessions(l);   // sessions, not raw hours
+      r.days += l.hours;   // raw hours; display converts per rateModel
       r.amount += l.amountInr;
       r.logIds.push(l.id);
       if (l.date > r.date) r.date = l.date;
@@ -760,14 +761,32 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace' }}>
                   {canEdit ? (
-                    <EditableNumber value={r.perSession} logId={r.logIds[0]} field="rateSnapshot" prefix="₹" onSaved={async () => {
-                      // Also update all other logs for this trainer in the same week
-                      if (r.logIds.length > 1) {
-                        const latest = await api.get(`/session-logs/${r.logIds[0]}`).then(res => res.data.rateSnapshot);
-                        await Promise.all(r.logIds.slice(1).map((id: string) => api.patch(`/session-logs/${id}`, { rateSnapshot: latest })));
-                      }
-                      onRefresh();
-                    }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <EditableNumber value={r.perSession} logId={r.logIds[0]} field="rateSnapshot" prefix="₹" onSaved={async () => {
+                        // Also update all other logs for this trainer in the same week
+                        if (r.logIds.length > 1) {
+                          const latest = await api.get(`/session-logs/${r.logIds[0]}`).then(res => res.data.rateSnapshot);
+                          await Promise.all(r.logIds.slice(1).map((id: string) => api.patch(`/session-logs/${id}`, { rateSnapshot: latest })));
+                        }
+                        onRefresh();
+                      }} />
+                      {r.perSession === 0 && (
+                        <button
+                          title="Fetch rate from trainer profile"
+                          style={{ fontSize: 10, color: '#f59e0b', cursor: 'pointer', border: '1px solid #f59e0b', borderRadius: 4, padding: '1px 5px', background: 'transparent' }}
+                          onClick={async () => {
+                            try {
+                              const trainer = await api.get(`/trainers/${r.trainer.id}`).then(res => res.data);
+                              const rate = trainer.defaultRateInr || 0;
+                              if (!rate) { showToast('Trainer has no rate set in profile', 'error'); return; }
+                              await Promise.all(r.logIds.map((id: string) => api.patch(`/session-logs/${id}`, { rateSnapshot: rate })));
+                              onRefresh();
+                              showToast('Rate synced from trainer profile ✓', 'success');
+                            } catch { showToast('Failed to fetch rate', 'error'); }
+                          }}
+                        >sync</button>
+                      )}
+                    </div>
                   ) : `₹${r.perSession.toLocaleString()}`}
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 600 }}>
