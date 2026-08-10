@@ -135,6 +135,135 @@ function EditableNumber({
   );
 }
 
+/* ── Bank Details inline editor ───────────────────────────────────────────── */
+
+function BankDetailsEditor({ trainer, onSaved }: { trainer: TrainerInfo; onSaved: (updated: Partial<TrainerInfo>) => void }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    paymentMethod: trainer.paymentMethod || 'Bank',
+    upiId: trainer.upiId || '',
+    bankHolderName: trainer.bankHolderName || '',
+    bankName: trainer.bankName || '',
+    bankAccountNumber: trainer.bankAccountNumber || '',
+    bankIfscCode: trainer.bankIfscCode || '',
+    bankBranchName: trainer.bankBranchName || '',
+    bankAccountType: trainer.bankAccountType || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const showToast = useUI((s) => s.showToast);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const payload: any = { paymentMethod: form.paymentMethod };
+      if (form.paymentMethod === 'UPI') {
+        payload.upiId = form.upiId;
+      } else {
+        payload.bankHolderName = form.bankHolderName;
+        payload.bankName = form.bankName;
+        payload.bankAccountNumber = form.bankAccountNumber;
+        payload.bankIfscCode = form.bankIfscCode;
+        payload.bankBranchName = form.bankBranchName;
+        payload.bankAccountType = form.bankAccountType;
+      }
+      await api.patch(`/trainers/${trainer.id}`, payload);
+      showToast('Bank details saved ✓', 'success');
+      onSaved(payload);
+      setOpen(false);
+    } catch {
+      showToast('Failed to save bank details', 'error');
+    }
+    setSaving(false);
+  };
+
+  const display = trainer.upiId
+    ? `UPI: ${trainer.upiId}`
+    : [trainer.bankHolderName, trainer.bankName, trainer.bankAccountNumber ? `A/c ${trainer.bankAccountNumber}` : '', trainer.bankIfscCode ? `IFSC ${trainer.bankIfscCode}` : ''].filter(Boolean).join(' · ');
+
+  const inp: React.CSSProperties = {
+    width: '100%', background: 'var(--bg-input)', border: '1px solid var(--brand-border)',
+    borderRadius: 5, padding: '5px 8px', fontSize: 12, color: 'var(--brand-text)',
+    outline: 'none',
+  };
+  const lbl: React.CSSProperties = { fontSize: 10, fontWeight: 600, color: 'var(--brand-textMuted)', marginBottom: 2, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' };
+
+  return (
+    <div style={{ position: 'relative' }} ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        title="Click to edit bank details"
+        style={{ textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--brand-textMuted)', fontSize: 11 }}
+      >
+        <span>{display || <span style={{ color: '#f59e0b', fontStyle: 'italic' }}>+ Add bank details</span>}</span>
+        <Pencil size={9} style={{ marginLeft: 4, opacity: 0.4, verticalAlign: 'middle' }} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'fixed', zIndex: 9999,
+          background: 'var(--bg-card)', border: '1px solid var(--brand-border)',
+          borderRadius: 10, padding: 16, width: 300,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+        }}
+          // position below the button via JS after mount — fixed positioning avoids overflow clipping
+        >
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12 }}>Bank Details — {trainer.name}</div>
+
+          <label style={lbl}>Payment Method</label>
+          <select
+            value={form.paymentMethod}
+            onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}
+            style={{ ...inp, marginBottom: 10 }}
+          >
+            <option value="Bank">Bank Transfer</option>
+            <option value="UPI">UPI</option>
+          </select>
+
+          {form.paymentMethod === 'UPI' ? (
+            <>
+              <label style={lbl}>UPI ID</label>
+              <input style={{ ...inp, marginBottom: 10 }} value={form.upiId} onChange={(e) => setForm({ ...form, upiId: e.target.value })} placeholder="name@upi" />
+            </>
+          ) : (
+            <>
+              <label style={lbl}>Account Holder Name</label>
+              <input style={{ ...inp, marginBottom: 8 }} value={form.bankHolderName} onChange={(e) => setForm({ ...form, bankHolderName: e.target.value })} placeholder="Full name on account" />
+              <label style={lbl}>Bank Name</label>
+              <input style={{ ...inp, marginBottom: 8 }} value={form.bankName} onChange={(e) => setForm({ ...form, bankName: e.target.value })} placeholder="e.g. SBI, HDFC" />
+              <label style={lbl}>Account Number</label>
+              <input style={{ ...inp, marginBottom: 8 }} value={form.bankAccountNumber} onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })} placeholder="Account number" />
+              <label style={lbl}>IFSC Code</label>
+              <input style={{ ...inp, marginBottom: 8 }} value={form.bankIfscCode} onChange={(e) => setForm({ ...form, bankIfscCode: e.target.value.toUpperCase() })} placeholder="e.g. SBIN0001234" />
+              <label style={lbl}>Branch Name</label>
+              <input style={{ ...inp, marginBottom: 8 }} value={form.bankBranchName} onChange={(e) => setForm({ ...form, bankBranchName: e.target.value })} placeholder="Optional" />
+              <label style={lbl}>Account Type</label>
+              <select value={form.bankAccountType} onChange={(e) => setForm({ ...form, bankAccountType: e.target.value })} style={{ ...inp, marginBottom: 10 }}>
+                <option value="">Select…</option>
+                <option value="Savings">Savings</option>
+                <option value="Current">Current</option>
+              </select>
+            </>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => setOpen(false)} style={{ fontSize: 12, padding: '5px 12px', borderRadius: 5, border: '1px solid var(--brand-border)', background: 'transparent', cursor: 'pointer', color: 'var(--brand-text)' }}>Cancel</button>
+            <button onClick={save} disabled={saving} style={{ fontSize: 12, padding: '5px 14px', borderRadius: 5, border: 'none', background: '#fbbf24', color: '#0a0c12', fontWeight: 700, cursor: 'pointer' }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Inline editable text ─────────────────────────────────────────────────── */
 
 function EditableText({
@@ -751,7 +880,9 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                   <a href={`/trainers/${r.trainer.id}`} style={{ color: 'inherit', textDecoration: 'none' }} onMouseEnter={e => (e.currentTarget.style.textDecoration = 'underline')} onMouseLeave={e => (e.currentTarget.style.textDecoration = 'none')}>{r.trainer.name}</a>
                 </td>
                 <td style={{ ...tdStyle, fontSize: 11, color: 'var(--brand-textMuted)', maxWidth: 220 }}>
-                  <span title={bankDetail(r.trainer)}>{bankDetail(r.trainer)}</span>
+                  {canEdit
+                    ? <BankDetailsEditor trainer={r.trainer} onSaved={() => onRefresh()} />
+                    : <span title={bankDetail(r.trainer)}>{bankDetail(r.trainer)}</span>}
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 12 }}>{r.date}</td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', textAlign: 'center' }}>
