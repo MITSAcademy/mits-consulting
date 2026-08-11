@@ -55,7 +55,7 @@ function canEditClient(role: string, cat: 'identity' | 'contact' | 'engagement' 
     demo_lead:    { identity: true,  contact: true,  engagement: true,  pipeline: true,  financial: false, sensitive: false },
     manager:      { identity: true,  contact: true,  engagement: true,  pipeline: true,  financial: true,  sensitive: true },
     lead:         { identity: false, contact: true,  engagement: false, pipeline: false, financial: false, sensitive: false },
-    sales_closer: { identity: false, contact: false, engagement: true,  pipeline: false, financial: true,  sensitive: false },
+    sales_closer: { identity: false, contact: true,  engagement: true,  pipeline: false, financial: true,  sensitive: false },
     accounts:     { identity: false, contact: false, engagement: false, pipeline: false, financial: true,  sensitive: false },
   };
   return m[role]?.[cat] || false;
