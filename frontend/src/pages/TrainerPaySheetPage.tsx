@@ -135,6 +135,56 @@ function EditableNumber({
   );
 }
 
+/* ── Editable Days (sessions) ─────────────────────────────────────────────── */
+// Displays the session count. On edit, saves amountInr = newDays × perSession
+// distributed evenly across all logs — avoids touching raw hours which would
+// trigger a backend recalc that may override the intended amount.
+function EditableDays({ days, logIds, perSession, onSaved }: {
+  days: number; logIds: string[]; perSession: number; onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(days));
+  const showToast = useUI((s) => s.showToast);
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+
+  const save = async () => {
+    const newDays = parseFloat(draft);
+    if (isNaN(newDays) || newDays < 0) { setEditing(false); setDraft(String(days)); return; }
+    if (newDays === days) { setEditing(false); return; }
+    const totalAmount = Math.round(newDays * perSession);
+    const perLog = Math.round(totalAmount / logIds.length);
+    try {
+      await Promise.all(logIds.map((id) => api.patch(`/session-logs/${id}`, { amountInr: perLog })));
+      onSaved();
+    } catch {
+      showToast('Failed to save', 'error');
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="number"
+        step="0.5"
+        className="input !py-0.5 !px-1.5 w-16 text-xs mono"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setEditing(false); setDraft(String(days)); } }}
+      />
+    );
+  }
+  return (
+    <button className="group flex items-center gap-1 hover:opacity-80" onClick={() => { setDraft(String(days)); setEditing(true); }} title="Click to edit sessions">
+      <span className="mono text-xs">{days}</span>
+      <Pencil size={9} className="opacity-0 group-hover:opacity-50" />
+    </button>
+  );
+}
+
 /* ── Bank Details inline editor ───────────────────────────────────────────── */
 
 function BankDetailsEditor({ trainer, onSaved }: { trainer: TrainerInfo; onSaved: (updated: Partial<TrainerInfo>) => void }) {
@@ -801,7 +851,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
         map.set(key, { trainer: l.trainer, date: l.date, days: 0, rateModel: l.rateModel || 'per_session', perSession: l.rateSnapshot, amount: 0, logIds: [], status: 'Paid' });
       }
       const r = map.get(key)!;
-      r.days += l.hours;   // raw hours; display converts per rateModel
+      r.days += toSessions(l);   // session count (0.5 or 1 per log for per_session; hours for per_hour)
       r.amount += l.amountInr;
       r.logIds.push(l.id);
       if (l.date > r.date) r.date = l.date;
@@ -886,13 +936,9 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 12 }}>{r.date}</td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', textAlign: 'center' }}>
-                  {canEdit && r.logIds.length === 1 ? (
-                    <EditableNumber value={r.days} logId={r.logIds[0]} field="hours" onSaved={onRefresh} />
-                  ) : (
-                    <span title={r.logIds.length > 1 ? `${r.logIds.length} logs — edit individual sessions in Session logs` : undefined}>
-                      {r.days}
-                    </span>
-                  )}
+                  {canEdit ? (
+                    <EditableDays days={r.days} logIds={r.logIds} perSession={r.perSession} onSaved={onRefresh} />
+                  ) : r.days}
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace' }}>
                   {canEdit ? (
@@ -905,22 +951,20 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                         }
                         onRefresh();
                       }} />
-                      {r.perSession === 0 && (
-                        <button
-                          title="Fetch rate from trainer profile"
-                          style={{ fontSize: 10, color: '#f59e0b', cursor: 'pointer', border: '1px solid #f59e0b', borderRadius: 4, padding: '1px 5px', background: 'transparent' }}
-                          onClick={async () => {
-                            try {
-                              const trainer = await api.get(`/trainers/${r.trainer.id}`).then(res => res.data);
-                              const rate = trainer.defaultRateInr || 0;
-                              if (!rate) { showToast('Trainer has no rate set in profile', 'error'); return; }
-                              await Promise.all(r.logIds.map((id: string) => api.patch(`/session-logs/${id}`, { rateSnapshot: rate })));
-                              onRefresh();
-                              showToast('Rate synced from trainer profile ✓', 'success');
-                            } catch { showToast('Failed to fetch rate', 'error'); }
-                          }}
-                        >sync</button>
-                      )}
+                      <button
+                        title="Sync rate from trainer profile"
+                        style={{ fontSize: 10, color: r.perSession === 0 ? '#f59e0b' : 'var(--brand-textMuted)', cursor: 'pointer', border: `1px solid ${r.perSession === 0 ? '#f59e0b' : 'var(--brand-border)'}`, borderRadius: 4, padding: '1px 5px', background: 'transparent', opacity: r.perSession === 0 ? 1 : 0.5 }}
+                        onClick={async () => {
+                          try {
+                            const trainer = await api.get(`/trainers/${r.trainer.id}`).then(res => res.data);
+                            const rate = trainer.defaultRateInr || 0;
+                            if (!rate) { showToast('Trainer has no rate set in profile', 'error'); return; }
+                            await Promise.all(r.logIds.map((id: string) => api.patch(`/session-logs/${id}`, { rateSnapshot: rate })));
+                            onRefresh();
+                            showToast('Rate synced from trainer profile ✓', 'success');
+                          } catch { showToast('Failed to fetch rate', 'error'); }
+                        }}
+                      >↺</button>
                     </div>
                   ) : `₹${r.perSession.toLocaleString()}`}
                 </td>
