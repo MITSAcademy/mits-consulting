@@ -1,4 +1,15 @@
 import 'dotenv/config';
+
+// Keep the process alive on unhandled errors — log them but never exit.
+// On Render free tier, exit code 1 causes a cold-start restart which takes
+// 30-60s and shows "Network Error" to all users during that window.
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err);
+});
+
 // Patch Express 4 to forward unhandled async rejections to the global error handler.
 // Without this, a bare `await prisma.*` that throws inside a route handler either
 // hangs the HTTP connection (Express 4 default) or crashes the process (Node 15+).
