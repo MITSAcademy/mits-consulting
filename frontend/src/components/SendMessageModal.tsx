@@ -37,6 +37,8 @@ export function SendMessageModal({ recipient, whatsappGroupLink, clientId, train
   const [templateId, setTemplateId] = useState<string>('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  // Allow typing an email directly in the modal when none is on file
+  const [emailOverride, setEmailOverride] = useState('');
 
   const { data: templates } = useQuery({
     queryKey: ['templates'],
@@ -68,10 +70,12 @@ export function SendMessageModal({ recipient, whatsappGroupLink, clientId, train
     }
   }
 
+  const effectiveEmail = recipient.email || emailOverride.trim();
+
   const sendEmail = useMutation({
     mutationFn: () =>
       api.post('/messages/email', {
-        to: recipient.email,
+        to: effectiveEmail,
         subject, body,
         templateId: templateId || undefined,
         clientId, trainerId,
@@ -107,7 +111,7 @@ export function SendMessageModal({ recipient, whatsappGroupLink, clientId, train
 
   const canSend =
     kind === 'Email'
-      ? !!(recipient.email && subject && body && health?.email?.configured)
+      ? !!(effectiveEmail && subject && body && health?.email?.configured)
       : !!(recipient.phone && body);
 
   return (
@@ -128,9 +132,7 @@ export function SendMessageModal({ recipient, whatsappGroupLink, clientId, train
           <Button
             size="sm"
             variant={kind === 'Email' ? 'primary' : 'default'}
-            disabled={!recipient.email}
             onClick={() => setKind('Email')}
-            title={!recipient.email ? 'No email on file' : ''}
           >
             <Mail size={12}/> Email {!recipient.email && '(no email)'}
           </Button>
@@ -151,10 +153,21 @@ export function SendMessageModal({ recipient, whatsappGroupLink, clientId, train
         </div>
 
         {/* Recipient line */}
-        <div className="rounded-lg p-2 text-xs mb-3" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
-          <span className="muted">To:</span>{' '}
-          <strong>{recipient.name || '—'}</strong>{' '}
-          <span className="mono ml-2">{kind === 'Email' ? recipient.email : recipient.phone}</span>
+        <div className="rounded-lg p-2 text-xs mb-3 flex items-center gap-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
+          <span className="muted shrink-0">To:</span>
+          <strong className="shrink-0">{recipient.name || '—'}</strong>
+          {kind === 'Email' && !recipient.email ? (
+            <input
+              type="email"
+              placeholder="Enter email address…"
+              value={emailOverride}
+              onChange={(e) => setEmailOverride(e.target.value)}
+              className="mono ml-1 flex-1 bg-transparent outline-none border-b border-dashed"
+              style={{ borderColor: emailOverride ? 'var(--brand-border)' : '#f59e0b', color: 'var(--brand-text)', fontSize: 11 }}
+            />
+          ) : (
+            <span className="mono ml-2">{kind === 'Email' ? recipient.email : recipient.phone}</span>
+          )}
         </div>
 
         {/* Template picker */}
