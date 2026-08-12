@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { prisma } from '../lib/prisma';
 import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
+import { sendEnquiryNotification } from '../lib/enquiryEmail';
 
 export const enquiriesRouter = Router();
 
@@ -39,6 +40,9 @@ enquiriesRouter.post('/', submitLimiter, async (req, res) => {
     },
   });
   res.status(201).json({ ok: true, id: enquiry.id });
+
+  // Fire-and-forget — never let a slow/failed notification block the webhook response.
+  sendEnquiryNotification(enquiry).catch(() => {});
 });
 
 // Everything below is internal — staff viewing/managing the enquiry inbox.
