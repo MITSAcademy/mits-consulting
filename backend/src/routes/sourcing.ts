@@ -279,16 +279,12 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
         if (phoneDigits) {
           existingTrainer = await tx.trainer.findFirst({ where: { phoneDigits } });
         }
-        // De-dupe pass 2 — normalized-name match. Compares lowercase + punctuation-stripped
-        // form against every active trainer so small typing variations dedupe.
+        // De-dupe pass 2 — DB-side case-insensitive name match (avoids loading all trainers).
         if (!existingTrainer && normName) {
-          const candidates = await tx.trainer.findMany({
-            where: { active: true },
+          existingTrainer = await tx.trainer.findFirst({
+            where: { active: true, name: { equals: p.trainerName?.trim(), mode: 'insensitive' } },
             select: { id: true, name: true },
-          });
-          existingTrainer = candidates.find((t) =>
-            (t.name || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() === normName,
-          ) || null;
+          }) || null;
         }
         if (existingTrainer) {
           trainerId = existingTrainer.id;
