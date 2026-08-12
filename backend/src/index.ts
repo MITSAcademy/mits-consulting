@@ -647,4 +647,9 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 app.listen(PORT, () => {
   console.log(`[mits-backend] listening on :${PORT}`);
   initScheduler();
+  // Log memory usage every 5 minutes so Render logs show what's growing
+  setInterval(() => {
+    const m = process.memoryUsage();
+    console.log(`[mem] rss=${Math.round(m.rss/1024/1024)}MB heap=${Math.round(m.heapUsed/1024/1024)}/${Math.round(m.heapTotal/1024/1024)}MB`);
+  }, 5 * 60 * 1000);
 });

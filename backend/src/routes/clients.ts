@@ -277,7 +277,7 @@ clientsRouter.get('/:id', async (req: AuthedRequest, res) => {
     where: { id: req.params.id },
     include: {
       ...include,
-      payments: { orderBy: { paymentDate: 'desc' } },
+      payments: { orderBy: { paymentDate: 'desc' }, take: 100 },
       sourcingRequests: { include: { proposals: { include: { trainer: true } } } },
       tasks: true,
       sessionLogs: { orderBy: { date: 'desc' }, take: 50 },

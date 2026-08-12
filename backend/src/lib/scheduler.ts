@@ -50,6 +50,7 @@ async function autoArchiveWeeklyPayouts() {
 
   const logs = await prisma.sessionLog.findMany({
     where: { status: 'Logged', date: { gte: weekStart, lte: weekEndStr } },
+    select: { id: true, amountInr: true },
   });
   if (logs.length === 0) {
     console.log(`[weekly-archive] no Logged sessions for ${weekStart} — skipping`);
