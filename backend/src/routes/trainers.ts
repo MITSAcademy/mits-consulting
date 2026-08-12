@@ -107,49 +107,38 @@ trainersRouter.get('/match', async (req, res) => {
   const required = skillTokens(requiredSkillStr);
   const clientBudget = client.cycleAmount || 0;
 
-  // Pre-fetch supporting data in parallel
-  const [trainers, sessionLogs, proposals, allClients, users] = await Promise.all([
+  // Use DB aggregates instead of loading all rows into memory
+  const [trainers, sessionCounts, team5SessionCounts, proposalCounts, pastClientCounts] = await Promise.all([
     prisma.trainer.findMany({ where: { active: true }, include }),
-    prisma.sessionLog.findMany({ select: { trainerId: true, clientId: true, taskId: true } }),
-    prisma.proposal.findMany({ select: { trainerId: true, verification: true } }),
-    prisma.client.findMany({ select: { id: true, primaryTrainerId: true, hostOwnerId: true } }),
-    prisma.user.findMany({ select: { id: true, role: true } }),
+    prisma.sessionLog.groupBy({ by: ['trainerId'], _count: { id: true } }),
+    // team5 sessions = sessions on clients whose hostOwner has a team-lead role
+    prisma.$queryRaw<{ trainerid: string; cnt: bigint }[]>`
+      SELECT sl."trainerId" AS trainerid, COUNT(*) AS cnt
+      FROM "SessionLog" sl
+      JOIN "Client" c ON c.id = sl."clientId"
+      JOIN "User" u ON u.id = c."hostOwnerId"
+      WHERE u.role IN ('lead','staff','manager')
+      GROUP BY sl."trainerId"
+    `,
+    prisma.proposal.groupBy({ by: ['trainerId', 'verification'], _count: { id: true } }),
+    prisma.client.groupBy({ by: ['primaryTrainerId'], _count: { id: true } }),
   ]);
 
-  // Pre-compute lookups
-  const userRoleById = new Map(users.map((u) => [u.id, u.role]));
-  const team5HostIds = new Set(
-    users.filter((u) => TEAM5_ROLES.has(u.role)).map((u) => u.id),
-  );
-  const team5ClientIds = new Set(
-    allClients.filter((c) => c.hostOwnerId && team5HostIds.has(c.hostOwnerId)).map((c) => c.id),
-  );
+  // Build lookups from aggregates
+  const sessionsByTrainer = new Map(sessionCounts.map((r) => [r.trainerId, r._count.id]));
+  const team5SessionsByTrainer = new Map(team5SessionCounts.map((r) => [r.trainerid, Number(r.cnt)]));
 
-  // Per-trainer aggregates
-  const sessionsByTrainer = new Map<string, number>();
-  const team5SessionsByTrainer = new Map<string, number>();
-  for (const s of sessionLogs) {
-    sessionsByTrainer.set(s.trainerId, (sessionsByTrainer.get(s.trainerId) || 0) + 1);
-    if (s.clientId && team5ClientIds.has(s.clientId)) {
-      team5SessionsByTrainer.set(s.trainerId, (team5SessionsByTrainer.get(s.trainerId) || 0) + 1);
-    }
-  }
   const proposalsByTrainer = new Map<string, { total: number; passed: number }>();
-  for (const p of proposals) {
+  for (const p of proposalCounts) {
     if (!p.trainerId) continue;
     const x = proposalsByTrainer.get(p.trainerId) || { total: 0, passed: 0 };
-    x.total += 1;
-    if (p.verification === 'Pass') x.passed += 1;
+    x.total += p._count.id;
+    if (p.verification === 'Pass') x.passed += p._count.id;
     proposalsByTrainer.set(p.trainerId, x);
   }
-  const pastClientCountByTrainer = new Map<string, number>();
-  for (const c of allClients) {
-    if (!c.primaryTrainerId) continue;
-    pastClientCountByTrainer.set(
-      c.primaryTrainerId,
-      (pastClientCountByTrainer.get(c.primaryTrainerId) || 0) + 1,
-    );
-  }
+  const pastClientCountByTrainer = new Map(
+    pastClientCounts.filter((r) => r.primaryTrainerId).map((r) => [r.primaryTrainerId!, r._count.id])
+  );
 
   const scored = trainers.map((t) => {
     const have = skillTokens(t.skills);

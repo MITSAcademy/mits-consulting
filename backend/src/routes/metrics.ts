@@ -23,7 +23,7 @@ metricsRouter.get('/home', requireRole('founder', 'manager', 'lead', 'demo_lead'
       engagementType: true, payDate1: true, payDate2: true,
       accountNameRaw: true,
     } }),
-    prisma.sessionLog.findMany({ where: { date: { gte: monthStart } } }),
+    prisma.sessionLog.findMany({ where: { date: { gte: monthStart } }, select: { amountInr: true, status: true } }),
     prisma.leverageRequest.findMany({ where: { status: 'PendingVaibhav' } }),
     prisma.regularTraining.findMany({ where: { status: 'active', clientId: { not: null } }, select: { clientId: true } }),
   ]);
