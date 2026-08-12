@@ -198,6 +198,7 @@ model User {
   freelanceUpdated       FreelanceRequirement[] @relation("FreelanceRequirementUpdated")
   bugReports             BugReport[]            @relation("BugReports")
   brainNotes             BrainNote[]            @relation("BrainNoteAuthor")
+  contactsAdded          Contact[]              @relation("ContactAddedBy")
   campaignsSent          MarketingCampaign[]    @relation("CampaignSentBy")
   campaignsCreated       MarketingCampaign[]    @relation("CampaignCreatedBy")
 }
@@ -1358,4 +1359,23 @@ model BrainNote {
   author      User     @relation("BrainNoteAuthor", fields: [authorId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// -------- CONTACTS (general contacts, not yet clients) --------
+model Contact {
+  id          String   @id @default(cuid())
+  name        String
+  email       String?
+  phoneCode   String?
+  phoneDigits String?
+  company     String?
+  source      String?  // LinkedIn, Referral, Cold call, WhatsApp, etc.
+  notes       String?  @db.Text
+  addedById   String
+  addedBy     User     @relation("ContactAddedBy", fields: [addedById], references: [id])
+  convertedToClientId String? // set when Convert is used
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
 }
