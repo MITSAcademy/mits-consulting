@@ -3,7 +3,7 @@ import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
-import { TableProperties, Download, Filter, X, Check, Pencil, ChevronsUpDown, LayoutGrid, List, FileSpreadsheet } from 'lucide-react';
+import { TableProperties, Download, Filter, X, Check, Pencil, ChevronsUpDown, LayoutGrid, List, FileSpreadsheet, Wallet } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { todayISO } from '@/lib/utils';
 import { useUI } from '@/store/ui';
@@ -812,6 +812,70 @@ function SummaryCard({ label, value, color }: { label: string; value: string; co
   );
 }
 
+/** Groups session logs by trainer — same shape as exportCSV, for on-screen review. */
+function groupByTrainer(logs: Log[]) {
+  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rate: number; total: number; comments: string[] }>();
+  logs.forEach((l) => {
+    const key = l.trainer.id;
+    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rate: l.rateSnapshot, total: 0, comments: [] });
+    const t = byTrainer.get(key)!;
+    t.days += toSessions(l);
+    t.total += l.amountInr;
+    if (l.comments) t.comments.push(l.comments);
+  });
+  return Array.from(byTrainer.values()).sort((a, b) => a.trainer.name.localeCompare(b.trainer.name));
+}
+
+function bankDetailsText(tr: TrainerInfo): string {
+  if (tr.upiId) return `UPI: ${tr.upiId}`;
+  return [tr.bankHolderName, tr.bankName, tr.bankAccountNumber ? `A/c: ${tr.bankAccountNumber}` : '', tr.bankIfscCode ? `IFSC: ${tr.bankIfscCode}` : '']
+    .filter(Boolean).join(' · ') || '—';
+}
+
+/** Payout view — Bhavneet's session-level sheet converted to Natasha's per-trainer payout format. */
+function PayoutView({ logs }: { logs: Log[] }) {
+  const grouped = useMemo(() => groupByTrainer(logs), [logs]);
+  const grandTotal = grouped.reduce((s, t) => s + t.total, 0);
+
+  return (
+    <div className="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Trainer</th>
+            <th>Bank / UPI details</th>
+            <th>Days</th>
+            <th>Rate/Session ₹</th>
+            <th>Total ₹</th>
+            <th>Comments</th>
+          </tr>
+        </thead>
+        <tbody>
+          {grouped.map((t, i) => (
+            <tr key={t.trainer.id}>
+              <td>{i + 1}</td>
+              <td className="font-medium">{t.trainer.name}</td>
+              <td className="text-xs">{bankDetailsText(t.trainer)}</td>
+              <td>{t.days}</td>
+              <td>₹{t.rate.toLocaleString()}</td>
+              <td className="font-semibold">₹{t.total.toLocaleString()}</td>
+              <td className="text-xs muted">{t.comments.join('; ')}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={5} className="text-right font-semibold">Total</td>
+            <td className="font-semibold">₹{grandTotal.toLocaleString()}</td>
+            <td />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 /* ── Excel-style grouped view ─────────────────────────────────────────────── */
 
 type TrainerRow = {
@@ -1122,7 +1186,7 @@ export function TrainerPaySheetPage() {
 
   const qc = useQueryClient();
   const [weekStart, setWeekStart] = useState(mondayOf(todayISO()));
-  const [viewMode, setViewMode] = useState<'excel' | 'detail'>('excel');
+  const [viewMode, setViewMode] = useState<'excel' | 'detail' | 'payout'>(user.role === 'payment_processor' ? 'payout' : 'excel');
   const [showFilters, setShowFilters] = useState(false);
   const [filterTrainer, setFilterTrainer] = useState('');
   const [filterClient, setFilterClient] = useState('');
@@ -1245,6 +1309,14 @@ export function TrainerPaySheetPage() {
                 title="Detailed session-level view"
               >
                 <List size={11} /> Detail
+              </button>
+              <button
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium"
+                style={{ background: viewMode === 'payout' ? 'var(--accent-gold)' : 'var(--bg-card)', color: viewMode === 'payout' ? '#1A1B1E' : 'var(--brand-textMuted)', borderLeft: '1px solid var(--brand-border)' }}
+                onClick={() => setViewMode('payout')}
+                title="Payout view — grouped by trainer with bank/UPI details, ready to pay"
+              >
+                <Wallet size={11} /> Payout
               </button>
             </div>
             <Button size="sm" variant={showFilters ? 'primary' : 'default'} onClick={() => setShowFilters(!showFilters)}>
@@ -1382,6 +1454,8 @@ export function TrainerPaySheetPage() {
           />
         ) : viewMode === 'excel' ? (
           <ExcelView logs={filtered} canMarkStatus={canMarkStatus} canEdit={canEdit} onRefresh={refresh} payWeeks={payWeeks} weekStart={weekStart} user={user} onUpdatePayWeek={(trainerId, data) => updatePayWeek.mutate({ trainerId, data })} />
+        ) : viewMode === 'payout' ? (
+          <PayoutView logs={filtered} />
         ) : (
           <div className="table-card">
             <table>
