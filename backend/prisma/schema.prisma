@@ -1379,3 +1379,20 @@ model Contact {
 
   @@index([createdAt])
 }
+
+// -------- WEBSITE ENQUIRIES (public submissions from mitsedge.com) --------
+model Enquiry {
+  id          String   @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  message     String?  @db.Text
+  course      String?
+  source      String   @default("mitsedge-website")
+  status      String   @default("new") // new | contacted | converted | dismissed
+  convertedToContactId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([createdAt])
+}

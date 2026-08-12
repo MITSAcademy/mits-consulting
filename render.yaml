@@ -68,6 +68,9 @@ services:
         sync: false
       - key: GOOGLE_REDIRECT_URI
         sync: false           # https://mits-backend.onrender.com/api/oauth/google/callback
+      # ── Website enquiry intake (mitsedge.com → /api/enquiries) ──────
+      - key: ENQUIRY_WEBHOOK_SECRET
+        sync: false           # Shared secret from the mitsedge.com/mits-rest team; sent by them as X-Enquiry-Key
 
   # ─── Frontend static site ──────────────────────────────────────────
   - type: web
