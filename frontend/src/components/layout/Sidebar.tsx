@@ -124,7 +124,7 @@ const NAV: NavItem[] = [
   { section: 'overview', page: '/money-flow', label: 'Money flow', icon: ArrowRightLeft, roles: ['founder', 'accounts'] },
   { section: 'overview', page: '/finance', label: 'Finance dashboard', icon: BarChart3, roles: ['founder'] },
   { section: 'overview', page: '/vaibhav-queue', label: 'Vaibhav queue', icon: AlertCircle, roles: ['founder', 'accounts'] },
-  { section: 'overview', page: '/second-brain', label: 'Second Brain', icon: Brain, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor'] },
+  { section: 'overview', page: '/second-brain', label: 'Second Brain', icon: Brain, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts'] },
   { section: 'overview', page: '/pipeline', label: 'Pipeline overview', icon: Target, roles: ['founder', 'demo_lead'] },
   { section: 'overview', page: '/reports/demo-team', label: 'Demo team report', icon: ChartLine, roles: ['founder', 'demo_lead'] },
 
@@ -140,13 +140,14 @@ const NAV: NavItem[] = [
   { section: 'recruit', page: '/sourcing', label: 'Sourcing requests', icon: Briefcase, roles: ['founder', 'recruiter'] },
   { section: 'recruit', page: '/trainer-leads', label: 'Trainer leads (admin)', icon: UserSearch, roles: ['founder'] },
   // All trainers visible to those who work with them
-  { section: 'recruit', page: '/trainers', label: 'Trainer pool', icon: UserCog, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'payment_processor'] },
+  { section: 'recruit', page: '/trainers', label: 'Trainer pool', icon: UserCog, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter'] },
 
   // ── Sales pipeline (Roshni + founder) ────────────────────────────────
   { section: 'sales', page: '/sales-closing', label: 'My pipeline', icon: LayoutGrid, roles: ['founder', 'sales_closer'] },
   { section: 'sales', page: '/roshni/follow-ups', label: 'My follow-ups', icon: Clock, roles: ['founder', 'sales_closer'] },
   { section: 'sales', page: '/fresh-payments', label: 'Fresh payments', icon: DollarSign, roles: ['founder', 'sales_closer', 'accounts'] },
   { section: 'sales', page: '/contacts', label: 'Contacts', icon: Users, roles: ['founder', 'manager', 'sales_closer'] },
+  { section: 'sales', page: '/enquiries', label: 'Website enquiries', icon: Inbox, roles: ['founder', 'manager', 'sales_closer'] },
 
   // ── Client success (team-scoped for manager/lead/AM) ─────────────────
   // Payment follow-up: Mitali's primary job + accounts; Bhavneet needs it to export her team's payments
@@ -173,7 +174,7 @@ const NAV: NavItem[] = [
   { section: 'clients', page: '/meeting-links', label: 'Meeting links', icon: Link, roles: ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'] },
 
   // ── Trainer ops: Bhavneet (lead) + AMs log sessions; Bhavneet creates payout batches; Mitali approves ──
-  { section: 'trainerOps', page: '/session-logs', label: 'Session logs', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager', 'accounts', 'payment_processor'] },
+  { section: 'trainerOps', page: '/session-logs', label: 'Session logs', icon: ClipboardList, roles: ['founder', 'manager', 'lead', 'account_manager', 'accounts'] },
   // Payment sheet: Bhavneet validates and submits; payment_processor processes
   { section: 'trainerOps', page: '/trainer-pay-sheet', label: 'Payment sheet', icon: TableProperties, roles: ['founder', 'manager', 'lead', 'account_manager', 'accounts', 'payment_processor'] },
   { section: 'trainerOps', page: '/trainer-pay', label: 'Trainer payouts', icon: Wallet, roles: ['founder', 'accounts', 'payment_processor'] },
@@ -181,11 +182,11 @@ const NAV: NavItem[] = [
   { section: 'trainerOps', page: '/payout-batches', label: 'Payout batches', icon: Archive, roles: ['founder', 'manager', 'lead', 'accounts', 'payment_processor'] },
 
   // ── My work (universal) ───────────────────────────────────────────────
-  { section: 'work', page: '/tasks', label: 'My tasks', icon: CheckSquare, roles: ['founder', 'manager', 'lead', 'staff', 'accounts', 'sales_closer', 'demo_lead', 'demo_intake', 'recruiter', 'payment_processor', 'account_manager'] },
+  { section: 'work', page: '/tasks', label: 'My tasks', icon: CheckSquare, roles: ['founder', 'manager', 'lead', 'staff', 'accounts', 'sales_closer', 'demo_lead', 'demo_intake', 'recruiter', 'account_manager'] },
   { section: 'work', page: '/leverage', label: 'Leverage', icon: Clock, roles: ['founder', 'demo_lead'] },
   { section: 'work', page: '/accounts-queue', label: 'Accounts queue', icon: Receipt, roles: ['founder', 'accounts'] },
-  { section: 'work', page: '/daily-report', label: 'Daily report', icon: Notebook, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
-  { section: 'team', page: '/timesheet', label: 'My timesheet', icon: ClipboardList, roles: ['manager', 'lead', 'staff', 'accounts', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'payment_processor', 'account_manager'] },
+  { section: 'work', page: '/daily-report', label: 'Daily report', icon: Notebook, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'staff', 'account_manager'] },
+  { section: 'team', page: '/timesheet', label: 'My timesheet', icon: ClipboardList, roles: ['manager', 'lead', 'staff', 'accounts', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'account_manager'] },
   { section: 'team', page: '/timesheet/report', label: 'Timesheet report', icon: BarChart2, roles: ['founder', 'manager', 'demo_lead'] },
 
   // ── Admin (Vaibhav + team leads for visibility) ───────────────────────
@@ -204,6 +205,7 @@ const NAV: NavItem[] = [
   { section: 'admin', page: '/audit', label: 'Activity log', icon: History, roles: ['founder', 'manager'] },
   { section: 'admin', page: '/integrity', label: 'Data integrity', icon: ShieldAlert, roles: ['founder', 'manager'] },
   { section: 'admin', page: '/settings', label: 'Settings', icon: Settings, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter', 'sales_closer', 'accounts', 'payment_processor', 'staff', 'account_manager'] },
+  // payment_processor: keep Settings (account/profile page); everything else trimmed to the pay-sheet workflow only.
 ];
 
 const SECTIONS: Record<string, string> = {

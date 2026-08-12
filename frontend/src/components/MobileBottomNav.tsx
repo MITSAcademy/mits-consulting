@@ -11,6 +11,9 @@ import {
   UserCog,
   LayoutGrid,
   MoreHorizontal,
+  TableProperties,
+  Wallet,
+  Archive,
 } from 'lucide-react';
 import { useAuth } from '@/store/auth';
 
@@ -65,13 +68,18 @@ function getTabsForRole(role: string): Tab[] {
         { label: 'Requirements', path: '/freelance-requirements', icon: LayoutGrid },
         { label: 'Calendar', path: '/my-calendar', icon: Calendar },
       ];
-    case 'payment_processor':
     case 'accounts':
       return [
         { label: 'Clients', path: '/clients', icon: Users },
         { label: 'Sessions', path: '/session-logs', icon: ClipboardList },
         { label: 'Payments', path: '/fresh-payments', icon: DollarSign },
         { label: 'Calendar', path: '/my-calendar', icon: Calendar },
+      ];
+    case 'payment_processor':
+      return [
+        { label: 'Pay sheet', path: '/trainer-pay-sheet', icon: TableProperties },
+        { label: 'Payouts', path: '/trainer-pay', icon: Wallet },
+        { label: 'Batches', path: '/payout-batches', icon: Archive },
       ];
     default:
       return [
