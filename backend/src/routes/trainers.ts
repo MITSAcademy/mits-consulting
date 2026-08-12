@@ -278,7 +278,15 @@ trainersRouter.patch('/:id', async (req: AuthedRequest, res) => {
     const existing = await prisma.trainer.findFirst({ where: { phoneDigits: data.phoneDigits, NOT: { id: req.params.id } } });
     if (existing) return res.status(409).json({ error: `Phone ${data.phoneDigits} already belongs to trainer "${existing.name}".` });
   }
-  const t = await prisma.trainer.update({ where: { id: req.params.id }, data, include });
+  let t;
+  try {
+    t = await prisma.trainer.update({ where: { id: req.params.id }, data, include });
+  } catch (e: any) {
+    if (e?.code === 'P2002' && e?.meta?.target?.includes('phoneDigits')) {
+      return res.status(409).json({ error: `Phone ${data.phoneDigits} is already used by another trainer.` });
+    }
+    throw e;
+  }
 
   // When defaultRateInr changes, propagate to all unpaid session logs so the
   // payment sheet reflects the new rate without manual edits.

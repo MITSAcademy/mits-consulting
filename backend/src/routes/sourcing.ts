@@ -289,22 +289,34 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
         if (existingTrainer) {
           trainerId = existingTrainer.id;
         } else {
-          const newTrainer = await tx.trainer.create({
-            data: {
-              name: (p.trainerName || 'Unnamed').replace(/\s+/g, ' ').trim(),
-              email: p.trainerEmail || null,
-              phoneCode,
-              phoneDigits: phoneDigits || null,
-              skills: p.trainerSkills || null,
-              defaultRateInr: p.rateInr || 0,
-              experienceYears: p.experienceYears || 0,
-              rateModel: 'hourly',
-              paymentMethod: 'UPI',
-              recruitedById: req.user!.id,
-              active: true,
-            },
-          });
-          trainerId = newTrainer.id;
+          // Use upsert on phoneDigits to handle race conditions where two proposals
+          // for the same phone number are submitted concurrently.
+          const trainerData = {
+            name: (p.trainerName || 'Unnamed').replace(/\s+/g, ' ').trim(),
+            email: p.trainerEmail || null,
+            phoneCode,
+            phoneDigits: phoneDigits || null,
+            skills: p.trainerSkills || null,
+            defaultRateInr: p.rateInr || 0,
+            experienceYears: p.experienceYears || 0,
+            rateModel: 'hourly' as const,
+            paymentMethod: 'UPI',
+            recruitedById: req.user!.id,
+            active: true,
+          };
+          let newTrainer;
+          try {
+            newTrainer = await tx.trainer.create({ data: trainerData });
+          } catch (e: any) {
+            // Race condition — another request created a trainer with the same phone between our check and create.
+            // Fall back to finding the existing one.
+            if (e?.code === 'P2002' && phoneDigits) {
+              const found = await tx.trainer.findFirst({ where: { phoneDigits }, select: { id: true } });
+              if (found) { trainerId = found.id; newTrainer = null; }
+              else throw e;
+            } else throw e;
+          }
+          if (newTrainer) trainerId = newTrainer.id;
         }
       }
       const c = await tx.proposal.create({
