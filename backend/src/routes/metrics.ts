@@ -180,7 +180,7 @@ metricsRouter.get('/nav-badges', async (req: AuthedRequest, res) => {
     role === 'founder'
       ? prisma.sourcingRequest.count({ where: { status: 'Open' } })
       : role === 'recruiter'
-      ? prisma.sourcingRequest.count({ where: { status: 'Open', sentToId: userId } })
+      ? prisma.sourcingRequest.count({ where: { status: 'Open', OR: [{ sentToId: userId }, { sentToId: null }] } })
       : Promise.resolve(0),
 
     // verifications pending — founder/demo_lead/demo_intake
