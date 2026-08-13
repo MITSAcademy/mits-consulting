@@ -12,7 +12,7 @@ export const prisma =
   new PrismaClient({
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
     datasourceUrl: process.env.DATABASE_URL
-      ? process.env.DATABASE_URL + (process.env.DATABASE_URL.includes('?') ? '&' : '?') + 'connection_limit=3&pool_timeout=10'
+      ? process.env.DATABASE_URL + (process.env.DATABASE_URL.includes('?') ? '&' : '?') + 'connection_limit=10&pool_timeout=15'
       : undefined,
   });
 
