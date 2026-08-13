@@ -77,9 +77,9 @@ sourcingRouter.get('/', async (req: AuthedRequest, res) => {
   const { status } = req.query as any;
   const where: any = {};
   if (status) where.status = status;
-  // Recruiters only see requests explicitly routed to them
+  // Recruiters see requests routed to them + unassigned requests (sentToId=null)
   if (req.user!.role === 'recruiter') {
-    where.sentToId = req.user!.id;
+    where.OR = [{ sentToId: req.user!.id }, { sentToId: null }];
   }
   const items = await prisma.sourcingRequest.findMany({ where, include, orderBy: { createdAt: 'desc' } });
   res.json(items.map((it) => redactSourcingForRecruiter(it, req.user!.role)));
@@ -134,17 +134,9 @@ sourcingRouter.post('/', async (req: AuthedRequest, res) => {
     orderBy: { createdAt: 'desc' },
   });
   if (existingActive) {
-    // Optionally update the routing target if a new sentToId was provided
-    if (sentToId && sentToId !== existingActive.sentToId) {
-      const updated = await prisma.sourcingRequest.update({
-        where: { id: existingActive.id },
-        data: { sentToId },
-        include,
-      });
-      await audit(req.user!.id, req.user!.name, 'SOURCING_REROUTE', `${updated.client.name} → ${sentToId}`);
-      return res.json(updated);
-    }
-    // Otherwise just return the existing one — idempotent re-tap.
+    // Idempotent re-tap — return the existing request without re-routing.
+    // Re-routing on a duplicate send was causing requests to silently jump
+    // from Aman to Kanchan (or vice versa) when Anjali clicked twice.
     return res.json(existingActive);
   }
 
