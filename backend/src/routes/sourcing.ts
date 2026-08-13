@@ -152,17 +152,18 @@ sourcingRouter.post('/', async (req: AuthedRequest, res) => {
   });
   await prisma.client.update({ where: { id: clientId }, data: { lifecycle: 'WithRecruiters' } });
   await audit(req.user!.id, req.user!.name, 'SOURCING_CREATE', r.client.name);
-  // Ping the recruiter the request was routed to.
-  if (sentToId) {
-    await notify({
-      userId: sentToId,
-      kind: 'SourcingAssigned',
-      title: `New sourcing request — ${r.client.name}`,
-      body: `${req.user!.name} sent a new client your way. Open the sourcing page to propose trainers.`,
-      link: `/sourcing`,
-      email: true,
-    });
-  }
+  // Ping the assigned recruiter — or all recruiters if unassigned.
+  const notifyIds = sentToId ? [sentToId] : RECRUITER_POOL;
+  await Promise.all(notifyIds.map((uid) => notify({
+    userId: uid,
+    kind: 'SourcingAssigned',
+    title: `New sourcing request — ${r.client.name}`,
+    body: sentToId
+      ? `${req.user!.name} sent a new client your way. Open the sourcing page to propose trainers.`
+      : `${req.user!.name} added a new unassigned sourcing request. Open the sourcing page to propose trainers.`,
+    link: `/sourcing`,
+    email: true,
+  })));
   res.status(201).json(r);
 });
 
