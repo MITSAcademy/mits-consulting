@@ -359,6 +359,7 @@ function NoteEditDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['brain-notes'] });
+      if (!isNew && note?.id) qc.invalidateQueries({ queryKey: ['brain-note', note.id] });
       showToast(isNew ? 'Note created' : 'Note saved');
       onSaved();
     },
@@ -720,13 +721,22 @@ export function SecondBrainPage() {
 
   const { data: notes = [], isLoading } = useQuery<BrainNote[]>({
     queryKey: ['brain-notes', params],
-    queryFn: () => api.get('/brain-notes', { params }).then((r) => r.data),
+    queryFn: () => api.get('/brain-notes', { params: { ...params, fields: 'list' } }).then((r) => r.data),
+    staleTime: 30_000,
+  });
+
+  const { data: selectedNote } = useQuery<BrainNote>({
+    queryKey: ['brain-note', selectedId],
+    queryFn: () => api.get(`/brain-notes/${selectedId}`).then((r) => r.data),
+    enabled: !!selectedId,
+    staleTime: 60_000,
   });
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => api.delete(`/brain-notes/${id}`),
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ['brain-notes'] });
+      qc.removeQueries({ queryKey: ['brain-note', id] });
       setSelectedId(null);
       setShowDeleteConfirm(false);
       showToast('Note deleted');
@@ -750,7 +760,7 @@ export function SecondBrainPage() {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Seed failed', 'error'),
   });
 
-  const selected = notes.find((n) => n.id === selectedId) || null;
+  const selected = selectedNote || null;
 
   // auto-select first on load
   useEffect(() => {

@@ -36,11 +36,19 @@ brainNotesRouter.get('/', async (req: AuthedRequest, res) => {
     { content: { contains: search, mode: 'insensitive' } },
   ];
 
-  const notes = await prisma.brainNote.findMany({
-    where,
-    include: { author: { select: { id: true, name: true } } },
-    orderBy: [{ isPinned: 'desc' }, { updatedAt: 'desc' }],
-  });
+  const listOnly = req.query.fields === 'list';
+  const orderBy = [{ isPinned: 'desc' as const }, { updatedAt: 'desc' as const }];
+  const notes = listOnly
+    ? await prisma.brainNote.findMany({
+        where,
+        select: { id: true, title: true, category: true, tags: true, visibleTo: true, isPinned: true, authorId: true, author: { select: { id: true, name: true } }, createdAt: true, updatedAt: true },
+        orderBy,
+      })
+    : await prisma.brainNote.findMany({
+        where,
+        include: { author: { select: { id: true, name: true } } },
+        orderBy,
+      });
   res.json(notes);
 });
 
