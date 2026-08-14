@@ -1235,7 +1235,15 @@ function EditContactModal({ client, onClose, emailOnly = false }: any) {
   });
   const save = useMutation({
     mutationFn: () => {
-      const payload = emailOnly ? { email: f.email } : f;
+      if (emailOnly) return api.patch(`/clients/${client.id}`, { email: f.email });
+      // Only send fields that actually changed — avoids false phone-uniqueness errors
+      const payload: any = {};
+      if (f.name !== (client.name || '')) payload.name = f.name;
+      if (f.whatsappGroupName !== (client.whatsappGroupName || '')) payload.whatsappGroupName = f.whatsappGroupName;
+      if (f.whatsappGroupLink !== (client.whatsappGroupLink || '')) payload.whatsappGroupLink = f.whatsappGroupLink;
+      if (f.phoneCode !== (client.phoneCode || '+1')) payload.phoneCode = f.phoneCode;
+      if (f.phoneDigits !== (client.phoneDigits || '')) payload.phoneDigits = f.phoneDigits;
+      if (f.email !== (client.email || '')) payload.email = f.email;
       return api.patch(`/clients/${client.id}`, payload);
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['client', client.id] }); showToast('Saved'); onClose(); },
