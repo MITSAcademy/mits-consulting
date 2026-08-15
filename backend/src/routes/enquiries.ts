@@ -7,7 +7,7 @@ import { sendEnquiryNotification } from '../lib/enquiryEmail';
 
 export const enquiriesRouter = Router();
 
-const ALLOWED = ['founder', 'manager', 'sales_closer'];
+const ALLOWED = ['founder', 'manager', 'demo_lead', 'sales_closer'];
 
 // Tight limit on the public submit endpoint — a handful of form posts per minute is normal,
 // anything past that is either abuse or a retry storm on the mitsedge.com side.

@@ -60,7 +60,7 @@ export function EnquiriesPage() {
     onError: (e: any) => showToast(e?.response?.data?.error || 'Failed to convert', 'error'),
   });
 
-  const canEdit = ['founder', 'manager', 'sales_closer'].includes(user.role);
+  const canEdit = ['founder', 'manager', 'demo_lead', 'sales_closer'].includes(user.role);
 
   const filtered = (data || []).filter((e) => {
     if (!search) return true;
