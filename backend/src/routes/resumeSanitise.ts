@@ -36,28 +36,44 @@ const upload = multer({
 const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
 // Requires + prefix, exactly 10 digits, or (NNN) NNN-NNNN — avoids false matches on dates
 const PHONE_RE = /(?:\+\d{1,3}[\s\-]?\(?\d{1,4}\)?[\s\-]?\d{2,4}[\s\-]?\d{2,4}[\s\-]?\d{0,4}|\b\d{10}\b|\(\d{3}\)\s*\d{3}[\s\-]\d{4})/g;
+const LINKEDIN_RE = /(?:https?:\/\/)?(?:www\.)?linkedin\.com\/[^\s<>)"']*/g;
 
 const LOGO_STRINGS = ['MITS Staffing', 'Mits Staffing', 'MITS STAFFING', 'MITSStaffing'];
 
 function redactText(text: string): string {
   let t = text;
-  t = t.replace(EMAIL_RE, (m) => '[removed]'.padEnd(m.length > 9 ? m.length : 9, ' ').slice(0, m.length > 9 ? m.length : 9));
+  t = t.replace(EMAIL_RE, (m) => ' '.repeat(m.length));
   t = t.replace(PHONE_RE, (m) => ' '.repeat(m.length));
+  t = t.replace(LINKEDIN_RE, (m) => ' '.repeat(m.length));
   for (const s of LOGO_STRINGS) t = t.split(s).join(' '.repeat(s.length));
   return t;
 }
 
 // ── PDF sanitiser ─────────────────────────────────────────────────────────────
-function patchContentStream(buf: Buffer): Buffer {
+
+// Patch text PII inside PDF literal strings and strip LinkedIn/logo text
+function patchTextInStream(buf: Buffer): Buffer {
   let s = buf.toString('latin1');
   s = s.replace(/\(([^)\\]*(?:\\.[^)\\]*)*)\)/g, (_match, inner) => {
     let patched = inner;
     patched = patched.replace(EMAIL_RE, (m: string) => ' '.repeat(m.length));
     patched = patched.replace(PHONE_RE, (m: string) => ' '.repeat(m.length));
+    patched = patched.replace(LINKEDIN_RE, (m: string) => ' '.repeat(m.length));
     for (const ls of LOGO_STRINGS) patched = patched.split(ls).join(' '.repeat(ls.length));
     if (patched === inner) return _match;
     return `(${patched})`;
   });
+  return Buffer.from(s, 'latin1');
+}
+
+// Remove all XDo image-draw operators from the first content stream of a page.
+// This strips embedded images (like the MITS logo) from the header area.
+// We do this on ALL streams and rely on the white rectangle to cover anything we miss.
+function stripImageOpsFromStream(buf: Buffer): Buffer {
+  let s = buf.toString('latin1');
+  // PDF content stream syntax: image is painted by "/Name Do"
+  // We remove all Do operators entirely — images become invisible placeholders
+  s = s.replace(/\/\w+\s+Do\b/g, '');
   return Buffer.from(s, 'latin1');
 }
 
@@ -67,31 +83,33 @@ async function sanitisePdf(inputBytes: Buffer): Promise<Buffer> {
 
   for (const page of pages) {
     const { width, height } = page.getSize();
-    // Header strip (10% ≈ 84pt on A4) — removes logo image at top
-    const headerH = Math.round(height * 0.10);
-    // Footer strip (5%) — removes contact lines at very bottom
+    const headerH = Math.round(height * 0.12);
     const footerH = Math.round(height * 0.05);
-    page.drawRectangle({ x: 0, y: height - headerH, width, height: headerH, color: rgb(1, 1, 1), opacity: 1 });
-    page.drawRectangle({ x: 0, y: 0, width, height: footerH, color: rgb(1, 1, 1), opacity: 1 });
 
-    // Patch content streams for text PII
+    // Patch content streams FIRST (before drawing rectangles, which append a new stream)
     const node = page.node;
     const contents = node.get(node.context.obj('Contents') as any);
-    if (!contents) continue;
+    if (contents) {
+      const refs: any[] = (contents as any).constructor?.name === 'PDFArray'
+        ? Array.from({ length: (contents as any).size() }, (_, i) => (contents as any).get(i))
+        : [contents];
 
-    const refs: any[] = (contents as any).constructor?.name === 'PDFArray'
-      ? Array.from({ length: (contents as any).size() }, (_, i) => (contents as any).get(i))
-      : [contents];
-
-    for (const ref of refs) {
-      const stream = doc.context.lookup(ref) as any;
-      if (!stream || typeof stream.getContents !== 'function') continue;
-      try {
-        const raw = Buffer.from(stream.getContents() as Uint8Array);
-        const patched = patchContentStream(raw);
-        if (!patched.equals(raw)) stream.setContents(patched);
-      } catch { /* skip — visual whiteout still applied */ }
+      for (const ref of refs) {
+        const stream = doc.context.lookup(ref) as any;
+        if (!stream || typeof stream.getContents !== 'function') continue;
+        try {
+          let raw: Buffer = Buffer.from(stream.getContents() as Uint8Array);
+          raw = stripImageOpsFromStream(raw);
+          raw = patchTextInStream(raw);
+          stream.setContents(raw);
+        } catch { /* skip stream — visual whiteout still applied */ }
+      }
     }
+
+    // Draw white rectangles AFTER patching — pdf-lib appends them as a new stream,
+    // so they render on top of the original content (images already stripped above)
+    page.drawRectangle({ x: 0, y: height - headerH, width, height: headerH, color: rgb(1, 1, 1), opacity: 1 });
+    page.drawRectangle({ x: 0, y: 0, width, height: footerH, color: rgb(1, 1, 1), opacity: 1 });
   }
 
   return Buffer.from(await doc.save());
