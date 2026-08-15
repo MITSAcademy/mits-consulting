@@ -67,8 +67,10 @@ async function sanitisePdf(inputBytes: Buffer): Promise<Uint8Array> {
     const textContent = await page.getTextContent();
     const boxes: RedactBox[] = [];
 
-    // Header whiteout — top 12% of page
-    boxes.push({ x: 0, y: pageHeight * 0.88, w: viewport.width, h: pageHeight * 0.12 });
+    // Header whiteout — top 18% of page (covers logo + contact line in header)
+    boxes.push({ x: 0, y: pageHeight * 0.82, w: viewport.width, h: pageHeight * 0.18 });
+    // Footer whiteout — bottom 8% of page (contact info sometimes placed here)
+    boxes.push({ x: 0, y: 0, w: viewport.width, h: pageHeight * 0.08 });
 
     for (const item of textContent.items as TextItem[]) {
       if (!item.str || !item.str.trim()) continue;
@@ -111,10 +113,12 @@ async function sanitisePdf(inputBytes: Buffer): Promise<Uint8Array> {
     const { height: pdfHeight, width: pdfWidth } = page.getSize();
     const boxes = pageRedactions.get(i + 1) || [];
 
-    // Always draw header strip even if no text boxes
+    // Always draw header + footer strip even if no text boxes
     if (boxes.length === 0) {
-      const hh = Math.round(pdfHeight * 0.12);
+      const hh = Math.round(pdfHeight * 0.18);
+      const fh = Math.round(pdfHeight * 0.08);
       page.drawRectangle({ x: 0, y: pdfHeight - hh, width: pdfWidth, height: hh, color: rgb(1, 1, 1), opacity: 1 });
+      page.drawRectangle({ x: 0, y: 0, width: pdfWidth, height: fh, color: rgb(1, 1, 1), opacity: 1 });
       continue;
     }
 

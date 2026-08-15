@@ -92,7 +92,7 @@ export function ResumeSanitisePage() {
           {[
             'Removes all email addresses from the resume',
             'Removes all phone numbers from the resume',
-            'Whites out the MITS Staffing header/logo on every page',
+            'Whites out the top header area (18%) — removes MITS Staffing logo image on every page',
             'Returns a clean PDF ready to share with clients',
           ].map((item) => (
             <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--brand-textSecondary)' }}>
