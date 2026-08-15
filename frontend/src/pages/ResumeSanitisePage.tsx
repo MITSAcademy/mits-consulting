@@ -11,6 +11,19 @@ interface Result {
   originalName: string;
   blobUrl: string;
   downloadName: string;
+  mimeType: string;
+}
+
+const ACCEPTED = '.pdf,.doc,.docx,.html,.htm';
+const ACCEPTED_LABEL = 'PDF, DOCX, DOC, HTML';
+
+function mimeForExt(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  if (ext === 'pdf') return 'application/pdf';
+  if (ext === 'docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (ext === 'doc') return 'application/msword';
+  if (ext === 'html' || ext === 'htm') return 'text/html';
+  return 'application/octet-stream';
 }
 
 export function ResumeSanitisePage() {
@@ -32,8 +45,10 @@ export function ResumeSanitisePage() {
   };
 
   const process = useCallback(async (f: File) => {
-    if (!f.name.toLowerCase().endsWith('.pdf')) {
-      showToast('Only PDF files are supported', 'error');
+    const ext = f.name.split('.').pop()?.toLowerCase() || '';
+    const supported = ['pdf', 'doc', 'docx', 'html', 'htm'];
+    if (!supported.includes(ext)) {
+      showToast(`Unsupported file type .${ext}. Supported: ${ACCEPTED_LABEL}`, 'error');
       return;
     }
     setFile(f);
@@ -48,13 +63,23 @@ export function ResumeSanitisePage() {
         responseType: 'blob',
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const mime = mimeForExt(f.name);
+      const blob = new Blob([response.data], { type: mime });
       const blobUrl = URL.createObjectURL(blob);
       const downloadName = `sanitised-${f.name}`;
-      setResult({ originalName: f.name, blobUrl, downloadName });
+      setResult({ originalName: f.name, blobUrl, downloadName, mimeType: mime });
       setStatus('done');
     } catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || 'Processing failed';
+      let msg = e?.message || 'Processing failed';
+      if (e?.response?.data instanceof Blob) {
+        try {
+          const text = await e.response.data.text();
+          const parsed = JSON.parse(text);
+          msg = parsed.error || msg;
+        } catch { /* keep original */ }
+      } else {
+        msg = e?.response?.data?.error || msg;
+      }
       setErrorMsg(msg);
       setStatus('error');
       showToast(msg, 'error');
@@ -73,11 +98,13 @@ export function ResumeSanitisePage() {
     if (f) process(f);
   };
 
+  const isPdf = result?.mimeType === 'application/pdf';
+
   return (
     <Page>
       <Topbar
         title="Resume Sanitiser"
-        subtitle="Remove emails, phone numbers, and MITS Staffing header from candidate PDFs"
+        subtitle="Remove emails, phone numbers, and MITS Staffing header from resumes"
       />
 
       <div style={{ maxWidth: 640, margin: '32px auto', padding: '0 24px' }}>
@@ -92,8 +119,8 @@ export function ResumeSanitisePage() {
           {[
             'Removes all email addresses from the resume',
             'Removes all phone numbers from the resume',
-            'Whites out the top header area (18%) — removes MITS Staffing logo image on every page',
-            'Returns a clean PDF ready to share with clients',
+            'Whites out the top header area — removes MITS Staffing logo on every page (PDF)',
+            `Returns the sanitised file in the same format as uploaded (${ACCEPTED_LABEL})`,
           ].map((item) => (
             <div key={item} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--brand-textSecondary)' }}>
               <CheckCircle size={13} style={{ color: 'var(--status-green)', flexShrink: 0 }} />
@@ -123,13 +150,13 @@ export function ResumeSanitisePage() {
             <Upload size={32} style={{ color: 'var(--brand-textMuted)', opacity: 0.6 }} />
             <div>
               <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--brand-text)', marginBottom: 4 }}>
-                Drop a PDF resume here
+                Drop a resume here
               </div>
               <div style={{ fontSize: 13, color: 'var(--brand-textMuted)' }}>
-                or click to browse · PDF only · max 20MB
+                or click to browse · {ACCEPTED_LABEL} · max 20MB
               </div>
             </div>
-            <input ref={inputRef} type="file" accept=".pdf,application/pdf" style={{ display: 'none' }} onChange={onFileChange} />
+            <input ref={inputRef} type="file" accept={ACCEPTED} style={{ display: 'none' }} onChange={onFileChange} />
           </div>
         )}
 
@@ -167,14 +194,27 @@ export function ResumeSanitisePage() {
               </div>
             </div>
 
-            {/* PDF preview */}
-            <div style={{ background: '#555', padding: 0 }}>
-              <iframe
-                src={result.blobUrl}
-                title="Sanitised PDF preview"
-                style={{ width: '100%', height: 480, border: 'none', display: 'block' }}
-              />
-            </div>
+            {/* PDF preview — only for PDFs */}
+            {isPdf && (
+              <div style={{ background: '#555', padding: 0 }}>
+                <iframe
+                  src={result.blobUrl}
+                  title="Sanitised PDF preview"
+                  style={{ width: '100%', height: 480, border: 'none', display: 'block' }}
+                />
+              </div>
+            )}
+
+            {/* Non-PDF — just show a file icon */}
+            {!isPdf && (
+              <div style={{
+                padding: '32px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                borderBottom: '1px solid var(--brand-borderSoft)',
+              }}>
+                <FileText size={40} style={{ color: 'var(--brand-textMuted)', opacity: 0.5 }} />
+                <div style={{ fontSize: 13, color: 'var(--brand-textMuted)' }}>Preview not available for this format — download to review</div>
+              </div>
+            )}
 
             {/* Actions */}
             <div style={{ padding: '14px 20px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
@@ -183,7 +223,7 @@ export function ResumeSanitisePage() {
               </Button>
               <a href={result.blobUrl} download={result.downloadName} style={{ textDecoration: 'none' }}>
                 <Button variant="primary">
-                  <Download size={13} /> Download sanitised PDF
+                  <Download size={13} /> Download sanitised file
                 </Button>
               </a>
             </div>
@@ -209,7 +249,7 @@ export function ResumeSanitisePage() {
         {/* Note */}
         <div style={{ marginTop: 20, padding: '12px 16px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--brand-borderSoft)' }}>
           <div style={{ fontSize: 11, color: 'var(--brand-textMuted)', lineHeight: 1.6 }}>
-            <strong style={{ color: 'var(--brand-textSecondary)' }}>Note:</strong> This tool works best on standard text-based PDFs. Scanned image PDFs (where the content is a photo) cannot have text removed — only the header area will be whited out. Always preview before sharing.
+            <strong style={{ color: 'var(--brand-textSecondary)' }}>Note:</strong> For PDFs, both text and the header area are sanitised. For DOCX/DOC, text content is sanitised; images are not removed. Scanned image PDFs (where content is a photo) — only the header area will be whited out. Always review before sharing.
           </div>
         </div>
       </div>
