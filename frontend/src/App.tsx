@@ -60,6 +60,7 @@ const TrainerPaySheetPage = lazy(() => import('@/pages/TrainerPaySheetPage').the
 const PayoutBatchesPage = lazy(() => import('@/pages/PayoutBatchesPage').then((m) => ({ default: m.PayoutBatchesPage })));
 const ContactsPage = lazy(() => import('@/pages/ContactsPage').then((m) => ({ default: m.ContactsPage })));
 const EnquiriesPage = lazy(() => import('@/pages/EnquiriesPage').then((m) => ({ default: m.EnquiriesPage })));
+const ResumeSanitisePage = lazy(() => import('@/pages/ResumeSanitisePage').then((m) => ({ default: m.ResumeSanitisePage })));
 const TasksPage = lazy(() => import('@/pages/TasksPage').then((m) => ({ default: m.TasksPage })));
 const LeveragePage = lazy(() => import('@/pages/LeveragePage').then((m) => ({ default: m.LeveragePage })));
 const AccountsQueuePage = lazy(() => import('@/pages/AccountsQueuePage').then((m) => ({ default: m.AccountsQueuePage })));
@@ -172,6 +173,7 @@ export default function App() {
           <Route path="/payout-batches" element={<PayoutBatchesPage />} />
           <Route path="/contacts" element={<ContactsPage />} />
           <Route path="/enquiries" element={<EnquiriesPage />} />
+          <Route path="/resume-sanitise" element={<ResumeSanitisePage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/leverage" element={<LeveragePage />} />
           <Route path="/accounts-queue" element={<AccountsQueuePage />} />
