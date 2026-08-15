@@ -2,6 +2,9 @@ import { Router } from 'express';
 import multer from 'multer';
 import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 import { PDFDocument, rgb } from 'pdf-lib';
+// pdf-parse is CJS and works fine in Node
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pdfParse = require('pdf-parse');
 
 export const resumeSanitiseRouter = Router();
 resumeSanitiseRouter.use(requireAuth);
@@ -20,122 +23,95 @@ const upload = multer({
 });
 
 const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
-const PHONE_RE = /(?:\+?\d[\d\s\-().]{7,}\d)/g;
+// Phone: covers +91 99999 99999, (123) 456-7890, +1-800-555-0000 etc.
+const PHONE_RE = /(\+?\d[\d\s\-().]{7,}\d)/g;
 
-interface TextItem {
-  str: string;
-  transform: number[]; // [scaleX, skewX, skewY, scaleY, tx, ty]
-  width: number;
-  height: number;
-}
+/**
+ * Approach:
+ *  1. Use pdf-lib to draw white rectangles:
+ *     - Top 20% of every page → removes header logo image
+ *     - Bottom 8% of every page → removes footer contact line
+ *  2. Scan each page's raw content streams for text operators that contain
+ *     email or phone patterns and replace the string content with spaces.
+ *     PDF text operators look like: (text)Tj  or [(text)]TJ
+ *     We patch the content stream bytes directly, keeping byte length identical.
+ */
 
-interface RedactBox {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+function blankSameLength(str: string): string {
+  return ' '.repeat(str.length);
 }
 
 /**
- * Use pdfjs-dist (ESM, dynamic import) to find character positions of
- * emails and phone numbers on each page, then use pdf-lib to draw white
- * rectangles over those positions + the header strip.
+ * Patch a single content stream buffer:
+ * Find (literal string) occurrences inside Tj/TJ operators and blank PII.
+ * We only touch literal strings — hex strings (<...>) are left alone because
+ * they often represent glyph IDs in subset-encoded fonts, not readable text.
  */
-async function sanitisePdf(inputBytes: Buffer): Promise<Uint8Array> {
-  // Dynamic import — pdfjs-dist v4+ is ESM-only
-  const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs' as any) as any;
-  // Disable worker in Node environment
-  pdfjsLib.GlobalWorkerOptions = pdfjsLib.GlobalWorkerOptions || {};
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+function patchContentStream(buf: Buffer): Buffer {
+  // Work as latin1 string so byte values are preserved 1:1
+  let s = buf.toString('latin1');
 
-  const loadingTask = pdfjsLib.getDocument({
-    data: new Uint8Array(inputBytes),
-    useSystemFonts: true,
-    disableFontFace: true,
+  // Match PDF literal strings: (content) — handling escaped parens \( \)
+  // Replace PII found inside them with spaces of equal length
+  s = s.replace(/\(([^)\\]*(?:\\.[^)\\]*)*)\)/g, (_match, inner) => {
+    let patched = inner;
+    patched = patched.replace(EMAIL_RE, blankSameLength);
+    patched = patched.replace(PHONE_RE, blankSameLength);
+    // If nothing changed, return original match unchanged
+    if (patched === inner) return _match;
+    return `(${patched})`;
   });
-  const pdfDoc = await loadingTask.promise;
-  const numPages = pdfDoc.numPages;
 
-  // Collect redaction boxes per page (in PDF user-space coords)
-  const pageRedactions: Map<number, RedactBox[]> = new Map();
+  return Buffer.from(s, 'latin1');
+}
 
-  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-    const page = await pdfDoc.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 1 });
-    const pageHeight = viewport.height;
+async function sanitisePdf(inputBytes: Buffer): Promise<Uint8Array> {
+  const doc = await PDFDocument.load(inputBytes, { ignoreEncryption: true });
+  const pages = doc.getPages();
 
-    const textContent = await page.getTextContent();
-    const boxes: RedactBox[] = [];
+  for (const page of pages) {
+    const { width, height } = page.getSize();
 
-    // Header whiteout — top 18% of page (covers logo + contact line in header)
-    boxes.push({ x: 0, y: pageHeight * 0.82, w: viewport.width, h: pageHeight * 0.18 });
-    // Footer whiteout — bottom 8% of page (contact info sometimes placed here)
-    boxes.push({ x: 0, y: 0, w: viewport.width, h: pageHeight * 0.08 });
+    // ── 1. Visual whiteout: header (logo image) + footer ──────────────────
+    const headerH = Math.round(height * 0.20);
+    const footerH = Math.round(height * 0.08);
 
-    for (const item of textContent.items as TextItem[]) {
-      if (!item.str || !item.str.trim()) continue;
+    page.drawRectangle({ x: 0, y: height - headerH, width, height: headerH, color: rgb(1, 1, 1), opacity: 1 });
+    page.drawRectangle({ x: 0, y: 0, width, height: footerH, color: rgb(1, 1, 1), opacity: 1 });
 
-      const emails = [...item.str.matchAll(new RegExp(EMAIL_RE.source, 'g'))];
-      const phones = [...item.str.matchAll(new RegExp(PHONE_RE.source, 'g'))];
+    // ── 2. Content stream patching: redact email/phone text ───────────────
+    const node = page.node;
+    // Access the raw content streams
+    const contents = node.get(node.context.obj('Contents') as any);
+    if (!contents) continue;
 
-      if (emails.length === 0 && phones.length === 0) continue;
-
-      // item.transform = [scaleX, skewX, skewY, scaleY, tx, ty]
-      // tx, ty = position of the text origin in PDF user space
-      const [, , , scaleY, tx, ty] = item.transform;
-      const fontSize = Math.abs(scaleY);
-      const charWidth = item.str.length > 0 ? item.width / item.str.length : fontSize * 0.5;
-
-      const addBox = (match: RegExpMatchArray) => {
-        const startChar = match.index ?? 0;
-        const matchLen = match[0].length;
-        const x = tx + startChar * charWidth;
-        const y = ty - fontSize * 0.2; // slight padding below baseline
-        const w = matchLen * charWidth + 2;
-        const h = fontSize * 1.4;
-        boxes.push({ x, y, w, h });
-      };
-
-      emails.forEach(addBox);
-      phones.forEach(addBox);
+    // Contents can be a single stream ref or an array of stream refs
+    const contentRefs: any[] = [];
+    if ((contents as any).constructor?.name === 'PDFArray') {
+      for (let i = 0; i < (contents as any).size(); i++) {
+        contentRefs.push((contents as any).get(i));
+      }
+    } else {
+      contentRefs.push(contents);
     }
 
-    pageRedactions.set(pageNum, boxes);
-    page.cleanup();
-  }
-
-  // Now use pdf-lib to draw white rectangles
-  const libDoc = await PDFDocument.load(inputBytes, { ignoreEncryption: true });
-  const pages = libDoc.getPages();
-
-  for (let i = 0; i < pages.length; i++) {
-    const page = pages[i];
-    const { height: pdfHeight, width: pdfWidth } = page.getSize();
-    const boxes = pageRedactions.get(i + 1) || [];
-
-    // Always draw header + footer strip even if no text boxes
-    if (boxes.length === 0) {
-      const hh = Math.round(pdfHeight * 0.18);
-      const fh = Math.round(pdfHeight * 0.08);
-      page.drawRectangle({ x: 0, y: pdfHeight - hh, width: pdfWidth, height: hh, color: rgb(1, 1, 1), opacity: 1 });
-      page.drawRectangle({ x: 0, y: 0, width: pdfWidth, height: fh, color: rgb(1, 1, 1), opacity: 1 });
-      continue;
-    }
-
-    // pdfjs uses bottom-left origin same as pdf-lib, so coordinates should align
-    for (const box of boxes) {
-      page.drawRectangle({
-        x: Math.max(0, box.x - 1),
-        y: Math.max(0, box.y),
-        width: Math.min(box.w + 2, pdfWidth),
-        height: Math.min(box.h, pdfHeight),
-        color: rgb(1, 1, 1),
-        opacity: 1,
-      });
+    for (const ref of contentRefs) {
+      const stream = doc.context.lookup(ref) as any;
+      if (!stream || typeof stream.getContents !== 'function') continue;
+      try {
+        const rawBytes: Uint8Array = stream.getContents();
+        const patched = patchContentStream(Buffer.from(rawBytes));
+        // Only update if something changed
+        if (!patched.equals(Buffer.from(rawBytes))) {
+          stream.setContents(patched);
+        }
+      } catch {
+        // If stream access fails, skip — visual whiteout still covers header
+      }
     }
   }
 
-  return libDoc.save();
+  return doc.save();
 }
 
 // POST /resume-sanitise/process
