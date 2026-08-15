@@ -23,8 +23,10 @@ const upload = multer({
 });
 
 const EMAIL_RE = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
-// Phone: covers +91 99999 99999, (123) 456-7890, +1-800-555-0000 etc.
-const PHONE_RE = /(\+?\d[\d\s\-().]{7,}\d)/g;
+// Phone: must start with + or have 10+ digits — avoids false matches on dates/years
+// Matches: +91 98765 43210, +1-800-555-0000, 9876543210, (123) 456-7890
+// Does NOT match: years (2024), short numbers, dates (15-08-2025)
+const PHONE_RE = /(?:\+\d{1,3}[\s\-]?\(?\d{1,4}\)?[\s\-]?\d{2,4}[\s\-]?\d{2,4}[\s\-]?\d{0,4}|\b\d{10}\b|\(\d{3}\)\s*\d{3}[\s\-]\d{4})/g;
 
 /**
  * Approach:
@@ -72,9 +74,11 @@ async function sanitisePdf(inputBytes: Buffer): Promise<Uint8Array> {
   for (const page of pages) {
     const { width, height } = page.getSize();
 
-    // ── 1. Visual whiteout: header (logo image) + footer ──────────────────
-    const headerH = Math.round(height * 0.20);
-    const footerH = Math.round(height * 0.08);
+    // ── 1. Visual whiteout: header (logo image only — ~60-80pt) + footer ──
+    // A4 = 842pt. 10% = 84pt — covers a typical logo bar without touching the name.
+    // Footer 5% catches contact lines placed at the very bottom.
+    const headerH = Math.round(height * 0.10);
+    const footerH = Math.round(height * 0.05);
 
     page.drawRectangle({ x: 0, y: height - headerH, width, height: headerH, color: rgb(1, 1, 1), opacity: 1 });
     page.drawRectangle({ x: 0, y: 0, width, height: footerH, color: rgb(1, 1, 1), opacity: 1 });
