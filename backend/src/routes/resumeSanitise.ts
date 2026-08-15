@@ -52,8 +52,8 @@ function patchContentStream(buf: Buffer): Buffer {
   let s = buf.toString('latin1');
   s = s.replace(/\(([^)\\]*(?:\\.[^)\\]*)*)\)/g, (_match, inner) => {
     let patched = inner;
-    patched = patched.replace(EMAIL_RE, (m) => ' '.repeat(m.length));
-    patched = patched.replace(PHONE_RE, (m) => ' '.repeat(m.length));
+    patched = patched.replace(EMAIL_RE, (m: string) => ' '.repeat(m.length));
+    patched = patched.replace(PHONE_RE, (m: string) => ' '.repeat(m.length));
     for (const ls of LOGO_STRINGS) patched = patched.split(ls).join(' '.repeat(ls.length));
     if (patched === inner) return _match;
     return `(${patched})`;
