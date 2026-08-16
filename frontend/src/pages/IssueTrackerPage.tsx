@@ -198,7 +198,8 @@ function EscalationRow({ esc }: { esc: Escalation }) {
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
   const isDemoTeam = DEMO_ROLES.includes(user?.role || '');
-  const isMgmt = MGMT_ROLES.includes(user?.role || '');
+  // demo_lead (Samita) can also change escalation status from their end
+  const isMgmt = MGMT_ROLES.includes(user?.role || '') || user?.role === 'demo_lead';
 
   const [status, setStatus] = useState(esc.escalationStatus || '');
   const [actions, setActions] = useState(esc.escalationActionsTaken || '');

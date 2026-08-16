@@ -8,7 +8,7 @@ const JSZip = require('jszip');
 
 export const resumeSanitiseRouter = Router();
 resumeSanitiseRouter.use(requireAuth);
-resumeSanitiseRouter.use(requireRole('founder', 'demo_lead'));
+resumeSanitiseRouter.use(requireRole('founder', 'demo_lead', 'recruiter', 'demo_intake', 'resume_sanitiser'));
 
 const ALLOWED_MIME = new Set([
   'application/pdf',

@@ -141,7 +141,7 @@ const NAV: NavItem[] = [
   { section: 'recruit', page: '/trainer-leads', label: 'Trainer leads (admin)', icon: UserSearch, roles: ['founder'] },
   // All trainers visible to those who work with them
   { section: 'recruit', page: '/trainers', label: 'Trainer pool', icon: UserCog, roles: ['founder', 'manager', 'lead', 'demo_lead', 'demo_intake', 'recruiter'] },
-  { section: 'recruit', page: '/resume-sanitise', label: 'Resume Sanitiser', icon: FileMinus, roles: ['founder', 'demo_lead'] },
+  { section: 'recruit', page: '/resume-sanitise', label: 'Resume Sanitiser', icon: FileMinus, roles: ['founder', 'demo_lead', 'recruiter', 'demo_intake', 'resume_sanitiser'] },
 
   // ── Sales pipeline (Roshni + founder) ────────────────────────────────
   { section: 'sales', page: '/sales-closing', label: 'My pipeline', icon: LayoutGrid, roles: ['founder', 'sales_closer'] },

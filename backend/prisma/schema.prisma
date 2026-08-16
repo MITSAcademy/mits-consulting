@@ -21,6 +21,7 @@ enum Role {
   accounts
   payment_processor
   account_manager
+  resume_sanitiser
 }
 
 enum Lifecycle {

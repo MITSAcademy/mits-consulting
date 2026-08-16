@@ -271,7 +271,7 @@ export async function sendDemoEscalationDigest(): Promise<void> {
   await sendEmail({
     to: primaryTo,
     cc: allCc.length > 0 ? allCc : undefined,
-    subject: `⚠️ Demo Escalation Digest — ${totalPending} pending · ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' })}`,
+    subject: `⚠️ Demo Digest — ${pendingTrainings.length} training escalation${pendingTrainings.length !== 1 ? 's' : ''}${pendingIssues.length > 0 ? ` + ${pendingIssues.length} issue${pendingIssues.length !== 1 ? 's' : ''}` : ''} · ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' })}`,
     body: `Demo Escalation Digest — ${totalPending} pending items (${pendingTrainings.length} training escalations, ${pendingIssues.length} issues). Please view in the portal.`,
     htmlBody: html,
     fromUser,

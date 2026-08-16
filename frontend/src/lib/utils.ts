@@ -178,6 +178,7 @@ export function homePathFor(role?: string): string {
     case 'staff':             return '/tasks';
     case 'accounts':          return '/accounts-queue';
     case 'payment_processor': return '/trainer-pay';
+    case 'resume_sanitiser':  return '/resume-sanitise';
     case 'lead':              return '/my-sessions';
     case 'account_manager':   return '/my-sessions';
     case 'manager':           return '/follow-up-payments';
@@ -210,4 +211,5 @@ export const ROLE_LABELS: Record<string, string> = {
   staff: 'Client success staff',
   accounts: 'Accounts',
   payment_processor: 'Payment processor',
+  resume_sanitiser: 'Resume Sanitiser',
 };
