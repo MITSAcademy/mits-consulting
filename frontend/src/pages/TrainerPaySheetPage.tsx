@@ -37,6 +37,7 @@ type TrainerInfo = {
   bankHolderName?: string; bankName?: string; bankAccountNumber?: string;
   bankIfscCode?: string; bankBranchName?: string; bankAccountType?: string;
   upiId?: string; paymentMethod?: string;
+  rateModel?: string;
 };
 
 type Log = {
@@ -44,15 +45,35 @@ type Log = {
   rateSnapshot: number; rateModel?: string; amountInr: number;
   status: string; notes?: string; feedback?: string;
   proceed?: string | null; comments?: string | null;
+  sessionHappened?: boolean;
   trainer: TrainerInfo;
   client?: { id: string; name: string } | null;
 };
 
-/** Convert raw hours to "sessions" for display/export.
- *  per_session: ≤1h = 0.5 session, >1h = 1 session
- *  per_hour: hours directly */
+/** The trainer's payment structure. The trainer record is the source of truth;
+ *  the log's snapshot is only a fallback for logs whose trainer no longer
+ *  resolves. Legal values come from the RateModel enum in schema.prisma:
+ *  hourly | per_session | training_one_shot | training_monthly. */
+function effectiveRateModel(log: Log): string {
+  return log.trainer?.rateModel || log.rateModel || 'per_session';
+}
+
+/** Internal training calls are paid as a separate lump sum, so their timings
+ *  must never reach this sheet. */
+function isTrainingCall(log: Log): boolean {
+  const m = effectiveRateModel(log);
+  return m === 'training_one_shot' || m === 'training_monthly';
+}
+
+/** Convert a log to "days" for display/export, strictly per the trainer's
+ *  payment structure:
+ *    hourly:      raw hours
+ *    per_session: ≤1h = 0.5 session, >1h = 1 session
+ *  A session that did not happen ("No Session Happened") or that carries no
+ *  logged time counts as 0 — it must not bill as a half session. */
 function toSessions(log: Log): number {
-  if (log.rateModel === 'per_hour') return log.hours;
+  if (log.sessionHappened === false || !log.hours || log.hours <= 0) return 0;
+  if (effectiveRateModel(log) === 'hourly') return log.hours;
   return log.hours <= 1.0 ? 0.5 : 1;
 }
 
@@ -136,30 +157,25 @@ function EditableNumber({
 }
 
 /* ── Editable Days (sessions) ─────────────────────────────────────────────── */
-// Displays the session count. On edit, saves amountInr = newDays × perSession
-// distributed evenly across all logs — avoids touching raw hours which would
-// trigger a backend recalc that may override the intended amount.
-function EditableDays({ days, logIds, perSession, onSaved }: {
-  days: number; logIds: string[]; perSession: number; onSaved: () => void;
+// Persists the edited day count as TrainerPayWeek.daysOverride for this
+// trainer+week. The amount is then derived as daysOverride × rate, so the cell
+// keeps the value it was given and the payment recalculates with it. Raw
+// SessionLog.hours are never rewritten — the logged duration stays auditable.
+function EditableDays({ days, isOverridden, onSave, onClear }: {
+  days: number; isOverridden: boolean;
+  onSave: (days: number) => void; onClear: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(days));
-  const showToast = useUI((s) => s.showToast);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+  // Track the value coming back from the server so the cell reflects saves.
+  useEffect(() => { if (!editing) setDraft(String(days)); }, [days, editing]);
 
   const save = async () => {
     const newDays = parseFloat(draft);
     if (isNaN(newDays) || newDays < 0) { setEditing(false); setDraft(String(days)); return; }
-    if (newDays === days) { setEditing(false); return; }
-    const totalAmount = Math.round(newDays * perSession);
-    const perLog = Math.round(totalAmount / logIds.length);
-    try {
-      await Promise.all(logIds.map((id) => api.patch(`/session-logs/${id}`, { amountInr: perLog })));
-      onSaved();
-    } catch {
-      showToast('Failed to save', 'error');
-    }
+    if (newDays !== days) onSave(newDays);
     setEditing(false);
   };
 
@@ -178,10 +194,19 @@ function EditableDays({ days, logIds, perSession, onSaved }: {
     );
   }
   return (
-    <button className="group flex items-center gap-1 hover:opacity-80" onClick={() => { setDraft(String(days)); setEditing(true); }} title="Click to edit sessions">
-      <span className="mono text-xs">{days}</span>
-      <Pencil size={9} className="opacity-0 group-hover:opacity-50" />
-    </button>
+    <span className="inline-flex items-center gap-1">
+      <button className="group flex items-center gap-1 hover:opacity-80" onClick={() => { setDraft(String(days)); setEditing(true); }} title="Click to edit days">
+        <span className="mono text-xs">{days}</span>
+        <Pencil size={9} className="opacity-0 group-hover:opacity-50" />
+      </button>
+      {isOverridden && (
+        <button
+          onClick={onClear}
+          title="Manually set — click to revert to the value derived from session logs"
+          style={{ fontSize: 9, lineHeight: 1, color: '#f59e0b', border: '1px solid #f59e0b', borderRadius: 4, padding: '1px 3px', background: 'transparent', cursor: 'pointer' }}
+        >M</button>
+      )}
+    </span>
   );
 }
 
@@ -895,7 +920,7 @@ function bankDetail(t: TrainerInfo): string {
   return parts.join(' · ') || '—';
 }
 
-type PayWeekRow = { id: string; trainerId: string; weekStart: string; mitaliAckAt: string | null; bhavneetVerification: string | null };
+type PayWeekRow = { id: string; trainerId: string; weekStart: string; mitaliAckAt: string | null; bhavneetVerification: string | null; daysOverride: number | null };
 
 function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStart, user, onUpdatePayWeek }: {
   logs: Log[]; canMarkStatus: boolean; canEdit: boolean; onRefresh: () => void;
@@ -925,7 +950,19 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
     return Array.from(map.values()).sort((a, b) => a.trainer.name.localeCompare(b.trainer.name));
   }, [logs]);
 
-  const grandTotal = rows.reduce((s, r) => s + r.amount, 0);
+  // When Days has been manually set for a trainer+week, the payment is
+  // recalculated from it (days x rate); otherwise the logged amounts stand.
+  const overrideFor = (trainerId: string): number | null => {
+    const pw = payWeeks.find((w) => w.trainerId === trainerId);
+    return pw && pw.daysOverride != null ? pw.daysOverride : null;
+  };
+  const effDaysFor = (r: TrainerRow): number => overrideFor(r.trainer.id) ?? r.days;
+  const effAmountFor = (r: TrainerRow): number => {
+    const o = overrideFor(r.trainer.id);
+    return o == null ? r.amount : Math.round(o * r.perSession);
+  };
+
+  const grandTotal = rows.reduce((s, r) => s + effAmountFor(r), 0);
 
   const markAllStatus = async (_trainerId: string, logIds: string[], status: string) => {
     try {
@@ -937,11 +974,14 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
     }
   };
 
-  const saveAmount = async (_trainerId: string, logIds: string[], newTotal: number, perSession: number) => {
+  const saveAmount = async (trainerId: string, logIds: string[], newTotal: number, perSession: number) => {
     // Distribute amount evenly across all logs for this trainer
     const perLog = Math.round(newTotal / logIds.length);
     try {
       await Promise.all(logIds.map((id) => api.patch(`/session-logs/${id}`, { amountInr: perLog, rateSnapshot: perSession })));
+      // An explicit amount wins over a Days override, otherwise the derived
+      // days x rate figure would immediately overwrite what was just typed.
+      if (overrideFor(trainerId) != null) onUpdatePayWeek(trainerId, { daysOverride: null });
       onRefresh();
     } catch {
       showToast('Failed to save', 'error');
@@ -1001,8 +1041,13 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                 <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: 12 }}>{r.date}</td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', textAlign: 'center' }}>
                   {canEdit ? (
-                    <EditableDays days={r.days} logIds={r.logIds} perSession={r.perSession} onSaved={onRefresh} />
-                  ) : r.days}
+                    <EditableDays
+                      days={effDaysFor(r)}
+                      isOverridden={overrideFor(r.trainer.id) != null}
+                      onSave={(d) => onUpdatePayWeek(r.trainer.id, { daysOverride: d })}
+                      onClear={() => onUpdatePayWeek(r.trainer.id, { daysOverride: null })}
+                    />
+                  ) : effDaysFor(r)}
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace' }}>
                   {canEdit ? (
@@ -1038,7 +1083,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                       <span style={{ color: 'var(--brand-textMuted)', fontSize: 12 }}>₹</span>
                       <input
                         type="number"
-                        defaultValue={r.amount}
+                        defaultValue={effAmountFor(r)}
                         autoFocus
                         style={{ width: 80, background: 'var(--bg-input)', border: '1px solid var(--brand-border)', borderRadius: 4, padding: '2px 6px', fontSize: 12, color: 'var(--brand-text)', fontFamily: 'monospace' }}
                         onBlur={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) saveAmount(r.trainer.id, r.logIds, v, r.perSession); else setEditingAmount(null); }}
@@ -1051,7 +1096,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                       onClick={() => { if (canEdit) { setAmountDraft(String(r.amount)); setEditingAmount(r.trainer.id); } }}
                       title={canEdit ? 'Click to edit' : undefined}
                     >
-                      ₹{r.amount.toLocaleString()}
+                      ₹{effAmountFor(r).toLocaleString()}
                       {canEdit && <Pencil size={9} style={{ opacity: 0.4 }} />}
                     </button>
                   )}
@@ -1257,6 +1302,9 @@ export function TrainerPaySheetPage() {
   const filtered = useMemo<Log[]>(() => {
     return (logs || [])
       .filter((l) => {
+        // Internal training calls are paid as a separate lump sum — their
+        // timings must never be counted in the Payment Sheet.
+        if (isTrainingCall(l)) return false;
         if (filterTrainer && l.trainer.id !== filterTrainer) return false;
         if (filterClient && l.client?.id !== filterClient) return false;
         if (filterStatus && l.status !== filterStatus) return false;
