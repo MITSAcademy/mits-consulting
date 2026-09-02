@@ -1,13 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
+import { Avatar } from '@/components/ui/avatar';
 import { Textarea, Input, Label } from '@/components/ui/input';
 import { useUI } from '@/store/ui';
 import { todayISO } from '@/lib/utils';
 import { useAuth } from '@/store/auth';
 import { Sparkles, Plus } from 'lucide-react';
+
+// Roles the backend lets read *everyone's* daily reports.
+// Mirrors REPORTS_ALL_ROLES in backend/src/routes/reports.ts — GET /reports
+// silently narrows to self-only for any other role, so this gate is UI-only.
+const REPORTS_ALL_ROLES = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead'];
+
+type View = 'mine' | 'team';
 
 // Human labels for the audit-log action codes the backend emits.
 const ACTION_LABEL: Record<string, string> = {
@@ -76,6 +84,12 @@ export function DailyReportPage() {
   const showToast = useUI((s) => s.showToast);
   const [date, setDate] = useState(todayISO());
   const [content, setContent] = useState('');
+  const [view, setView] = useState<View>('mine');
+
+  const canViewTeam = REPORTS_ALL_ROLES.includes(user?.role || '');
+  // Derived rather than reading `view` directly, so the team view can never
+  // render for a role that isn't allowed to see it.
+  const showTeam = canViewTeam && view === 'team';
 
   const { data: reports } = useQuery({
     queryKey: ['reports', user?.id],
@@ -86,6 +100,35 @@ export function DailyReportPage() {
     queryKey: ['audit/mine', date],
     queryFn: () => api.get('/audit/mine', { params: { date } }).then((r) => r.data),
   });
+
+  // Team view — no userId param, so the backend returns every user's reports
+  // for leadership roles. Only fetched once the tab is actually opened.
+  const { data: teamReports, isLoading: teamReportsLoading } = useQuery({
+    queryKey: ['reports', 'team'],
+    queryFn: () => api.get('/reports').then((r) => r.data),
+    enabled: showTeam,
+  });
+
+  const { data: users, isLoading: usersLoading } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => api.get('/users').then((r) => r.data),
+    enabled: showTeam,
+  });
+
+  const teamLoading = teamReportsLoading || usersLoading;
+
+  const byUser = useMemo(() => {
+    const map: Record<string, any[]> = {};
+    (teamReports || []).forEach((r: any) => {
+      (map[r.userId] = map[r.userId] || []).push(r);
+    });
+    return map;
+  }, [teamReports]);
+
+  const activeUsers = useMemo(
+    () => (users || []).filter((u: any) => u.active),
+    [users],
+  );
 
   const submit = useMutation({
     mutationFn: () => api.post('/reports', { date, content }),
@@ -110,8 +153,40 @@ export function DailyReportPage() {
 
   return (
     <>
-      <Topbar title="Daily report" subtitle={user?.name} />
+      <Topbar title="Daily report" subtitle={showTeam ? 'Team' : user?.name} />
       <Page>
+        {/* Tab strip — only leadership roles get the Team option, so there's
+            nothing to toggle (and no strip) for everyone else. */}
+        {canViewTeam && (
+          <div className="flex gap-1 mb-4" style={{ borderBottom: '1px solid var(--brand-border)', paddingBottom: 0 }}>
+            {([
+              { key: 'mine' as View, label: 'My reports' },
+              { key: 'team' as View, label: 'Team reports' },
+            ]).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setView(key)}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: 13,
+                  fontWeight: view === key ? 700 : 500,
+                  color: view === key ? 'var(--brand-primary)' : 'var(--brand-textSecondary)',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: view === key ? '2px solid var(--brand-primary)' : '2px solid transparent',
+                  cursor: 'pointer',
+                  marginBottom: -1,
+                  transition: 'color 0.15s',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {!showTeam && (
+        <>
         <div className="card mb-4">
           <div className="card-h">
             <span>Submit today's report</span>
@@ -183,6 +258,47 @@ export function DailyReportPage() {
             </div>
           )}
         </div>
+        </>
+        )}
+
+        {/* ── Team reports ────────────────────────────────────────────────── */}
+        {showTeam && (
+          <>
+            {teamLoading && <div className="muted text-sm py-8 text-center">Loading reports…</div>}
+            {!teamLoading && activeUsers.length === 0 && (
+              <div className="muted text-sm p-4 text-center">No active users found.</div>
+            )}
+            <div className="grid md:grid-cols-2 gap-3">
+              {activeUsers.map((u: any) => {
+                const list = byUser[u.id] || [];
+                return (
+                  <div key={u.id} className="card">
+                    <div className="card-h flex justify-between">
+                      <div className="flex items-center gap-2"><Avatar name={u.name} size={24} /><span>{u.name}</span></div>
+                      <span className="text-xs muted normal-case">
+                        {list.length} report{list.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                    {list.length === 0 ? <div className="muted text-xs py-2">No reports yet.</div> : (
+                      <div className="space-y-1.5">
+                        {list.slice(0, 5).map((r: any) => (
+                          <div
+                            key={r.id}
+                            className="rounded-lg p-2.5"
+                            style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
+                          >
+                            <div className="text-[11px] mono muted mb-0.5">{r.date}</div>
+                            <div className="text-xs line-clamp-2">{r.content}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </Page>
     </>
   );

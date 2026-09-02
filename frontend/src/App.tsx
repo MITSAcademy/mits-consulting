@@ -51,7 +51,6 @@ const MySessionsPage = lazy(() => import('@/pages/MySessionsPage').then((m) => (
 const DemoTeamReportPage = lazy(() => import('@/pages/DemoTeamReportPage').then((m) => ({ default: m.DemoTeamReportPage })));
 const RegularTrainingsPage = lazy(() => import('@/pages/RegularTrainingsPage').then((m) => ({ default: m.RegularTrainingsPage })));
 const RegularTrainingDetailPage = lazy(() => import('@/pages/RegularTrainingDetailPage').then((m) => ({ default: m.RegularTrainingDetailPage })));
-const CalendarPage = lazy(() => import('@/pages/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const RenewalsPage = lazy(() => import('@/pages/RenewalsPage').then((m) => ({ default: m.RenewalsPage })));
 const FeedbackPage = lazy(() => import('@/pages/FeedbackPage').then((m) => ({ default: m.FeedbackPage })));
 const SessionLogsPage = lazy(() => import('@/pages/SessionLogsPage').then((m) => ({ default: m.SessionLogsPage })));

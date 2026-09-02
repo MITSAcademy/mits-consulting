@@ -36,8 +36,6 @@ export function PermissionsPage() {
           This matrix mirrors what the backend enforces on every <code>PATCH /clients/:id</code> and
           <code> POST /clients/:id/stage</code>. To toggle the master switch (off = anyone can edit anything),
           use <Link to="/settings" className="text-brand-amber underline">Settings → strict_edit_permissions</Link>.
-          The <Link to="/edit-requests" className="text-brand-amber underline">Edit requests</Link> queue handles
-          change-requests from users without direct permission.
         </div>
         <div className="table-card">
           <table>

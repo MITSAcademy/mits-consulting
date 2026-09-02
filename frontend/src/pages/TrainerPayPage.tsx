@@ -16,6 +16,20 @@ function startOfWeek(iso: string) {
   return d.toISOString().slice(0, 10);
 }
 
+/** The trainer's payment structure. The trainer record is the source of truth;
+ *  the log's snapshot is only a fallback for logs whose trainer no longer
+ *  resolves. Mirrors the rule the Payment Sheet applies. */
+function effectiveRateModel(log: any): string {
+  return log.trainer?.rateModel || log.rateModel || 'per_session';
+}
+
+/** Internal training calls are paid as a separate lump sum, so they must never
+ *  be payable from here. */
+function isTrainingCall(log: any): boolean {
+  const m = effectiveRateModel(log);
+  return m === 'training_one_shot' || m === 'training_monthly';
+}
+
 export function TrainerPayPage() {
   const qc = useQueryClient();
   const showToast = useUI((s) => s.showToast);
@@ -37,7 +51,10 @@ export function TrainerPayPage() {
     onError: () => showToast('Failed to create batch', 'error'),
   });
 
-  const eligible = (logs || []).filter((l: any) => l.status === 'Logged');
+  // Internal training calls are paid as a separate lump sum — they must never
+  // be listed, selected, or sent to POST /payouts from this page.
+  const payable = (logs || []).filter((l: any) => !isTrainingCall(l));
+  const eligible = payable.filter((l: any) => l.status === 'Logged');
   const total = eligible.filter((l: any) => selected.includes(l.id)).reduce((s: number, l: any) => s + l.amountInr, 0);
 
   const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -65,7 +82,7 @@ export function TrainerPayPage() {
           </div>
         )}
         {logsLoading && <div className="muted text-sm p-6">Loading sessions...</div>}
-        {!logsLoading && (logs || []).length === 0 ? (
+        {!logsLoading && payable.length === 0 ? (
           <EmptyState
             icon={Wallet}
             tone="grey"
@@ -79,7 +96,7 @@ export function TrainerPayPage() {
               <tr><th></th><th>Date</th><th>Trainer</th><th>Client</th><th>Hours</th><th>Amount</th><th>Status</th></tr>
             </thead>
             <tbody>
-              {(logs || []).map((l: any) => (
+              {payable.map((l: any) => (
                 <tr
                   key={l.id}
                   className="clickable"

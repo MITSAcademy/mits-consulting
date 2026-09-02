@@ -667,6 +667,10 @@ model TrainerPayWeek {
   weekStart            String    // YYYY-MM-DD Monday
   mitaliAckAt          DateTime?
   bhavneetVerification String?   // 'Correct' | 'Incorrect' | 'Hold' | 'Issue'
+  // Manual "Days" override for this trainer+week on the Payment Sheet.
+  // NULL = use the value derived from the session logs. Set = the sheet shows
+  // this many days and bills daysOverride × rate. Never mutates SessionLog.hours.
+  daysOverride         Float?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 

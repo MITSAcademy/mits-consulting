@@ -17,6 +17,7 @@ const include = {
       bankHolderName: true, bankName: true, bankAccountNumber: true,
       bankIfscCode: true, bankBranchName: true, bankAccountType: true,
       upiId: true, paymentMethod: true,
+      rateModel: true,
     },
   },
   client: { select: { id: true, name: true, hostOwner: { select: { id: true, name: true } } } },
@@ -102,12 +103,17 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
     });
   }
 
-  // Auto-fetch trainer's defaultRateInr if rateSnapshot not provided
+  // Auto-fetch trainer's defaultRateInr if rateSnapshot not provided.
+  // The rate model must always fall back to the TRAINER's structure, never to a
+  // hardcoded 'per_session' — otherwise a log created with an explicit rate but
+  // no rateModel is stamped per_session even for an hourly trainer, and both the
+  // stored amountInr and the Payment Sheet then use the wrong structure.
   let effectiveRate = rateSnapshot || 0;
-  let effectiveRateModel = rateModel || 'per_session';
-  if (!effectiveRate) {
+  let effectiveRateModel = rateModel;
+  if (!effectiveRate || !effectiveRateModel) {
     const trainer = await prisma.trainer.findUnique({ where: { id: trainerId }, select: { defaultRateInr: true, rateModel: true } });
-    if (trainer?.defaultRateInr) { effectiveRate = trainer.defaultRateInr; effectiveRateModel = trainer.rateModel || 'per_session'; }
+    if (!effectiveRate && trainer?.defaultRateInr) { effectiveRate = trainer.defaultRateInr; }
+    if (!effectiveRateModel) { effectiveRateModel = trainer?.rateModel || 'per_session'; }
   }
   // No-show: hours=0, amount=0, regardless of what was sent
   const actualHours = didHappen ? (hours || 0) : 0;
