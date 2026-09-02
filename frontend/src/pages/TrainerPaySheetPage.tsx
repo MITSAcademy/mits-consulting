@@ -1248,7 +1248,10 @@ export function TrainerPaySheetPage() {
       const allWeeksLogs = await Promise.all(
         mondays.map(async (ws) => {
           const r = await api.get('/session-logs', { params: { weekStart: ws } });
-          return { weekStart: ws, logs: r.data as Log[] };
+          // Internal training calls are paid as a separate lump sum, so they
+          // must never reach the monthly Bhavneet sheet either.
+          const logs = (r.data as Log[]).filter((l) => !isTrainingCall(l));
+          return { weekStart: ws, logs };
         })
       );
       // Only keep weeks that have at least one log
