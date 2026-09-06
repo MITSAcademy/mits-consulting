@@ -77,6 +77,84 @@ function toSessions(log: Log): number {
   return log.hours <= 1.0 ? 0.5 : 1;
 }
 
+/** The "Per Session" figure to DISPLAY for one trainer's week.
+ *
+ *  Amount is the sum of every log's stored amountInr, while the rate column
+ *  historically showed a single log's rateSnapshot (the earliest in the week).
+ *  Those are computed from different bases, so the row can read as though the
+ *  arithmetic is broken.
+ *
+ *    stored rate reconciles -> show it exactly as before
+ *    it does not reconcile  -> show the rate implied by the total (amount /
+ *                              days), so Days x rate always ties out to Amount
+ *
+ *  The trigger is reconciliation, NOT "the logs have different rates" — a week
+ *  can fail to reconcile on a single consistent rate, e.g. when amountInr was
+ *  billed on hours while Days counts session units (or vice versa). Keying off
+ *  rate differences alone would miss exactly that case.
+ *
+ *  DISPLAY ONLY. Nothing here is written back: stored rateSnapshot and
+ *  amountInr are left exactly as they are.
+ */
+function displayRate(rates: number[], days: number, amount: number): {
+  rate: number; mixed: boolean; distinct: number[];
+} {
+  const distinct = Array.from(new Set(rates)).sort((a, b) => a - b);
+  const stored = distinct[0] ?? 0;
+  // Nothing billable to divide by — keep the stored rate rather than inventing
+  // one, but still flag it when the logs disagree with each other.
+  if (days <= 0) return { rate: stored, mixed: distinct.length > 1, distinct };
+  const reconciles = distinct.length <= 1 && Math.abs(stored * days - amount) < 1;
+  if (reconciles) return { rate: stored, mixed: false, distinct };
+  return { rate: Math.round((amount / days) * 100) / 100, mixed: true, distinct };
+}
+
+/** The reconciled rate for one aggregated row (grid, export or payout view).
+ *  Keeps every surface showing the same figure the Payment Sheet grid shows.
+ *  Returns a raw number — callers that emit CSV must NOT locale-format it, or
+ *  the thousands separator would inject a comma into the column. */
+function reconciledRate(rates: number[], days: number, total: number): number {
+  return displayRate(rates, days, total).rate;
+}
+
+/** Written into export comment fields when a row's rate was reconciled from the
+ *  total rather than matching the stored per-log rate, so whoever processes the
+ *  payment run can see it. Display only — no stored data is affected. */
+const RATE_RECONCILED_MARKER = '[RATE RECONCILED — VERIFY]';
+
+/** Prepends the marker to a row's existing comments without losing or mangling
+ *  them. filter(Boolean) keeps empty comments from producing stray separators. */
+function withRateMarker(comments: string[], mixed: boolean): string {
+  const parts = mixed ? [RATE_RECONCILED_MARKER, ...comments] : comments;
+  return parts.filter(Boolean).join('; ');
+}
+
+/** Whole rates render exactly as before; an implied rate keeps 2dp so the row ties out. */
+function fmtRate(n: number): string {
+  return Number.isInteger(n)
+    ? n.toLocaleString()
+    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Flags that the displayed rate is implied from the total, not a stored per-log rate. */
+function MixedRateBadge({ distinct }: { distinct: number[] }) {
+  const stored = distinct.map((x) => `₹${x.toLocaleString()}`).join(', ');
+  return (
+    <span
+      title={
+        `Days × the stored rate does not add up to Amount, so this shows the rate implied by the total (Amount ÷ Days) and the row ties out. `
+        + `Stored per-log rate${distinct.length > 1 ? 's' : ''}: ${stored}. `
+        + `Two things cause this: the week's logs carry different rates, or an amount was billed on hours while Days counts session units (or vice versa) — so check both, not just the rates. `
+        + `The stored rates and amounts are unchanged — worth investigating.`
+      }
+      style={{
+        fontSize: 9, lineHeight: 1, color: '#f59e0b', border: '1px solid #f59e0b',
+        borderRadius: 4, padding: '1px 3px', background: 'transparent', cursor: 'help',
+      }}
+    >~</span>
+  );
+}
+
 /* ── Status config ────────────────────────────────────────────────────────── */
 
 const PAY_STATUS_CFG = {
@@ -545,13 +623,14 @@ function exportExcel(logs: Log[], weekLabel: string) {
 
 function exportCSV(logs: Log[], weekLabel: string) {
   // Group by trainer, sum days (hours) and total amount
-  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rate: number; total: number; comments: string[] }>();
+  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rates: number[]; total: number; comments: string[] }>();
   logs.forEach((l, i) => {
     const key = l.trainer.id;
-    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rate: l.rateSnapshot, total: 0, comments: [] });
+    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rates: [], total: 0, comments: [] });
     const t = byTrainer.get(key)!;
     t.days += toSessions(l);
     t.total += l.amountInr;
+    t.rates.push(l.rateSnapshot);
     if (l.comments) t.comments.push(l.comments);
   });
 
@@ -562,7 +641,8 @@ function exportCSV(logs: Log[], weekLabel: string) {
       ? `UPI: ${tr.upiId}`
       : [tr.bankHolderName, tr.bankName, tr.bankAccountNumber ? `A/c: ${tr.bankAccountNumber}` : '', tr.bankIfscCode ? `IFSC: ${tr.bankIfscCode}` : ''].filter(Boolean).join(' | ');
     const phone = tr.phoneCode && tr.phoneDigits ? `${tr.phoneCode}${tr.phoneDigits}` : '';
-    return [i + 1, tr.name, `"${bankDetails}"`, phone, t.days, t.rate, t.total, `"${t.comments.join('; ')}"`].join(',');
+    const ri = displayRate(t.rates, t.days, t.total);
+    return [i + 1, tr.name, `"${bankDetails}"`, phone, t.days, ri.rate, t.total, `"${withRateMarker(t.comments, ri.mixed)}"`].join(',');
   });
 
   const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -576,13 +656,14 @@ function exportCSV(logs: Log[], weekLabel: string) {
 
 function exportWhatsApp(logs: Log[], weekLabel: string) {
   // Group by trainer
-  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rate: number; total: number }>();
+  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rates: number[]; total: number }>();
   logs.forEach((l) => {
     const key = l.trainer.id;
-    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rate: l.rateSnapshot, total: 0 });
+    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rates: [], total: 0 });
     const t = byTrainer.get(key)!;
     t.days += toSessions(l);
     t.total += l.amountInr;
+    t.rates.push(l.rateSnapshot);
   });
 
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
@@ -595,7 +676,8 @@ function exportWhatsApp(logs: Log[], weekLabel: string) {
   ];
 
   Array.from(byTrainer.values()).forEach((t, i) => {
-    lines.push(`${String(i + 1).padEnd(6)} ${t.trainer.name.padEnd(22)} ${String(t.days).padEnd(6)} * ${String(t.rate).padEnd(12)} (=) ${t.total}`);
+    const ri = displayRate(t.rates, t.days, t.total);
+    lines.push(`${String(i + 1).padEnd(6)} ${t.trainer.name.padEnd(22)} ${String(t.days).padEnd(6)} * ${String(ri.rate).padEnd(12)} (=) ${t.total}${ri.mixed ? '  ⚠ rate reconciled' : ''}`);
   });
 
   const grand = Array.from(byTrainer.values()).reduce((s, t) => s + t.total, 0);
@@ -639,17 +721,17 @@ function exportBhavneetSheet(allWeeksLogs: { weekStart: string; logs: Log[] }[])
   const trainers = Array.from(trainerMap.values()).sort((a, b) => a.name.localeCompare(b.name));
 
   // Aggregate per trainer per week, also collect client names
-  type WeekData = { days: number; rate: number; total: number; comments: string[]; clients: Set<string> };
+  type WeekData = { days: number; rates: number[]; total: number; comments: string[]; clients: Set<string> };
   const data = new Map<string, Map<string, WeekData>>(); // trainerId → weekStart → data
   for (const { weekStart, logs } of allWeeksLogs) {
     for (const l of logs) {
       if (!data.has(l.trainer.id)) data.set(l.trainer.id, new Map());
       const tw = data.get(l.trainer.id)!;
-      if (!tw.has(weekStart)) tw.set(weekStart, { days: 0, rate: l.rateSnapshot, total: 0, comments: [], clients: new Set() });
+      if (!tw.has(weekStart)) tw.set(weekStart, { days: 0, rates: [], total: 0, comments: [], clients: new Set() });
       const w = tw.get(weekStart)!;
       w.days += toSessions(l);   // sessions, not raw hours
       w.total += l.amountInr;
-      w.rate = l.rateSnapshot;   // per-session rate as stored
+      w.rates.push(l.rateSnapshot);
       if (l.comments) w.comments.push(l.comments);
       if (l.client?.name) w.clients.add(l.client.name);
     }
@@ -723,11 +805,12 @@ function exportBhavneetSheet(allWeeksLogs: { weekStart: string; logs: Log[] }[])
       const w = data.get(t.id)?.get(ws);
       const bg = WEEK_COLORS[wi % WEEK_COLORS.length].row;
       const clients = w ? Array.from(w.clients).join(', ') : '';
+      const ri = w ? displayRate(w.rates, w.days, w.total) : null;
       row += tdNum(w ? w.days : 0, bg)
-           + tdNum(w ? w.rate : '', bg)
+           + tdNum(ri ? ri.rate : '', bg)
            + tdNum(w ? w.total : 0, bg, true)
            + td(clients, bg, 'font-size:10px;color:#555;')
-           + td(w?.comments.join('; ') ?? '', bg, 'font-size:10px;');
+           + td(w && ri ? withRateMarker(w.comments, ri.mixed) : '', bg, 'font-size:10px;');
     }
     row += '</tr>';
     return row;
@@ -839,16 +922,19 @@ function SummaryCard({ label, value, color }: { label: string; value: string; co
 
 /** Groups session logs by trainer — same shape as exportCSV, for on-screen review. */
 function groupByTrainer(logs: Log[]) {
-  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rate: number; total: number; comments: string[] }>();
+  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rates: number[]; total: number; comments: string[] }>();
   logs.forEach((l) => {
     const key = l.trainer.id;
-    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rate: l.rateSnapshot, total: 0, comments: [] });
+    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rates: [], total: 0, comments: [] });
     const t = byTrainer.get(key)!;
     t.days += toSessions(l);
     t.total += l.amountInr;
+    t.rates.push(l.rateSnapshot);
     if (l.comments) t.comments.push(l.comments);
   });
-  return Array.from(byTrainer.values()).sort((a, b) => a.trainer.name.localeCompare(b.trainer.name));
+  return Array.from(byTrainer.values())
+    .map((t) => ({ ...t, rate: reconciledRate(t.rates, t.days, t.total) }))
+    .sort((a, b) => a.trainer.name.localeCompare(b.trainer.name));
 }
 
 function bankDetailsText(tr: TrainerInfo): string {
@@ -908,7 +994,8 @@ type TrainerRow = {
   date: string;       // latest session date for this week
   days: number;       // raw hours sum across logs
   rateModel: string;  // per_session or per_hour
-  perSession: number; // rate snapshot
+  perSession: number; // rate snapshot from the earliest log — used by the edit/sync WRITE paths
+  rates: number[];    // every log's rateSnapshot, for the reconciliation check (display only)
   amount: number;     // total amount
   logIds: string[];   // underlying log ids (for status ops)
   status: string;     // worst-case status across logs (Paid if all paid, else Logged)
@@ -937,11 +1024,12 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
     for (const l of logs) {
       const key = l.trainer.id;
       if (!map.has(key)) {
-        map.set(key, { trainer: l.trainer, date: l.date, days: 0, rateModel: l.rateModel || 'per_session', perSession: l.rateSnapshot, amount: 0, logIds: [], status: 'Paid' });
+        map.set(key, { trainer: l.trainer, date: l.date, days: 0, rateModel: l.rateModel || 'per_session', perSession: l.rateSnapshot, rates: [], amount: 0, logIds: [], status: 'Paid' });
       }
       const r = map.get(key)!;
       r.days += toSessions(l);   // session count (0.5 or 1 per log for per_session; hours for per_hour)
       r.amount += l.amountInr;
+      r.rates.push(l.rateSnapshot);
       r.logIds.push(l.id);
       if (l.date > r.date) r.date = l.date;
       // status: if any log isn't Paid, show as unpaid
@@ -957,9 +1045,13 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
     return pw && pw.daysOverride != null ? pw.daysOverride : null;
   };
   const effDaysFor = (r: TrainerRow): number => overrideFor(r.trainer.id) ?? r.days;
+  // The rate the row DISPLAYS — the stored rate when it reconciles with Amount,
+  // otherwise the rate implied by the total. Never written back.
+  const rateInfoFor = (r: TrainerRow) => displayRate(r.rates, r.days, r.amount);
   const effAmountFor = (r: TrainerRow): number => {
     const o = overrideFor(r.trainer.id);
-    return o == null ? r.amount : Math.round(o * r.perSession);
+    // Derive from the displayed rate so Days x rate still reconciles to Amount.
+    return o == null ? r.amount : Math.round(o * rateInfoFor(r).rate);
   };
 
   const grandTotal = rows.reduce((s, r) => s + effAmountFor(r), 0);
@@ -1026,6 +1118,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
             const isEditing = editingAmount === r.trainer.id;
 
             const pw = payWeeks.find(w => w.trainerId === r.trainer.id);
+            const rate = rateInfoFor(r);
 
             return (
               <tr key={r.trainer.id} style={{ background: isPaid ? 'rgba(34,197,94,0.04)' : undefined }}>
@@ -1052,6 +1145,9 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                 <td style={{ ...tdStyle, fontFamily: 'monospace' }}>
                   {canEdit ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {rate.mixed ? (
+                      <span title="Implied from the total — the stored rate does not reconcile with Amount">₹{fmtRate(rate.rate)}</span>
+                      ) : (
                       <EditableNumber value={r.perSession} logId={r.logIds[0]} field="rateSnapshot" prefix="₹" onSaved={async () => {
                         // Also update all other logs for this trainer in the same week
                         if (r.logIds.length > 1) {
@@ -1060,6 +1156,8 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                         }
                         onRefresh();
                       }} />
+                      )}
+                      {rate.mixed && <MixedRateBadge distinct={rate.distinct} />}
                       <button
                         title="Sync rate from trainer profile"
                         style={{ fontSize: 10, color: r.perSession === 0 ? '#f59e0b' : 'var(--brand-textMuted)', cursor: 'pointer', border: `1px solid ${r.perSession === 0 ? '#f59e0b' : 'var(--brand-border)'}`, borderRadius: 4, padding: '1px 5px', background: 'transparent', opacity: r.perSession === 0 ? 1 : 0.5 }}
@@ -1075,7 +1173,12 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                         }}
                       >↺</button>
                     </div>
-                  ) : `₹${r.perSession.toLocaleString()}`}
+                  ) : (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <span>₹{fmtRate(rate.rate)}</span>
+                      {rate.mixed && <MixedRateBadge distinct={rate.distinct} />}
+                    </span>
+                  )}
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 600 }}>
                   {isEditing ? (
