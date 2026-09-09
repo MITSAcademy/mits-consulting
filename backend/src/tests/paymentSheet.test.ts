@@ -31,14 +31,18 @@ jest.mock('../lib/prisma', () => ({
     regularTraining: { findFirst: jest.fn() },
     sessionLog:      { create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
     trainerPayWeek:  { upsert: jest.fn(), findMany: jest.fn() },
+    payoutBatch:     { create: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), updateMany: jest.fn() },
     auditLog:        { create: jest.fn() },
   },
 }));
+
+jest.mock('../lib/audit', () => ({ audit: jest.fn() }));
 
 import { RateModel } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { sessionLogsRouter } from '../routes/sessionLogs';
 import { trainerPayWeeksRouter } from '../routes/trainerPayWeeks';
+import { payoutsRouter } from '../routes/payouts';
 
 const db = prisma as any;
 
@@ -46,6 +50,7 @@ const app = express();
 app.use(express.json());
 app.use('/session-logs', sessionLogsRouter);
 app.use('/trainer-pay-weeks', trainerPayWeeksRouter);
+app.use('/payouts', payoutsRouter);
 const api = supertest(app);
 
 /** The `data` object handed to prisma.sessionLog.create by the route. */
@@ -318,19 +323,91 @@ describe('Bug 4 -- Days override persists on TrainerPayWeek', () => {
 });
 
 /* ---------------------------------------------------------------------------
+   PAYOUT AMOUNTS -- real money comes from stored amountInr, never from display
+   --------------------------------------------------------------------------- */
+describe('Payout amounts are computed server-side from stored amountInr', () => {
+  // The Payment Sheet now DISPLAYS a derived total (Days x Rate) instead of the
+  // stored amountInr sum. These tests pin the boundary: that display change must
+  // never be able to move real money. POST /payouts re-reads the logs from the
+  // database and sums their stored amountInr; the client sends only sessionIds.
+  //
+  // If one of these fails, someone has wired a display figure into the payout
+  // path. Read the DESIGN RULE at the top of frontend/src/lib/paySheetCalc.ts.
+  beforeEach(() => {
+    db.payoutBatch.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'pb-1', ...data }));
+    db.sessionLog.updateMany.mockResolvedValue({ count: 2 });
+  });
+
+  const storedLogs = [
+    { id: 's1', amountInr: 6183, status: 'Logged', hours: 2, rateSnapshot: 1300 },
+    { id: 's2', amountInr: 4000, status: 'Logged', hours: 2, rateSnapshot: 1300 },
+  ];
+
+  it('sums the STORED amountInr, not Days x Rate', async () => {
+    db.sessionLog.findMany.mockResolvedValue(storedLogs);
+
+    const res = await api.post('/payouts').send({ weekStart: '2026-09-07', sessionIds: ['s1', 's2'] });
+
+    expect(res.status).toBe(201);
+    // 6183 + 4000 stored. Days x Rate for these logs would be 2 x 1300 = 2600,
+    // which must NOT be what the batch is created with.
+    expect(db.payoutBatch.create.mock.calls[0][0].data.totalInr).toBe(10183);
+    expect(db.payoutBatch.create.mock.calls[0][0].data.totalInr).not.toBe(2600);
+  });
+
+  it('ignores any amount the client tries to supply', async () => {
+    db.sessionLog.findMany.mockResolvedValue(storedLogs);
+
+    const res = await api.post('/payouts').send({
+      weekStart: '2026-09-07', sessionIds: ['s1', 's2'],
+      // None of these may influence the batch total.
+      totalInr: 999999, total: 999999, amountInr: 999999, days: 50, rate: 9999,
+    });
+
+    expect(res.status).toBe(201);
+    expect(db.payoutBatch.create.mock.calls[0][0].data.totalInr).toBe(10183);
+  });
+
+  it('re-reads the logs from the database rather than trusting the request', async () => {
+    db.sessionLog.findMany.mockResolvedValue(storedLogs);
+
+    await api.post('/payouts').send({ weekStart: '2026-09-07', sessionIds: ['s1', 's2'] });
+
+    // The route must query by id AND status, so an already-batched session
+    // cannot be double-paid, and the amount can only come from the DB row.
+    const where = db.sessionLog.findMany.mock.calls[0][0].where;
+    expect(where.id.in).toEqual(['s1', 's2']);
+    expect(where.status).toBe('Logged');
+  });
+
+  it('never pays a session that is not in Logged status', async () => {
+    db.sessionLog.findMany.mockResolvedValue([]);
+
+    const res = await api.post('/payouts').send({ weekStart: '2026-09-07', sessionIds: ['s1'] });
+
+    expect(res.status).toBe(409);
+    expect(db.payoutBatch.create).not.toHaveBeenCalled();
+  });
+});
+
+/* ---------------------------------------------------------------------------
    BUG 2 -- internal training calls excluded from the Payment Sheet
    --------------------------------------------------------------------------- */
 describe('Bug 2 -- internal training calls excluded', () => {
   // The exclusion rule (`isTrainingCall`, matching rateModel training_one_shot /
-  // training_monthly) lives in frontend/src/pages/TrainerPaySheetPage.tsx. It has
-  // no backend counterpart by design: GET /session-logs deliberately returns every
-  // log for the week and the Payment Sheet filters at render time.
+  // training_monthly) lives in frontend/src/lib/paySheetCalc.ts. It has no backend
+  // counterpart by design: GET /session-logs deliberately returns every log for
+  // the week and the Payment Sheet filters at render time.
   //
   // It cannot be covered from backend/src/tests -- backend tsconfig sets
-  // rootDir: "src", so it cannot import across into frontend/ -- and frontend has
-  // no test runner configured (no vitest/jest in frontend/package.json).
-  // Covering it needs a frontend test runner, which is a tooling decision.
-  it.todo('excludes training_one_shot / training_monthly logs -- blocked: no frontend test runner');
+  // rootDir: "src", so a test in here cannot import across into frontend/ without
+  // breaking `npm run build` -- and frontend has no test runner configured.
+  //
+  // It IS covered, along with every other calculation invariant, by the
+  // randomised property tests in backend/scripts/paySheetCalcCheck.ts, which
+  // drive the real shared module through tsx (outside rootDir, so the build is
+  // unaffected).  Run:  npm run test:paysheet-calc
+  it.todo('excludes training_one_shot / training_monthly logs -- covered by npm run test:paysheet-calc');
 
   it('GET /session-logs still returns all logs (filtering is the sheet job)', async () => {
     db.sessionLog.findMany.mockResolvedValue([
