@@ -12,7 +12,7 @@ import { useAuth } from '@/store/auth';
 // the exports and the payout view can never disagree. See the DESIGN RULE at the
 // top of it before changing any display maths.
 import {
-  isTrainingCall, buildTrainerWeekRows, grandTotal, roundDays, fmtRate,
+  isTrainingCall, buildTrainerWeekRows, grandTotal, pendingTotal, roundDays, fmtRate,
   buildCsvLines, buildWhatsAppLines, CSV_HEADER,
   type TrainerWeekRow, type OverrideLookup,
 } from '@/lib/paySheetCalc';
@@ -851,7 +851,6 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, getOverr
   onUpdatePayWeek: (trainerId: string, data: any) => void;
 }) {
   const showToast = useUI((s) => s.showToast);
-  const [editingAmount, setEditingAmount] = useState<string | null>(null);
 
   // One shared builder — the exports and the payout view call the very same
   // function with the very same override lookup, so they cannot drift apart.
@@ -870,20 +869,11 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, getOverr
     }
   };
 
-  const saveAmount = async (trainerId: string, logIds: string[], newTotal: number, perSession: number) => {
-    // Distribute amount evenly across all logs for this trainer
-    const perLog = Math.round(newTotal / logIds.length);
-    try {
-      await Promise.all(logIds.map((id) => api.patch(`/session-logs/${id}`, { amountInr: perLog, rateSnapshot: perSession })));
-      // An explicit amount wins over a Days override, otherwise the derived
-      // days x rate figure would immediately overwrite what was just typed.
-      if (getOverride(trainerId) != null) onUpdatePayWeek(trainerId, { daysOverride: null });
-      onRefresh();
-    } catch {
-      showToast('Failed to save', 'error');
-    }
-    setEditingAmount(null);
-  };
+  /* There is deliberately no saveAmount here any more. Amount is derived from
+     Days x Rate, so writing amountInr from this screen could not round-trip:
+     the typed figure was stored but the cell kept showing the derived one, and
+     the write silently flattened every log in the week to the average. The two
+     real inputs (Days, Per Session) each have their own editor. */
 
   const thStyle: React.CSSProperties = {
     padding: '9px 12px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
@@ -919,8 +909,6 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, getOverr
               const l = logs.find((x) => x.id === id);
               return l?.status === 'Paid';
             });
-            const isEditing = editingAmount === r.trainer.id;
-
             const pw = payWeeks.find(w => w.trainerId === r.trainer.id);
 
             return (
@@ -981,36 +969,16 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, getOverr
                     </span>
                   )}
                 </td>
-                <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 600 }}>
-                  {isEditing ? (
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      <span style={{ color: 'var(--brand-textMuted)', fontSize: 12 }}>₹</span>
-                      <input
-                        type="number"
-                        // Seeded from the STORED amount, deliberately NOT from
-                        // the displayed Days x Rate figure. Blurring this input
-                        // WRITES amountInr to every log in the week, so seeding
-                        // it with a derived number would let a stray click
-                        // silently rewrite stored financial data. The box edits
-                        // real stored money; the cell above it shows the
-                        // derived display figure.
-                        defaultValue={r.storedTotal}
-                        autoFocus
-                        style={{ width: 80, background: 'var(--bg-input)', border: '1px solid var(--brand-border)', borderRadius: 4, padding: '2px 6px', fontSize: 12, color: 'var(--brand-text)', fontFamily: 'monospace' }}
-                        onBlur={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) saveAmount(r.trainer.id, r.logIds, v, r.firstLogRate); else setEditingAmount(null); }}
-                        onKeyDown={(e) => { if (e.key === 'Escape') setEditingAmount(null); }}
-                      />
-                    </div>
-                  ) : (
-                    <button
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: canEdit ? 'pointer' : 'default' }}
-                      onClick={() => { if (canEdit) setEditingAmount(r.trainer.id); }}
-                      title={canEdit ? 'Click to edit' : undefined}
-                    >
-                      ₹{r.total.toLocaleString()}
-                      {canEdit && <Pencil size={9} style={{ opacity: 0.4 }} />}
-                    </button>
-                  )}
+                {/* READ-ONLY BY DESIGN. Amount is derived output (Days x Rate),
+                    not an independent input, so there is nothing here to edit:
+                    change Days or Per Session and this follows. It used to be
+                    editable, writing amountInr across the week's logs — which
+                    under the derived rule was silently discarded from the
+                    display, so the typed figure never came back. Change the
+                    inputs, not the result. */}
+                <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 600 }}
+                    title={`${r.days} × ₹${fmtRate(r.rate)}`}>
+                  ₹{r.total.toLocaleString()}
                 </td>
                 <td style={{ ...tdStyle, textAlign: 'center' }}>
                   {canMarkStatus ? (
@@ -1250,7 +1218,11 @@ export function TrainerPaySheetPage() {
   const summaryRows = useMemo(() => buildTrainerWeekRows(filtered, getOverride), [filtered, getOverride]);
   const totalAmount   = grandTotal(summaryRows);
   const totalDays     = roundDays(summaryRows.reduce((s, r) => s + r.days, 0));
-  const totalPending  = summaryRows.filter((r) => r.status !== 'Paid').reduce((s, r) => s + r.total, 0);
+  // Pro-rated by the unpaid share of each week's days, so a part-paid trainer
+  // contributes only the unpaid portion — matching what the old per-log
+  // amountInr sum reported. See rowPending() for why this is not "any unpaid
+  // log means the whole row".
+  const totalPending  = pendingTotal(summaryRows);
   const uniqueTrainers = summaryRows.length;
   // Raw sum of the stored amountInr. Shown only in the session-level Detail
   // table, whose rows are individual stored logs.

@@ -144,6 +144,9 @@ export type TrainerWeekRow = {
   days: number;
   /** Days derived from the session logs, ignoring any override. */
   derivedDays: number;
+  /** Of `derivedDays`, the portion sitting on logs that are not yet Paid.
+   *  Used to pro-rate a partly-paid week — see rowPending(). */
+  unpaidDerivedDays: number;
   /** True when a manual Days override supplied `days`. */
   isOverridden: boolean;
   /** The stored rate shown on screen. */
@@ -185,7 +188,7 @@ export function buildTrainerWeekRows(
   getOverride: OverrideLookup = () => null,
 ): TrainerWeekRow[] {
   type Acc = {
-    trainer: CalcTrainer; derivedDays: number; storedTotal: number;
+    trainer: CalcTrainer; derivedDays: number; unpaidDerivedDays: number; storedTotal: number;
     rates: number[]; logIds: string[]; logs: CalcLog[];
     comments: string[]; clients: Set<string>; date: string; status: string;
   };
@@ -196,13 +199,15 @@ export function buildTrainerWeekRows(
     const key = l.trainer.id;
     if (!map.has(key)) {
       map.set(key, {
-        trainer: l.trainer, derivedDays: 0, storedTotal: 0, rates: [],
+        trainer: l.trainer, derivedDays: 0, unpaidDerivedDays: 0, storedTotal: 0, rates: [],
         logIds: [], logs: [], comments: [], clients: new Set<string>(),
         date: l.date, status: 'Paid',
       });
     }
     const a = map.get(key)!;
-    a.derivedDays += toSessions(l);
+    const logDays = toSessions(l);
+    a.derivedDays += logDays;
+    if (l.status !== 'Paid') a.unpaidDerivedDays += logDays;
     if (usableNumber(l.amountInr)) a.storedTotal += l.amountInr;
     a.rates.push(l.rateSnapshot);
     a.logIds.push(l.id);
@@ -224,6 +229,7 @@ export function buildTrainerWeekRows(
         trainer: a.trainer,
         days,
         derivedDays,
+        unpaidDerivedDays: roundDays(a.unpaidDerivedDays),
         isOverridden,
         rate,
         distinctRates: Array.from(new Set(a.rates.filter(usableNumber))).sort((x, y) => x - y),
@@ -244,6 +250,33 @@ export function buildTrainerWeekRows(
 /** Grand total of the DISPLAYED figures. Always equals the sum of Days x Rate. */
 export function grandTotal(rows: TrainerWeekRow[]): number {
   return rows.reduce((s, r) => s + r.total, 0);
+}
+
+/**
+ * The still-unpaid share of one row's displayed Total.
+ *
+ * Payment status lives on the individual session logs, but the Total is now a
+ * whole-week figure (Days x Rate), so a part-paid week has to be pro-rated: the
+ * unpaid fraction of the week's derived days is applied to the displayed Total.
+ * Two logs paid out of three therefore reports a third of the row, which is what
+ * the old per-log `amountInr` sum reported too.
+ *
+ * Do NOT simplify this to "any unpaid log means the whole row is pending" — that
+ * over-reports every part-paid week, which is the bug this function exists to
+ * avoid.
+ */
+export function rowPending(r: TrainerWeekRow): number {
+  if (r.derivedDays > 0) {
+    return Math.round(r.total * (r.unpaidDerivedDays / r.derivedDays));
+  }
+  // No derived days to pro-rate against (every log a no-show, or an overridden
+  // row with no logged time). Fall back to the whole row when it is not Paid.
+  return r.status !== 'Paid' ? r.total : 0;
+}
+
+/** Sum of the unpaid share across rows — the "Pending Payment" figure. */
+export function pendingTotal(rows: TrainerWeekRow[]): number {
+  return rows.reduce((s, r) => s + rowPending(r), 0);
 }
 
 /** Whole rates render plainly; a fractional one keeps 2dp so the row ties out. */

@@ -18,6 +18,7 @@
 
 import {
   buildTrainerWeekRows, buildCsvLines, buildWhatsAppLines, grandTotal,
+  rowPending, pendingTotal,
   toSessions, isTrainingCall, roundDays, fmtRate, effectiveRateModel,
   type CalcLog, type OverrideLookup, type TrainerWeekRow,
 } from '../../frontend/src/lib/paySheetCalc';
@@ -276,6 +277,18 @@ function main() {
       check(r.days === r.derivedDays, `(d) ${r.trainer.id}: days ${r.days} !== derivedDays ${r.derivedDays}`);
     }
 
+    /* pending must be a share of the row, never more than it, never negative */
+    const pend = rowPending(r);
+    check(Number.isFinite(pend), `(g) ${r.trainer.id}: pending is ${pend}`);
+    check(pend >= Math.min(0, r.total) && Math.abs(pend) <= Math.abs(r.total) + 1,
+      `(g) ${r.trainer.id}: pending ${pend} outside the row total ${r.total}`);
+    const allPaid = f.logs.length > 0 && f.logs.every((l) => l.status === 'Paid');
+    const nonePaid = f.logs.length > 0 && f.logs.every((l) => l.status !== 'Paid');
+    if (allPaid) check(pend === 0, `(g) ${r.trainer.id}: fully paid but pending ${pend}`);
+    if (nonePaid) check(pend === r.total, `(g) ${r.trainer.id}: nothing paid but pending ${pend} !== total ${r.total}`);
+    check(r.unpaidDerivedDays <= r.derivedDays + 1e-9,
+      `(g) ${r.trainer.id}: unpaidDerivedDays ${r.unpaidDerivedDays} > derivedDays ${r.derivedDays}`);
+
     /* the displayed rate must be a rate that is really stored on a log */
     const stored = f.logs.map((l) => l.rateSnapshot);
     check(stored.length === 0 || stored.includes(r.rate),
@@ -356,6 +369,19 @@ function main() {
   check(sp.rate === 1300, `regression: Sathish rate ${sp.rate} !== 1300 (must be the STORED rate, never 10183/4.5)`);
   check(sp.total === 5850, `regression: Sathish total ${sp.total} !== 5850`);
   check(sp.storedTotal === 10183, `regression: Sathish storedTotal ${sp.storedTotal} !== 10183 (stored data must be untouched)`);
+
+  /* Pending pro-ration regression: 2 of 3 equal days paid must report a third
+     of the row, NOT the whole row (the bug this replaced). */
+  const partial = buildTrainerWeekRows([0, 1, 2].map((j) => ({
+    id: `pp${j}`, date: '2026-09-07', hours: 2, rateSnapshot: 1200,
+    rateModel: 'per_session', amountInr: 1200, status: j < 2 ? 'Paid' : 'Logged',
+    sessionHappened: true, trainer: { id: 'pp', name: 'Partly Paid', rateModel: 'per_session' },
+  })))[0];
+  check(partial.days === 3, `pending regression: days ${partial.days} !== 3`);
+  check(partial.total === 3600, `pending regression: total ${partial.total} !== 3600`);
+  check(partial.unpaidDerivedDays === 1, `pending regression: unpaidDerivedDays ${partial.unpaidDerivedDays} !== 1`);
+  check(rowPending(partial) === 1200, `pending regression: pending ${rowPending(partial)} !== 1200 (a third of 3600)`);
+  check(pendingTotal([partial]) === 1200, `pending regression: pendingTotal ${pendingTotal([partial])} !== 1200`);
 
   /* float-drift regression: 1.1 + 2.2 must not render as 3.3000000000000003 */
   const drift = buildTrainerWeekRows([
