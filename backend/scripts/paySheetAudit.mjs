@@ -16,6 +16,12 @@
  *                         equal the Amount, with a per-log breakdown, payment
  *                         status, historical scope, and a copy-paste CSV block.
  *                         --weeks=N widens that report past a single week.
+ *   BULK CORRECTION PROPOSAL
+ *                         for those same mismatched rows, what the amount WOULD
+ *                         be under the fixed formula (days x stored rate), the
+ *                         over/under difference, and a per-row confidence flag.
+ *                         A proposal for a human to read: it changes nothing,
+ *                         applies nothing, and writes nothing.
  */
 
 import 'dotenv/config';
@@ -383,6 +389,188 @@ async function main() {
     console.log('--- end CSV ---');
   }
 
+  /* ── BULK CORRECTION PROPOSAL ───────────────────────────────────────────── */
+  // STILL READ-ONLY. Takes every trainer-week the RATE MISMATCH REPORT flagged
+  // above and works out what the amount WOULD be under the fixed formula
+  //
+  //     proposedAmount = round(days x stored rate)
+  //
+  // where `days` already comes from the corrected toSessions() rule — session
+  // units for per_session trainers, raw hours for hourly ones. This section
+  // proposes numbers for a human to read. It writes nothing, and it does not
+  // alter any row of the report above.
+
+  const PROPOSAL_DISCLAIMER = [
+    '  THIS IS A PROPOSAL ONLY. Nothing has been changed.',
+    '  Every row must be reviewed by a human before any correction is applied.',
+    '  Rows marked NEEDS MANUAL REVIEW require special attention — do not',
+    '  bulk-approve without checking them individually.',
+  ];
+  const loudDisclaimer = () => {
+    console.log('');
+    console.log('!'.repeat(78));
+    for (const line of PROPOSAL_DISCLAIMER) console.log('!!' + line);
+    console.log('!'.repeat(78));
+  };
+
+  // Free-text markers that suggest a human deliberately set the amount. A hit
+  // does NOT mean the row is wrong — it means the row must not be auto-touched.
+  const OVERRIDE_PATTERNS = [
+    ['bonus', /bonus/i],
+    ['adjustment', /adjust/i],
+    ['override', /overrid/i],
+    ['special rate', /special\s*-?\s*rate/i],
+    ['manual', /manual/i],
+    ['negotiated', /negotiat/i],
+    ['incentive', /incentive/i],
+    ['arrears', /arrear/i],
+    ['discount', /discount/i],
+  ];
+
+  h(`BULK CORRECTION PROPOSAL — ${rangeStart} .. ${rangeEnd}${weekCount > 1 ? ` (${weekCount} weeks)` : ''}`);
+  loudDisclaimer();
+
+  // Comments/notes for the flagged logs only — a bounded, read-only lookup.
+  const flaggedLogIds = bad.flatMap((b) => b.logs.map((l) => l.id));
+  const freeTextById = new Map();
+  if (flaggedLogIds.length) {
+    const withText = await prisma.sessionLog.findMany({
+      where: { id: { in: flaggedLogIds } },
+      select: { id: true, comments: true, notes: true },
+    });
+    for (const r of withText) freeTextById.set(r.id, r);
+  }
+
+  const scanOverride = (log) => {
+    const extra = freeTextById.get(log.id) || {};
+    const hits = [];
+    for (const [field, text] of [['comments', extra.comments], ['notes', extra.notes]]) {
+      if (!text) continue;
+      for (const [label, re] of OVERRIDE_PATTERNS) {
+        if (re.test(text)) {
+          const quoted = String(text).replace(/\s+/g, ' ').trim().slice(0, 60);
+          hits.push(`"${label}" in ${field} ("${quoted}")`);
+        }
+      }
+    }
+    return hits;
+  };
+
+  const proposals = bad.map((b) => {
+    const proposedAmount = b.days > 0 ? Math.round(b.days * b.stored) : 0;
+    const difference = b.amount - proposedAmount;
+    const direction = difference === 0 ? 'NO CHANGE' : difference > 0 ? 'OVERPAID' : 'UNDERPAID';
+    const paidLogs = b.logs.filter((l) => l.status === 'Paid');
+    const overrideHits = b.logs.flatMap(scanOverride);
+
+    // "LIKELY SAFE" requires ALL of these. Any one of them failing forces a
+    // manual read, because the proposed number would otherwise be a guess.
+    const reasons = [];
+    if (b.distinct.length > 1) {
+      reasons.push(`rates disagree across logs (${b.distinct.map(inr).join(' vs ')}) — the proposal used the lowest, ${inr(b.stored)}`);
+    }
+    if (overrideHits.length) {
+      reasons.push(`comment suggests intentional override — ${overrideHits.join('; ')}`);
+    }
+    if (proposedAmount === 0 && b.amount !== 0) {
+      reasons.push(`proposal would zero out a non-zero stored amount of ${inr(b.amount)} (stored rate is ${inr(b.stored)})`);
+    }
+    const safe = reasons.length === 0;
+
+    return {
+      ...b, proposedAmount, difference, direction, paidLogs, safe,
+      confidence: safe ? 'LIKELY SAFE TO AUTO-CORRECT' : 'NEEDS MANUAL REVIEW',
+      reviewNote: safe
+        ? 'all logs in this week share one stored rate; no override keywords in comments/notes'
+        : reasons.join('; '),
+    };
+  });
+
+  if (!proposals.length) {
+    console.log('');
+    console.log('No mismatched trainer-weeks in this range, so there is nothing to propose.');
+  } else {
+    console.log('');
+    console.log(`Proposed corrections for the ${proposals.length} mismatched trainer-week(s) listed above,`);
+    console.log('in the same order. Formula: proposedAmount = round(days x stored rate).');
+    console.log(`Override keyword scan (case-insensitive, on SessionLog.comments and .notes): ${OVERRIDE_PATTERNS.map(([l]) => l).join(', ')}.`);
+    console.log('');
+    console.log(
+      'WEEK'.padEnd(12) + 'TRAINER'.padEnd(24) + 'DAYS'.padEnd(6) + 'RATE'.padEnd(10) +
+      'CURRENT'.padEnd(12) + 'PROPOSED'.padEnd(12) + 'DIFFERENCE'.padEnd(12) +
+      'DIRECTION'.padEnd(11) + 'PAID'.padEnd(7) + 'CONFIDENCE');
+    console.log('-'.repeat(130));
+    for (const p of proposals) {
+      console.log(
+        String(p.weekStart).padEnd(12) +
+        String(p.trainer.name).slice(0, 22).padEnd(24) +
+        String(p.days).padEnd(6) +
+        inr(p.stored).padEnd(10) +
+        inr(p.amount).padEnd(12) +
+        inr(p.proposedAmount).padEnd(12) +
+        inr(Math.abs(p.difference)).padEnd(12) +
+        p.direction.padEnd(11) +
+        `${p.paidLogs.length}/${p.logs.length}`.padEnd(7) +
+        p.confidence);
+      console.log('            why: ' + p.reviewNote);
+      if (p.paidLogs.length) {
+        console.log(`            ** ${p.paidLogs.length} of ${p.logs.length} logs already marked Paid — money may already have gone out **`);
+      }
+    }
+
+    /* ── Proposal summary ─────────────────────────────────────────────────── */
+    const safeRows = proposals.filter((p) => p.safe);
+    const reviewRows = proposals.filter((p) => !p.safe);
+    const sumAbs = (rs) => rs.reduce((s, r) => s + Math.abs(r.difference), 0);
+    const sumNet = (rs) => rs.reduce((s, r) => s + r.difference, 0);
+    const sumPaidLogs = (rs) => rs.reduce((s, r) => s + r.paidLogs.length, 0);
+    const sumCurrent = (rs) => rs.reduce((s, r) => s + r.amount, 0);
+    const sumProposed = (rs) => rs.reduce((s, r) => s + r.proposedAmount, 0);
+
+    const describe = (label, rs) => {
+      const net = sumNet(rs);
+      console.log('');
+      console.log(` ${label}`);
+      console.log(`   trainer-weeks           : ${rs.length}`);
+      console.log(`   current stored total    : ${inr(sumCurrent(rs))}`);
+      console.log(`   proposed total          : ${inr(sumProposed(rs))}`);
+      console.log(`   total amount in play    : ${inr(sumAbs(rs))}  (sum of absolute differences)`);
+      console.log(`   net movement            : ${inr(Math.abs(net))} ${net === 0 ? '' : net > 0 ? 'would come OFF the sheet (overpaid)' : 'would go ON to the sheet (underpaid)'}`);
+      console.log(`   overpaid / underpaid    : ${rs.filter((r) => r.difference > 0).length} / ${rs.filter((r) => r.difference < 0).length}`);
+      console.log(`   logs already Paid       : ${sumPaidLogs(rs)}`);
+    };
+
+    console.log('');
+    console.log('='.repeat(78));
+    console.log(' PROPOSAL SUMMARY');
+    console.log('='.repeat(78));
+    describe('LIKELY SAFE TO AUTO-CORRECT', safeRows);
+    describe('NEEDS MANUAL REVIEW', reviewRows);
+    console.log('');
+    console.log(` TOTAL: ${proposals.length} trainer-week(s), ${inr(sumAbs(proposals))} in play, ${sumPaidLogs(proposals)} already-Paid log(s) involved`);
+    console.log('='.repeat(78));
+
+    /* ── Proposal CSV ─────────────────────────────────────────────────────── */
+    const csvq = (v) => `"${String(v == null ? '' : v).replace(/\s*[\r\n]+\s*/g, ' ').replace(/"/g, '""')}"`;
+    console.log('');
+    console.log('--- CSV (copy from the line below into a spreadsheet) ---');
+    console.log([
+      'Week', 'Trainer', 'TrainerId', 'PaymentStructure', 'ProfileRate', 'StoredRate', 'AllStoredRates',
+      'Days', 'CurrentAmount', 'ProposedAmount', 'Difference', 'Direction',
+      'LogsThisWeek', 'PaidLogsThisWeek', 'Confidence', 'ReviewNote',
+    ].join(','));
+    for (const p of proposals) {
+      console.log([
+        p.weekStart, csvq(p.trainer.name), p.trainer.id, p.trainer.rateModel,
+        p.trainer.defaultRateInr, p.stored, csvq(p.distinct.join(' | ')),
+        p.days, p.amount, p.proposedAmount, p.difference, p.direction,
+        p.logs.length, p.paidLogs.length, csvq(p.confidence), csvq(p.reviewNote),
+      ].join(','));
+    }
+    console.log('--- end CSV ---');
+  }
+
+  loudDisclaimer();
   console.log('\nDone. No data was modified by this script.');
 }
 
