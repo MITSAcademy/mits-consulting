@@ -77,21 +77,48 @@ function toSessions(log: Log): number {
   return log.hours <= 1.0 ? 0.5 : 1;
 }
 
+/* ============================================================================
+ * DESIGN RULE: This function must NEVER return a rate that isn't actually
+ * stored somewhere (trainer profile or session log). If the numbers don't add
+ * up, FLAG it — never invent a number to make the math look right. A
+ * confusing-but-real number is always better than a clean-but-fake one on a
+ * payment page.
+ *
+ * History (do not reintroduce): an earlier version returned Amount / Days when
+ * a row failed to reconcile. Every row tied out on screen, but the rate shown
+ * matched no trainer's profile, and users correctly reported it as "rates
+ * stopped syncing from the trainer profile". Showing a plausible fake number
+ * on a payment page is worse than showing a real number with a warning.
+ *
+ * REGRESSION SCENARIO — re-check by hand if you touch this (the real reported
+ * production case, Sathish Punati). There is no frontend test runner in this
+ * repo, so this is the canonical check:
+ *
+ *   displayRate([1300, 1300, 1300, 1300, 1300], 4.5, 10183)
+ *     MUST return { rate: 1300, mixed: true }      <- the stored rate
+ *     MUST NOT return  rate: 2262.89               <- 10183 / 4.5, fabricated
+ *
+ *   Days x Rate = 4.5 x 1300 = 5850, which deliberately does NOT equal the
+ *   Amount of 10183. That 4333 gap is the signal; MixedRateBadge spells it out.
+ *   A row only reconciles (mixed: false) when |storedRate * days - amount| < 1.
+ * ========================================================================== */
+
 /** The "Per Session" figure to DISPLAY for one trainer's week.
  *
- *  Amount is the sum of every log's stored amountInr, while the rate column
- *  historically showed a single log's rateSnapshot (the earliest in the week).
- *  Those are computed from different bases, so the row can read as though the
- *  arithmetic is broken.
+ *  The rate returned is ALWAYS the stored rate. `mixed` reports whether the row
+ *  reconciles:
+ *    reconciles         -> mixed: false, no badge, Days x Rate == Amount
+ *    does not reconcile -> mixed: true, badge shown, and the rate is STILL the
+ *                          stored one — so Days x Rate deliberately will NOT
+ *                          equal Amount. That visible gap is the whole point.
  *
- *    stored rate reconciles -> show it exactly as before
- *    it does not reconcile  -> show the rate implied by the total (amount /
- *                              days), so Days x rate always ties out to Amount
+ *  Non-reconciliation has two causes: the week's logs carry different stored
+ *  rates, or amountInr was billed on hours while Days counts session units (or
+ *  vice versa). Keying off rate differences alone would miss the second.
  *
- *  The trigger is reconciliation, NOT "the logs have different rates" — a week
- *  can fail to reconcile on a single consistent rate, e.g. when amountInr was
- *  billed on hours while Days counts session units (or vice versa). Keying off
- *  rate differences alone would miss exactly that case.
+ *  `rate` comes from the sorted distinct set so every surface (grid, CSV,
+ *  WhatsApp, Bhavneet sheet) shows the same figure regardless of the order the
+ *  logs happen to arrive in.
  *
  *  DISPLAY ONLY. Nothing here is written back: stored rateSnapshot and
  *  amountInr are left exactly as they are.
@@ -101,31 +128,33 @@ function displayRate(rates: number[], days: number, amount: number): {
 } {
   const distinct = Array.from(new Set(rates)).sort((a, b) => a - b);
   const stored = distinct[0] ?? 0;
-  // Nothing billable to divide by — keep the stored rate rather than inventing
-  // one, but still flag it when the logs disagree with each other.
+  // Nothing billable to divide by — the row can only be inconsistent if the
+  // logs disagree with each other.
   if (days <= 0) return { rate: stored, mixed: distinct.length > 1, distinct };
   const reconciles = distinct.length <= 1 && Math.abs(stored * days - amount) < 1;
-  if (reconciles) return { rate: stored, mixed: false, distinct };
-  return { rate: Math.round((amount / days) * 100) / 100, mixed: true, distinct };
+  return { rate: stored, mixed: !reconciles, distinct };
 }
 
-/** The reconciled rate for one aggregated row (grid, export or payout view).
- *  Keeps every surface showing the same figure the Payment Sheet grid shows.
+/** The stored rate for one aggregated row (grid, export or payout view).
+ *  Every surface shows the same figure the Payment Sheet grid shows.
  *  Returns a raw number — callers that emit CSV must NOT locale-format it, or
  *  the thousands separator would inject a comma into the column. */
 function reconciledRate(rates: number[], days: number, total: number): number {
   return displayRate(rates, days, total).rate;
 }
 
-/** Written into export comment fields when a row's rate was reconciled from the
- *  total rather than matching the stored per-log rate, so whoever processes the
- *  payment run can see it. Display only — no stored data is affected. */
-const RATE_RECONCILED_MARKER = '[RATE RECONCILED — VERIFY]';
+/** Written into export comment fields when a row's Amount does not match its
+ *  stored rate, so whoever processes the payment run checks it. Nothing is
+ *  recalculated — this is purely a discrepancy flag. Display only. */
+const RATE_MISMATCH_MARKER = '[AMOUNT DOES NOT MATCH STORED RATE — VERIFY]';
+
+/** Short form of the same flag for the fixed-width WhatsApp summary. */
+const RATE_MISMATCH_SHORT = '  ⚠ amount does not match stored rate';
 
 /** Prepends the marker to a row's existing comments without losing or mangling
  *  them. filter(Boolean) keeps empty comments from producing stray separators. */
 function withRateMarker(comments: string[], mixed: boolean): string {
-  const parts = mixed ? [RATE_RECONCILED_MARKER, ...comments] : comments;
+  const parts = mixed ? [RATE_MISMATCH_MARKER, ...comments] : comments;
   return parts.filter(Boolean).join('; ');
 }
 
@@ -136,16 +165,28 @@ function fmtRate(n: number): string {
     : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/** Flags that the displayed rate is implied from the total, not a stored per-log rate. */
-function MixedRateBadge({ distinct }: { distinct: number[] }) {
-  const stored = distinct.map((x) => `₹${x.toLocaleString()}`).join(', ');
+/** Flags that a row's Amount does not match its stored rate. The tooltip shows
+ *  the real figures — stored rate, what Days x Rate would give, what Amount
+ *  actually says, and the gap — so the reader can act on it without guessing.
+ *  `days` / `total` are the UNDERLYING logged values, not any Days override, so
+ *  the warning keeps describing the source data even when a row is overridden. */
+function MixedRateBadge({ distinct, days, total }: { distinct: number[]; days: number; total: number }) {
+  const stored = distinct[0] ?? 0;
+  const expected = Math.round(stored * days);
+  const diff = total - expected;
+  const money = (n: number) => `₹${Math.round(n).toLocaleString()}`;
+  const multi = distinct.length > 1
+    ? ` This week's logs carry ${distinct.length} different stored rates (${distinct.map(money).join(', ')}); the lowest is shown.`
+    : '';
   return (
     <span
       title={
-        `Days × the stored rate does not add up to Amount, so this shows the rate implied by the total (Amount ÷ Days) and the row ties out. `
-        + `Stored per-log rate${distinct.length > 1 ? 's' : ''}: ${stored}. `
-        + `Two things cause this: the week's logs carry different rates, or an amount was billed on hours while Days counts session units (or vice versa) — so check both, not just the rates. `
-        + `The stored rates and amounts are unchanged — worth investigating.`
+        `This trainer's stored rate is ${money(stored)}/session. `
+        + `Based on Days × Rate, the expected Amount would be ${money(expected)}, `
+        + `but the actual Amount shows ${money(total)} — a difference of ${money(Math.abs(diff))} `
+        + `${diff > 0 ? 'more' : 'less'} than expected. `
+        + `Please verify this row before processing payment.${multi} `
+        + `The stored rates and amounts are unchanged.`
       }
       style={{
         fontSize: 9, lineHeight: 1, color: '#f59e0b', border: '1px solid #f59e0b',
@@ -677,7 +718,7 @@ function exportWhatsApp(logs: Log[], weekLabel: string) {
 
   Array.from(byTrainer.values()).forEach((t, i) => {
     const ri = displayRate(t.rates, t.days, t.total);
-    lines.push(`${String(i + 1).padEnd(6)} ${t.trainer.name.padEnd(22)} ${String(t.days).padEnd(6)} * ${String(ri.rate).padEnd(12)} (=) ${t.total}${ri.mixed ? '  ⚠ rate reconciled' : ''}`);
+    lines.push(`${String(i + 1).padEnd(6)} ${t.trainer.name.padEnd(22)} ${String(t.days).padEnd(6)} * ${String(ri.rate).padEnd(12)} (=) ${t.total}${ri.mixed ? RATE_MISMATCH_SHORT : ''}`);
   });
 
   const grand = Array.from(byTrainer.values()).reduce((s, t) => s + t.total, 0);
@@ -1145,8 +1186,8 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                 <td style={{ ...tdStyle, fontFamily: 'monospace' }}>
                   {canEdit ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {rate.mixed ? (
-                      <span title="Implied from the total — the stored rate does not reconcile with Amount">₹{fmtRate(rate.rate)}</span>
+                      {rate.distinct.length > 1 ? (
+                      <span title="This week's logs carry different stored rates — edit them individually, or use the sync button to set one rate for the week">₹{fmtRate(rate.rate)}</span>
                       ) : (
                       <EditableNumber value={r.perSession} logId={r.logIds[0]} field="rateSnapshot" prefix="₹" onSaved={async () => {
                         // Also update all other logs for this trainer in the same week
@@ -1157,7 +1198,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                         onRefresh();
                       }} />
                       )}
-                      {rate.mixed && <MixedRateBadge distinct={rate.distinct} />}
+                      {rate.mixed && <MixedRateBadge distinct={rate.distinct} days={r.days} total={r.amount} />}
                       <button
                         title="Sync rate from trainer profile"
                         style={{ fontSize: 10, color: r.perSession === 0 ? '#f59e0b' : 'var(--brand-textMuted)', cursor: 'pointer', border: `1px solid ${r.perSession === 0 ? '#f59e0b' : 'var(--brand-border)'}`, borderRadius: 4, padding: '1px 5px', background: 'transparent', opacity: r.perSession === 0 ? 1 : 0.5 }}
@@ -1176,7 +1217,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                   ) : (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                       <span>₹{fmtRate(rate.rate)}</span>
-                      {rate.mixed && <MixedRateBadge distinct={rate.distinct} />}
+                      {rate.mixed && <MixedRateBadge distinct={rate.distinct} days={r.days} total={r.amount} />}
                     </span>
                   )}
                 </td>
