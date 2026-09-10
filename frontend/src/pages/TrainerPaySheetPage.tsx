@@ -8,18 +8,37 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { todayISO } from '@/lib/utils';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
+// Every surface on this page builds its rows from this one module, so the grid,
+// the exports and the payout view can never disagree. See the DESIGN RULE at the
+// top of it before changing any display maths.
+import {
+  isTrainingCall, buildTrainerWeekRows, grandTotal, pendingTotal, roundDays, fmtRate,
+  buildCsvLines, buildWhatsAppLines, CSV_HEADER,
+  type TrainerWeekRow, type OverrideLookup,
+  escapeHtml, tsvCell,
+} from '@/lib/paySheetCalc';
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
+/* Week maths is done entirely in UTC.
+ *
+ * TIMEZONE: `new Date('2026-09-07')` parses as UTC midnight, but getDay() and
+ * setDate() read/write LOCAL time. West of UTC that midnight is the previous
+ * evening, so a Monday reported getDay() === 0 and the week snapped back seven
+ * days — every row on the sheet came from the wrong week. Using the UTC getters
+ * against a UTC-parsed date keeps the two halves in the same frame, and makes
+ * the result independent of where the operator or the server happens to be.
+ * It also sidesteps DST: no local wall-clock arithmetic means no 23- or 25-hour
+ * day that can round to the wrong date. */
 function mondayOf(iso: string) {
-  const d = new Date(iso);
-  const day = d.getDay();
-  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  const d = new Date(iso + 'T00:00:00Z');
+  const day = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1));
   return d.toISOString().slice(0, 10);
 }
 function addDays(iso: string, n: number) {
-  const d = new Date(iso);
-  d.setDate(d.getDate() + n);
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 function fmtWeek(monday: string) {
@@ -50,151 +69,14 @@ type Log = {
   client?: { id: string; name: string } | null;
 };
 
-/** The trainer's payment structure. The trainer record is the source of truth;
- *  the log's snapshot is only a fallback for logs whose trainer no longer
- *  resolves. Legal values come from the RateModel enum in schema.prisma:
- *  hourly | per_session | training_one_shot | training_monthly. */
-function effectiveRateModel(log: Log): string {
-  return log.trainer?.rateModel || log.rateModel || 'per_session';
-}
-
-/** Internal training calls are paid as a separate lump sum, so their timings
- *  must never reach this sheet. */
-function isTrainingCall(log: Log): boolean {
-  const m = effectiveRateModel(log);
-  return m === 'training_one_shot' || m === 'training_monthly';
-}
-
-/** Convert a log to "days" for display/export, strictly per the trainer's
- *  payment structure:
- *    hourly:      raw hours
- *    per_session: ≤1h = 0.5 session, >1h = 1 session
- *  A session that did not happen ("No Session Happened") or that carries no
- *  logged time counts as 0 — it must not bill as a half session. */
-function toSessions(log: Log): number {
-  if (log.sessionHappened === false || !log.hours || log.hours <= 0) return 0;
-  if (effectiveRateModel(log) === 'hourly') return log.hours;
-  return log.hours <= 1.0 ? 0.5 : 1;
-}
-
-/* ============================================================================
- * DESIGN RULE: This function must NEVER return a rate that isn't actually
- * stored somewhere (trainer profile or session log). If the numbers don't add
- * up, FLAG it — never invent a number to make the math look right. A
- * confusing-but-real number is always better than a clean-but-fake one on a
- * payment page.
- *
- * History (do not reintroduce): an earlier version returned Amount / Days when
- * a row failed to reconcile. Every row tied out on screen, but the rate shown
- * matched no trainer's profile, and users correctly reported it as "rates
- * stopped syncing from the trainer profile". Showing a plausible fake number
- * on a payment page is worse than showing a real number with a warning.
- *
- * REGRESSION SCENARIO — re-check by hand if you touch this (the real reported
- * production case, Sathish Punati). There is no frontend test runner in this
- * repo, so this is the canonical check:
- *
- *   displayRate([1300, 1300, 1300, 1300, 1300], 4.5, 10183)
- *     MUST return { rate: 1300, mixed: true }      <- the stored rate
- *     MUST NOT return  rate: 2262.89               <- 10183 / 4.5, fabricated
- *
- *   Days x Rate = 4.5 x 1300 = 5850, which deliberately does NOT equal the
- *   Amount of 10183. That 4333 gap is the signal; MixedRateBadge spells it out.
- *   A row only reconciles (mixed: false) when |storedRate * days - amount| < 1.
- * ========================================================================== */
-
-/** The "Per Session" figure to DISPLAY for one trainer's week.
- *
- *  The rate returned is ALWAYS the stored rate. `mixed` reports whether the row
- *  reconciles:
- *    reconciles         -> mixed: false, no badge, Days x Rate == Amount
- *    does not reconcile -> mixed: true, badge shown, and the rate is STILL the
- *                          stored one — so Days x Rate deliberately will NOT
- *                          equal Amount. That visible gap is the whole point.
- *
- *  Non-reconciliation has two causes: the week's logs carry different stored
- *  rates, or amountInr was billed on hours while Days counts session units (or
- *  vice versa). Keying off rate differences alone would miss the second.
- *
- *  `rate` comes from the sorted distinct set so every surface (grid, CSV,
- *  WhatsApp, Bhavneet sheet) shows the same figure regardless of the order the
- *  logs happen to arrive in.
- *
- *  DISPLAY ONLY. Nothing here is written back: stored rateSnapshot and
- *  amountInr are left exactly as they are.
- */
-function displayRate(rates: number[], days: number, amount: number): {
-  rate: number; mixed: boolean; distinct: number[];
-} {
-  const distinct = Array.from(new Set(rates)).sort((a, b) => a - b);
-  const stored = distinct[0] ?? 0;
-  // Nothing billable to divide by — the row can only be inconsistent if the
-  // logs disagree with each other.
-  if (days <= 0) return { rate: stored, mixed: distinct.length > 1, distinct };
-  const reconciles = distinct.length <= 1 && Math.abs(stored * days - amount) < 1;
-  return { rate: stored, mixed: !reconciles, distinct };
-}
-
-/** The stored rate for one aggregated row (grid, export or payout view).
- *  Every surface shows the same figure the Payment Sheet grid shows.
- *  Returns a raw number — callers that emit CSV must NOT locale-format it, or
- *  the thousands separator would inject a comma into the column. */
-function reconciledRate(rates: number[], days: number, total: number): number {
-  return displayRate(rates, days, total).rate;
-}
-
-/** Written into export comment fields when a row's Amount does not match its
- *  stored rate, so whoever processes the payment run checks it. Nothing is
- *  recalculated — this is purely a discrepancy flag. Display only. */
-const RATE_MISMATCH_MARKER = '[AMOUNT DOES NOT MATCH STORED RATE — VERIFY]';
-
-/** Short form of the same flag for the fixed-width WhatsApp summary. */
-const RATE_MISMATCH_SHORT = '  ⚠ amount does not match stored rate';
-
-/** Prepends the marker to a row's existing comments without losing or mangling
- *  them. filter(Boolean) keeps empty comments from producing stray separators. */
-function withRateMarker(comments: string[], mixed: boolean): string {
-  const parts = mixed ? [RATE_MISMATCH_MARKER, ...comments] : comments;
-  return parts.filter(Boolean).join('; ');
-}
-
-/** Whole rates render exactly as before; an implied rate keeps 2dp so the row ties out. */
-function fmtRate(n: number): string {
-  return Number.isInteger(n)
-    ? n.toLocaleString()
-    : n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-/** Flags that a row's Amount does not match its stored rate. The tooltip shows
- *  the real figures — stored rate, what Days x Rate would give, what Amount
- *  actually says, and the gap — so the reader can act on it without guessing.
- *  `days` / `total` are the UNDERLYING logged values, not any Days override, so
- *  the warning keeps describing the source data even when a row is overridden. */
-function MixedRateBadge({ distinct, days, total }: { distinct: number[]; days: number; total: number }) {
-  const stored = distinct[0] ?? 0;
-  const expected = Math.round(stored * days);
-  const diff = total - expected;
-  const money = (n: number) => `₹${Math.round(n).toLocaleString()}`;
-  const multi = distinct.length > 1
-    ? ` This week's logs carry ${distinct.length} different stored rates (${distinct.map(money).join(', ')}); the lowest is shown.`
-    : '';
-  return (
-    <span
-      title={
-        `This trainer's stored rate is ${money(stored)}/session. `
-        + `Based on Days × Rate, the expected Amount would be ${money(expected)}, `
-        + `but the actual Amount shows ${money(total)} — a difference of ${money(Math.abs(diff))} `
-        + `${diff > 0 ? 'more' : 'less'} than expected. `
-        + `Please verify this row before processing payment.${multi} `
-        + `The stored rates and amounts are unchanged.`
-      }
-      style={{
-        fontSize: 9, lineHeight: 1, color: '#f59e0b', border: '1px solid #f59e0b',
-        borderRadius: 4, padding: '1px 3px', background: 'transparent', cursor: 'help',
-      }}
-    >~</span>
-  );
-}
+/* Calculation helpers (effectiveRateModel / isTrainingCall / toSessions /
+ * buildTrainerWeekRows / fmtRate) now live in @/lib/paySheetCalc so that the
+ * grid, the three exports and the payout view all share one implementation.
+ * The rate-mismatch warning badge that used to live here has been removed —
+ * the Total is now derived from Days x Rate, so there is nothing on this page
+ * left to warn about. That analysis moved to the read-only audit script,
+ * backend/scripts/paySheetAudit.mjs. The full rationale is the DESIGN RULE
+ * block at the top of @/lib/paySheetCalc. */
 
 /* ── Status config ────────────────────────────────────────────────────────── */
 
@@ -649,9 +531,9 @@ function StatusCell({
 function exportExcel(logs: Log[], weekLabel: string) {
   const header = ['Sr No', 'Date', 'Trainer', 'Client', 'Sessions', 'Rate ₹', 'Total ₹', 'Status', 'Proceed', 'Comments'].join('\t');
   const rows = logs.map((l, i) => [
-    i + 1, l.date, l.trainer.name, l.client?.name || '—',
+    i + 1, l.date, tsvCell(l.trainer.name), tsvCell(l.client?.name || '—'),
     l.hours, l.rateSnapshot, l.amountInr,
-    payLabel(l.status), l.proceed || '—', l.comments || '',
+    payLabel(l.status), tsvCell(l.proceed || '—'), tsvCell(l.comments || ''),
   ].join('\t'));
   const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/tab-separated-values' });
   const url = URL.createObjectURL(blob);
@@ -662,31 +544,10 @@ function exportExcel(logs: Log[], weekLabel: string) {
   URL.revokeObjectURL(url);
 }
 
-function exportCSV(logs: Log[], weekLabel: string) {
-  // Group by trainer, sum days (hours) and total amount
-  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rates: number[]; total: number; comments: string[] }>();
-  logs.forEach((l, i) => {
-    const key = l.trainer.id;
-    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rates: [], total: 0, comments: [] });
-    const t = byTrainer.get(key)!;
-    t.days += toSessions(l);
-    t.total += l.amountInr;
-    t.rates.push(l.rateSnapshot);
-    if (l.comments) t.comments.push(l.comments);
-  });
+function exportCSV(logs: Log[], weekLabel: string, getOverride: OverrideLookup) {
+  const rows = buildCsvLines(buildTrainerWeekRows(logs, getOverride));
 
-  const header = ['Sr No', 'Trainer Name', 'Bank Account / UPI Details', 'Phone (UPI)', 'Days', 'Rate/Session (₹)', 'Total Amount (₹)', 'Comments'].join(',');
-  const rows = Array.from(byTrainer.values()).map((t, i) => {
-    const tr = t.trainer;
-    const bankDetails = tr.upiId
-      ? `UPI: ${tr.upiId}`
-      : [tr.bankHolderName, tr.bankName, tr.bankAccountNumber ? `A/c: ${tr.bankAccountNumber}` : '', tr.bankIfscCode ? `IFSC: ${tr.bankIfscCode}` : ''].filter(Boolean).join(' | ');
-    const phone = tr.phoneCode && tr.phoneDigits ? `${tr.phoneCode}${tr.phoneDigits}` : '';
-    const ri = displayRate(t.rates, t.days, t.total);
-    return [i + 1, tr.name, `"${bankDetails}"`, phone, t.days, ri.rate, t.total, `"${withRateMarker(t.comments, ri.mixed)}"`].join(',');
-  });
-
-  const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob([[CSV_HEADER, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -695,17 +556,8 @@ function exportCSV(logs: Log[], weekLabel: string) {
   URL.revokeObjectURL(url);
 }
 
-function exportWhatsApp(logs: Log[], weekLabel: string) {
-  // Group by trainer
-  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rates: number[]; total: number }>();
-  logs.forEach((l) => {
-    const key = l.trainer.id;
-    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rates: [], total: 0 });
-    const t = byTrainer.get(key)!;
-    t.days += toSessions(l);
-    t.total += l.amountInr;
-    t.rates.push(l.rateSnapshot);
-  });
+function exportWhatsApp(logs: Log[], weekLabel: string, getOverride: OverrideLookup) {
+  const rows0 = buildTrainerWeekRows(logs, getOverride);
 
   const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
   const lines: string[] = [
@@ -716,12 +568,9 @@ function exportWhatsApp(logs: Log[], weekLabel: string) {
     '',
   ];
 
-  Array.from(byTrainer.values()).forEach((t, i) => {
-    const ri = displayRate(t.rates, t.days, t.total);
-    lines.push(`${String(i + 1).padEnd(6)} ${t.trainer.name.padEnd(22)} ${String(t.days).padEnd(6)} * ${String(ri.rate).padEnd(12)} (=) ${t.total}${ri.mixed ? RATE_MISMATCH_SHORT : ''}`);
-  });
+  lines.push(...buildWhatsAppLines(rows0));
 
-  const grand = Array.from(byTrainer.values()).reduce((s, t) => s + t.total, 0);
+  const grand = grandTotal(rows0);
   lines.push('');
   lines.push(`Total: ₹${grand.toLocaleString()}`);
 
@@ -751,32 +600,19 @@ const WEEK_COLORS = [
  *   - Merged header cells
  *   - Client mapping column per week
  */
-function exportBhavneetSheet(allWeeksLogs: { weekStart: string; logs: Log[] }[]) {
-  // Collect all unique trainers across all weeks, sorted by name
+function exportBhavneetSheet(allWeeksLogs: { weekStart: string; logs: Log[]; getOverride: OverrideLookup }[]) {
+  // Aggregate per trainer per week through the shared row builder, so this sheet
+  // shows the same Days / Rate / Total as the grid does for the same week.
+  const data = new Map<string, Map<string, TrainerWeekRow>>(); // trainerId → weekStart → row
   const trainerMap = new Map<string, TrainerInfo>();
-  for (const { logs } of allWeeksLogs) {
-    for (const l of logs) {
-      if (!trainerMap.has(l.trainer.id)) trainerMap.set(l.trainer.id, l.trainer);
+  for (const { weekStart, logs, getOverride } of allWeeksLogs) {
+    for (const row of buildTrainerWeekRows(logs, getOverride)) {
+      if (!trainerMap.has(row.trainer.id)) trainerMap.set(row.trainer.id, row.trainer as TrainerInfo);
+      if (!data.has(row.trainer.id)) data.set(row.trainer.id, new Map());
+      data.get(row.trainer.id)!.set(weekStart, row);
     }
   }
   const trainers = Array.from(trainerMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-
-  // Aggregate per trainer per week, also collect client names
-  type WeekData = { days: number; rates: number[]; total: number; comments: string[]; clients: Set<string> };
-  const data = new Map<string, Map<string, WeekData>>(); // trainerId → weekStart → data
-  for (const { weekStart, logs } of allWeeksLogs) {
-    for (const l of logs) {
-      if (!data.has(l.trainer.id)) data.set(l.trainer.id, new Map());
-      const tw = data.get(l.trainer.id)!;
-      if (!tw.has(weekStart)) tw.set(weekStart, { days: 0, rates: [], total: 0, comments: [], clients: new Set() });
-      const w = tw.get(weekStart)!;
-      w.days += toSessions(l);   // sessions, not raw hours
-      w.total += l.amountInr;
-      w.rates.push(l.rateSnapshot);
-      if (l.comments) w.comments.push(l.comments);
-      if (l.client?.name) w.clients.add(l.client.name);
-    }
-  }
 
   const weeks = allWeeksLogs.map((w) => w.weekStart);
   // 5 cols per week: Days, Amount/session, Total Amount, Clients, Comments
@@ -845,13 +681,12 @@ function exportBhavneetSheet(allWeeksLogs: { weekStart: string; logs: Log[] }[])
       const ws = weeks[wi];
       const w = data.get(t.id)?.get(ws);
       const bg = WEEK_COLORS[wi % WEEK_COLORS.length].row;
-      const clients = w ? Array.from(w.clients).join(', ') : '';
-      const ri = w ? displayRate(w.rates, w.days, w.total) : null;
+      const clients = w ? w.clients.join(', ') : '';
       row += tdNum(w ? w.days : 0, bg)
-           + tdNum(ri ? ri.rate : '', bg)
+           + tdNum(w ? w.rate : '', bg)
            + tdNum(w ? w.total : 0, bg, true)
            + td(clients, bg, 'font-size:10px;color:#555;')
-           + td(w && ri ? withRateMarker(w.comments, ri.mixed) : '', bg, 'font-size:10px;');
+           + td(w ? w.comments.filter(Boolean).join('; ') : '', bg, 'font-size:10px;');
     }
     row += '</tr>';
     return row;
@@ -905,21 +740,25 @@ function exportBhavneetSheet(allWeeksLogs: { weekStart: string; logs: Log[] }[])
 
 function exportPdf(logs: Log[], weekLabel: string) {
   const totalAmount = logs.reduce((s, l) => s + l.amountInr, 0);
+  // SECURITY: every value below that originates from user input is escaped.
+  // This document is written into a window that inherits the app's origin, so
+  // an unescaped trainer name or comment is executable script, not just broken
+  // markup. Numbers and config-derived colours are safe by construction.
   const rows = logs.map((l, i) => `<tr>
     <td>${i + 1}</td>
-    <td>${l.date}</td>
-    <td>${l.trainer.name}</td>
-    <td>${l.client?.name || '—'}</td>
-    <td>${l.hours}</td>
+    <td>${escapeHtml(l.date)}</td>
+    <td>${escapeHtml(l.trainer.name)}</td>
+    <td>${escapeHtml(l.client?.name || '—')}</td>
+    <td>${escapeHtml(l.hours)}</td>
     <td>₹${l.rateSnapshot.toLocaleString()}</td>
     <td>₹${l.amountInr.toLocaleString()}</td>
-    <td style="color:${payColor(l.status)}">${payLabel(l.status)}</td>
-    <td style="color:${l.proceed ? (PROCEED_CFG as any)[l.proceed]?.color : '#888'}">${l.proceed || '—'}</td>
-    <td>${l.comments || '—'}</td>
+    <td style="color:${payColor(l.status)}">${escapeHtml(payLabel(l.status))}</td>
+    <td style="color:${l.proceed ? (PROCEED_CFG as any)[l.proceed]?.color : '#888'}">${escapeHtml(l.proceed || '—')}</td>
+    <td>${escapeHtml(l.comments || '—')}</td>
   </tr>`).join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-  <title>Trainer Pay Sheet — ${weekLabel}</title>
+  <title>Trainer Pay Sheet — ${escapeHtml(weekLabel)}</title>
   <style>
     body { font-family: Arial, sans-serif; font-size: 11px; color: #111; padding: 20px; }
     h1 { font-size: 15px; } p { color: #666; margin-bottom: 14px; }
@@ -930,7 +769,7 @@ function exportPdf(logs: Log[], weekLabel: string) {
     tfoot td { background: #f3f4f6; font-weight: bold; }
   </style></head><body>
   <h1>MITS Trainer Payment Sheet</h1>
-  <p>${weekLabel} · ${logs.length} entries · ₹${totalAmount.toLocaleString()} total</p>
+  <p>${escapeHtml(weekLabel)} · ${logs.length} entries · ₹${totalAmount.toLocaleString()} total</p>
   <table>
     <thead><tr>
       <th>Sr</th><th>Date</th><th>Trainer</th><th>Client</th>
@@ -961,23 +800,6 @@ function SummaryCard({ label, value, color }: { label: string; value: string; co
   );
 }
 
-/** Groups session logs by trainer — same shape as exportCSV, for on-screen review. */
-function groupByTrainer(logs: Log[]) {
-  const byTrainer = new Map<string, { trainer: TrainerInfo; days: number; rates: number[]; total: number; comments: string[] }>();
-  logs.forEach((l) => {
-    const key = l.trainer.id;
-    if (!byTrainer.has(key)) byTrainer.set(key, { trainer: l.trainer, days: 0, rates: [], total: 0, comments: [] });
-    const t = byTrainer.get(key)!;
-    t.days += toSessions(l);
-    t.total += l.amountInr;
-    t.rates.push(l.rateSnapshot);
-    if (l.comments) t.comments.push(l.comments);
-  });
-  return Array.from(byTrainer.values())
-    .map((t) => ({ ...t, rate: reconciledRate(t.rates, t.days, t.total) }))
-    .sort((a, b) => a.trainer.name.localeCompare(b.trainer.name));
-}
-
 function bankDetailsText(tr: TrainerInfo): string {
   if (tr.upiId) return `UPI: ${tr.upiId}`;
   return [tr.bankHolderName, tr.bankName, tr.bankAccountNumber ? `A/c: ${tr.bankAccountNumber}` : '', tr.bankIfscCode ? `IFSC: ${tr.bankIfscCode}` : '']
@@ -985,9 +807,9 @@ function bankDetailsText(tr: TrainerInfo): string {
 }
 
 /** Payout view — Bhavneet's session-level sheet converted to Natasha's per-trainer payout format. */
-function PayoutView({ logs }: { logs: Log[] }) {
-  const grouped = useMemo(() => groupByTrainer(logs), [logs]);
-  const grandTotal = grouped.reduce((s, t) => s + t.total, 0);
+function PayoutView({ logs, getOverride }: { logs: Log[]; getOverride: OverrideLookup }) {
+  const grouped = useMemo(() => buildTrainerWeekRows(logs, getOverride), [logs, getOverride]);
+  const total = grandTotal(grouped);
 
   return (
     <div className="table-card">
@@ -1008,18 +830,18 @@ function PayoutView({ logs }: { logs: Log[] }) {
             <tr key={t.trainer.id}>
               <td>{i + 1}</td>
               <td className="font-medium">{t.trainer.name}</td>
-              <td className="text-xs">{bankDetailsText(t.trainer)}</td>
+              <td className="text-xs">{bankDetailsText(t.trainer as TrainerInfo)}</td>
               <td>{t.days}</td>
-              <td>₹{t.rate.toLocaleString()}</td>
+              <td>₹{fmtRate(t.rate)}</td>
               <td className="font-semibold">₹{t.total.toLocaleString()}</td>
-              <td className="text-xs muted">{t.comments.join('; ')}</td>
+              <td className="text-xs muted">{t.comments.filter(Boolean).join('; ')}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr>
             <td colSpan={5} className="text-right font-semibold">Total</td>
-            <td className="font-semibold">₹{grandTotal.toLocaleString()}</td>
+            <td className="font-semibold">₹{total.toLocaleString()}</td>
             <td />
           </tr>
         </tfoot>
@@ -1030,18 +852,6 @@ function PayoutView({ logs }: { logs: Log[] }) {
 
 /* ── Excel-style grouped view ─────────────────────────────────────────────── */
 
-type TrainerRow = {
-  trainer: TrainerInfo;
-  date: string;       // latest session date for this week
-  days: number;       // raw hours sum across logs
-  rateModel: string;  // per_session or per_hour
-  perSession: number; // rate snapshot from the earliest log — used by the edit/sync WRITE paths
-  rates: number[];    // every log's rateSnapshot, for the reconciliation check (display only)
-  amount: number;     // total amount
-  logIds: string[];   // underlying log ids (for status ops)
-  status: string;     // worst-case status across logs (Paid if all paid, else Logged)
-};
-
 function bankDetail(t: TrainerInfo): string {
   if (t.upiId) return `UPI: ${t.upiId}`;
   const parts = [t.bankHolderName, t.bankName, t.bankAccountNumber ? `A/c ${t.bankAccountNumber}` : '', t.bankIfscCode ? `IFSC ${t.bankIfscCode}` : ''].filter(Boolean);
@@ -1050,77 +860,46 @@ function bankDetail(t: TrainerInfo): string {
 
 type PayWeekRow = { id: string; trainerId: string; weekStart: string; mitaliAckAt: string | null; bhavneetVerification: string | null; daysOverride: number | null };
 
-function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStart, user, onUpdatePayWeek }: {
+function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, getOverride, user, onUpdatePayWeek }: {
   logs: Log[]; canMarkStatus: boolean; canEdit: boolean; onRefresh: () => void;
-  payWeeks: PayWeekRow[]; weekStart: string; user: { id: string; role: string };
+  payWeeks: PayWeekRow[]; getOverride: OverrideLookup; user: { id: string; role: string };
   onUpdatePayWeek: (trainerId: string, data: any) => void;
 }) {
   const showToast = useUI((s) => s.showToast);
-  const [editingAmount, setEditingAmount] = useState<string | null>(null);
-  const [amountDraft, setAmountDraft] = useState('');
 
-  // Group logs by trainer
-  const rows = useMemo<TrainerRow[]>(() => {
-    const map = new Map<string, TrainerRow>();
-    for (const l of logs) {
-      const key = l.trainer.id;
-      if (!map.has(key)) {
-        map.set(key, { trainer: l.trainer, date: l.date, days: 0, rateModel: l.rateModel || 'per_session', perSession: l.rateSnapshot, rates: [], amount: 0, logIds: [], status: 'Paid' });
-      }
-      const r = map.get(key)!;
-      r.days += toSessions(l);   // session count (0.5 or 1 per log for per_session; hours for per_hour)
-      r.amount += l.amountInr;
-      r.rates.push(l.rateSnapshot);
-      r.logIds.push(l.id);
-      if (l.date > r.date) r.date = l.date;
-      // status: if any log isn't Paid, show as unpaid
-      if (l.status !== 'Paid') r.status = l.status;
-    }
-    return Array.from(map.values()).sort((a, b) => a.trainer.name.localeCompare(b.trainer.name));
-  }, [logs]);
+  // One shared builder — the exports and the payout view call the very same
+  // function with the very same override lookup, so they cannot drift apart.
+  const rows = useMemo(() => buildTrainerWeekRows(logs, getOverride), [logs, getOverride]);
 
-  // When Days has been manually set for a trainer+week, the payment is
-  // recalculated from it (days x rate); otherwise the logged amounts stand.
-  const overrideFor = (trainerId: string): number | null => {
-    const pw = payWeeks.find((w) => w.trainerId === trainerId);
-    return pw && pw.daysOverride != null ? pw.daysOverride : null;
-  };
-  const effDaysFor = (r: TrainerRow): number => overrideFor(r.trainer.id) ?? r.days;
-  // The rate the row DISPLAYS — the stored rate when it reconciles with Amount,
-  // otherwise the rate implied by the total. Never written back.
-  const rateInfoFor = (r: TrainerRow) => displayRate(r.rates, r.days, r.amount);
-  const effAmountFor = (r: TrainerRow): number => {
-    const o = overrideFor(r.trainer.id);
-    // Derive from the displayed rate so Days x rate still reconciles to Amount.
-    return o == null ? r.amount : Math.round(o * rateInfoFor(r).rate);
-  };
+  // Displayed grand total. Always the sum of each row's Days x Rate.
+  const total = grandTotal(rows);
 
-  const grandTotal = rows.reduce((s, r) => s + effAmountFor(r), 0);
+  // CONCURRENCY: `disabled={isPaid}` only reflects server state, which does not
+  // change until the refetch lands — so a rapid double-click fired the whole
+  // PATCH set twice. The writes are idempotent (same status), so nothing was
+  // corrupted, but it doubled the request volume and could interleave with a
+  // refetch to flash a stale row. This tracks the in-flight trainer instead.
+  const [statusBusy, setStatusBusy] = useState<string | null>(null);
 
-  const markAllStatus = async (_trainerId: string, logIds: string[], status: string) => {
+  const markAllStatus = async (trainerId: string, logIds: string[], status: string) => {
+    if (statusBusy) return;
+    setStatusBusy(trainerId);
     try {
       await Promise.all(logIds.map((id) => api.patch(`/session-logs/${id}`, { status })));
       onRefresh();
       showToast(status === 'Paid' ? 'Payment marked as Done ✓' : 'Marked as Pending');
     } catch {
       showToast('Failed to update status', 'error');
+    } finally {
+      setStatusBusy(null);
     }
   };
 
-  const saveAmount = async (trainerId: string, logIds: string[], newTotal: number, perSession: number) => {
-    // Distribute amount evenly across all logs for this trainer
-    const perLog = Math.round(newTotal / logIds.length);
-    try {
-      await Promise.all(logIds.map((id) => api.patch(`/session-logs/${id}`, { amountInr: perLog, rateSnapshot: perSession })));
-      // An explicit amount wins over a Days override, otherwise the derived
-      // days x rate figure would immediately overwrite what was just typed.
-      if (overrideFor(trainerId) != null) onUpdatePayWeek(trainerId, { daysOverride: null });
-      onRefresh();
-    } catch {
-      showToast('Failed to save', 'error');
-    }
-    setEditingAmount(null);
-  };
+  /* There is deliberately no saveAmount here any more. Amount is derived from
+     Days x Rate, so writing amountInr from this screen could not round-trip:
+     the typed figure was stored but the cell kept showing the derived one, and
+     the write silently flattened every log in the week to the average. The two
+     real inputs (Days, Per Session) each have their own editor. */
 
   const thStyle: React.CSSProperties = {
     padding: '9px 12px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase',
@@ -1156,10 +935,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
               const l = logs.find((x) => x.id === id);
               return l?.status === 'Paid';
             });
-            const isEditing = editingAmount === r.trainer.id;
-
             const pw = payWeeks.find(w => w.trainerId === r.trainer.id);
-            const rate = rateInfoFor(r);
 
             return (
               <tr key={r.trainer.id} style={{ background: isPaid ? 'rgba(34,197,94,0.04)' : undefined }}>
@@ -1176,20 +952,20 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                 <td style={{ ...tdStyle, fontFamily: 'monospace', textAlign: 'center' }}>
                   {canEdit ? (
                     <EditableDays
-                      days={effDaysFor(r)}
-                      isOverridden={overrideFor(r.trainer.id) != null}
+                      days={r.days}
+                      isOverridden={r.isOverridden}
                       onSave={(d) => onUpdatePayWeek(r.trainer.id, { daysOverride: d })}
                       onClear={() => onUpdatePayWeek(r.trainer.id, { daysOverride: null })}
                     />
-                  ) : effDaysFor(r)}
+                  ) : r.days}
                 </td>
                 <td style={{ ...tdStyle, fontFamily: 'monospace' }}>
                   {canEdit ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {rate.distinct.length > 1 ? (
-                      <span title="This week's logs carry different stored rates — edit them individually, or use the sync button to set one rate for the week">₹{fmtRate(rate.rate)}</span>
+                      {r.distinctRates.length > 1 ? (
+                      <span title="This week's logs carry different stored rates — edit them individually, or use the sync button to set one rate for the week">₹{fmtRate(r.rate)}</span>
                       ) : (
-                      <EditableNumber value={r.perSession} logId={r.logIds[0]} field="rateSnapshot" prefix="₹" onSaved={async () => {
+                      <EditableNumber value={r.firstLogRate} logId={r.logIds[0]} field="rateSnapshot" prefix="₹" onSaved={async () => {
                         // Also update all other logs for this trainer in the same week
                         if (r.logIds.length > 1) {
                           const latest = await api.get(`/session-logs/${r.logIds[0]}`).then(res => res.data.rateSnapshot);
@@ -1198,10 +974,9 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                         onRefresh();
                       }} />
                       )}
-                      {rate.mixed && <MixedRateBadge distinct={rate.distinct} days={r.days} total={r.amount} />}
                       <button
                         title="Sync rate from trainer profile"
-                        style={{ fontSize: 10, color: r.perSession === 0 ? '#f59e0b' : 'var(--brand-textMuted)', cursor: 'pointer', border: `1px solid ${r.perSession === 0 ? '#f59e0b' : 'var(--brand-border)'}`, borderRadius: 4, padding: '1px 5px', background: 'transparent', opacity: r.perSession === 0 ? 1 : 0.5 }}
+                        style={{ fontSize: 10, color: r.firstLogRate === 0 ? '#f59e0b' : 'var(--brand-textMuted)', cursor: 'pointer', border: `1px solid ${r.firstLogRate === 0 ? '#f59e0b' : 'var(--brand-border)'}`, borderRadius: 4, padding: '1px 5px', background: 'transparent', opacity: r.firstLogRate === 0 ? 1 : 0.5 }}
                         onClick={async () => {
                           try {
                             const trainer = await api.get(`/trainers/${r.trainer.id}`).then(res => res.data);
@@ -1216,41 +991,27 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                     </div>
                   ) : (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <span>₹{fmtRate(rate.rate)}</span>
-                      {rate.mixed && <MixedRateBadge distinct={rate.distinct} days={r.days} total={r.amount} />}
+                      <span>₹{fmtRate(r.rate)}</span>
                     </span>
                   )}
                 </td>
-                <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 600 }}>
-                  {isEditing ? (
-                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      <span style={{ color: 'var(--brand-textMuted)', fontSize: 12 }}>₹</span>
-                      <input
-                        type="number"
-                        defaultValue={effAmountFor(r)}
-                        autoFocus
-                        style={{ width: 80, background: 'var(--bg-input)', border: '1px solid var(--brand-border)', borderRadius: 4, padding: '2px 6px', fontSize: 12, color: 'var(--brand-text)', fontFamily: 'monospace' }}
-                        onBlur={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) saveAmount(r.trainer.id, r.logIds, v, r.perSession); else setEditingAmount(null); }}
-                        onKeyDown={(e) => { if (e.key === 'Escape') setEditingAmount(null); }}
-                      />
-                    </div>
-                  ) : (
-                    <button
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: canEdit ? 'pointer' : 'default' }}
-                      onClick={() => { if (canEdit) { setAmountDraft(String(r.amount)); setEditingAmount(r.trainer.id); } }}
-                      title={canEdit ? 'Click to edit' : undefined}
-                    >
-                      ₹{effAmountFor(r).toLocaleString()}
-                      {canEdit && <Pencil size={9} style={{ opacity: 0.4 }} />}
-                    </button>
-                  )}
+                {/* READ-ONLY BY DESIGN. Amount is derived output (Days x Rate),
+                    not an independent input, so there is nothing here to edit:
+                    change Days or Per Session and this follows. It used to be
+                    editable, writing amountInr across the week's logs — which
+                    under the derived rule was silently discarded from the
+                    display, so the typed figure never came back. Change the
+                    inputs, not the result. */}
+                <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 600 }}
+                    title={`${r.days} × ₹${fmtRate(r.rate)}`}>
+                  ₹{r.total.toLocaleString()}
                 </td>
                 <td style={{ ...tdStyle, textAlign: 'center' }}>
                   {canMarkStatus ? (
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                       <button
                         onClick={() => markAllStatus(r.trainer.id, r.logIds, 'Paid')}
-                        disabled={isPaid}
+                        disabled={isPaid || statusBusy !== null}
                         style={{
                           padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: isPaid ? 'default' : 'pointer',
                           background: isPaid ? 'rgba(34,197,94,0.2)' : 'rgba(34,197,94,0.15)',
@@ -1263,7 +1024,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
                       </button>
                       <button
                         onClick={() => markAllStatus(r.trainer.id, r.logIds, 'NotPaid')}
-                        disabled={!isPaid}
+                        disabled={!isPaid || statusBusy !== null}
                         style={{
                           padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: !isPaid ? 'default' : 'pointer',
                           background: !isPaid ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.08)',
@@ -1334,7 +1095,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
           <tr style={{ background: 'var(--bg-input)' }}>
             <td colSpan={6} style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, fontSize: 12 }}>End Total</td>
             <td style={{ ...tdStyle, fontFamily: 'monospace', fontWeight: 800, fontSize: 14, color: 'var(--status-green)' }}>
-              ₹{grandTotal.toLocaleString()}
+              ₹{total.toLocaleString()}
             </td>
             <td style={tdStyle} />
             <td style={tdStyle} />
@@ -1351,17 +1112,17 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, weekStar
 
 /** Returns all Monday dates for the 4–5 weeks that fall within the given month (year-MM). */
 function weeksInMonth(yearMonth: string): string[] {
+  // UTC throughout — see the TIMEZONE note on mondayOf.
   const [year, month] = yearMonth.split('-').map(Number);
-  const firstDay = new Date(year, month - 1, 1);
-  const lastDay = new Date(year, month, 0);
+  const lastDay = new Date(Date.UTC(year, month, 0));
   const mondays: string[] = [];
   // Start from the Monday on or before the 1st
-  const d = new Date(firstDay);
-  const dow = d.getDay();
-  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  const d = new Date(Date.UTC(year, month - 1, 1));
+  const dow = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1));
   while (d <= lastDay) {
     mondays.push(d.toISOString().slice(0, 10));
-    d.setDate(d.getDate() + 7);
+    d.setUTCDate(d.getUTCDate() + 7);
   }
   return mondays;
 }
@@ -1391,11 +1152,20 @@ export function TrainerPaySheetPage() {
       const mondays = weeksInMonth(exportMonth);
       const allWeeksLogs = await Promise.all(
         mondays.map(async (ws) => {
-          const r = await api.get('/session-logs', { params: { weekStart: ws } });
+          // Each week needs its own TrainerPayWeek rows too, otherwise the
+          // monthly sheet would silently ignore manually edited Days and
+          // disagree with the grid for that week.
+          const [r, pw] = await Promise.all([
+            api.get('/session-logs', { params: { weekStart: ws } }),
+            api.get('/trainer-pay-weeks', { params: { weekStart: ws } }),
+          ]);
           // Internal training calls are paid as a separate lump sum, so they
           // must never reach the monthly Bhavneet sheet either.
           const logs = (r.data as Log[]).filter((l) => !isTrainingCall(l));
-          return { weekStart: ws, logs };
+          const byTrainer = new Map<string, number | null>();
+          for (const row of (pw.data as PayWeekRow[])) byTrainer.set(row.trainerId, row.daysOverride);
+          const getWeekOverride: OverrideLookup = (id) => byTrainer.get(id) ?? null;
+          return { weekStart: ws, logs, getOverride: getWeekOverride };
         })
       );
       // Only keep weeks that have at least one log
@@ -1415,13 +1185,28 @@ export function TrainerPaySheetPage() {
 
   const { data: logs, isLoading } = useQuery({
     queryKey: ['session-logs', { weekStart }],
-    queryFn: () => api.get('/session-logs', { params: { weekStart } }).then((r) => r.data as Log[]),
+    // DEFENSIVE: see the note on the trainer-pay-weeks query. A non-array here
+    // used to throw inside the `filtered` memo and blank the entire sheet.
+    queryFn: () => api.get('/session-logs', { params: { weekStart } })
+      .then((r) => (Array.isArray(r.data) ? r.data as Log[] : [])),
   });
 
   const { data: payWeeks = [] } = useQuery<PayWeekRow[]>({
     queryKey: ['trainer-pay-weeks', weekStart],
-    queryFn: () => api.get(`/trainer-pay-weeks?weekStart=${weekStart}`).then(r => r.data),
+    // DEFENSIVE: a proxy error page, a 200 with an error object, or a shape
+    // change upstream would otherwise reach `.find()` / `for..of` below and blank
+    // the whole page. An empty list degrades to "no overrides", which is correct.
+    queryFn: () => api.get(`/trainer-pay-weeks?weekStart=${weekStart}`)
+      .then(r => (Array.isArray(r.data) ? r.data as PayWeekRow[] : [])),
   });
+
+  // ONE override lookup, shared by the grid, the payout view and every export,
+  // so a manually edited Days value shows up identically on all of them.
+  const getOverride = useMemo<OverrideLookup>(() => {
+    const byTrainer = new Map<string, number | null>();
+    for (const w of payWeeks) byTrainer.set(w.trainerId, w.daysOverride);
+    return (trainerId: string) => byTrainer.get(trainerId) ?? null;
+  }, [payWeeks]);
 
   const updatePayWeek = useMutation({
     mutationFn: ({ trainerId, data }: { trainerId: string; data: any }) =>
@@ -1461,11 +1246,20 @@ export function TrainerPaySheetPage() {
       .sort((a, b) => a.date.localeCompare(b.date) || a.trainer.name.localeCompare(b.trainer.name));
   }, [logs, filterTrainer, filterClient, filterStatus, filterProceed]);
 
-  // Summary
-  const totalAmount   = filtered.reduce((s, l) => s + l.amountInr, 0);
-  const totalSessions = filtered.reduce((s, l) => s + l.hours, 0);
-  const totalPending  = filtered.filter((l) => l.status !== 'Paid').reduce((s, l) => s + l.amountInr, 0);
-  const uniqueTrainers = new Set(filtered.map((l) => l.trainer.id)).size;
+  // Summary — built from the same shared rows the grid renders, so the cards can
+  // never contradict the table underneath them.
+  const summaryRows = useMemo(() => buildTrainerWeekRows(filtered, getOverride), [filtered, getOverride]);
+  const totalAmount   = grandTotal(summaryRows);
+  const totalDays     = roundDays(summaryRows.reduce((s, r) => s + r.days, 0));
+  // Pro-rated by the unpaid share of each week's days, so a part-paid trainer
+  // contributes only the unpaid portion — matching what the old per-log
+  // amountInr sum reported. See rowPending() for why this is not "any unpaid
+  // log means the whole row".
+  const totalPending  = pendingTotal(summaryRows);
+  const uniqueTrainers = summaryRows.length;
+  // Raw sum of the stored amountInr. Shown only in the session-level Detail
+  // table, whose rows are individual stored logs.
+  const storedLoggedTotal = filtered.reduce((s, l) => s + l.amountInr, 0);
 
   const activeFilterCount = [filterTrainer, filterClient, filterStatus, filterProceed].filter(Boolean).length;
   const hasFilters = activeFilterCount > 0;
@@ -1553,10 +1347,10 @@ export function TrainerPaySheetPage() {
             )}
             {filtered.length > 0 && (
               <>
-                <Button size="sm" onClick={() => exportCSV(filtered, fmtWeek(weekStart))} title="Download CSV (grouped by trainer with bank details)">
+                <Button size="sm" onClick={() => exportCSV(filtered, fmtWeek(weekStart), getOverride)} title="Download CSV (grouped by trainer with bank details)">
                   <Download size={12} /> CSV
                 </Button>
-                <Button size="sm" onClick={() => exportWhatsApp(filtered, fmtWeek(weekStart))} title="Download WhatsApp text format">
+                <Button size="sm" onClick={() => exportWhatsApp(filtered, fmtWeek(weekStart), getOverride)} title="Download WhatsApp text format">
                   <Download size={12} /> WhatsApp .txt
                 </Button>
                 <Button size="sm" onClick={() => exportExcel(filtered, fmtWeek(weekStart))}>
@@ -1629,7 +1423,7 @@ export function TrainerPaySheetPage() {
         {(logs || []).length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <SummaryCard label="Total Trainers"    value={String(uniqueTrainers)}          color="#38bdf8" />
-            <SummaryCard label="Total Sessions"    value={String(totalSessions)}           color="#eab308" />
+            <SummaryCard label="Total Days"        value={String(totalDays)}               color="#eab308" />
             <SummaryCard label="Total Amount"      value={`₹${totalAmount.toLocaleString()}`} color="#22c55e" />
             <SummaryCard label="Pending Payment"   value={`₹${totalPending.toLocaleString()}`} color="#fb923c" />
           </div>
@@ -1648,9 +1442,9 @@ export function TrainerPaySheetPage() {
               : 'Navigate to a different week, or log sessions via Session logs.'}
           />
         ) : viewMode === 'excel' ? (
-          <ExcelView logs={filtered} canMarkStatus={canMarkStatus} canEdit={canEdit} onRefresh={refresh} payWeeks={payWeeks} weekStart={weekStart} user={user} onUpdatePayWeek={(trainerId, data) => updatePayWeek.mutate({ trainerId, data })} />
+          <ExcelView logs={filtered} canMarkStatus={canMarkStatus} canEdit={canEdit} onRefresh={refresh} payWeeks={payWeeks} getOverride={getOverride} user={user} onUpdatePayWeek={(trainerId, data) => updatePayWeek.mutate({ trainerId, data })} />
         ) : viewMode === 'payout' ? (
-          <PayoutView logs={filtered} />
+          <PayoutView logs={filtered} getOverride={getOverride} />
         ) : (
           <div className="table-card">
             <table>
@@ -1708,8 +1502,11 @@ export function TrainerPaySheetPage() {
               </tbody>
               <tfoot>
                 <tr style={{ background: 'var(--bg-input)' }}>
-                  <td colSpan={6} className="text-right text-xs font-semibold pr-3">Grand Total</td>
-                  <td className="mono font-bold" style={{ color: 'var(--status-green)' }}>₹{totalAmount.toLocaleString()}</td>
+                  <td colSpan={6} className="text-right text-xs font-semibold pr-3"
+                      title="Raw sum of the stored amount on each session log. The payable figure is the Days × Rate total shown on the Excel and Payout views.">
+                    Logged Total (stored)
+                  </td>
+                  <td className="mono font-bold" style={{ color: 'var(--status-green)' }}>₹{storedLoggedTotal.toLocaleString()}</td>
                   <td colSpan={3}></td>
                 </tr>
               </tfoot>

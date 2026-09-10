@@ -20,6 +20,7 @@
     "seed:big": "tsx src/seed/big.ts",
     "seed:stress": "tsx src/seed/stress.ts",
     "test": "jest --testPathPattern=src/tests",
+    "test:paysheet-calc": "tsx scripts/paySheetCalcCheck.ts",
     "test:rbac": "jest rbac.stress",
     "test:smoke": "node scripts/smoke.js",
     "postinstall": "prisma generate"
@@ -27,6 +28,10 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/dist/"
+    ],
     "testTimeout": 30000,
     "globals": {
       "ts-jest": {

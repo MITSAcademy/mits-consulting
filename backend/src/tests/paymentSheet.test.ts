@@ -24,21 +24,31 @@ jest.mock('../lib/auth', () => ({
 }));
 
 // -- Prisma mock ------------------------------------------------------------
-jest.mock('../lib/prisma', () => ({
-  prisma: {
+jest.mock('../lib/prisma', () => {
+  const client: any = {
     trainer:         { findUnique: jest.fn() },
     client:          { findUnique: jest.fn() },
     regularTraining: { findFirst: jest.fn() },
     sessionLog:      { create: jest.fn(), update: jest.fn(), updateMany: jest.fn(), findUnique: jest.fn(), findMany: jest.fn() },
     trainerPayWeek:  { upsert: jest.fn(), findMany: jest.fn() },
+    payoutBatch:     { create: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), updateMany: jest.fn() },
     auditLog:        { create: jest.fn() },
-  },
-}));
+  };
+  // POST /payouts claims its session logs inside a transaction. The mock runs
+  // the callback against this same client, so every db.* assertion below still
+  // sees the calls the route makes inside it.
+  client.$transaction = jest.fn((fn: any) => (typeof fn === 'function' ? fn(client) : Promise.all(fn)));
+  return { prisma: client };
+});
+
+jest.mock('../lib/audit', () => ({ audit: jest.fn() }));
 
 import { RateModel } from '@prisma/client';
 import { prisma } from '../lib/prisma';
+import { audit } from '../lib/audit';
 import { sessionLogsRouter } from '../routes/sessionLogs';
 import { trainerPayWeeksRouter } from '../routes/trainerPayWeeks';
+import { payoutsRouter } from '../routes/payouts';
 
 const db = prisma as any;
 
@@ -46,6 +56,7 @@ const app = express();
 app.use(express.json());
 app.use('/session-logs', sessionLogsRouter);
 app.use('/trainer-pay-weeks', trainerPayWeeksRouter);
+app.use('/payouts', payoutsRouter);
 const api = supertest(app);
 
 /** The `data` object handed to prisma.sessionLog.create by the route. */
@@ -318,19 +329,268 @@ describe('Bug 4 -- Days override persists on TrainerPayWeek', () => {
 });
 
 /* ---------------------------------------------------------------------------
+   PAYOUT AMOUNTS -- real money comes from stored amountInr, never from display
+   --------------------------------------------------------------------------- */
+describe('Payout amounts are computed server-side from stored amountInr', () => {
+  // The Payment Sheet now DISPLAYS a derived total (Days x Rate) instead of the
+  // stored amountInr sum. These tests pin the boundary: that display change must
+  // never be able to move real money. POST /payouts re-reads the logs from the
+  // database and sums their stored amountInr; the client sends only sessionIds.
+  //
+  // If one of these fails, someone has wired a display figure into the payout
+  // path. Read the DESIGN RULE at the top of frontend/src/lib/paySheetCalc.ts.
+  beforeEach(() => {
+    db.payoutBatch.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'pb-1', ...data }));
+    db.sessionLog.updateMany.mockResolvedValue({ count: 2 });
+  });
+
+  const storedLogs = [
+    { id: 's1', amountInr: 6183, status: 'Logged', hours: 2, rateSnapshot: 1300 },
+    { id: 's2', amountInr: 4000, status: 'Logged', hours: 2, rateSnapshot: 1300 },
+  ];
+
+  it('sums the STORED amountInr, not Days x Rate', async () => {
+    db.sessionLog.findMany.mockResolvedValue(storedLogs);
+
+    const res = await api.post('/payouts').send({ weekStart: '2026-09-07', sessionIds: ['s1', 's2'] });
+
+    expect(res.status).toBe(201);
+    // 6183 + 4000 stored. Days x Rate for these logs would be 2 x 1300 = 2600,
+    // which must NOT be what the batch is created with.
+    expect(db.payoutBatch.create.mock.calls[0][0].data.totalInr).toBe(10183);
+    expect(db.payoutBatch.create.mock.calls[0][0].data.totalInr).not.toBe(2600);
+  });
+
+  it('ignores any amount the client tries to supply', async () => {
+    db.sessionLog.findMany.mockResolvedValue(storedLogs);
+
+    const res = await api.post('/payouts').send({
+      weekStart: '2026-09-07', sessionIds: ['s1', 's2'],
+      // None of these may influence the batch total.
+      totalInr: 999999, total: 999999, amountInr: 999999, days: 50, rate: 9999,
+    });
+
+    expect(res.status).toBe(201);
+    expect(db.payoutBatch.create.mock.calls[0][0].data.totalInr).toBe(10183);
+  });
+
+  it('re-reads the logs from the database rather than trusting the request', async () => {
+    db.sessionLog.findMany.mockResolvedValue(storedLogs);
+
+    await api.post('/payouts').send({ weekStart: '2026-09-07', sessionIds: ['s1', 's2'] });
+
+    // The route must query by id AND status, so an already-batched session
+    // cannot be double-paid, and the amount can only come from the DB row.
+    const where = db.sessionLog.findMany.mock.calls[0][0].where;
+    expect(where.id.in).toEqual(['s1', 's2']);
+    expect(where.status).toBe('Logged');
+  });
+
+  it('never pays a session that is not in Logged status', async () => {
+    db.sessionLog.findMany.mockResolvedValue([]);
+
+    const res = await api.post('/payouts').send({ weekStart: '2026-09-07', sessionIds: ['s1'] });
+
+    expect(res.status).toBe(409);
+    expect(db.payoutBatch.create).not.toHaveBeenCalled();
+  });
+});
+
+/* ---------------------------------------------------------------------------
+   RECALC-AMOUNTS -- must use the TRAINER's rate model, not the log's snapshot
+   --------------------------------------------------------------------------- */
+describe('POST /session-logs/recalc-amounts uses the trainer rate model', () => {
+  // Bug 1, third occurrence. This endpoint (the "Fix Rs0 amounts" button) used
+  // to compute from `log.rateModel` -- the snapshot frozen into the row when it
+  // was written -- so every log created before a trainer's structure was
+  // corrected got re-billed on the wrong basis, and this endpoint WRITES.
+  const recalc = (body: any = {}) => api.post('/session-logs/recalc-amounts').send(body);
+
+  /** The `data` handed to the Nth sessionLog.update call. */
+  const updatedAmounts = () =>
+    db.sessionLog.update.mock.calls.map((c: any[]) => c[0].data.amountInr);
+  const whereClause = () => db.sessionLog.findMany.mock.calls[0][0].where;
+
+  beforeEach(() => {
+    db.sessionLog.update.mockResolvedValue({});
+  });
+
+  it('bills by HOURS when the trainer is hourly but the log snapshot says per_session', async () => {
+    db.sessionLog.findMany.mockResolvedValue([
+      { id: 'l1', hours: 3, rateSnapshot: 800, rateModel: 'per_session', trainer: { rateModel: 'hourly' } },
+    ]);
+
+    const res = await recalc();
+
+    expect(res.status).toBe(200);
+    // 3h x 800 = 2400 on the trainer's real structure. The stale snapshot would
+    // have produced a single session at 800.
+    expect(updatedAmounts()).toEqual([2400]);
+  });
+
+  it('bills by SESSION UNITS when the trainer is per_session but the log snapshot says hourly', async () => {
+    db.sessionLog.findMany.mockResolvedValue([
+      { id: 'l1', hours: 3, rateSnapshot: 1500, rateModel: 'hourly', trainer: { rateModel: 'per_session' } },
+    ]);
+
+    await recalc();
+
+    // >1h = 1 session x 1500. The stale snapshot would have produced 3 x 1500 = 4500.
+    expect(updatedAmounts()).toEqual([1500]);
+  });
+
+  it('bills a half session for <= 1h on a per_session trainer', async () => {
+    db.sessionLog.findMany.mockResolvedValue([
+      { id: 'l1', hours: 0.75, rateSnapshot: 1500, rateModel: 'hourly', trainer: { rateModel: 'per_session' } },
+    ]);
+
+    await recalc();
+
+    expect(updatedAmounts()).toEqual([750]);
+  });
+
+  it('falls back to the log snapshot only when the trainer does not resolve', async () => {
+    db.sessionLog.findMany.mockResolvedValue([
+      { id: 'l1', hours: 3, rateSnapshot: 800, rateModel: 'hourly', trainer: null },
+    ]);
+
+    await recalc();
+
+    expect(updatedAmounts()).toEqual([2400]); // 3 x 800 per the snapshot
+  });
+
+  it('selects the trainer rateModel from the database (not just the log columns)', async () => {
+    db.sessionLog.findMany.mockResolvedValue([]);
+
+    await recalc();
+
+    expect(db.sessionLog.findMany.mock.calls[0][0].select.trainer)
+      .toEqual({ select: { rateModel: true } });
+  });
+
+  it('default mode targets only rate>0 + amount==0 logs, and never no-shows or Paid', async () => {
+    db.sessionLog.findMany.mockResolvedValue([]);
+
+    await recalc();
+
+    expect(whereClause()).toEqual({
+      sessionHappened: true, rateSnapshot: { gt: 0 }, amountInr: 0, status: { not: 'Paid' },
+    });
+  });
+
+  it('default mode EXCLUDES a Paid log even when rate>0 and amount==0', async () => {
+    // MONEY SAFETY. forceAll has always excluded Paid logs; default mode did
+    // not, so a Paid log sitting at amountInr = 0 matched the query and had its
+    // amount rewritten after the money had already gone out.
+    //
+    // This test honours the where clause the route actually builds rather than
+    // just asserting its shape, so it proves the Paid row is never updated.
+    const ROWS = [
+      { id: 'paid',   status: 'Paid',   sessionHappened: true, rateSnapshot: 1200, amountInr: 0,
+        hours: 2, rateModel: 'per_session', trainer: { rateModel: 'per_session' } },
+      { id: 'logged', status: 'Logged', sessionHappened: true, rateSnapshot: 1200, amountInr: 0,
+        hours: 2, rateModel: 'per_session', trainer: { rateModel: 'per_session' } },
+    ];
+    db.sessionLog.findMany.mockImplementation(({ where }: any) =>
+      Promise.resolve(ROWS.filter((r) =>
+        (where.sessionHappened === undefined || r.sessionHappened === where.sessionHappened) &&
+        (where.rateSnapshot === undefined || r.rateSnapshot > where.rateSnapshot.gt) &&
+        (where.amountInr === undefined || r.amountInr === where.amountInr) &&
+        (where.status?.not === undefined || r.status !== where.status.not))));
+
+    const res = await recalc();
+
+    expect(whereClause().status).toEqual({ not: 'Paid' });
+    const updatedIds = db.sessionLog.update.mock.calls.map((c: any[]) => c[0].where.id);
+    expect(updatedIds).toEqual(['logged']);      // only the unpaid log was rewritten
+    expect(updatedIds).not.toContain('paid');    // the Paid log was never touched
+    expect(res.body.checked).toBe(1);
+  });
+
+  it('forceAll mode recalculates unpaid logs and EXCLUDES Paid ones', async () => {
+    db.sessionLog.findMany.mockResolvedValue([]);
+
+    await recalc({ forceAll: true });
+
+    const w = whereClause();
+    expect(w.status).toEqual({ in: ['Logged', 'ReadyForFinal'] });
+    expect(w.sessionHappened).toBe(true);
+    expect(w.rateSnapshot).toEqual({ gt: 0 });
+    // 'Paid' is not in the allowed status list, so a paid log can never match.
+    expect(w.status.in).not.toContain('Paid');
+  });
+
+  it('scopes to one trainer when trainerId is supplied', async () => {
+    db.sessionLog.findMany.mockResolvedValue([]);
+
+    await recalc({ trainerId: 't-9' });
+
+    expect(whereClause().trainerId).toBe('t-9');
+  });
+
+  it('does not write when the recalculated amount would be 0', async () => {
+    db.sessionLog.findMany.mockResolvedValue([
+      { id: 'l1', hours: 0, rateSnapshot: 800, rateModel: 'hourly', trainer: { rateModel: 'hourly' } },
+    ]);
+
+    const res = await recalc();
+
+    expect(db.sessionLog.update).not.toHaveBeenCalled();
+    expect(res.body).toEqual({ ok: true, checked: 1, fixed: 0 });
+  });
+
+  it('still writes an audit entry with the fixed/checked counts', async () => {
+    db.sessionLog.findMany.mockResolvedValue([
+      { id: 'l1', hours: 3, rateSnapshot: 800, rateModel: 'per_session', trainer: { rateModel: 'hourly' } },
+      { id: 'l2', hours: 2, rateSnapshot: 500, rateModel: 'per_session', trainer: { rateModel: 'per_session' } },
+    ]);
+
+    const res = await recalc();
+
+    expect(res.body).toEqual({ ok: true, checked: 2, fixed: 2 });
+    expect(audit).toHaveBeenCalledWith(
+      'u-test', 'Test User', 'SESSION_RECALC', expect.stringContaining('Fixed 2/2 logs'),
+    );
+  });
+
+  it.each(['staff', 'accounts', 'payment_processor', 'account_manager'])(
+    'forbids %s from triggering a recalculation', async (role) => {
+      mockCurrentUser.role = role;
+
+      const res = await recalc();
+
+      expect(res.status).toBe(403);
+      expect(db.sessionLog.update).not.toHaveBeenCalled();
+    });
+
+  it.each(['founder', 'manager', 'lead'])('allows %s to trigger a recalculation', async (role) => {
+    mockCurrentUser.role = role;
+    db.sessionLog.findMany.mockResolvedValue([]);
+
+    const res = await recalc();
+
+    expect(res.status).toBe(200);
+  });
+});
+
+/* ---------------------------------------------------------------------------
    BUG 2 -- internal training calls excluded from the Payment Sheet
    --------------------------------------------------------------------------- */
 describe('Bug 2 -- internal training calls excluded', () => {
   // The exclusion rule (`isTrainingCall`, matching rateModel training_one_shot /
-  // training_monthly) lives in frontend/src/pages/TrainerPaySheetPage.tsx. It has
-  // no backend counterpart by design: GET /session-logs deliberately returns every
-  // log for the week and the Payment Sheet filters at render time.
+  // training_monthly) lives in frontend/src/lib/paySheetCalc.ts. It has no backend
+  // counterpart by design: GET /session-logs deliberately returns every log for
+  // the week and the Payment Sheet filters at render time.
   //
   // It cannot be covered from backend/src/tests -- backend tsconfig sets
-  // rootDir: "src", so it cannot import across into frontend/ -- and frontend has
-  // no test runner configured (no vitest/jest in frontend/package.json).
-  // Covering it needs a frontend test runner, which is a tooling decision.
-  it.todo('excludes training_one_shot / training_monthly logs -- blocked: no frontend test runner');
+  // rootDir: "src", so a test in here cannot import across into frontend/ without
+  // breaking `npm run build` -- and frontend has no test runner configured.
+  //
+  // It IS covered, along with every other calculation invariant, by the
+  // randomised property tests in backend/scripts/paySheetCalcCheck.ts, which
+  // drive the real shared module through tsx (outside rootDir, so the build is
+  // unaffected).  Run:  npm run test:paysheet-calc
+  it.todo('excludes training_one_shot / training_monthly logs -- covered by npm run test:paysheet-calc');
 
   it('GET /session-logs still returns all logs (filtering is the sheet job)', async () => {
     db.sessionLog.findMany.mockResolvedValue([
@@ -340,6 +600,177 @@ describe('Bug 2 -- internal training calls excluded', () => {
     const res = await api.get('/session-logs').query({ weekStart: '2026-09-01' });
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(2); // backend contract unchanged by this fix
+  });
+});
+
+/* ---------------------------------------------------------------------------
+   HARDENING PASS -- concurrency, malformed input, and permission gaps
+   --------------------------------------------------------------------------- */
+describe('PATCH /session-logs/:id rejects malformed money values', () => {
+  // The body used to be copied through unchecked, so a negative amount was
+  // persisted verbatim and a non-numeric one reached Prisma as a 500.
+  const patch = (body: any) => api.patch('/session-logs/sl-1').send(body);
+
+  beforeEach(() => {
+    db.sessionLog.update.mockResolvedValue({ id: 'sl-1' });
+    db.sessionLog.findUnique.mockResolvedValue({
+      hours: 2, rateSnapshot: 1200, rateModel: 'per_session', sessionHappened: true,
+    });
+  });
+
+  it.each([
+    ['amountInr', -1],
+    ['amountInr', 'abc'],
+    ['amountInr', null],
+    ['rateSnapshot', -500],
+    ['rateSnapshot', 'NaN'],
+    ['rateSnapshot', Infinity],
+    ['hours', -2],
+    ['hours', 'two'],
+  ])('rejects %s = %p with 400 and writes nothing', async (field, value) => {
+    const res = await patch({ [field]: value });
+
+    expect(res.status).toBe(400);
+    expect(db.sessionLog.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['amountInr', 0],
+    ['amountInr', 99999999],
+    ['rateSnapshot', 0],
+    ['hours', 0],
+    ['hours', 1.5],
+  ])('accepts a valid %s = %p', async (field, value) => {
+    const res = await patch({ [field]: value });
+
+    expect(res.status).toBe(200);
+    expect(db.sessionLog.update).toHaveBeenCalled();
+  });
+
+  it('stores a numeric string as a number, not as the raw string', async () => {
+    await patch({ amountInr: '1500' });
+
+    expect(db.sessionLog.update.mock.calls[0][0].data.amountInr).toBe(1500);
+  });
+});
+
+describe('PATCH /session-logs/:id gates money fields independently of the UI', () => {
+  // SESSION_LOG_WRITE is wide (staff and account_manager log sessions), but the
+  // Payment Sheet only grants edit rights to PAY_FIELD_EDIT roles. The frontend
+  // hid the rate/amount editors from the others while the API still accepted
+  // their writes -- the permission was enforced only in the browser.
+  const patch = (body: any) => api.patch('/session-logs/sl-1').send(body);
+
+  beforeEach(() => {
+    db.sessionLog.update.mockResolvedValue({ id: 'sl-1' });
+    db.sessionLog.findUnique.mockResolvedValue({
+      hours: 2, rateSnapshot: 1200, rateModel: 'per_session', sessionHappened: true,
+    });
+  });
+
+  it.each(['staff', 'account_manager'])(
+    'forbids %s from editing amountInr, rateSnapshot or hours', async (role) => {
+      mockCurrentUser.role = role;
+
+      for (const field of ['amountInr', 'rateSnapshot', 'hours']) {
+        db.sessionLog.update.mockClear();
+        const res = await patch({ [field]: 1000 });
+        expect(res.status).toBe(403);
+        expect(db.sessionLog.update).not.toHaveBeenCalled();
+      }
+    });
+
+  it.each(['founder', 'manager', 'lead', 'accounts', 'payment_processor'])(
+    'allows %s to edit money fields', async (role) => {
+      mockCurrentUser.role = role;
+
+      const res = await patch({ amountInr: 1000 });
+
+      expect(res.status).toBe(200);
+    });
+
+  it('still lets staff edit non-money operational fields', async () => {
+    // The gate must be narrow: it protects payment fields, it does not turn
+    // PATCH into a founder-only endpoint.
+    mockCurrentUser.role = 'staff';
+
+    const res = await patch({ notes: 'client rescheduled', comments: 'ok' });
+
+    expect(res.status).toBe(200);
+    expect(db.sessionLog.update.mock.calls[0][0].data.notes).toBe('client rescheduled');
+  });
+
+  it('blocks the whole request when money and non-money fields are mixed', async () => {
+    mockCurrentUser.role = 'staff';
+
+    const res = await patch({ notes: 'fine', amountInr: 500 });
+
+    expect(res.status).toBe(403);
+    expect(db.sessionLog.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /payouts claims sessions atomically', () => {
+  // CONCURRENCY: read -> create -> update used to be three statements, so two
+  // simultaneous requests both saw the same rows as 'Logged' and both created a
+  // batch for them, queueing the trainer for payment twice.
+  const storedLogs = [
+    { id: 's1', amountInr: 6183, status: 'Logged' },
+    { id: 's2', amountInr: 4000, status: 'Logged' },
+  ];
+  const create = () => api.post('/payouts').send({ weekStart: '2026-09-07', sessionIds: ['s1', 's2'] });
+
+  beforeEach(() => {
+    db.payoutBatch.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'pb-1', ...data }));
+    db.sessionLog.findMany.mockResolvedValue(storedLogs);
+  });
+
+  it('runs the read, the claim and the batch insert in one transaction', async () => {
+    db.sessionLog.updateMany.mockResolvedValue({ count: 2 });
+
+    const res = await create();
+
+    expect(res.status).toBe(201);
+    expect(db.$transaction).toHaveBeenCalled();
+  });
+
+  it('claims only rows still in Logged status', async () => {
+    db.sessionLog.updateMany.mockResolvedValue({ count: 2 });
+
+    await create();
+
+    const claim = db.sessionLog.updateMany.mock.calls[0][0];
+    expect(claim.where.status).toBe('Logged');
+    expect(claim.data.status).toBe('ReadyForFinal');
+  });
+
+  it('rolls back and 409s when a concurrent request claimed some rows first', async () => {
+    // The competing request already flipped s2, so our claim matches 1 of 2.
+    db.sessionLog.updateMany.mockResolvedValue({ count: 1 });
+
+    const res = await create();
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/claimed some of these sessions/i);
+  });
+
+  it('never bills a partial set when the claim is short', async () => {
+    db.sessionLog.updateMany.mockResolvedValue({ count: 1 });
+
+    await create();
+
+    // The throw aborts the transaction before the batch row is written. With a
+    // real database the create would also be rolled back.
+    expect(db.payoutBatch.create).not.toHaveBeenCalled();
+  });
+
+  it('still 409s when nothing is claimable at all', async () => {
+    db.sessionLog.findMany.mockResolvedValue([]);
+
+    const res = await create();
+
+    expect(res.status).toBe(409);
+    expect(db.payoutBatch.create).not.toHaveBeenCalled();
   });
 });
 

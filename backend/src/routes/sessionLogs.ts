@@ -139,12 +139,44 @@ sessionLogsRouter.post('/', requireRole(...SESSION_LOG_WRITE), async (req: Authe
   res.status(201).json(log);
 });
 
+// Money-bearing fields on a session log. SESSION_LOG_WRITE is deliberately wide
+// (it includes staff and account_manager so they can log sessions and leave
+// notes), but the Payment Sheet only grants *edit* rights to the roles below.
+// Without this the UI hid the rate/amount editors from staff while the API
+// happily accepted `PATCH /session-logs/:id {"amountInr": 999999}` from them —
+// the frontend was the only thing enforcing a financial permission.
+const PAY_FIELD_EDIT = ['founder', 'manager', 'lead', 'accounts', 'payment_processor', 'demo_lead'];
+const MONEY_FIELDS = ['rateSnapshot', 'amountInr', 'hours'];
+
+/** Numeric fields must be finite and non-negative. Previously the request body
+ *  was copied through unchecked, so a negative amount was persisted verbatim and
+ *  a non-numeric one reached Prisma and surfaced as a 500. */
+function badNumber(v: any): boolean {
+  const n = Number(v);
+  return v === null || v === '' || !Number.isFinite(n) || n < 0;
+}
+
 sessionLogsRouter.patch('/:id', requireRole(...SESSION_LOG_WRITE), async (req: AuthedRequest, res) => {
   const data: any = {};
+
+  const touchedMoney = MONEY_FIELDS.filter((f) => f in req.body);
+  if (touchedMoney.length && !PAY_FIELD_EDIT.includes(req.user!.role)) {
+    return res.status(403).json({
+      error: `Not allowed to edit payment fields (${touchedMoney.join(', ')}) on a session log`,
+    });
+  }
+  for (const f of touchedMoney) {
+    if (badNumber(req.body[f])) {
+      return res.status(400).json({ error: `${f} must be a number >= 0` });
+    }
+  }
+
   // Any authorized role can edit these operational fields
   for (const f of ['hours', 'rateSnapshot', 'amountInr', 'notes', 'proceed', 'comments', 'sessionHappened', 'cancelledBy', 'feedback']) {
     if (f in req.body) data[f] = req.body[f];
   }
+  // Numeric fields are stored as numbers, never as the raw string a client sent.
+  for (const f of touchedMoney) data[f] = Number(req.body[f]);
   // Status (Paid/NotPaid) is restricted to demo_lead (Samita) and founder
   if ('status' in req.body) {
     const role = req.user!.role;
@@ -208,7 +240,12 @@ sessionLogsRouter.post('/recalc-amounts', requireRole('founder', 'manager', 'lea
   const where: any = { sessionHappened: true };
   if (trainerId) where.trainerId = trainerId;
   if (!forceAll) {
-    // Only fix logs with a valid rate but zero amount
+    // Only fix logs with a valid rate but zero amount.
+    // MONEY SAFETY: never touch a log that is already Paid. forceAll below has
+    // always excluded Paid logs; this branch did not, so a Paid log sitting at
+    // amountInr = 0 matched here and had its amount silently rewritten after
+    // the money had gone out. Both modes must protect Paid logs identically.
+    where.status = { not: 'Paid' };
     where.rateSnapshot = { gt: 0 };
     where.amountInr = 0;
   } else {
@@ -216,12 +253,34 @@ sessionLogsRouter.post('/recalc-amounts', requireRole('founder', 'manager', 'lea
     where.status = { in: ['Logged', 'ReadyForFinal'] };
     where.rateSnapshot = { gt: 0 };
   }
-  const logs = await prisma.sessionLog.findMany({ where, select: { id: true, hours: true, rateSnapshot: true, rateModel: true } });
+  const logs = await prisma.sessionLog.findMany({
+    where,
+    // The trainer's CURRENT rateModel is selected alongside the log's own
+    // snapshot — see the source-of-truth note below.
+    select: {
+      id: true, hours: true, rateSnapshot: true, rateModel: true,
+      trainer: { select: { rateModel: true } },
+    },
+  });
   let fixed = 0;
   await Promise.all(logs.map(async (log) => {
-    const sessions = log.hours <= 1.0 ? 0.5 : 1;
-    const amountInr = (log.rateModel || 'per_session') === 'per_session'
-      ? Math.round(sessions * log.rateSnapshot)
+    // SOURCE OF TRUTH: the trainer's current rateModel wins. The log's own
+    // snapshot is a fallback only, for a log whose trainer no longer resolves.
+    //
+    // This is the Bug 1 class of mistake and it has now been found three times
+    // in this codebase. Reading the log's stale snapshot here re-billed an
+    // hourly trainer per-session (and vice versa) for every log written before
+    // their structure was corrected on the trainer record — which is exactly
+    // what POST / above and the Payment Sheet were fixed to stop doing. Any
+    // change to this rule must be made in all three places at once:
+    //   backend   POST /session-logs        -> effectiveRateModel (above)
+    //   backend   POST /recalc-amounts      -> here
+    //   frontend  src/lib/paySheetCalc.ts   -> effectiveRateModel / toSessions
+    const rateModel = log.trainer?.rateModel || log.rateModel || 'per_session';
+    // Same session-counting rule as the create path and the frontend's
+    // toSessions(): per_session bills in session units, everything else by hours.
+    const amountInr = rateModel === 'per_session'
+      ? Math.round(hoursToSessions(log.hours) * log.rateSnapshot)
       : Math.round(log.hours * log.rateSnapshot);
     if (amountInr > 0) {
       await prisma.sessionLog.update({ where: { id: log.id }, data: { amountInr } });

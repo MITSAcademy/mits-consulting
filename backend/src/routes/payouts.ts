@@ -23,21 +23,58 @@ payoutsRouter.post('/', async (req: AuthedRequest, res) => {
   // Filter to ONLY sessions that are still in the Logged state. Without this
   // guard a caller could include sessions that were already paid in a prior
   // batch, double-paying the trainer.
-  const logs = await prisma.sessionLog.findMany({
-    where: { id: { in: sessionIds }, status: 'Logged' },
-  });
-  if (logs.length === 0) {
+  // CONCURRENCY: this used to read the logs, create the batch, then flip the
+  // statuses in three separate statements. Two requests arriving together (a
+  // double-clicked button, or two people on the sheet at once) both read the
+  // same rows as 'Logged' and both created a batch for them — the trainer was
+  // queued for payment twice.
+  //
+  // Everything now runs in one transaction, and the claim is the updateMany:
+  // it matches only rows still in 'Logged', so a concurrent duplicate blocks on
+  // those row locks and then claims fewer than it read. If we cannot claim
+  // every row we intended, we roll back rather than bill a partial set.
+  type ClaimResult = {
+    ids: string[]; total: number;
+    created: { id: string; weekStart: string; totalInr: number; sessionIds: string[]; status: string };
+  };
+  let out: ClaimResult | null;
+  try {
+    out = await prisma.$transaction(async (tx): Promise<ClaimResult | null> => {
+      const found = await tx.sessionLog.findMany({
+        where: { id: { in: sessionIds }, status: 'Logged' },
+        select: { id: true, amountInr: true },
+      });
+      if (found.length === 0) return null;
+      const ids = found.map((l) => l.id);
+      const claimed = await tx.sessionLog.updateMany({
+        where: { id: { in: ids }, status: 'Logged' },
+        data: { status: 'ReadyForFinal' },
+      });
+      if (claimed.count !== ids.length) {
+        throw new Error('CONCURRENT_BATCH');
+      }
+      const total = found.reduce((s, l) => s + l.amountInr, 0);
+      const created = await tx.payoutBatch.create({
+        data: { weekStart, totalInr: total, sessionIds: ids, status: 'Pending' },
+      });
+      return { ids, total, created };
+    });
+  } catch (e: any) {
+    if (e?.message === 'CONCURRENT_BATCH') {
+      return res.status(409).json({
+        error: 'Another payout batch claimed some of these sessions while this request was running. Nothing was created — refresh and try again.',
+      });
+    }
+    throw e;
+  }
+
+  if (!out) {
     return res.status(409).json({
       error: 'None of the supplied sessions are in "Logged" status — every one is already in a payout batch (Pending / Approved / Paid).',
     });
   }
-  const validIds = logs.map((l) => l.id);
+  const { ids: validIds, total: totalInr, created: batch } = out;
   const dropped = sessionIds.length - validIds.length;
-  const totalInr = logs.reduce((s, l) => s + l.amountInr, 0);
-  const batch = await prisma.payoutBatch.create({
-    data: { weekStart, totalInr, sessionIds: validIds, status: 'Pending' },
-  });
-  await prisma.sessionLog.updateMany({ where: { id: { in: validIds } }, data: { status: 'ReadyForFinal' } });
   await audit(
     req.user!.id, req.user!.name, 'PAYOUT_BATCH_CREATE',
     `${weekStart} · ₹${totalInr} · ${validIds.length} sessions${dropped ? ` (${dropped} skipped — already in a batch)` : ''}`,
