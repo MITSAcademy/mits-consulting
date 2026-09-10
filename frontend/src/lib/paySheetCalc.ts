@@ -307,6 +307,32 @@ export const CSV_HEADER = [
   'Days', 'Rate/Session (₹)', 'Total Amount (₹)', 'Comments',
 ].join(',');
 
+/** HTML-escape a value destined for a generated document.
+ *
+ *  SECURITY: trainer names, client names and session-log comments are free text
+ *  typed by users. The Bhavneet sheet already escaped them; the PDF export did
+ *  not, and it renders via `win.document.write()` into a window that inherits
+ *  this app's origin — so a trainer named `<img src=x onerror=...>` executed
+ *  script with the operator's session. Every user-controlled value interpolated
+ *  into generated HTML must go through this. Quotes are escaped too, so a value
+ *  is also safe inside an attribute.
+ */
+export function escapeHtml(v: unknown): string {
+  return String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Neutralise a value for a TAB-separated export. A tab or newline inside a
+ *  trainer name or comment silently shifted every later column, which on a
+ *  payment sheet means a name lining up against someone else's amount. */
+export function tsvCell(v: unknown): string {
+  return String(v ?? '').replace(/[\t\r\n]+/g, ' ');
+}
+
 /** RFC-4180 quoting. Every free-text field goes through this: a trainer comment
  *  containing a comma used to shift every later column by one, and one
  *  containing a double quote produced a row no spreadsheet could parse. */

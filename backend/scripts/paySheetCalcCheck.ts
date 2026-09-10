@@ -20,6 +20,7 @@ import {
   buildTrainerWeekRows, buildCsvLines, buildWhatsAppLines, grandTotal,
   rowPending, pendingTotal,
   toSessions, isTrainingCall, roundDays, fmtRate, effectiveRateModel,
+  escapeHtml, tsvCell,
   type CalcLog, type OverrideLookup, type TrainerWeekRow,
 } from '../../frontend/src/lib/paySheetCalc';
 
@@ -403,6 +404,44 @@ function main() {
   const overridden = gridRows.filter((r) => r.isOverridden).length;
   const mixedRate = gridRows.filter((r) => r.distinctRates.length > 1).length;
   const disagreeing = gridRows.filter((r) => r.total !== r.storedTotal).length;
+
+  /* (g) escaping — user-controlled text must never escape into generated
+     documents. The PDF export writes into a window that inherits the app's
+     origin, so an unescaped trainer name is executable script. */
+  const TAB = String.fromCharCode(9), LF = String.fromCharCode(10), CR = String.fromCharCode(13);
+  const HOSTILE = [
+    '<img src=x onerror=alert(1)>',
+    '</td><script>fetch("//evil")</script><td>',
+    'Anita "Quotes" ' + String.fromCharCode(39) + 'Brien',
+    '<b>&amp;</b>',
+    'Ravi' + TAB + 'Kumar',
+    'line1' + LF + 'line2',
+    'Ravi' + CR + LF + 'Kumar',
+  ];
+
+  for (const raw of HOSTILE) {
+    const e = escapeHtml(raw);
+    check(!/[<>]/.test(e), `(g) escapeHtml left an angle bracket in: ${JSON.stringify(raw)}`);
+    check(!e.includes('"'), `(g) escapeHtml left a raw double quote in: ${JSON.stringify(raw)}`);
+    check(!e.includes("'"), `(g) escapeHtml left a raw single quote in: ${JSON.stringify(raw)}`);
+    check(!/<script/i.test(e), `(g) escapeHtml let a script tag through: ${JSON.stringify(raw)}`);
+    check(!/onerror=/i.test(e) || !/</.test(e), `(g) escapeHtml left an executable handler: ${JSON.stringify(raw)}`);
+
+    const t = tsvCell(raw);
+    check(!(t.includes(TAB) || t.includes(CR) || t.includes(LF)),
+      `(g) tsvCell left a delimiter in: ${JSON.stringify(raw)}`);
+  }
+  // Escaping must be lossless in the sense that nothing is silently dropped.
+  check(escapeHtml('A & B') === 'A &amp; B', '(g) escapeHtml mangled a plain ampersand');
+  check(escapeHtml(null) === '' && escapeHtml(undefined) === '',
+    '(g) escapeHtml turned a nullish value into a literal null/undefined');
+  check(tsvCell(null) === '' && tsvCell(undefined) === '',
+    '(g) tsvCell turned a nullish value into a literal null/undefined');
+  // Unicode / emoji / RTL must survive untouched (item 9).
+  for (const ok of ['Zoë Müller', '日本語講師', 'مدرب', 'Ravi 🎉 Kumar']) {
+    check(escapeHtml(ok) === ok, `(g) escapeHtml altered safe unicode: ${ok}`);
+    check(tsvCell(ok) === ok, `(g) tsvCell altered safe unicode: ${ok}`);
+  }
 
   console.log('Payment Sheet calculation — randomised property tests');
   console.log('='.repeat(66));

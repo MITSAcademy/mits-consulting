@@ -15,19 +15,30 @@ import {
   isTrainingCall, buildTrainerWeekRows, grandTotal, pendingTotal, roundDays, fmtRate,
   buildCsvLines, buildWhatsAppLines, CSV_HEADER,
   type TrainerWeekRow, type OverrideLookup,
+  escapeHtml, tsvCell,
 } from '@/lib/paySheetCalc';
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
+/* Week maths is done entirely in UTC.
+ *
+ * TIMEZONE: `new Date('2026-09-07')` parses as UTC midnight, but getDay() and
+ * setDate() read/write LOCAL time. West of UTC that midnight is the previous
+ * evening, so a Monday reported getDay() === 0 and the week snapped back seven
+ * days — every row on the sheet came from the wrong week. Using the UTC getters
+ * against a UTC-parsed date keeps the two halves in the same frame, and makes
+ * the result independent of where the operator or the server happens to be.
+ * It also sidesteps DST: no local wall-clock arithmetic means no 23- or 25-hour
+ * day that can round to the wrong date. */
 function mondayOf(iso: string) {
-  const d = new Date(iso);
-  const day = d.getDay();
-  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  const d = new Date(iso + 'T00:00:00Z');
+  const day = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - (day === 0 ? 6 : day - 1));
   return d.toISOString().slice(0, 10);
 }
 function addDays(iso: string, n: number) {
-  const d = new Date(iso);
-  d.setDate(d.getDate() + n);
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 function fmtWeek(monday: string) {
@@ -520,9 +531,9 @@ function StatusCell({
 function exportExcel(logs: Log[], weekLabel: string) {
   const header = ['Sr No', 'Date', 'Trainer', 'Client', 'Sessions', 'Rate ₹', 'Total ₹', 'Status', 'Proceed', 'Comments'].join('\t');
   const rows = logs.map((l, i) => [
-    i + 1, l.date, l.trainer.name, l.client?.name || '—',
+    i + 1, l.date, tsvCell(l.trainer.name), tsvCell(l.client?.name || '—'),
     l.hours, l.rateSnapshot, l.amountInr,
-    payLabel(l.status), l.proceed || '—', l.comments || '',
+    payLabel(l.status), tsvCell(l.proceed || '—'), tsvCell(l.comments || ''),
   ].join('\t'));
   const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/tab-separated-values' });
   const url = URL.createObjectURL(blob);
@@ -729,21 +740,25 @@ function exportBhavneetSheet(allWeeksLogs: { weekStart: string; logs: Log[]; get
 
 function exportPdf(logs: Log[], weekLabel: string) {
   const totalAmount = logs.reduce((s, l) => s + l.amountInr, 0);
+  // SECURITY: every value below that originates from user input is escaped.
+  // This document is written into a window that inherits the app's origin, so
+  // an unescaped trainer name or comment is executable script, not just broken
+  // markup. Numbers and config-derived colours are safe by construction.
   const rows = logs.map((l, i) => `<tr>
     <td>${i + 1}</td>
-    <td>${l.date}</td>
-    <td>${l.trainer.name}</td>
-    <td>${l.client?.name || '—'}</td>
-    <td>${l.hours}</td>
+    <td>${escapeHtml(l.date)}</td>
+    <td>${escapeHtml(l.trainer.name)}</td>
+    <td>${escapeHtml(l.client?.name || '—')}</td>
+    <td>${escapeHtml(l.hours)}</td>
     <td>₹${l.rateSnapshot.toLocaleString()}</td>
     <td>₹${l.amountInr.toLocaleString()}</td>
-    <td style="color:${payColor(l.status)}">${payLabel(l.status)}</td>
-    <td style="color:${l.proceed ? (PROCEED_CFG as any)[l.proceed]?.color : '#888'}">${l.proceed || '—'}</td>
-    <td>${l.comments || '—'}</td>
+    <td style="color:${payColor(l.status)}">${escapeHtml(payLabel(l.status))}</td>
+    <td style="color:${l.proceed ? (PROCEED_CFG as any)[l.proceed]?.color : '#888'}">${escapeHtml(l.proceed || '—')}</td>
+    <td>${escapeHtml(l.comments || '—')}</td>
   </tr>`).join('');
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-  <title>Trainer Pay Sheet — ${weekLabel}</title>
+  <title>Trainer Pay Sheet — ${escapeHtml(weekLabel)}</title>
   <style>
     body { font-family: Arial, sans-serif; font-size: 11px; color: #111; padding: 20px; }
     h1 { font-size: 15px; } p { color: #666; margin-bottom: 14px; }
@@ -754,7 +769,7 @@ function exportPdf(logs: Log[], weekLabel: string) {
     tfoot td { background: #f3f4f6; font-weight: bold; }
   </style></head><body>
   <h1>MITS Trainer Payment Sheet</h1>
-  <p>${weekLabel} · ${logs.length} entries · ₹${totalAmount.toLocaleString()} total</p>
+  <p>${escapeHtml(weekLabel)} · ${logs.length} entries · ₹${totalAmount.toLocaleString()} total</p>
   <table>
     <thead><tr>
       <th>Sr</th><th>Date</th><th>Trainer</th><th>Client</th>
@@ -859,13 +874,24 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, getOverr
   // Displayed grand total. Always the sum of each row's Days x Rate.
   const total = grandTotal(rows);
 
-  const markAllStatus = async (_trainerId: string, logIds: string[], status: string) => {
+  // CONCURRENCY: `disabled={isPaid}` only reflects server state, which does not
+  // change until the refetch lands — so a rapid double-click fired the whole
+  // PATCH set twice. The writes are idempotent (same status), so nothing was
+  // corrupted, but it doubled the request volume and could interleave with a
+  // refetch to flash a stale row. This tracks the in-flight trainer instead.
+  const [statusBusy, setStatusBusy] = useState<string | null>(null);
+
+  const markAllStatus = async (trainerId: string, logIds: string[], status: string) => {
+    if (statusBusy) return;
+    setStatusBusy(trainerId);
     try {
       await Promise.all(logIds.map((id) => api.patch(`/session-logs/${id}`, { status })));
       onRefresh();
       showToast(status === 'Paid' ? 'Payment marked as Done ✓' : 'Marked as Pending');
     } catch {
       showToast('Failed to update status', 'error');
+    } finally {
+      setStatusBusy(null);
     }
   };
 
@@ -985,7 +1011,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, getOverr
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                       <button
                         onClick={() => markAllStatus(r.trainer.id, r.logIds, 'Paid')}
-                        disabled={isPaid}
+                        disabled={isPaid || statusBusy !== null}
                         style={{
                           padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: isPaid ? 'default' : 'pointer',
                           background: isPaid ? 'rgba(34,197,94,0.2)' : 'rgba(34,197,94,0.15)',
@@ -998,7 +1024,7 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, getOverr
                       </button>
                       <button
                         onClick={() => markAllStatus(r.trainer.id, r.logIds, 'NotPaid')}
-                        disabled={!isPaid}
+                        disabled={!isPaid || statusBusy !== null}
                         style={{
                           padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: !isPaid ? 'default' : 'pointer',
                           background: !isPaid ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.08)',
@@ -1086,17 +1112,17 @@ function ExcelView({ logs, canMarkStatus, canEdit, onRefresh, payWeeks, getOverr
 
 /** Returns all Monday dates for the 4–5 weeks that fall within the given month (year-MM). */
 function weeksInMonth(yearMonth: string): string[] {
+  // UTC throughout — see the TIMEZONE note on mondayOf.
   const [year, month] = yearMonth.split('-').map(Number);
-  const firstDay = new Date(year, month - 1, 1);
-  const lastDay = new Date(year, month, 0);
+  const lastDay = new Date(Date.UTC(year, month, 0));
   const mondays: string[] = [];
   // Start from the Monday on or before the 1st
-  const d = new Date(firstDay);
-  const dow = d.getDay();
-  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  const d = new Date(Date.UTC(year, month - 1, 1));
+  const dow = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - (dow === 0 ? 6 : dow - 1));
   while (d <= lastDay) {
     mondays.push(d.toISOString().slice(0, 10));
-    d.setDate(d.getDate() + 7);
+    d.setUTCDate(d.getUTCDate() + 7);
   }
   return mondays;
 }
@@ -1159,12 +1185,19 @@ export function TrainerPaySheetPage() {
 
   const { data: logs, isLoading } = useQuery({
     queryKey: ['session-logs', { weekStart }],
-    queryFn: () => api.get('/session-logs', { params: { weekStart } }).then((r) => r.data as Log[]),
+    // DEFENSIVE: see the note on the trainer-pay-weeks query. A non-array here
+    // used to throw inside the `filtered` memo and blank the entire sheet.
+    queryFn: () => api.get('/session-logs', { params: { weekStart } })
+      .then((r) => (Array.isArray(r.data) ? r.data as Log[] : [])),
   });
 
   const { data: payWeeks = [] } = useQuery<PayWeekRow[]>({
     queryKey: ['trainer-pay-weeks', weekStart],
-    queryFn: () => api.get(`/trainer-pay-weeks?weekStart=${weekStart}`).then(r => r.data),
+    // DEFENSIVE: a proxy error page, a 200 with an error object, or a shape
+    // change upstream would otherwise reach `.find()` / `for..of` below and blank
+    // the whole page. An empty list degrades to "no overrides", which is correct.
+    queryFn: () => api.get(`/trainer-pay-weeks?weekStart=${weekStart}`)
+      .then(r => (Array.isArray(r.data) ? r.data as PayWeekRow[] : [])),
   });
 
   // ONE override lookup, shared by the grid, the payout view and every export,

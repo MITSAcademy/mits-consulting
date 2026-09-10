@@ -9,10 +9,13 @@ import { Pill } from '@/components/ui/pill';
 import { EmptyState } from '@/components/EmptyState';
 import { Wallet } from 'lucide-react';
 
+/** UTC throughout: `new Date('2026-09-07')` is UTC midnight, but getDay() and
+ *  setDate() read local time, so west of UTC a Monday reported as Sunday and the
+ *  page loaded the wrong week. Mirrors mondayOf() in TrainerPaySheetPage. */
 function startOfWeek(iso: string) {
-  const d = new Date(iso);
-  const day = d.getDay();
-  d.setDate(d.getDate() - day + (day === 0 ? -6 : 1));
+  const d = new Date(iso + 'T00:00:00Z');
+  const day = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - day + (day === 0 ? -6 : 1));
   return d.toISOString().slice(0, 10);
 }
 
@@ -36,7 +39,8 @@ export function TrainerPayPage() {
   const [weekStart, setWeekStart] = useState(startOfWeek(todayISO()));
   const { data: logs, isLoading: logsLoading } = useQuery({
     queryKey: ['session-logs', { weekStart }],
-    queryFn: () => api.get('/session-logs', { params: { weekStart } }).then((r) => r.data),
+    queryFn: () => api.get('/session-logs', { params: { weekStart } })
+      .then((r) => (Array.isArray(r.data) ? r.data : [])),
   });
   const [selected, setSelected] = useState<string[]>([]);
 
