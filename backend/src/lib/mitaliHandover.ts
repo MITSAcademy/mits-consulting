@@ -1,6 +1,6 @@
 /**
  * Handover welcome — sent by Mitali after Roshni hands off the client.
- * Subject: "Welcome Aboard [Name] -- MITS Solution"
+ * Subject: "Welcome Aboard [Name] -- MITS Edge"
  * Matches the email screenshot: playbook link, service agreement, team intro.
  *
  * Dual-channel: HTML email + plain text (also used for WhatsApp).
@@ -26,7 +26,7 @@ const MITALI_PHONE = '+91 97795 30773';
 const WELCOME_CC = 'mc.welcome@mitssolution.com';
 
 export const HANDOVER_SUBJECT = (clientName: string) =>
-  `Welcome Aboard ${clientName} -- MITS Solution`;
+  `Welcome Aboard ${clientName} -- MITS Edge`;
 
 export function buildHandoverText(v: HandoverVars): string {
   const senderName = v.senderName || 'Mitali';
@@ -34,7 +34,7 @@ export function buildHandoverText(v: HandoverVars): string {
   return [
     `Dear ${v.clientName},`,
     ``,
-    `We hope this email finds you well. On behalf of the entire team at MITS Solution, we are thrilled to welcome you aboard!! We appreciate your trust in us and are committed to ensuring your experience with MITS is exceptional.`,
+    `We hope this email finds you well. On behalf of the entire team at MITS Edge, we are thrilled to welcome you aboard!! We appreciate your trust in us and are committed to ensuring your experience with MITS is exceptional.`,
     ``,
     `To help you get started and better understand our processes, services, and how we work together, we have prepared a comprehensive guide – the MITS Client Playbook. This playbook serves as a valuable resource that outlines all the essential information you need to know about our company and how we can support your goals.`,
     `MITS Client Playbook: ${playbookUrl}`,
@@ -84,7 +84,7 @@ export function buildHandoverHtml(v: HandoverVars): string {
           <p style="margin:0 0 16px;">Dear ${esc(v.clientName)},</p>
 
           <p style="margin:0 0 16px;">
-            We hope this email finds you well. On behalf of the entire team at <b>MITS Solution</b>, we are thrilled to <b>welcome you aboard</b>!! We appreciate your trust in us and are committed to ensuring your experience with MITS is exceptional.
+            We hope this email finds you well. On behalf of the entire team at <b>MITS Edge</b>, we are thrilled to <b>welcome you aboard</b>!! We appreciate your trust in us and are committed to ensuring your experience with MITS is exceptional.
           </p>
 
           <p style="margin:0 0 16px;">
@@ -149,7 +149,7 @@ export function buildHandoverHtml(v: HandoverVars): string {
 
           <p style="margin:8px 0 0;font-size:13px;">
             <span style="color:#9C7B2C;">🏆</span>&nbsp;
-            <a href="${WEBSITE}" target="_blank" style="color:#9C7B2C;font-weight:700;font-style:italic;text-decoration:underline;">MITS Solution got awarded as one of the top Ed'Tech Firms in 2022</a>
+            <a href="${WEBSITE}" target="_blank" style="color:#9C7B2C;font-weight:700;font-style:italic;text-decoration:underline;">MITS Edge got awarded as one of the top Ed'Tech Firms in 2022</a>
           </p>
 
         </td></tr>
