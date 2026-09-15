@@ -463,7 +463,7 @@ regularTrainingsRouter.post('/my-sessions/send-daily', async (req: AuthedRequest
 
   try {
     await sendEmail({
-      to: toEmails,
+      to: Array.isArray(toEmails) ? toEmails.join(', ') : toEmails,
       cc: ccUnique.length ? ccUnique : undefined,
       subject: `Daily Session Sheet — ${label}`,
       body: textBody,
