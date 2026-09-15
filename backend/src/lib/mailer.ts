@@ -1,7 +1,7 @@
 /**
- * SMTP mailer using nodemailer. Supports:
- *  • System OAuth2 — uses Vaibhav's stored Google refresh token (never expires on password change)
- *  • System fallback — SMTP_HOST/USER/PASS env vars (legacy, kept as last resort)
+ * Mailer. Supports:
+ *  • System emails — Resend API (RESEND_API_KEY env var) — no App Password, never expires
+ *  • System fallback — SMTP_HOST/USER/PASS env vars (legacy fallback if Resend not configured)
  *  • Per-user override — each User can configure their own Gmail App Password,
  *    stored encrypted with SMTP_USER_ENCRYPTION_KEY (or JWT_SECRET as fallback).
  *  • Calendar invites — pass `icsAttachment` to embed an RFC 5545 .ics file as an alternative.
@@ -9,6 +9,7 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import crypto from 'crypto';
 import { google } from 'googleapis';
+import { Resend } from 'resend';
 import { prisma } from './prisma';
 
 let systemTransporter: Transporter | null = null;
@@ -269,39 +270,30 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     throw err;
   } else {
     // Path 3 — SYSTEM-INITIATED notification.
-    // Try Gmail REST API via Vaibhav's stored refresh token first — bypasses
-    // SMTP entirely so it works even if the App Password is broken/revoked.
-    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    // Try Resend first (API key, no App Password, never expires).
+    if (process.env.RESEND_API_KEY) {
       try {
-        const vaibhav = await prisma.user.findUnique({
-          where: { id: 'u-vaibhav' },
-          select: { gmailAddress: true, googleRefreshToken: true, sendAsAddress: true },
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const htmlBody = args.htmlBody
+          ? args.htmlBody
+          : `<pre style="font-family:Inter,sans-serif;white-space:pre-wrap;font-size:14px;line-height:1.6;">${escapeHtml(args.body)}</pre>`;
+        const toArr = Array.isArray(args.to) ? args.to : [args.to];
+        const ccArr = args.cc ? (Array.isArray(args.cc) ? args.cc : [args.cc]) : undefined;
+        const bccArr = args.bcc ? (Array.isArray(args.bcc) ? args.bcc : [args.bcc]) : undefined;
+        const { data, error } = await resend.emails.send({
+          from: 'MITS Consulting Hub <hub@mitssolution.com>',
+          to: toArr,
+          cc: ccArr,
+          bcc: bccArr,
+          subject: args.subject,
+          html: htmlBody,
+          text: args.body,
         });
-        if (vaibhav?.gmailAddress && vaibhav?.googleRefreshToken) {
-          const refreshToken = decryptSecret(vaibhav.googleRefreshToken);
-          const fromAddr = vaibhav.sendAsAddress || vaibhav.gmailAddress;
-          const fromHeader = `"MITS Consulting Hub" <${fromAddr}>`;
-          const htmlBody = args.htmlBody
-            ? args.htmlBody
-            : `<pre style="font-family:Inter,sans-serif;white-space:pre-wrap;font-size:14px;line-height:1.6;">${escapeHtml(args.body)}</pre>`;
-          const msgId = await sendViaGmailApi({
-            gmail: vaibhav.gmailAddress,
-            refreshToken,
-            from: fromHeader,
-            to: args.to,
-            cc: args.cc,
-            bcc: args.bcc,
-            subject: args.subject,
-            html: htmlBody,
-            text: args.body,
-            attachments: args.attachments,
-            icsAttachment: args.icsAttachment,
-          });
-          console.log('[mailer] system → Gmail API (Vaibhav)', msgId);
-          return { id: msgId, provider: 'smtp-system' };
-        }
+        if (error) throw new Error(error.message);
+        console.log('[mailer] system → Resend', data?.id);
+        return { id: data?.id || 'sent', provider: 'smtp-system' };
       } catch (e) {
-        console.warn('[mailer] Gmail API send failed, falling back to SMTP env vars:', (e as any)?.message);
+        console.warn('[mailer] Resend failed, falling back to SMTP env vars:', (e as any)?.message);
       }
     }
 
