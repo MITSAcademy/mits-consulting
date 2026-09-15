@@ -24,6 +24,8 @@ export interface NotifyArgs {
   email?: boolean;
   /** Kept for backwards compatibility — no longer used (all emails go via Resend). */
   fromUserId?: string;
+  /** When true, skips the automatic Vaibhav CC on the notification email. */
+  skipVaibhavCc?: boolean;
 }
 
 const FRONTEND_BASE = (process.env.CLIENT_ORIGIN || '').trim().replace(/\/+$/, '');
@@ -65,6 +67,7 @@ export async function notify(args: NotifyArgs): Promise<void> {
       to,
       subject: `[MITS] ${args.title}`,
       body,
+      skipVaibhavCc: args.skipVaibhavCc,
     });
   } catch (e) {
     // eslint-disable-next-line no-console

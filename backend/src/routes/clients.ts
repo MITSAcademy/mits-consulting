@@ -861,6 +861,7 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
             body: `${proposal.trainer?.name || 'Trainer'} is doing the demo on ${client.demoDate || 'TBD'}${client.demoTimeIst ? ' at ' + client.demoTimeIst + ' IST' : ''}. Heads up so you can stay in the loop.`,
             link: `/clients/${req.params.id}`,
             email: true,
+            skipVaibhavCc: true,
           });
         }
       } catch (e) {
@@ -2621,6 +2622,7 @@ clientsRouter.post('/:id/schedule-multi-demo', async (req: AuthedRequest, res) =
           body: `${trainer.name} is doing the demo on ${slot.date} at ${slot.timeIst} IST. Heads up so you can stay in the loop.`,
           link: `/clients/${client.id}`,
           email: true,
+          skipVaibhavCc: true,
         });
       }
     } catch (e) {
