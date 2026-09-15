@@ -9,7 +9,7 @@
  */
 
 import { prisma } from './prisma';
-import { sendEmail, safeBuildFromUser } from './mailer';
+import { sendEmail } from './mailer';
 
 function fmtDate(d: Date | null | undefined): string {
   if (!d) return '—';
@@ -136,15 +136,6 @@ export async function sendDemoEscalationDigest(): Promise<void> {
     return;
   }
 
-  const vaibhav = await prisma.user.findUnique({
-    where: { id: 'u-vaibhav' },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-  });
-  if (!vaibhav?.gmailAddress || !vaibhav?.smtpAppPassword) {
-    console.warn('[demo-escalation-digest] Vaibhav SMTP not configured — skipping');
-    return;
-  }
-
   const todayLabel = new Date().toLocaleDateString('en-IN', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata',
   });
@@ -264,7 +255,6 @@ export async function sendDemoEscalationDigest(): Promise<void> {
 </body>
 </html>`;
 
-  const fromUser = safeBuildFromUser(vaibhav);
   const [primaryTo, ...ccRest] = toEmails;
   const allCc = [...ccRest, ...ccEmails];
 
@@ -274,7 +264,6 @@ export async function sendDemoEscalationDigest(): Promise<void> {
     subject: `⚠️ Demo Digest — ${pendingTrainings.length} training escalation${pendingTrainings.length !== 1 ? 's' : ''}${pendingIssues.length > 0 ? ` + ${pendingIssues.length} issue${pendingIssues.length !== 1 ? 's' : ''}` : ''} · ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', timeZone: 'Asia/Kolkata' })}`,
     body: `Demo Escalation Digest — ${totalPending} pending items (${pendingTrainings.length} training escalations, ${pendingIssues.length} issues). Please view in the portal.`,
     htmlBody: html,
-    fromUser,
   });
 
   console.log(`[demo-escalation-digest] Sent to ${toEmails.join(', ')} — ${pendingTrainings.length} training escalations, ${pendingIssues.length} issues`);
