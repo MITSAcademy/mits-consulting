@@ -18,7 +18,7 @@ import { prisma } from '../lib/prisma';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 import { buildIcsInvite } from '../lib/ical';
-import { sendEmail, safeBuildFromUser } from '../lib/mailer';
+import { sendEmail } from '../lib/mailer';
 import { notify } from '../lib/notify';
 
 export const regularTrainingsRouter = Router();
@@ -413,12 +413,6 @@ regularTrainingsRouter.post('/my-sessions/send-daily', async (req: AuthedRequest
   // deduplicate cc, exclude to
   const ccUnique = [...new Set(ccEmails)].filter((e) => !toEmails.includes(e));
 
-  const sender = await prisma.user.findUnique({
-    where: { id: req.user!.id },
-    select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true },
-  });
-  const fromUser = sender ? safeBuildFromUser(sender) : undefined;
-
   const label = dateStr || new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
 
   // Build HTML table
@@ -474,8 +468,7 @@ regularTrainingsRouter.post('/my-sessions/send-daily', async (req: AuthedRequest
       subject: `Daily Session Sheet — ${label}`,
       body: textBody,
       htmlBody,
-      fromUser,
-    } as any);
+    });
     await audit(req.user!.id, req.user!.name, 'DAILY_SHEET_SENT', `${rows.length} sessions · ${label}`);
     res.json({ ok: true, to: toEmails, cc: ccUnique });
   } catch (err: any) {
@@ -650,9 +643,9 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
   // Who is the organiser? The requesting user (Kashish/AM)
   const organiser = await prisma.user.findUnique({
     where: { id: req.user!.id },
-    select: { id: true, name: true, email: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
+    select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true },
   });
-  const organiserEmail = organiser?.gmailAddress || organiser?.email || process.env.SMTP_USER!;
+  const organiserEmail = organiser?.gmailAddress || organiser?.email || 'info.mitsedge@mitssolution.com';
 
   const startISO = dt.toISOString();
   const uid = `training-${session.id}`;
@@ -695,8 +688,6 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
     'bhavneet.kaur@mitssolution.com', // Bhavneet
   ];
 
-  const fromUser = organiser ? safeBuildFromUser(organiser) : undefined;
-
   for (const recipient of recipients) {
     const ics = buildIcsInvite({
       uid,
@@ -716,7 +707,6 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
         to: recipient.email,
         subject: `📅 ${summary} · ${istLabel} IST`,
         body: description,
-        fromUser,
         cc: cc.length ? cc : undefined,
         icsAttachment: { filename: 'session-invite.ics', content: ics, method: 'REQUEST' },
       });

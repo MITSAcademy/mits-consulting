@@ -134,7 +134,6 @@ export async function sendMitaliDailyReport() {
     activeWindow = fmtTime(new Date(logs[0].createdAt));
   }
 
-  const fromUser = safeBuildFromUser(vaibhav);
   // Build recipients
   const vaibhav = await prisma.user.findUnique({ where: { id: 'u-vaibhav' }, select: { email: true, gmailAddress: true } });
   const samita = await prisma.user.findFirst({ where: { role: 'demo_lead' }, select: { email: true, gmailAddress: true } });

@@ -11,7 +11,7 @@ import { Router } from 'express';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { prisma } from '../lib/prisma';
 import { audit } from '../lib/audit';
-import { sendEmail, safeBuildFromUser } from '../lib/mailer';
+import { sendEmail } from '../lib/mailer';
 
 export const dateChangeRequestsRouter = Router();
 dateChangeRequestsRouter.use(requireAuth);
@@ -31,10 +31,8 @@ async function notifyApproval(
   type: string,
   requesterName: string,
   approverEmails: string[],
-  vaibhav: { id: string; gmailAddress: string | null; smtpAppPassword: string | null; sendAsAddress: string | null; name: string }
 ) {
-  const fromUser = safeBuildFromUser(vaibhav);
-  if (!fromUser || !approverEmails.length) return;
+  if (!approverEmails.length) return;
 
   const typeLabel = type === 'payment_received' ? 'Payment Received' : 'Leverage Request';
   const subject = `[Action Required] Date Change Request — ${clientName} (${typeLabel})`;
@@ -56,7 +54,7 @@ async function notifyApproval(
     </div>
   </div>`;
 
-  await sendEmail({ to: approverEmails.join(', '), subject, body: subject, htmlBody: html, fromUser });
+  await sendEmail({ to: approverEmails.join(', '), subject, body: subject, htmlBody: html });
 }
 
 async function notifyRequester(
@@ -64,10 +62,7 @@ async function notifyRequester(
   status: 'approved' | 'rejected',
   rejectionNote: string | null,
   requesterEmail: string,
-  vaibhav: { id: string; gmailAddress: string | null; smtpAppPassword: string | null; sendAsAddress: string | null; name: string }
 ) {
-  const fromUser = safeBuildFromUser(vaibhav);
-  if (!fromUser) return;
   const subject = `Date Change Request ${status === 'approved' ? 'Approved ✓' : 'Rejected ✗'} — ${clientName}`;
   const html = `
   <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;">
@@ -75,7 +70,7 @@ async function notifyRequester(
     ${status === 'rejected' && rejectionNote ? `<p style="color:#dc2626;">Reason: ${rejectionNote}</p>` : ''}
     ${status === 'approved' ? '<p style="color:#16a34a;">The payment dates have been updated.</p>' : '<p>You may resubmit with corrections.</p>'}
   </div>`;
-  await sendEmail({ to: requesterEmail, subject, body: subject, htmlBody: html, fromUser });
+  await sendEmail({ to: requesterEmail, subject, body: subject, htmlBody: html });
 }
 
 // ── GET / — list requests (pending for approvers, own requests for accounts) ──
@@ -178,20 +173,14 @@ dateChangeRequestsRouter.post('/', async (req: AuthedRequest, res) => {
 
   // Notify approvers
   try {
-    const vaibhav = await prisma.user.findUnique({
-      where: { id: 'u-vaibhav' },
-      select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-    });
-    if (vaibhav?.gmailAddress && vaibhav?.smtpAppPassword) {
-      if (type === 'payment_received') {
-        // Notify Samita (demo_lead)
-        const samita = await prisma.user.findFirst({ where: { role: 'demo_lead' }, select: { gmailAddress: true, email: true } });
-        const emails = [samita?.gmailAddress || samita?.email, vaibhav.gmailAddress].filter(Boolean) as string[];
-        await notifyApproval(client.name, request.id, type, req.user!.name, emails, vaibhav);
-      } else {
-        // Notify Vaibhav only
-        await notifyApproval(client.name, request.id, type, req.user!.name, [vaibhav.gmailAddress!], vaibhav);
-      }
+    const vaibhav = await prisma.user.findUnique({ where: { id: 'u-vaibhav' }, select: { gmailAddress: true, email: true } });
+    if (type === 'payment_received') {
+      const samita = await prisma.user.findFirst({ where: { role: 'demo_lead' }, select: { gmailAddress: true, email: true } });
+      const emails = [samita?.gmailAddress || samita?.email, vaibhav?.gmailAddress || vaibhav?.email].filter(Boolean) as string[];
+      await notifyApproval(client.name, request.id, type, req.user!.name, emails);
+    } else {
+      const emails = [vaibhav?.gmailAddress || vaibhav?.email].filter(Boolean) as string[];
+      await notifyApproval(client.name, request.id, type, req.user!.name, emails);
     }
   } catch (e) { console.warn('[date-change] email notify failed', e); }
 
@@ -318,15 +307,11 @@ dateChangeRequestsRouter.post('/:id/approve', async (req: AuthedRequest, res) =>
       : `${request.client.name}: leverage approved — ${request.proposedDate1 || '?'} / ${request.proposedDate2 || '?'}`,
     { clientId: request.clientId });
 
-  // Notify Mitali
+  // Notify requester
   try {
-    const vaibhav = await prisma.user.findUnique({
-      where: { id: 'u-vaibhav' },
-      select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-    });
     const requester = await prisma.user.findUnique({ where: { id: request.requestedById }, select: { email: true, gmailAddress: true } });
     const email = requester?.gmailAddress || requester?.email;
-    if (vaibhav && email) await notifyRequester(request.client.name, 'approved', null, email, vaibhav);
+    if (email) await notifyRequester(request.client.name, 'approved', null, email);
   } catch (e) { console.warn('[date-change] email notify failed', e); }
 
   res.json({ ok: true });
@@ -361,15 +346,11 @@ dateChangeRequestsRouter.post('/:id/reject', async (req: AuthedRequest, res) => 
     `${request.client.name}: date change rejected — ${rejectionNote || 'no reason given'}`,
     { clientId: request.clientId });
 
-  // Notify Mitali
+  // Notify requester
   try {
-    const vaibhav = await prisma.user.findUnique({
-      where: { id: 'u-vaibhav' },
-      select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-    });
     const requester = await prisma.user.findUnique({ where: { id: request.requestedById }, select: { email: true, gmailAddress: true } });
     const email = requester?.gmailAddress || requester?.email;
-    if (vaibhav && email) await notifyRequester(request.client.name, 'rejected', rejectionNote || null, email, vaibhav);
+    if (email) await notifyRequester(request.client.name, 'rejected', rejectionNote || null, email);
   } catch (e) { console.warn('[date-change] email notify failed', e); }
 
   res.json({ ok: true });

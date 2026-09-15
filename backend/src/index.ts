@@ -212,11 +212,7 @@ app.use('/api/marketing-campaigns', marketingCampaignsRouter);
 app.post('/api/internal/send-welcome-staff', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
     const { prisma: db } = await import('./lib/prisma');
-    const { safeBuildFromUser, sendEmail } = await import('./lib/mailer');
-    const vaibhav = await db.user.findUnique({ where: { id: 'u-vaibhav' }, select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true } });
-    if (!vaibhav?.gmailAddress || !vaibhav?.smtpAppPassword) return res.status(500).json({ error: 'Vaibhav SMTP not configured' });
-    const fromUser = safeBuildFromUser(vaibhav);
-    if (!fromUser) return res.status(500).json({ error: 'Could not build fromUser' });
+    const { sendEmail } = await import('./lib/mailer');
 
     const recipients = [
       { name: 'Areena', email: 'areena.beri@mitssolution.com', role: 'full access (same as Vaibhav)', note: 'You have been given founder-level access to manage operations on my behalf.' },
@@ -268,7 +264,6 @@ app.post('/api/internal/send-welcome-staff', requireAuth, requireRole('founder')
 </body></html>`;
 
       await sendEmail({
-        fromUser,
         to: r.email,
         subject: `Welcome to MITS Consulting Hub, ${r.name}! 🎉`,
         body: `Welcome to MITS Consulting Hub, ${r.name}!`,
@@ -425,17 +420,7 @@ app.post('/api/internal/backfill-feedback-dates', requireAuth, requireRole('foun
 
 app.post('/api/internal/retrigger-freelance-notifications', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
-    const { safeBuildFromUser, sendEmail } = await import('./lib/mailer');
-    const senders = await prisma.user.findMany({
-      where: { smtpAppPassword: { not: null }, active: true },
-      select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-      orderBy: [{ id: 'asc' }],
-    });
-    const senderRaw = (senders as any[]).find((u: any) => u.id === 'u-vaibhav') || senders[0];
-    if (!senderRaw) return res.status(500).json({ error: 'No SMTP-configured user found' });
-    const fromUser = safeBuildFromUser(senderRaw);
-    if (!fromUser) return res.status(500).json({ error: 'Could not build fromUser' });
-
+    const { sendEmail } = await import('./lib/mailer');
     const recruiters = await prisma.user.findMany({
       where: { role: 'recruiter', active: true },
       select: { name: true, email: true, gmailAddress: true },
@@ -489,7 +474,7 @@ app.post('/api/internal/retrigger-freelance-notifications', requireAuth, require
 
     for (const to of recipientEmails) {
       await sendEmail({
-        fromUser, to,
+        to,
         subject: `${open.length} open trainer requirement${open.length > 1 ? 's' : ''} pending your action`,
         body: `You have ${open.length} open freelance trainer requirements with no trainer assigned yet. Please log in to review.`,
         htmlBody: html,
@@ -546,15 +531,7 @@ app.get('/api/internal/smtp-health', requireAuth, requireRole('founder'), async 
 // Founder-only: send App Password advisory email to all SMTP-configured users
 app.post('/api/internal/send-smtp-advisory', requireAuth, requireRole('founder'), async (_req, res) => {
   try {
-    const { safeBuildFromUser, sendEmail, decryptSecret, getUserTransporter } = await import('./lib/mailer');
-    const vaibhav = await prisma.user.findUnique({
-      where: { id: 'u-vaibhav' },
-      select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-    });
-    if (!vaibhav?.gmailAddress || !vaibhav?.smtpAppPassword) return res.status(500).json({ error: 'Vaibhav SMTP not configured' });
-    const fromUser = safeBuildFromUser(vaibhav);
-    if (!fromUser) return res.status(500).json({ error: 'Could not build fromUser' });
-
+    const { sendEmail, decryptSecret, getUserTransporter } = await import('./lib/mailer');
     const users = await prisma.user.findMany({
       where: { smtpAppPassword: { not: null }, active: true },
       select: { id: true, name: true, email: true, gmailAddress: true, smtpAppPassword: true },
@@ -630,7 +607,7 @@ app.post('/api/internal/send-smtp-advisory', requireAuth, requireRole('founder')
           closeTags;
       }
 
-      await sendEmail({ fromUser, to, subject, body: subject, htmlBody: html });
+      await sendEmail({ to, subject, body: subject, htmlBody: html });
       sent.push({ name: u.name, status: u.ok ? 'ok' : 'broken' });
     }
 

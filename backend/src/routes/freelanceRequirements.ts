@@ -2,19 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requireRole, AuthedRequest } from '../lib/auth';
 import { prisma } from '../lib/prisma';
 import { audit } from '../lib/audit';
-import { sendEmail, safeBuildFromUser } from '../lib/mailer';
-
-async function getFromUser() {
-  // Try Vaibhav first; if his SMTP isn't configured, fall back to any configured user
-  const users = await prisma.user.findMany({
-    where: { smtpAppPassword: { not: null }, active: true },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-    orderBy: [{ id: 'asc' }],
-  });
-  // Prefer Vaibhav
-  const preferred = users.find((u: any) => u.id === 'u-vaibhav') || users[0];
-  return preferred ? safeBuildFromUser(preferred) : null;
-}
+import { sendEmail } from '../lib/mailer';
 
 async function getRecruiters(): Promise<{ email: string; name: string }[]> {
   const users = await prisma.user.findMany({
@@ -82,8 +70,8 @@ freelanceRequirementsRouter.post('/', requireRole(...REGULAR_ROLES), async (req:
 
   // Notify all recruiters about the new requirement
   try {
-    const [fromUser, recruiters] = await Promise.all([getFromUser(), getRecruiters()]);
-    if (fromUser && recruiters.length) {
+    const recruiters = await getRecruiters();
+    if (recruiters.length) {
       const rows = [
         ['Client', clientName],
         ['Skill required', skillRequired],
@@ -121,7 +109,6 @@ freelanceRequirementsRouter.post('/', requireRole(...REGULAR_ROLES), async (req:
 
       for (const r of recruiters) {
         await sendEmail({
-          fromUser,
           to: r.email,
           subject: `New trainer requirement: ${skillRequired} for ${clientName}`,
           body: `New trainer requirement raised by ${req.user!.name}: ${skillRequired} for ${clientName}. Priority: ${priority || 'Medium'}.`,
@@ -240,9 +227,6 @@ freelanceRequirementsRouter.post('/:id/proposals/:idx/notify', requireRole(...RE
   const p = proposals[idx] as any;
   if (!p.trainerEmail) return res.status(400).json({ error: 'No email address on this trainer proposal' });
 
-  const fromUser = await getFromUser();
-  if (!fromUser) return res.status(503).json({ error: 'No SMTP sender configured' });
-
   const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 0;">
   <tr><td align="center">
@@ -270,7 +254,6 @@ freelanceRequirementsRouter.post('/:id/proposals/:idx/notify', requireRole(...RE
 </table></body></html>`;
 
   await sendEmail({
-    fromUser,
     to: p.trainerEmail,
     subject: `Training opportunity: ${req2.skillRequired} — MITS Consulting`,
     body: `Hi ${p.trainerName || 'Trainer'}, we have a training opportunity for ${req2.skillRequired} for client ${req2.clientName}. Please reply if interested.`,
@@ -312,15 +295,10 @@ freelanceRequirementsRouter.post('/:id/re-raise', requireRole(...REGULAR_ROLES),
   try {
     const recruiters = await getRecruiters();
     if (recruiters.length) {
-      // Fetch raiser (with SMTP creds) + their manager for CC
       const raiserRow = await prisma.user.findUnique({
         where: { id: req.user!.id },
-        select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true, email: true, reportsToId: true },
+        select: { id: true, name: true, gmailAddress: true, sendAsAddress: true, email: true, reportsToId: true },
       });
-      // Send from the raiser's own Gmail; fall back to Vaibhav if not configured
-      const fromUser = (raiserRow ? safeBuildFromUser(raiserRow) : null) || await getFromUser();
-      if (!fromUser) { console.warn('[freelance-reraise-notify] no SMTP sender available'); return; }
-
       const raiserEmail = raiserRow?.gmailAddress || raiserRow?.email || null;
       let managerEmail: string | null = null;
       if (raiserRow?.reportsToId) {
@@ -370,7 +348,6 @@ freelanceRequirementsRouter.post('/:id/re-raise', requireRole(...REGULAR_ROLES),
       // Send one email: first recruiter in To, rest + raiser + manager in CC
       const [primaryTo, ...ccRecruiters] = recruiters.map((r: any) => r.email);
       await sendEmail({
-        fromUser,
         to: primaryTo,
         cc: [...ccRecruiters, ...ccList],
         subject: `Re-raised requirement: ${source.skillRequired} for ${source.clientName}`,
