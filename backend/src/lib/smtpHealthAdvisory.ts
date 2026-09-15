@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import { safeBuildFromUser, sendEmail, decryptSecret, getUserTransporter } from './mailer';
+import { sendEmail, decryptSecret, getUserTransporter } from './mailer';
 
 const STEPS = `
 <ol style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
@@ -30,17 +30,6 @@ function wrap(subtitle: string, body: string) {
 }
 
 export async function sendSmtpHealthAdvisory() {
-  const vaibhav = await prisma.user.findUnique({
-    where: { id: 'u-vaibhav' },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-  });
-  if (!vaibhav?.gmailAddress || !vaibhav?.smtpAppPassword) {
-    console.warn('[smtp-advisory] Vaibhav SMTP not configured — skipping');
-    return;
-  }
-  const fromUser = safeBuildFromUser(vaibhav);
-  if (!fromUser) return;
-
   const users = await prisma.user.findMany({
     where: { smtpAppPassword: { not: null }, active: true },
     select: { id: true, name: true, email: true, gmailAddress: true, smtpAppPassword: true },
@@ -80,7 +69,7 @@ export async function sendSmtpHealthAdvisory() {
         <p style="font-size:13px;color:#6b7280;margin:0;">Once done, use <strong>Hub → avatar → Email settings → Send test email</strong> to confirm. Reply to this email if you need help.</p>`
       );
       await sendEmail({
-        fromUser, to,
+        to,
         subject: `⚠️ Action needed: Your Hub email is broken, ${firstName}`,
         body: `Your Hub Gmail App Password is broken. Please re-enter it now.`,
         htmlBody: html,
@@ -104,7 +93,7 @@ export async function sendSmtpHealthAdvisory() {
         <p style="font-size:13px;color:#6b7280;margin:0;">Test anytime: Hub → avatar → Email settings → <strong>Send test email</strong>.</p>`
       );
       await sendEmail({
-        fromUser, to,
+        to,
         subject: 'Weekly reminder: Re-enter App Password if you change your Google password',
         body: 'Weekly SMTP health reminder — your email is currently working fine.',
         htmlBody: html,

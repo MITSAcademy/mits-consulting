@@ -281,7 +281,7 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
         const ccArr = args.cc ? (Array.isArray(args.cc) ? args.cc : [args.cc]) : undefined;
         const bccArr = args.bcc ? (Array.isArray(args.bcc) ? args.bcc : [args.bcc]) : undefined;
         const { data, error } = await resend.emails.send({
-          from: 'MITS Consulting Hub <hub@mitssolution.com>',
+          from: 'MITS Consulting Hub <info.mitsedge@mitssolution.com>',
           to: toArr,
           cc: ccArr,
           bcc: bccArr,

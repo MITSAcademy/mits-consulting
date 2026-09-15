@@ -16,7 +16,7 @@
  */
 
 import { prisma } from './prisma';
-import { sendEmail, safeBuildFromUser } from './mailer';
+import { sendEmail } from './mailer';
 import { audit } from './audit';
 
 const FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSep1UNX-Cx3USsytUO2NvwtsQdanCYOlFANLzeNS442hx5TQQ/viewform';
@@ -78,19 +78,8 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean; sample?:
   const vaibhav = users.find((u) => u.id === 'u-vaibhav');
   const samita = users.find((u) => u.id === 'u-samita');
 
-  if (!mitali?.gmailAddress || !mitali?.smtpAppPassword) {
-    console.warn('[feedback-email] Mitali SMTP not configured — skipping');
-    return { sent: 0, skipped: 0, errors: 0 };
-  }
-
-  const fromUser = safeBuildFromUser(mitali as any);
-  if (!fromUser) {
-    console.warn('[feedback-email] Could not build fromUser for Mitali — skipping');
-    return { sent: 0, skipped: 0, errors: 0 };
-  }
-
-  // CC: Vaibhav + Samita only (Mitali is the sender — don't CC her on her own email)
-  const ccEmails = [vaibhav?.email, samita?.email].filter(Boolean).join(', ');
+  // CC: Vaibhav + Samita + Mitali
+  const ccEmails = [vaibhav?.email, samita?.email, mitali?.email].filter(Boolean).join(', ');
 
   // Find all active clients whose payDate1 = targetDate (2 days away)
   const clients = await prisma.client.findMany({
@@ -108,7 +97,7 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean; sample?:
   // Sample mode: send one test email to internal team only, no real client emails
   if (opts.sample) {
     const sampleClientName = clients[0]?.name || 'Test Client';
-    const html = buildHtml(sampleClientName, mitali.name);
+    const html = buildHtml(sampleClientName, mitali?.name || 'MITS Team');
     const sampleTo = [vaibhav?.email, samita?.email].filter(Boolean).join(', ');
     if (!sampleTo) {
       console.warn('[feedback-email] Sample skipped — no internal recipient emails configured');
@@ -118,9 +107,8 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean; sample?:
       to: sampleTo,
       cc: undefined,
       subject: `[SAMPLE] We value your feedback - MITS Solution`,
-      body: `[SAMPLE — no client copied]\n\nDear ${sampleClientName.split(' ')[0]},\n\nWe'd love your feedback! Please fill our Client Survey Form: ${FORM_URL}\n\nRegards,\n${mitali.name}`,
+      body: `[SAMPLE — no client copied]\n\nDear ${sampleClientName.split(' ')[0]},\n\nWe'd love your feedback! Please fill our Client Survey Form: ${FORM_URL}\n\nRegards,\n${mitali?.name || 'MITS Team'}`,
       htmlBody: html,
-      fromUser,
     });
     console.log(`[feedback-email] Sample sent to internal team (${clients.length} clients would receive real email)`);
     return { sent: 1, skipped: 0, errors: 0 };
@@ -138,14 +126,13 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean; sample?:
     }
 
     try {
-      const html = buildHtml(client.name, mitali.name);
+      const html = buildHtml(client.name, mitali?.name || 'MITS Team');
       await sendEmail({
         to: client.email,
         cc: ccEmails,
         subject: 'We value your feedback - MITS Solution',
-        body: `Dear ${client.name.split(' ')[0]},\n\nWe'd love your feedback! Please fill our Client Survey Form: ${FORM_URL}\n\nRegards,\n${mitali.name}`,
+        body: `Dear ${client.name.split(' ')[0]},\n\nWe'd love your feedback! Please fill our Client Survey Form: ${FORM_URL}\n\nRegards,\n${mitali?.name || 'MITS Team'}`,
         htmlBody: html,
-        fromUser,
       });
 
       await prisma.client.update({
@@ -154,7 +141,7 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean; sample?:
       });
 
       await audit(
-        mitali.id, mitali.name,
+        mitali?.id || 'system', mitali?.name || 'MITS Team',
         'FEEDBACK_EMAIL_SENT',
         `Feedback survey email sent to ${client.name} (${client.email}) — payDate1 in 2 days (${targetDate})`,
         { clientId: client.id }

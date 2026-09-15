@@ -13,7 +13,7 @@
  */
 
 import { prisma } from './prisma';
-import { sendEmail, safeBuildFromUser } from './mailer';
+import { sendEmail } from './mailer';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -442,24 +442,7 @@ export async function sendPaymentFollowUpReport({ force = false }: { force?: boo
   const subject = `${urgency}Payment Follow-Up Report — ${dateLabel}`;
   const html = buildHtml({ date: dateLabel, overdue, dueSoon, upcoming, farFuture, noDate, freshPayments, followUpPayments });
 
-  // Send from Vaibhav's account
-  const vaibhav = await prisma.user.findFirst({
-    where: { role: 'founder' },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-  });
-
-  if (!vaibhav?.gmailAddress || !vaibhav?.smtpAppPassword) {
-    console.error('[payment-followup-report] Vaibhav has no Gmail App Password — cannot send');
-    return;
-  }
-
-  const fromUser = safeBuildFromUser(vaibhav);
-  if (!fromUser) {
-    console.error('[payment-followup-report] Could not decrypt Vaibhav\'s App Password');
-    return;
-  }
-
-  // Recipients: Vaibhav + Samita + Mitali + Areena (NOT Bhavneet — she gets her own 2 PM sheet)
+  // Recipients: Samita + Mitali + Areena (NOT Bhavneet — she gets her own 2 PM sheet)
   const recipients = await prisma.user.findMany({
     where: { id: { in: ['u-samita', 'u-mitali'] } },
     select: { email: true, gmailAddress: true },
@@ -475,7 +458,6 @@ export async function sendPaymentFollowUpReport({ force = false }: { force?: boo
     subject,
     body: subject,
     htmlBody: html,
-    fromUser,
   });
 
   console.log(`[payment-followup-report] Sent to ${toEmails} — ${overdue.length} overdue, ${dueSoon.length} due soon, ${upcoming.length} upcoming`);

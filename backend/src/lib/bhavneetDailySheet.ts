@@ -5,7 +5,7 @@
  */
 
 import { prisma } from './prisma';
-import { sendEmail, safeBuildFromUser } from './mailer';
+import { sendEmail } from './mailer';
 
 function todayIST(): string {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -84,14 +84,6 @@ export async function sendBhavneetDailySheet() {
   <p style="color:#9ca3af;font-size:11px;margin-top:12px">Auto-generated from MITS Portal · ${label}</p>
 </div>`;
 
-  // Send from Bhavneet's account
-  const bhavneet = await prisma.user.findUnique({
-    where: { id: 'u-bhavneet' },
-    select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true },
-  });
-
-  const fromUser = bhavneet ? safeBuildFromUser(bhavneet) : undefined;
-
   const allIds = ['u-kashish', 'u-muskan', 'u-samita', 'u-vaibhav', 'u-mitali', 'u-bhavneet'];
   const users = await prisma.user.findMany({
     where: { id: { in: allIds } },
@@ -110,8 +102,7 @@ export async function sendBhavneetDailySheet() {
     subject: `Daily Session Sheet — ${label}`,
     body: `Daily session sheet for ${label} — ${trainings.length} sessions`,
     htmlBody,
-    fromUser,
-  } as any);
+  });
 
   console.log(`[bhavneet-daily-sheet] Sent — ${trainings.length} sessions · ${label}`);
 }

@@ -5,7 +5,7 @@
  */
 
 import { prisma } from './prisma';
-import { sendEmail, safeBuildFromUser } from './mailer';
+import { sendEmail } from './mailer';
 import { audit } from './audit';
 
 function todayIST(): string {
@@ -30,17 +30,6 @@ function fmt(iso: string) {
 
 export async function sendWeeklyFeedbackReport(triggeredBy?: { id: string; name: string }): Promise<void> {
   const { monday, saturday } = weekBoundsIST();
-
-  const vaibhav = await prisma.user.findUnique({
-    where: { id: 'u-vaibhav' },
-    select: { id: true, name: true, email: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-  });
-  if (!vaibhav?.gmailAddress || !vaibhav?.smtpAppPassword) {
-    console.warn('[weekly-feedback-report] Vaibhav SMTP not configured');
-    return;
-  }
-  const fromUser = safeBuildFromUser(vaibhav as any);
-  if (!fromUser) return;
 
   const recipients = await prisma.user.findMany({
     where: { id: { in: ['u-mitali', 'u-bhavneet', 'u-vaibhav'] } },
@@ -182,7 +171,6 @@ export async function sendWeeklyFeedbackReport(triggeredBy?: { id: string; name:
     subject,
     body: `Weekly Feedback Compliance Report\nWeek: ${monday} to ${saturday}\nActive clients: ${totalClients}\nVerbal done: ${verbalDone} / missed: ${verbalMissed}\nWritten done: ${writtenDone} / missed: ${writtenMissed}`,
     htmlBody: html,
-    fromUser,
   });
 
   const actor = triggeredBy ?? { id: 'u-vaibhav', name: 'System' };

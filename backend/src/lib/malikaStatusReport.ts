@@ -8,7 +8,7 @@
  */
 
 import { prisma } from './prisma';
-import { sendEmail, safeBuildFromUser } from './mailer';
+import { sendEmail } from './mailer';
 
 // ── IST helpers ───────────────────────────────────────────────────────────────
 
@@ -272,30 +272,12 @@ export async function sendMalikaStatusReport({ force = false }: { force?: boolea
 
   const html = buildStatusReportHtml({ date: dateLabel, completedToday, inProgress, tomorrow });
 
-  // Send from Vaibhav's account
-  const vaibhav = await prisma.user.findFirst({
-    where: { role: 'founder' },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-  });
-
-  if (!vaibhav?.gmailAddress || !vaibhav?.smtpAppPassword) {
-    console.error('[malika-report] Vaibhav has no Gmail App Password configured — cannot send');
-    return;
-  }
-
-  const fromUser = safeBuildFromUser(vaibhav);
-  if (!fromUser) {
-    console.error('[malika-report] Could not decrypt Vaibhav\'s App Password');
-    return;
-  }
-
   await sendEmail({
     to: 'malgup@mitssolution.com',
     cc: 'er.vaibhavaggarwal@gmail.com',
     subject,
     body: subject,
     htmlBody: html,
-    fromUser,
   });
 
   console.log(`[malika-report] Sent to malgup@mitssolution.com — ${completedToday.length} done, ${inProgress.length} pending`);

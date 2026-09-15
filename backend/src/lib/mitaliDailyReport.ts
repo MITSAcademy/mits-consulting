@@ -15,7 +15,7 @@
  */
 
 import { prisma } from './prisma';
-import { sendEmail, safeBuildFromUser } from './mailer';
+import { sendEmail } from './mailer';
 
 const ACTION_LABELS: Record<string, string> = {
   PAYMENT_ADVANCED: 'Payment collected',
@@ -67,15 +67,6 @@ export async function sendMitaliDailyReport() {
   }
   if (!config.enabled) {
     console.log('[mitali-daily-report] disabled in config — skipping');
-    return;
-  }
-
-  const vaibhav = await prisma.user.findUnique({
-    where: { id: 'u-vaibhav' },
-    select: { id: true, name: true, gmailAddress: true, smtpAppPassword: true, sendAsAddress: true },
-  });
-  if (!vaibhav?.gmailAddress || !vaibhav?.smtpAppPassword) {
-    console.warn('[mitali-daily-report] Vaibhav SMTP not configured — skipping');
     return;
   }
 
@@ -144,13 +135,12 @@ export async function sendMitaliDailyReport() {
   }
 
   const fromUser = safeBuildFromUser(vaibhav);
-  if (!fromUser) return;
-
   // Build recipients
+  const vaibhav = await prisma.user.findUnique({ where: { id: 'u-vaibhav' }, select: { email: true, gmailAddress: true } });
   const samita = await prisma.user.findFirst({ where: { role: 'demo_lead' }, select: { email: true, gmailAddress: true } });
   const toList = [
     mitali.gmailAddress || mitali.email,
-    vaibhav.gmailAddress,
+    vaibhav?.gmailAddress || vaibhav?.email,
     samita?.gmailAddress || samita?.email,
     ...config.extraRecipients,
   ].filter(Boolean) as string[];
@@ -225,6 +215,6 @@ export async function sendMitaliDailyReport() {
   </td></tr>
 </table></body></html>`;
 
-  await sendEmail({ to: toEmails, subject, body: subject, htmlBody: html, fromUser });
+  await sendEmail({ to: toEmails, subject, body: subject, htmlBody: html });
   console.log(`[mitali-daily-report] Sent to ${toEmails} — ${paymentsCollected} payments, ${feedbackTaken} feedback, ${totalActions} total actions`);
 }
