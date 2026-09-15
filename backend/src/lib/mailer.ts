@@ -277,9 +277,14 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
         const htmlBody = args.htmlBody
           ? args.htmlBody
           : `<pre style="font-family:Inter,sans-serif;white-space:pre-wrap;font-size:14px;line-height:1.6;">${escapeHtml(args.body)}</pre>`;
-        const toArr = Array.isArray(args.to) ? args.to : [args.to];
-        const ccArr = args.cc ? (Array.isArray(args.cc) ? args.cc : [args.cc]) : undefined;
-        const bccArr = args.bcc ? (Array.isArray(args.bcc) ? args.bcc : [args.bcc]) : undefined;
+        const splitEmails = (v: string | string[] | undefined): string[] | undefined => {
+          if (!v) return undefined;
+          const arr = Array.isArray(v) ? v : v.split(',').map(s => s.trim());
+          return arr.filter(e => e.includes('@'));
+        };
+        const toArr = splitEmails(args.to) || [];
+        const ccArr = splitEmails(args.cc as string | string[] | undefined);
+        const bccArr = splitEmails(args.bcc as string | string[] | undefined);
         const { data, error } = await resend.emails.send({
           from: 'MITS Edge <info.mitsedge@mitssolution.com>',
           to: toArr,

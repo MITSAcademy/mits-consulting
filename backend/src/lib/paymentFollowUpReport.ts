@@ -449,16 +449,17 @@ export async function sendPaymentFollowUpReport({ force = false }: { force?: boo
   });
 
   const toEmails = [
-    ...recipients.map(u => u.gmailAddress || u.email).filter(Boolean),
+    ...recipients.map(u => u.gmailAddress || u.email).filter((e): e is string => !!e && e.includes('@')),
     'areena.beri@mitssolution.com',
-  ].join(', ');
+  ];
 
   await sendEmail({
-    to: toEmails,
+    to: toEmails[0],
+    cc: toEmails.slice(1).join(', ') || undefined,
     subject,
     body: subject,
     htmlBody: html,
   });
 
-  console.log(`[payment-followup-report] Sent to ${toEmails} — ${overdue.length} overdue, ${dueSoon.length} due soon, ${upcoming.length} upcoming`);
+  console.log(`[payment-followup-report] Sent to ${toEmails.join(', ')} — ${overdue.length} overdue, ${dueSoon.length} due soon, ${upcoming.length} upcoming`);
 }
