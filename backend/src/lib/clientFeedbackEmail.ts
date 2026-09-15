@@ -106,7 +106,7 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean; sample?:
     await sendEmail({
       to: sampleTo,
       cc: undefined,
-      subject: `[SAMPLE] We value your feedback - MITS Solution`,
+      subject: `[SAMPLE] We value your feedback - MITS Edge`,
       body: `[SAMPLE — no client copied]\n\nDear ${sampleClientName.split(' ')[0]},\n\nWe'd love your feedback! Please fill our Client Survey Form: ${FORM_URL}\n\nRegards,\n${mitali?.name || 'MITS Team'}`,
       htmlBody: html,
     });
@@ -130,7 +130,7 @@ export async function sendClientFeedbackEmails(opts: { force?: boolean; sample?:
       await sendEmail({
         to: client.email,
         cc: ccEmails,
-        subject: 'We value your feedback - MITS Solution',
+        subject: 'We value your feedback - MITS Edge',
         body: `Dear ${client.name.split(' ')[0]},\n\nWe'd love your feedback! Please fill our Client Survey Form: ${FORM_URL}\n\nRegards,\n${mitali?.name || 'MITS Team'}`,
         htmlBody: html,
       });
