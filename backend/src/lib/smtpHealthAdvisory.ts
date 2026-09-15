@@ -1,15 +1,5 @@
 import { prisma } from './prisma';
-import { sendEmail, decryptSecret, getUserTransporter } from './mailer';
-
-const STEPS = `
-<ol style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
-  <li>Go to <a href="https://myaccount.google.com/apppasswords" style="color:#2563eb;">myaccount.google.com/apppasswords</a></li>
-  <li>Sign in with your <strong>@mitssolution.com</strong> Google account</li>
-  <li>Click <strong>"Create a new App Password"</strong> → App: Mail, Device: Other → name it "MITS Hub"</li>
-  <li>Copy the 16-character password shown</li>
-  <li>Open the Hub → click your avatar (top right) → <strong>Email settings</strong></li>
-  <li>Paste the new App Password and click <strong>Save</strong></li>
-</ol>`;
+import { sendEmail } from './mailer';
 
 function wrap(subtitle: string, body: string) {
   return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Arial,sans-serif;">
@@ -29,78 +19,83 @@ function wrap(subtitle: string, body: string) {
 </table></body></html>`;
 }
 
+const CAL_STEPS = `
+<ol style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
+  <li>Open the MITS Hub and click <strong>Sign in with Google</strong></li>
+  <li>Select your <strong>@mitssolution.com</strong> account</li>
+  <li>On the permissions screen, click <strong>Allow</strong> (includes calendar access)</li>
+  <li>You'll be taken straight back in — calendar sync will resume</li>
+</ol>`;
+
 export async function sendSmtpHealthAdvisory() {
+  // Find users with no calendar token or a stale one (not connected in 50+ days)
+  const cutoff = new Date(Date.now() - 50 * 24 * 60 * 60 * 1000);
+
   const users = await prisma.user.findMany({
-    where: { smtpAppPassword: { not: null }, active: true },
-    select: { id: true, name: true, email: true, gmailAddress: true, smtpAppPassword: true },
+    where: { active: true, role: { notIn: ['resume_sanitiser'] } },
+    select: {
+      id: true, name: true, email: true, gmailAddress: true,
+      googleRefreshToken: true, googleCalendarConnectedAt: true,
+    },
   });
 
-  // Live health check for each user
-  const health = await Promise.all(users.map(async (u: any) => {
-    try {
-      const pwd = decryptSecret(u.smtpAppPassword!);
-      const tx = getUserTransporter(u.id, u.gmailAddress!, pwd);
-      await tx.verify();
-      return { ...u, ok: true };
-    } catch {
-      return { ...u, ok: false };
-    }
-  }));
+  // Monday-only for healthy users; daily for those with no token at all
+  const isMonday = new Date().getDay() === 1;
 
-  for (const u of health) {
+  for (const u of users) {
     const to = u.gmailAddress || u.email;
     if (!to) continue;
-
     const firstName = u.name.split(' ')[0];
 
-    if (!u.ok) {
-      const html = wrap('Urgent: Your Gmail App Password has stopped working',
-        `<p style="font-size:15px;font-weight:700;color:#dc2626;margin:0 0 12px;">⚠️ ${firstName}, your Hub email is currently broken.</p>
+    const noToken = !u.googleRefreshToken;
+    const stale = u.googleCalendarConnectedAt && new Date(u.googleCalendarConnectedAt) < cutoff;
+
+    if (noToken) {
+      // Alert every day until they reconnect
+      const html = wrap('Action needed: Reconnect your Google account',
+        `<p style="font-size:15px;font-weight:700;color:#dc2626;margin:0 0 12px;">⚠️ ${firstName}, your Google calendar is not connected.</p>
         <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
-          We ran a daily check and your Gmail App Password is returning an <strong>Invalid login</strong> error.
-          <strong>No emails are going out from your account</strong> — session sheets, notifications, and follow-ups are all failing silently.
+          Your Hub calendar is showing no events because your Google account isn't linked yet.
+          This takes less than a minute to fix.
         </p>
         <table cellpadding="0" cellspacing="0" style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:20px;margin:0 0 20px;width:100%;">
           <tr><td>
-            <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:10px;">Fix this now — takes 2 minutes:</div>
-            ${STEPS}
+            <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:10px;">Reconnect now:</div>
+            ${CAL_STEPS}
           </td></tr>
         </table>
-        <p style="font-size:13px;color:#6b7280;margin:0;">Once done, use <strong>Hub → avatar → Email settings → Send test email</strong> to confirm. Reply to this email if you need help.</p>`
+        <p style="font-size:13px;color:#6b7280;margin:0;">If you see your calendar events already, ignore this — someone will fix the check shortly.</p>`
       );
       await sendEmail({
         to,
-        subject: `⚠️ Action needed: Your Hub email is broken, ${firstName}`,
-        body: `Your Hub Gmail App Password is broken. Please re-enter it now.`,
+        subject: `⚠️ ${firstName} — your Hub calendar isn't connected`,
+        body: `Your Google calendar is not connected to the Hub. Please sign in with Google to restore it.`,
         htmlBody: html,
       });
-    } else {
-      // Only send the general reminder on Mondays to avoid daily noise
-      const isMonday = new Date().getDay() === 1;
-      if (!isMonday) continue;
-
-      const html = wrap('Gmail App Password — Weekly reminder',
-        `<p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 12px;">✅ ${firstName}, your Hub email is working fine.</p>
+    } else if (stale && isMonday) {
+      // Nudge on Mondays if it's been a while — token may have expired
+      const html = wrap('Google calendar — reconnect reminder',
+        `<p style="font-size:15px;font-weight:600;color:#111827;margin:0 0 12px;">📅 ${firstName}, your calendar connection may need a refresh.</p>
         <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 16px;">
-          Weekly reminder — if you ever <strong>change your Google account password</strong>, your Hub App Password will be automatically revoked and emails will stop working.
+          It's been a while since you last signed in with Google. If your Hub calendar looks empty or out of date,
+          a quick re-login will fix it — Google occasionally expires access after long periods of inactivity.
         </p>
-        <table cellpadding="0" cellspacing="0" style="background:#fef9ec;border:1px solid #fcd34d;border-radius:8px;padding:20px;margin:0 0 20px;width:100%;">
+        <table cellpadding="0" cellspacing="0" style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:20px;margin:0 0 20px;width:100%;">
           <tr><td>
-            <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:10px;">If you change your Google password, do this immediately:</div>
-            ${STEPS}
+            <div style="font-size:13px;font-weight:700;color:#1e40af;margin-bottom:10px;">To refresh your calendar access:</div>
+            ${CAL_STEPS}
           </td></tr>
         </table>
-        <p style="font-size:13px;color:#6b7280;margin:0;">Test anytime: Hub → avatar → Email settings → <strong>Send test email</strong>.</p>`
+        <p style="font-size:13px;color:#6b7280;margin:0;">If your calendar is showing correctly, no action needed.</p>`
       );
       await sendEmail({
         to,
-        subject: 'Weekly reminder: Re-enter App Password if you change your Google password',
-        body: 'Weekly SMTP health reminder — your email is currently working fine.',
+        subject: `Reminder: Refresh your Hub calendar connection, ${firstName}`,
+        body: `Your Google calendar connection may have expired. Please sign in again to refresh it.`,
         htmlBody: html,
       });
     }
   }
 
-  const broken = health.filter((u: any) => !u.ok).map((u: any) => u.name);
-  console.log(`[smtp-advisory] done — broken: [${broken.join(', ') || 'none'}]`);
+  console.log(`[calendar-advisory] done — checked ${users.length} users`);
 }
