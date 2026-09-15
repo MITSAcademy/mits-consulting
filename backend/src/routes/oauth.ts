@@ -33,11 +33,13 @@ function gcCodeCache() {
 // Scopes:
 //   openid email profile               — identity (mandatory for SSO)
 //   calendar.readonly                  — read user's events into our My Calendar grid
+//   gmail.send                         — send system emails via OAuth2 (no App Password needed)
 const SCOPES = [
   'openid',
   'email',
   'profile',
   'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
 ].join(' ');
 
 function googleConfigured(): boolean {
@@ -188,6 +190,7 @@ oauthRouter.get('/google/callback', async (req, res) => {
       accounts:          '/accounts-queue',
       payment_processor: '/trainer-pay',
       account_manager:   '/tasks',
+      resume_sanitiser:  '/resume-sanitise',
       lead:              '/calendar',
       staff:             '/tasks',
     };
