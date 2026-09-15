@@ -35,11 +35,13 @@ export async function sendWeeklyFeedbackReport(triggeredBy?: { id: string; name:
     where: { id: { in: ['u-mitali', 'u-bhavneet', 'u-vaibhav'] } },
     select: { email: true },
   });
-  const toEmails = recipients.map(u => u.email).filter(Boolean).join(', ');
-  if (!toEmails) {
+  const toEmailsArr = recipients.map(u => u.email).filter((e): e is string => !!e);
+  if (!toEmailsArr.length) {
     console.warn('[weekly-feedback-report] No recipient emails configured — skipping');
     return;
   }
+  const toEmails = toEmailsArr[0];
+  const ccEmailsExtra = toEmailsArr.slice(1).join(', ') || undefined;
 
   // Active clients
   const clients = await prisma.client.findMany({
@@ -168,6 +170,7 @@ export async function sendWeeklyFeedbackReport(triggeredBy?: { id: string; name:
 
   await sendEmail({
     to: toEmails,
+    cc: ccEmailsExtra,
     subject,
     body: `Weekly Feedback Compliance Report\nWeek: ${monday} to ${saturday}\nActive clients: ${totalClients}\nVerbal done: ${verbalDone} / missed: ${verbalMissed}\nWritten done: ${writtenDone} / missed: ${writtenMissed}`,
     htmlBody: html,

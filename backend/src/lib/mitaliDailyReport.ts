@@ -143,7 +143,9 @@ export async function sendMitaliDailyReport() {
     samita?.gmailAddress || samita?.email,
     ...config.extraRecipients,
   ].filter(Boolean) as string[];
-  const toEmails = [...new Set(toList)].join(', ');
+  const toEmailsArr = [...new Set(toList)];
+  const toEmails = toEmailsArr[0];
+  const ccEmailsExtra = toEmailsArr.slice(1).join(', ') || undefined;
 
   const subject = `Mitali's Daily Activity Report — ${todayStr}`;
 
@@ -214,6 +216,6 @@ export async function sendMitaliDailyReport() {
   </td></tr>
 </table></body></html>`;
 
-  await sendEmail({ to: toEmails, subject, body: subject, htmlBody: html });
+  await sendEmail({ to: toEmails, cc: ccEmailsExtra, subject, body: subject, htmlBody: html });
   console.log(`[mitali-daily-report] Sent to ${toEmails} — ${paymentsCollected} payments, ${feedbackTaken} feedback, ${totalActions} total actions`);
 }

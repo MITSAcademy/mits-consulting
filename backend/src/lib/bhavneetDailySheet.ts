@@ -97,8 +97,8 @@ export async function sendBhavneetDailySheet() {
     .filter(e => !toEmails.includes(e));
 
   await sendEmail({
-    to: toEmails.join(', '),
-    cc: ccEmails.length ? ccEmails.join(', ') : undefined,
+    to: toEmails[0],
+    cc: [...toEmails.slice(1), ...ccEmails].join(', ') || undefined,
     subject: `Daily Session Sheet — ${label}`,
     body: `Daily session sheet for ${label} — ${trainings.length} sessions`,
     htmlBody,
