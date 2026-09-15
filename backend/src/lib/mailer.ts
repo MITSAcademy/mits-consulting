@@ -1,12 +1,14 @@
 /**
  * SMTP mailer using nodemailer. Supports:
- *  • System fallback — SMTP_HOST/USER/PASS env vars
+ *  • System OAuth2 — uses Vaibhav's stored Google refresh token (never expires on password change)
+ *  • System fallback — SMTP_HOST/USER/PASS env vars (legacy, kept as last resort)
  *  • Per-user override — each User can configure their own Gmail App Password,
  *    stored encrypted with SMTP_USER_ENCRYPTION_KEY (or JWT_SECRET as fallback).
  *  • Calendar invites — pass `icsAttachment` to embed an RFC 5545 .ics file as an alternative.
  */
 import nodemailer, { Transporter } from 'nodemailer';
 import crypto from 'crypto';
+import { prisma } from './prisma';
 
 let systemTransporter: Transporter | null = null;
 // Per-user transporters cached by user id (reset when password changes)
@@ -14,6 +16,70 @@ const userTransporters = new Map<string, { gmail: string; pwHash: string; tx: Tr
 
 export function smtpConfigured(): boolean {
   return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
+/**
+ * Build a Gmail OAuth2 transporter using a stored refresh token.
+ * This never breaks when the Google account password changes — only
+ * revoked when the user explicitly removes app access.
+ */
+function buildOAuth2Transporter(gmail: string, refreshToken: string): Transporter {
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: {
+      type: 'OAuth2',
+      user: gmail,
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      refreshToken,
+    },
+    connectionTimeout: 30_000,
+    greetingTimeout: 30_000,
+    socketTimeout: 60_000,
+  });
+}
+
+/**
+ * System transporter: tries Vaibhav's OAuth2 refresh token first (robust, never
+ * breaks on password change), falls back to SMTP_HOST env vars if not available.
+ */
+export async function getSystemTransporterAsync(): Promise<{ tx: Transporter; from: string }> {
+  // Try OAuth2 via Vaibhav's stored refresh token
+  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+    try {
+      const vaibhav = await prisma.user.findUnique({
+        where: { id: 'u-vaibhav' },
+        select: { gmailAddress: true, googleRefreshToken: true, sendAsAddress: true, name: true },
+      });
+      if (vaibhav?.gmailAddress && vaibhav?.googleRefreshToken) {
+        const refreshToken = decryptSecret(vaibhav.googleRefreshToken);
+        const tx = buildOAuth2Transporter(vaibhav.gmailAddress, refreshToken);
+        const fromAddr = vaibhav.sendAsAddress || vaibhav.gmailAddress;
+        const from = `"MITS Consulting Hub" <${fromAddr}>`;
+        console.log('[mailer] system → OAuth2 (Vaibhav)');
+        return { tx, from };
+      }
+    } catch (e) {
+      console.warn('[mailer] OAuth2 system transport failed, falling back to SMTP env vars:', (e as any)?.message);
+    }
+  }
+
+  // Fallback to env-var SMTP (App Password / legacy)
+  if (!smtpConfigured()) {
+    throw new Error('System SMTP not configured. Set SMTP_HOST/USER/PASS env vars, or ensure Vaibhav has logged in via Google SSO to store a refresh token.');
+  }
+  // Reset cached transporter so env-var changes take effect
+  systemTransporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === 'true' || Number(process.env.SMTP_PORT) === 465,
+    auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
+  });
+  const from = process.env.SMTP_FROM || `"MITS Hub" <${process.env.SMTP_USER}>`;
+  console.log('[mailer] system → SMTP env vars (fallback)');
+  return { tx: systemTransporter, from };
 }
 
 export function getSystemTransporter(): Transporter {
@@ -187,19 +253,12 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     err.code = 'MISSING_APP_PASSWORD';
     throw err;
   } else {
-    // Path 3 — SYSTEM-INITIATED notification (notify() / handover task email /
-    // sourcing-request assignment / etc.) — these aren't personal correspondence
-    // so they go from the shared MITS Hub system account. Without this path,
-    // sourcing-request notifications silently failed for any sender who hadn't
-    // configured their App Password yet — Kanchan reported missing emails for
-    // today's requests. Restoring the system SMTP fallback for this path only.
-    if (!smtpConfigured()) {
-      const err: any = new Error('System SMTP not configured (SMTP_HOST / SMTP_USER / SMTP_PASS env vars). System notifications cannot send.');
-      err.code = 'SYSTEM_SMTP_NOT_CONFIGURED';
-      throw err;
-    }
-    tx = getSystemTransporter();
-    from = process.env.SMTP_FROM || `"MITS Hub" <${process.env.SMTP_USER}>`;
+    // Path 3 — SYSTEM-INITIATED notification. Prefers OAuth2 via Vaibhav's
+    // stored Google refresh token (never breaks on password change), falls back
+    // to SMTP env vars if OAuth2 is not available.
+    const sys = await getSystemTransporterAsync();
+    tx = sys.tx;
+    from = sys.from;
     provider = 'smtp-system';
   }
 
