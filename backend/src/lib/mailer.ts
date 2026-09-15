@@ -293,15 +293,30 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
         console.log('[mailer] system → Resend', data?.id);
         return { id: data?.id || 'sent', provider: 'smtp-system' };
       } catch (e) {
-        console.warn('[mailer] Resend failed, falling back to SMTP env vars:', (e as any)?.message);
+        console.error('[mailer] Resend failed, falling back to SMTP env vars:', (e as any)?.message);
       }
     }
 
     // Fallback to env-var SMTP
-    const sys = await getSystemTransporterAsync();
-    tx = sys.tx;
-    from = sys.from;
-    provider = 'smtp-system';
+    try {
+      const sys = await getSystemTransporterAsync();
+      tx = sys.tx;
+      from = sys.from;
+      provider = 'smtp-system';
+    } catch (smtpErr) {
+      // Both Resend and SMTP failed — log to audit so nothing is silently lost
+      console.error('[mailer] ALL delivery paths failed for:', args.subject, 'to:', args.to, (smtpErr as any)?.message);
+      try {
+        const { prisma: db } = await import('./prisma');
+        await db.auditLog.create({ data: {
+          userId: 'system', userName: 'System',
+          action: 'EMAIL_DELIVERY_FAILED',
+          detail: `Subject: ${args.subject} | To: ${Array.isArray(args.to) ? args.to.join(', ') : args.to}`,
+          meta: JSON.stringify({ error: (smtpErr as any)?.message }),
+        }});
+      } catch { /* audit failure is non-fatal */ }
+      throw smtpErr;
+    }
   }
 
   const html = args.htmlBody
