@@ -309,10 +309,9 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
       try {
         const { prisma: db } = await import('./prisma');
         await db.auditLog.create({ data: {
-          userId: 'system', userName: 'System',
+          byName: 'System',
           action: 'EMAIL_DELIVERY_FAILED',
-          detail: `Subject: ${args.subject} | To: ${Array.isArray(args.to) ? args.to.join(', ') : args.to}`,
-          meta: JSON.stringify({ error: (smtpErr as any)?.message }),
+          details: `Subject: ${args.subject} | To: ${Array.isArray(args.to) ? args.to.join(', ') : args.to} | Error: ${(smtpErr as any)?.message}`,
         }});
       } catch { /* audit failure is non-fatal */ }
       throw smtpErr;
