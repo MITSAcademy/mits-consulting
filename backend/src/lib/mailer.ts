@@ -8,6 +8,7 @@
  */
 import nodemailer, { Transporter } from 'nodemailer';
 import crypto from 'crypto';
+import { google } from 'googleapis';
 import { prisma } from './prisma';
 
 let systemTransporter: Transporter | null = null;
@@ -19,11 +20,21 @@ export function smtpConfigured(): boolean {
 }
 
 /**
- * Build a Gmail OAuth2 transporter using a stored refresh token.
- * This never breaks when the Google account password changes — only
- * revoked when the user explicitly removes app access.
+ * Exchange a stored refresh token for a fresh access token using googleapis,
+ * then build a nodemailer transporter that authenticates with it.
+ * This is the correct OAuth2 flow — nodemailer's built-in OAuth2 mode
+ * requires an access token, not a refresh token directly.
  */
-function buildOAuth2Transporter(gmail: string, refreshToken: string): Transporter {
+async function buildOAuth2Transporter(gmail: string, refreshToken: string): Promise<Transporter> {
+  const oAuth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID!,
+    process.env.GOOGLE_CLIENT_SECRET!,
+    process.env.GOOGLE_REDIRECT_URI,
+  );
+  oAuth2Client.setCredentials({ refresh_token: refreshToken });
+  const { token: accessToken } = await oAuth2Client.getAccessToken();
+  if (!accessToken) throw new Error('Failed to obtain access token from refresh token');
+
   return nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
@@ -34,6 +45,7 @@ function buildOAuth2Transporter(gmail: string, refreshToken: string): Transporte
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
       refreshToken,
+      accessToken,
     },
     connectionTimeout: 30_000,
     greetingTimeout: 30_000,
@@ -55,7 +67,7 @@ export async function getSystemTransporterAsync(): Promise<{ tx: Transporter; fr
       });
       if (vaibhav?.gmailAddress && vaibhav?.googleRefreshToken) {
         const refreshToken = decryptSecret(vaibhav.googleRefreshToken);
-        const tx = buildOAuth2Transporter(vaibhav.gmailAddress, refreshToken);
+        const tx = await buildOAuth2Transporter(vaibhav.gmailAddress, refreshToken);
         const fromAddr = vaibhav.sendAsAddress || vaibhav.gmailAddress;
         const from = `"MITS Consulting Hub" <${fromAddr}>`;
         console.log('[mailer] system → OAuth2 (Vaibhav)');
@@ -70,7 +82,6 @@ export async function getSystemTransporterAsync(): Promise<{ tx: Transporter; fr
   if (!smtpConfigured()) {
     throw new Error('System SMTP not configured. Set SMTP_HOST/USER/PASS env vars, or ensure Vaibhav has logged in via Google SSO to store a refresh token.');
   }
-  // Reset cached transporter so env-var changes take effect
   systemTransporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
