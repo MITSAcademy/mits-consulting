@@ -14,7 +14,6 @@
 import cron from 'node-cron';
 import { sendTeam2Briefing, sendTeam1Briefing, sendSamitaBriefing, sendRoshniBriefing } from './dailyBriefing';
 import { runIssueEscalation } from './issueEscalation';
-import { sendMalikaStatusReport } from './malikaStatusReport';
 import { sendPaymentFollowUpReport } from './paymentFollowUpReport';
 import { sendBhavneetDailySheet } from './bhavneetDailySheet';
 import { sendSmtpHealthAdvisory } from './smtpHealthAdvisory';
@@ -110,8 +109,6 @@ export function initScheduler() {
   cron.schedule('0 11 * * *', () => safe('demo-escalation-digest', () => sendDemoEscalationDigest()), {
     timezone: 'Asia/Kolkata',
   });
-
-  // Malika status report disabled
 
   // Payment Follow-Up Report — 12:00 PM IST → Vaibhav, Samita, Mitali, Areena
   cron.schedule('0 12 * * *', () => safe('payment-followup-report', () => sendPaymentFollowUpReport({ force: true })), {
