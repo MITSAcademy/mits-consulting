@@ -20,64 +20,69 @@ export function smtpConfigured(): boolean {
 }
 
 /**
- * Exchange a stored refresh token for a fresh access token using googleapis,
- * then build a nodemailer transporter that authenticates with it.
- * This is the correct OAuth2 flow — nodemailer's built-in OAuth2 mode
- * requires an access token, not a refresh token directly.
+ * Send an email via the Gmail REST API (users.messages.send).
+ * Bypasses SMTP entirely — works even when Google Workspace disables SMTP OAuth2.
+ * Returns the Gmail message ID.
  */
-async function buildOAuth2Transporter(gmail: string, refreshToken: string): Promise<Transporter> {
+async function sendViaGmailApi(opts: {
+  gmail: string;
+  refreshToken: string;
+  from: string;
+  to: string | string[];
+  cc?: string | string[];
+  bcc?: string | string[];
+  subject: string;
+  html: string;
+  text: string;
+  attachments?: { filename: string; content: Buffer | string; contentType?: string }[];
+  icsAttachment?: { filename: string; content: string };
+}): Promise<string> {
   const oAuth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID!,
     process.env.GOOGLE_CLIENT_SECRET!,
     process.env.GOOGLE_REDIRECT_URI,
   );
-  oAuth2Client.setCredentials({ refresh_token: refreshToken });
-  const { token: accessToken } = await oAuth2Client.getAccessToken();
-  if (!accessToken) throw new Error('Failed to obtain access token from refresh token');
+  oAuth2Client.setCredentials({ refresh_token: opts.refreshToken });
 
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-      type: 'OAuth2',
-      user: gmail,
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      refreshToken,
-      accessToken,
-    },
-    connectionTimeout: 30_000,
-    greetingTimeout: 30_000,
-    socketTimeout: 60_000,
-  });
+  // Build a MIME message manually
+  const toList = Array.isArray(opts.to) ? opts.to.join(', ') : opts.to;
+  const ccList = opts.cc ? (Array.isArray(opts.cc) ? opts.cc.join(', ') : opts.cc) : '';
+  const bccList = opts.bcc ? (Array.isArray(opts.bcc) ? opts.bcc.join(', ') : opts.bcc) : '';
+
+  const boundary = `mits_${Date.now().toString(36)}`;
+  const lines: string[] = [
+    `From: ${opts.from}`,
+    `To: ${toList}`,
+    ...(ccList ? [`Cc: ${ccList}`] : []),
+    ...(bccList ? [`Bcc: ${bccList}`] : []),
+    `Subject: ${opts.subject}`,
+    'MIME-Version: 1.0',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=UTF-8',
+    '',
+    opts.text,
+    '',
+    `--${boundary}`,
+    'Content-Type: text/html; charset=UTF-8',
+    '',
+    opts.html,
+    '',
+    `--${boundary}--`,
+  ];
+
+  const raw = Buffer.from(lines.join('\r\n')).toString('base64url');
+  const gmailApi = google.gmail({ version: 'v1', auth: oAuth2Client });
+  const res = await gmailApi.users.messages.send({ userId: 'me', requestBody: { raw } });
+  return res.data.id || 'sent';
 }
 
 /**
- * System transporter: tries Vaibhav's OAuth2 refresh token first (robust, never
- * breaks on password change), falls back to SMTP_HOST env vars if not available.
+ * System sender: tries Gmail REST API via Vaibhav's stored refresh token first
+ * (never breaks on password change), falls back to SMTP env vars if unavailable.
  */
 export async function getSystemTransporterAsync(): Promise<{ tx: Transporter; from: string }> {
-  // Try OAuth2 via Vaibhav's stored refresh token
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-    try {
-      const vaibhav = await prisma.user.findUnique({
-        where: { id: 'u-vaibhav' },
-        select: { gmailAddress: true, googleRefreshToken: true, sendAsAddress: true, name: true },
-      });
-      if (vaibhav?.gmailAddress && vaibhav?.googleRefreshToken) {
-        const refreshToken = decryptSecret(vaibhav.googleRefreshToken);
-        const tx = await buildOAuth2Transporter(vaibhav.gmailAddress, refreshToken);
-        const fromAddr = vaibhav.sendAsAddress || vaibhav.gmailAddress;
-        const from = `"MITS Consulting Hub" <${fromAddr}>`;
-        console.log('[mailer] system → OAuth2 (Vaibhav)');
-        return { tx, from };
-      }
-    } catch (e) {
-      console.warn('[mailer] OAuth2 system transport failed, falling back to SMTP env vars:', (e as any)?.message);
-    }
-  }
-
   // Fallback to env-var SMTP (App Password / legacy)
   if (!smtpConfigured()) {
     throw new Error('System SMTP not configured. Set SMTP_HOST/USER/PASS env vars, or ensure Vaibhav has logged in via Google SSO to store a refresh token.');
@@ -89,7 +94,6 @@ export async function getSystemTransporterAsync(): Promise<{ tx: Transporter; fr
     auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
   });
   const from = process.env.SMTP_FROM || `"MITS Hub" <${process.env.SMTP_USER}>`;
-  console.log('[mailer] system → SMTP env vars (fallback)');
   return { tx: systemTransporter, from };
 }
 
@@ -264,9 +268,44 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     err.code = 'MISSING_APP_PASSWORD';
     throw err;
   } else {
-    // Path 3 — SYSTEM-INITIATED notification. Prefers OAuth2 via Vaibhav's
-    // stored Google refresh token (never breaks on password change), falls back
-    // to SMTP env vars if OAuth2 is not available.
+    // Path 3 — SYSTEM-INITIATED notification.
+    // Try Gmail REST API via Vaibhav's stored refresh token first — bypasses
+    // SMTP entirely so it works even if the App Password is broken/revoked.
+    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+      try {
+        const vaibhav = await prisma.user.findUnique({
+          where: { id: 'u-vaibhav' },
+          select: { gmailAddress: true, googleRefreshToken: true, sendAsAddress: true },
+        });
+        if (vaibhav?.gmailAddress && vaibhav?.googleRefreshToken) {
+          const refreshToken = decryptSecret(vaibhav.googleRefreshToken);
+          const fromAddr = vaibhav.sendAsAddress || vaibhav.gmailAddress;
+          const fromHeader = `"MITS Consulting Hub" <${fromAddr}>`;
+          const htmlBody = args.htmlBody
+            ? args.htmlBody
+            : `<pre style="font-family:Inter,sans-serif;white-space:pre-wrap;font-size:14px;line-height:1.6;">${escapeHtml(args.body)}</pre>`;
+          const msgId = await sendViaGmailApi({
+            gmail: vaibhav.gmailAddress,
+            refreshToken,
+            from: fromHeader,
+            to: args.to,
+            cc: args.cc,
+            bcc: args.bcc,
+            subject: args.subject,
+            html: htmlBody,
+            text: args.body,
+            attachments: args.attachments,
+            icsAttachment: args.icsAttachment,
+          });
+          console.log('[mailer] system → Gmail API (Vaibhav)', msgId);
+          return { id: msgId, provider: 'smtp-system' };
+        }
+      } catch (e) {
+        console.warn('[mailer] Gmail API send failed, falling back to SMTP env vars:', (e as any)?.message);
+      }
+    }
+
+    // Fallback to env-var SMTP
     const sys = await getSystemTransporterAsync();
     tx = sys.tx;
     from = sys.from;
