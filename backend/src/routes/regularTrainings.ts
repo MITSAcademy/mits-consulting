@@ -709,6 +709,7 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
         body: description,
         cc: cc.length ? cc : undefined,
         icsAttachment: { filename: 'session-invite.ics', content: ics, method: 'REQUEST' },
+        skipVaibhavCc: true,
       });
       results.push(recipient.email);
     } catch (e: any) {
