@@ -361,15 +361,42 @@ sourcingRouter.post('/:id/proposals', async (req: AuthedRequest, res) => {
   });
   const notifyTarget = fullClient?.intakeOwnerId || fullClient?.leadOwnerId;
   if (notifyTarget && notifyTarget !== req.user!.id) {
+    // In-app notification
     await notify({
       userId: notifyTarget,
       kind: 'ProposalReceived',
       title: `${created.length} trainer proposal${created.length === 1 ? '' : 's'} for ${fullClient?.name || existing.clientId}`,
       body: `${req.user!.name} proposed candidates — review on the verifications page.`,
       link: `/verifications`,
-      email: true,
+      email: false,
       fromUserId: req.user!.id,
     });
+    // Fetch intake owner email + Samita for CC
+    const [intakeUser, samita] = await Promise.all([
+      prisma.user.findUnique({ where: { id: notifyTarget }, select: { email: true, gmailAddress: true, name: true } }),
+      prisma.user.findFirst({ where: { role: 'demo_lead' }, select: { email: true, gmailAddress: true } }),
+    ]);
+    const toEmail = intakeUser?.gmailAddress || intakeUser?.email;
+    if (toEmail) {
+      const trainerLines = created.map((p, i) => {
+        const phone = p.trainerPhone ? `  Phone: ${p.trainerPhone.slice(0, -3)}***` : '';
+        const skills = p.trainerSkills ? `  Skills: ${p.trainerSkills}` : '';
+        const rate = p.rateInr ? `  Rate: ₹${p.rateInr}/hr` : '';
+        const exp = p.experienceYears ? `  Experience: ${p.experienceYears} yr` : '';
+        return `${i + 1}. ${p.trainerName || 'Unnamed'}${phone}${skills}${rate}${exp}`;
+      }).join('\n');
+      const clientName = fullClient?.name || existing.clientId;
+      const subject = `[MITS] ${created.length} trainer proposal${created.length === 1 ? '' : 's'} for ${clientName}`;
+      const body = `Hi ${intakeUser?.name?.split(' ')[0] || 'Team'},\n\n${req.user!.name} has proposed ${created.length} trainer${created.length === 1 ? '' : 's'} for ${clientName}:\n\n${trainerLines}\n\nPlease review and verify on the portal:\nhttps://mits-frontend.onrender.com/verifications\n\n— MITS Consulting Hub`;
+      const samitaEmail = samita?.gmailAddress || samita?.email;
+      await sendEmail({
+        to: toEmail,
+        cc: samitaEmail || undefined,
+        subject,
+        body,
+        skipVaibhavCc: true,
+      });
+    }
   }
   res.status(201).json(created);
 });

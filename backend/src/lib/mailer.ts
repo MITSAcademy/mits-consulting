@@ -237,6 +237,8 @@ export interface SendEmailArgs {
   attachments?: { filename: string; content: Buffer | string; contentType?: string }[];
   cc?: string | string[];
   bcc?: string | string[];
+  /** When true, skip the automatic Vaibhav CC (for emails where he is not the audience). */
+  skipVaibhavCc?: boolean;
   /** When set, use this as the HTML body verbatim instead of auto-wrapping `body` in <pre>. */
   htmlBody?: string;
 }
@@ -286,7 +288,8 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
         const ccBase = splitEmails(args.cc as string | string[] | undefined) || [];
         // Always CC Vaibhav on every system email so it appears in his sent items
         const VAIBHAV = 'vaibhav.aggarwal@mitssolution.com';
-        const ccArr = [...new Set([...ccBase, VAIBHAV])].filter(e => !toArr.includes(e));
+        const vaibhavList = args.skipVaibhavCc ? [] : [VAIBHAV];
+        const ccArr = [...new Set([...ccBase, ...vaibhavList])].filter(e => !toArr.includes(e));
         const bccArr = splitEmails(args.bcc as string | string[] | undefined);
         const { data, error } = await resend.emails.send({
           from: 'MITS Edge <info.mitsedge@mitssolution.com>',
