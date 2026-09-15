@@ -674,21 +674,23 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
   const results: string[] = [];
   const errors: string[] = [];
 
-  // Recipients: trainer email, client email, organiser email
-  const recipients: Array<{ name: string; email: string }> = [];
-  if (trainerForInvite?.email) recipients.push({ name: trainerForInvite.name, email: trainerForInvite.email });
-  if (training.client?.email)  recipients.push({ name: training.client.name,  email: training.client.email });
-  // Always include the organiser (so it lands on their calendar)
-  if (organiserEmail && !recipients.find((r) => r.email === organiserEmail)) {
-    recipients.push({ name: organiser?.name || 'Organiser', email: organiserEmail });
+  // Build one consolidated invite — trainer gets TO, everyone else in CC.
+  // One email instead of 3 separate ones.
+  const allAttendees: Array<{ name: string; email: string }> = [];
+  if (trainerForInvite?.email) allAttendees.push({ name: trainerForInvite.name, email: trainerForInvite.email });
+  if (training.client?.email)  allAttendees.push({ name: training.client.name,  email: training.client.email });
+  if (organiserEmail && !allAttendees.find(a => a.email === organiserEmail)) {
+    allAttendees.push({ name: organiser?.name || 'Organiser', email: organiserEmail });
   }
-  // Always CC these stakeholders on every session invite
-  const fixedCc = [
-    'mitagg@mitssolution.com',       // Mitali
-    'bhavneet.kaur@mitssolution.com', // Bhavneet
-  ];
 
-  for (const recipient of recipients) {
+  const primaryTo = allAttendees[0]?.email;
+  if (primaryTo) {
+    const ccList = [
+      ...allAttendees.slice(1).map(a => a.email),
+      'mitagg@mitssolution.com',        // Mitali
+      'bhavneet.kaur@mitssolution.com', // Bhavneet
+    ].filter((e, i, arr) => e !== primaryTo && arr.indexOf(e) === i);
+
     const ics = buildIcsInvite({
       uid,
       summary,
@@ -698,22 +700,21 @@ regularTrainingsRouter.post('/trainings/:id/sessions/invite', async (req: Authed
       organizerEmail: organiserEmail,
       startISO,
       durationMinutes,
-      attendees: [{ name: recipient.name, email: recipient.email }],
+      attendees: allAttendees,
       method: 'REQUEST',
     });
     try {
-      const cc = fixedCc.filter((a) => a !== recipient.email && a !== organiserEmail);
       await sendEmail({
-        to: recipient.email,
+        to: primaryTo,
         subject: `📅 ${summary} · ${istLabel} IST`,
         body: description,
-        cc: cc.length ? cc : undefined,
+        cc: ccList.length ? ccList.join(', ') : undefined,
         icsAttachment: { filename: 'session-invite.ics', content: ics, method: 'REQUEST' },
         skipVaibhavCc: true,
       });
-      results.push(recipient.email);
+      results.push(...allAttendees.map(a => a.email));
     } catch (e: any) {
-      errors.push(`${recipient.email}: ${e.message}`);
+      errors.push(`${primaryTo}: ${e.message}`);
     }
   }
 
