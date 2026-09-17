@@ -18,8 +18,38 @@ import { prisma } from '../lib/prisma';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 import { buildIcsInvite } from '../lib/ical';
-import { sendEmail } from '../lib/mailer';
+import { sendEmail, safeBuildFromUser } from '../lib/mailer';
 import { notify } from '../lib/notify';
+
+const FRONTEND_BASE = (process.env.CLIENT_ORIGIN || '').trim().replace(/\/+$/, '');
+
+/** Send a personal allocation ping via the recipient's own Gmail App Password.
+ *  Falls back to Resend (no Vaibhav CC) if App Password not configured. */
+async function notifyAllocation(userId: string, title: string, body: string, link: string) {
+  // In-app bell
+  await notify({ userId, kind: 'new_session_allocated', title, body, link, email: false });
+  // Email: try recipient's own App Password first, else Resend without Vaibhav CC
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true },
+  });
+  const to = user?.sendAsAddress || user?.gmailAddress || user?.email;
+  if (!to) return;
+  const { decryptSecret } = await import('../lib/mailer');
+  const appPasswordPlain = user?.smtpAppPassword ? decryptSecret(user.smtpAppPassword) : null;
+  const fromUser = user && appPasswordPlain && user.gmailAddress
+    ? safeBuildFromUser({ id: user.id, name: user.name, gmailAddress: user.gmailAddress, smtpAppPassword: user.smtpAppPassword, sendAsAddress: user.sendAsAddress })
+    : undefined;
+  const greeting = user?.name ? `Hi ${user.name.split(' ')[0]},\n\n` : '';
+  const linkLine = link && FRONTEND_BASE ? `\n\nOpen in portal: ${FRONTEND_BASE}${link}` : '';
+  await sendEmail({
+    to,
+    subject: `[MITS] ${title}`,
+    body: `${greeting}${title}${body ? `\n\n${body}` : ''}${linkLine}\n\n— MITS Consulting Hub`,
+    fromUser,
+    skipVaibhavCc: true,
+  });
+}
 
 export const regularTrainingsRouter = Router();
 regularTrainingsRouter.use(requireAuth);
@@ -90,14 +120,12 @@ regularTrainingsRouter.post('/trainings', async (req: AuthedRequest, res) => {
     const clientName = b.clientId
       ? (await prisma.client.findUnique({ where: { id: b.clientId }, select: { name: true } }))?.name
       : null;
-    await notify({
-      userId: created.hostedByDefaultId,
-      kind: 'new_session_allocated',
-      title: `New training allocated to you: ${created.name}`,
-      body: clientName ? `Client: ${clientName}. Check My Sessions for details.` : 'Check My Sessions for details.',
-      link: '/my-sessions',
-      email: true,
-    });
+    await notifyAllocation(
+      created.hostedByDefaultId,
+      `New training allocated to you: ${created.name}`,
+      clientName ? `Client: ${clientName}. Check My Sessions for details.` : 'Check My Sessions for details.',
+      '/my-sessions',
+    );
   }
 
   res.status(201).json(created);
@@ -168,14 +196,12 @@ regularTrainingsRouter.patch('/trainings/:id', async (req: AuthedRequest, res) =
     const clientName = updated.clientId
       ? (await prisma.client.findUnique({ where: { id: updated.clientId }, select: { name: true } }))?.name
       : null;
-    await notify({
-      userId: data.hostedByDefaultId,
-      kind: 'new_session_allocated',
-      title: `Training allocated to you: ${updated.name}`,
-      body: clientName ? `Client: ${clientName}. Check My Sessions for details.` : 'Check My Sessions for details.',
-      link: '/my-sessions',
-      email: true,
-    });
+    await notifyAllocation(
+      data.hostedByDefaultId,
+      `Training allocated to you: ${updated.name}`,
+      clientName ? `Client: ${clientName}. Check My Sessions for details.` : 'Check My Sessions for details.',
+      '/my-sessions',
+    );
   }
 
   res.json(updated);
