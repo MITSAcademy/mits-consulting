@@ -3,7 +3,103 @@ import { prisma } from '../lib/prisma';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 import { notify } from '../lib/notify';
-import { sendEmail, decryptSecret } from '../lib/mailer';
+import { sendEmail, decryptSecret, safeBuildFromUser } from '../lib/mailer';
+
+const FRONTEND_BASE = (process.env.CLIENT_ORIGIN || '').trim().replace(/\/+$/, '');
+
+function buildSourcingNotifyHtml(opts: {
+  recipientFirstName: string;
+  headline: string;
+  subheadline: string;
+  rows: Array<{ label: string; value: string }>;
+  portalUrl: string;
+  raisedBy: string;
+}): string {
+  const rowsHtml = opts.rows.map(r => `
+    <tr>
+      <td style="padding:10px 16px;color:#6b7280;font-size:13px;width:36%;vertical-align:top;border-bottom:1px solid #f3f4f6;">${r.label}</td>
+      <td style="padding:10px 16px;color:#111827;font-size:13px;vertical-align:top;border-bottom:1px solid #f3f4f6;">${r.value}</td>
+    </tr>`).join('');
+  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f9fafb;font-family:Inter,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px;">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+  <tr><td style="background:#111827;padding:28px 32px;">
+    <div style="color:#f59e0b;font-size:20px;font-weight:800;letter-spacing:-0.3px;">MITS Consulting Hub</div>
+    <div style="color:#9ca3af;font-size:13px;margin-top:4px;">New Sourcing Request</div>
+  </td></tr>
+  <tr><td style="padding:28px 32px 8px;">
+    <div style="font-size:17px;font-weight:700;color:#111827;">Hi ${opts.recipientFirstName},</div>
+    <div style="font-size:15px;font-weight:600;color:#111827;margin-top:16px;">${opts.headline}</div>
+    <div style="font-size:13px;color:#6b7280;margin-top:6px;">${opts.subheadline}</div>
+  </td></tr>
+  <tr><td style="padding:16px 32px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+      ${rowsHtml}
+    </table>
+  </td></tr>
+  <tr><td style="padding:8px 32px 28px;">
+    <a href="${opts.portalUrl}" style="display:inline-block;background:#f59e0b;color:#000;font-weight:700;font-size:14px;padding:12px 24px;border-radius:8px;text-decoration:none;">View Sourcing Page</a>
+  </td></tr>
+  <tr><td style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;">
+    <span style="font-size:11px;color:#9ca3af;">MITS Solution · Internal notification · Raised by ${opts.raisedBy}</span>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+}
+
+/** Send a personal sourcing ping via the recipient's own Gmail App Password.
+ *  Falls back to Resend (no Vaibhav CC) if App Password not configured. */
+async function notifySourcing(
+  userId: string,
+  kind: string,
+  title: string,
+  body: string,
+  link: string,
+  htmlDetails?: { clientName: string; skills?: string; raisedBy: string; notes?: string },
+) {
+  await notify({ userId, kind, title, body, link, email: false });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true },
+  });
+  const to = user?.sendAsAddress || user?.gmailAddress || user?.email;
+  if (!to) return;
+  const appPasswordPlain = user?.smtpAppPassword ? decryptSecret(user.smtpAppPassword) : null;
+  const fromUser = user && appPasswordPlain && user.gmailAddress
+    ? safeBuildFromUser({ id: user.id, name: user.name, gmailAddress: user.gmailAddress, smtpAppPassword: user.smtpAppPassword, sendAsAddress: user.sendAsAddress })
+    : undefined;
+  const firstName = user?.name?.split(' ')[0] || 'Team';
+  const portalUrl = `${FRONTEND_BASE}${link}`;
+
+  let htmlBody: string | undefined;
+  if (htmlDetails) {
+    const rows: Array<{ label: string; value: string }> = [
+      { label: 'Client', value: htmlDetails.clientName },
+    ];
+    if (htmlDetails.skills) rows.push({ label: 'Skills required', value: htmlDetails.skills });
+    if (htmlDetails.notes) rows.push({ label: 'Notes', value: htmlDetails.notes });
+    rows.push({ label: 'Raised by', value: htmlDetails.raisedBy });
+    htmlBody = buildSourcingNotifyHtml({
+      recipientFirstName: firstName,
+      headline: title,
+      subheadline: body,
+      rows,
+      portalUrl,
+      raisedBy: htmlDetails.raisedBy,
+    });
+  }
+
+  const linkLine = link && FRONTEND_BASE ? `\n\nOpen in portal: ${portalUrl}` : '';
+  await sendEmail({
+    to,
+    subject: `[MITS] ${title}`,
+    body: `Hi ${firstName},\n\n${title}\n\n${body}${linkLine}\n\n— MITS Consulting Hub`,
+    htmlBody,
+    fromUser,
+    skipVaibhavCc: true,
+  });
+}
 import {
   buildTrainerOutreachText,
   buildTrainerOutreachHtml,
@@ -154,16 +250,18 @@ sourcingRouter.post('/', async (req: AuthedRequest, res) => {
   await audit(req.user!.id, req.user!.name, 'SOURCING_CREATE', r.client.name);
   // Ping the assigned recruiter — or all recruiters if unassigned.
   const notifyIds = sentToId ? [sentToId] : RECRUITER_POOL;
-  await Promise.all(notifyIds.map((uid) => notify({
-    userId: uid,
-    kind: 'SourcingAssigned',
-    title: `New sourcing request — ${r.client.name}`,
-    body: sentToId
+  const intakeData: any = r.client.intakeData || {};
+  const skillsRequired = intakeData.skillRequired || intakeData.skills || intakeData.skill || null;
+  await Promise.all(notifyIds.map((uid) => notifySourcing(
+    uid,
+    'SourcingAssigned',
+    `New sourcing request — ${r.client.name}`,
+    sentToId
       ? `${req.user!.name} sent a new client your way. Open the sourcing page to propose trainers.`
       : `${req.user!.name} added a new unassigned sourcing request. Open the sourcing page to propose trainers.`,
-    link: `/sourcing`,
-    email: true,
-  })));
+    `/sourcing`,
+    { clientName: r.client.name, skills: skillsRequired, raisedBy: req.user!.name },
+  )));
   res.status(201).json(r);
 });
 
@@ -189,14 +287,16 @@ sourcingRouter.patch('/:id', async (req: AuthedRequest, res) => {
   const r = await prisma.sourcingRequest.update({ where: { id: req.params.id }, data, include });
   // If routing changed, notify the new recruiter.
   if (data.sentToId && data.sentToId !== prior?.sentToId) {
-    await notify({
-      userId: data.sentToId,
-      kind: 'SourcingReassigned',
-      title: `Sourcing request reassigned to you — ${prior?.client?.name || r.client.name}`,
-      body: `${req.user!.name} routed this client to you.`,
-      link: `/sourcing`,
-      email: true,
-    });
+    const rIntake: any = r.client.intakeData || {};
+    const rSkills = rIntake.skillRequired || rIntake.skills || rIntake.skill || null;
+    await notifySourcing(
+      data.sentToId,
+      'SourcingReassigned',
+      `Sourcing request reassigned to you — ${prior?.client?.name || r.client.name}`,
+      `${req.user!.name} routed this client to you.`,
+      `/sourcing`,
+      { clientName: prior?.client?.name || r.client.name, skills: rSkills, raisedBy: req.user!.name },
+    );
   }
   res.json(r);
 });
