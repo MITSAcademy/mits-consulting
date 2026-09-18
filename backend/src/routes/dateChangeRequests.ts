@@ -11,7 +11,7 @@ import { Router } from 'express';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { prisma } from '../lib/prisma';
 import { audit } from '../lib/audit';
-import { sendEmail } from '../lib/mailer';
+import { sendEmail, safeBuildFromUser, decryptSecret } from '../lib/mailer';
 
 export const dateChangeRequestsRouter = Router();
 dateChangeRequestsRouter.use(requireAuth);
@@ -62,6 +62,7 @@ async function notifyRequester(
   status: 'approved' | 'rejected',
   rejectionNote: string | null,
   requesterEmail: string,
+  opts?: { fromUser?: ReturnType<typeof safeBuildFromUser>; cc?: string },
 ) {
   const subject = `Date Change Request ${status === 'approved' ? 'Approved ✓' : 'Rejected ✗'} — ${clientName}`;
   const html = `
@@ -70,7 +71,7 @@ async function notifyRequester(
     ${status === 'rejected' && rejectionNote ? `<p style="color:#dc2626;">Reason: ${rejectionNote}</p>` : ''}
     ${status === 'approved' ? '<p style="color:#16a34a;">The payment dates have been updated.</p>' : '<p>You may resubmit with corrections.</p>'}
   </div>`;
-  await sendEmail({ to: requesterEmail, subject, body: subject, htmlBody: html });
+  await sendEmail({ to: requesterEmail, cc: opts?.cc, subject, body: subject, htmlBody: html, fromUser: opts?.fromUser, skipVaibhavCc: true });
 }
 
 // ── GET / — list requests (pending for approvers, own requests for accounts) ──
@@ -307,11 +308,19 @@ dateChangeRequestsRouter.post('/:id/approve', async (req: AuthedRequest, res) =>
       : `${request.client.name}: leverage approved — ${request.proposedDate1 || '?'} / ${request.proposedDate2 || '?'}`,
     { clientId: request.clientId });
 
-  // Notify requester
+  // Notify requester — send from Samita's Gmail, CC Samita
   try {
-    const requester = await prisma.user.findUnique({ where: { id: request.requestedById }, select: { email: true, gmailAddress: true } });
+    const [requester, samita] = await Promise.all([
+      prisma.user.findUnique({ where: { id: request.requestedById }, select: { email: true, gmailAddress: true } }),
+      prisma.user.findFirst({ where: { role: 'demo_lead' }, select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true } }),
+    ]);
     const email = requester?.gmailAddress || requester?.email;
-    if (email) await notifyRequester(request.client.name, 'approved', null, email);
+    const samitaEmail = samita?.gmailAddress || samita?.email;
+    const appPasswordPlain = samita?.smtpAppPassword ? decryptSecret(samita.smtpAppPassword) : null;
+    const fromUser = samita && appPasswordPlain && samita.gmailAddress
+      ? safeBuildFromUser({ id: samita.id, name: samita.name, gmailAddress: samita.gmailAddress, smtpAppPassword: samita.smtpAppPassword, sendAsAddress: samita.sendAsAddress })
+      : undefined;
+    if (email) await notifyRequester(request.client.name, 'approved', null, email, { fromUser, cc: samitaEmail || undefined });
   } catch (e) { console.warn('[date-change] email notify failed', e); }
 
   res.json({ ok: true });
@@ -346,11 +355,19 @@ dateChangeRequestsRouter.post('/:id/reject', async (req: AuthedRequest, res) => 
     `${request.client.name}: date change rejected — ${rejectionNote || 'no reason given'}`,
     { clientId: request.clientId });
 
-  // Notify requester
+  // Notify requester — send from Samita's Gmail, CC Samita
   try {
-    const requester = await prisma.user.findUnique({ where: { id: request.requestedById }, select: { email: true, gmailAddress: true } });
+    const [requester, samita] = await Promise.all([
+      prisma.user.findUnique({ where: { id: request.requestedById }, select: { email: true, gmailAddress: true } }),
+      prisma.user.findFirst({ where: { role: 'demo_lead' }, select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true } }),
+    ]);
     const email = requester?.gmailAddress || requester?.email;
-    if (email) await notifyRequester(request.client.name, 'rejected', rejectionNote || null, email);
+    const samitaEmail = samita?.gmailAddress || samita?.email;
+    const appPasswordPlain = samita?.smtpAppPassword ? decryptSecret(samita.smtpAppPassword) : null;
+    const fromUser = samita && appPasswordPlain && samita.gmailAddress
+      ? safeBuildFromUser({ id: samita.id, name: samita.name, gmailAddress: samita.gmailAddress, smtpAppPassword: samita.smtpAppPassword, sendAsAddress: samita.sendAsAddress })
+      : undefined;
+    if (email) await notifyRequester(request.client.name, 'rejected', rejectionNote || null, email, { fromUser, cc: samitaEmail || undefined });
   } catch (e) { console.warn('[date-change] email notify failed', e); }
 
   res.json({ ok: true });
