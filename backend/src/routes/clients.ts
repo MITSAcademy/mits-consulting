@@ -6,7 +6,7 @@ import { SourcingStatus, DemoStatus, Lifecycle } from '@prisma/client';
 import { requireAuth, AuthedRequest } from '../lib/auth';
 import { audit } from '../lib/audit';
 import { notify } from '../lib/notify';
-import { sendEmail, decryptSecret, formatSendError } from '../lib/mailer';
+import { sendEmail, decryptSecret, formatSendError, safeBuildFromUser } from '../lib/mailer';
 import { buildIcsInvite } from '../lib/ical';
 import { buildWelcomeEmailHtml, WELCOME_EMAIL_SUBJECT } from '../lib/welcomeEmail';
 import { buildSkillMatrixHtml, buildSkillMatrixText, istToUsZones, DEFAULT_SOFT_SKILLS } from '../lib/skillMatrix';
@@ -675,14 +675,71 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
   // reach out and set up the feedback rhythm.
   if (lifecycle === 'Active' && current.lifecycle !== 'Active') {
     try {
+      // In-app bell
       await notify({
         userId: 'u-mitali',
         kind: 'ClientActivated',
         title: `New active client: ${client.name}`,
         body: `${req.user!.name} moved ${client.name} to Active. Reach out to introduce the team and set up the feedback rhythm.`,
         link: `/clients/${client.id}`,
-        email: true,
+        email: false,
       });
+      // Branded HTML email — send from Samita's Gmail, CC Samita, no Vaibhav
+      const [mitali, samita] = await Promise.all([
+        prisma.user.findUnique({ where: { id: 'u-mitali' }, select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true } }),
+        prisma.user.findFirst({ where: { role: 'demo_lead' }, select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true } }),
+      ]);
+      const toEmail = mitali?.sendAsAddress || mitali?.gmailAddress || mitali?.email;
+      if (toEmail) {
+        const samitaEmail = samita?.gmailAddress || samita?.email;
+        const appPasswordPlain = samita?.smtpAppPassword ? decryptSecret(samita.smtpAppPassword) : null;
+        const fromUser = samita && appPasswordPlain && samita.gmailAddress
+          ? safeBuildFromUser({ id: samita.id, name: samita.name, gmailAddress: samita.gmailAddress, smtpAppPassword: samita.smtpAppPassword, sendAsAddress: samita.sendAsAddress })
+          : undefined;
+        const portalUrl = `${process.env.CLIENT_ORIGIN || 'https://mits-frontend.onrender.com'}/clients/${client.id}`;
+        const html = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f9fafb;font-family:Inter,Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px;">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
+  <tr><td style="background:#111827;padding:28px 32px;">
+    <div style="color:#f59e0b;font-size:20px;font-weight:800;">MITS Consulting Hub</div>
+    <div style="color:#9ca3af;font-size:13px;margin-top:4px;">New Active Client</div>
+  </td></tr>
+  <tr><td style="padding:28px 32px 16px;">
+    <div style="font-size:17px;font-weight:700;color:#111827;">Hi ${mitali?.name?.split(' ')[0] || 'Mitali'},</div>
+    <div style="font-size:15px;font-weight:600;color:#111827;margin-top:16px;">🎉 New active client: ${client.name}</div>
+    <div style="font-size:13px;color:#6b7280;margin-top:8px;">${req.user!.name} moved <strong>${client.name}</strong> to Active. Reach out to introduce the team and set up the feedback rhythm.</div>
+  </td></tr>
+  <tr><td style="padding:0 32px 16px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+      <tr>
+        <td style="padding:10px 16px;color:#6b7280;font-size:13px;width:36%;border-bottom:1px solid #f3f4f6;">Client</td>
+        <td style="padding:10px 16px;color:#111827;font-size:13px;font-weight:600;border-bottom:1px solid #f3f4f6;">${client.name}</td>
+      </tr>
+      <tr>
+        <td style="padding:10px 16px;color:#6b7280;font-size:13px;width:36%;">Moved by</td>
+        <td style="padding:10px 16px;color:#111827;font-size:13px;">${req.user!.name}</td>
+      </tr>
+    </table>
+  </td></tr>
+  <tr><td style="padding:0 32px 28px;">
+    <a href="${portalUrl}" style="display:inline-block;background:#f59e0b;color:#000;font-weight:700;font-size:14px;padding:12px 24px;border-radius:8px;text-decoration:none;">Open Client Profile</a>
+  </td></tr>
+  <tr><td style="padding:14px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;">
+    <span style="font-size:11px;color:#9ca3af;">MITS Solution · Internal notification</span>
+  </td></tr>
+</table>
+</td></tr></table>
+</body></html>`;
+        await sendEmail({
+          to: toEmail,
+          cc: samitaEmail || undefined,
+          subject: `[MITS] New active client: ${client.name}`,
+          body: `Hi ${mitali?.name?.split(' ')[0] || 'Mitali'},\n\nNew active client: ${client.name}\n\n${req.user!.name} moved ${client.name} to Active. Reach out to introduce the team and set up the feedback rhythm.\n\nOpen in portal: ${portalUrl}\n\n— MITS Consulting Hub`,
+          htmlBody: html,
+          fromUser,
+          skipVaibhavCc: true,
+        });
+      }
     } catch (e) {
       console.warn('[notify-mitali-active] failed (non-fatal):', (e as any)?.message);
     }
