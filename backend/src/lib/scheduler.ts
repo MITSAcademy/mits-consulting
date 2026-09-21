@@ -16,7 +16,6 @@ import { sendTeam2Briefing, sendTeam1Briefing, sendSamitaBriefing, sendRoshniBri
 import { runIssueEscalation } from './issueEscalation';
 import { sendPaymentFollowUpReport } from './paymentFollowUpReport';
 import { sendBhavneetDailySheet } from './bhavneetDailySheet';
-import { sendSmtpHealthAdvisory } from './smtpHealthAdvisory';
 import { sendDailyReminders } from './dailyReminders';
 import { sendMitaliDailyReport } from './mitaliDailyReport';
 import { sendClientFeedbackEmails } from './clientFeedbackEmail';
@@ -117,11 +116,6 @@ export function initScheduler() {
 
   // Bhavneet's daily session sheet — 2:00 PM IST → Kashish, Muskan (CC: Samita, Vaibhav, Mitali, Bhavneet)
   cron.schedule('0 14 * * *', () => safe('bhavneet-daily-sheet', () => sendBhavneetDailySheet()), {
-    timezone: 'Asia/Kolkata',
-  });
-
-  // SMTP health advisory — 9:00 AM IST daily → emails broken users urgently, working users get a reminder
-  cron.schedule('5 9 * * *', () => safe('smtp-health-advisory', () => sendSmtpHealthAdvisory()), {
     timezone: 'Asia/Kolkata',
   });
 
