@@ -642,7 +642,10 @@ clientsRouter.post('/:id/stage', async (req: AuthedRequest, res) => {
       where: { id: req.params.id },
       select: { salesOwnerId: true, saleClosingSubStatus: true },
     });
-    if (!c?.salesOwnerId) data.salesOwnerId = 'u-roshni';
+    if (!c?.salesOwnerId) {
+      const activeSalesCloser = await prisma.user.findFirst({ where: { role: 'sales_closer', active: true }, select: { id: true } });
+      if (activeSalesCloser) data.salesOwnerId = activeSalesCloser.id;
+    }
     if (!c?.saleClosingSubStatus) {
       data.saleClosingSubStatus = 'RP';
       data.saleClosingSubStatusAt = new Date();
@@ -2501,7 +2504,12 @@ clientsRouter.post('/:id/post-demo-feedback', async (req: AuthedRequest, res) =>
     // doesn't have to. From RP her job is to move to one of CP / C / JBT /
     // Training.
     baseUpdate.lifecycle = 'SaleClosing';
-    baseUpdate.salesOwnerId = existing.salesOwnerId || 'u-roshni';
+    if (!existing.salesOwnerId) {
+      const activeSalesCloser = await prisma.user.findFirst({ where: { role: 'sales_closer', active: true }, select: { id: true } });
+      baseUpdate.salesOwnerId = activeSalesCloser?.id || null;
+    } else {
+      baseUpdate.salesOwnerId = existing.salesOwnerId;
+    }
     baseUpdate.saleClosingSubStatus = 'RP';
     baseUpdate.saleClosingSubStatusAt = new Date();
   } else if (outcome === 'Negative') {

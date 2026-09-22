@@ -7,9 +7,8 @@
  */
 import { Router } from 'express';
 import { requireAuth, AuthedRequest } from '../lib/auth';
-import { sendTeam1Briefing, sendTeam2Briefing, sendSamitaBriefing, sendRoshniBriefing } from '../lib/dailyBriefing';
+import { sendTeam1Briefing, sendTeam2Briefing, sendSamitaBriefing } from '../lib/dailyBriefing';
 import { sendDemoEscalationDigest } from '../lib/demoEscalationDigest';
-import { sendMalikaStatusReport } from '../lib/malikaStatusReport';
 import { sendMitaliDailyReport } from '../lib/mitaliDailyReport';
 import { sendClientFeedbackEmails } from '../lib/clientFeedbackEmail';
 import { sendWeeklyFeedbackReport } from '../lib/weeklyFeedbackReport';
@@ -22,13 +21,12 @@ briefingRouter.post('/trigger', async (req: AuthedRequest, res) => {
     return res.status(403).json({ error: 'Only founder can manually trigger briefings.' });
   }
   const { team, shift } = req.body as { team?: string; shift?: string };
-  if (!['team1', 'team2', 'samita', 'roshni'].includes(team || '')) return res.status(400).json({ error: 'team must be team1, team2, samita or roshni' });
+  if (!['team1', 'team2', 'samita'].includes(team || '')) return res.status(400).json({ error: 'team must be team1, team2 or samita' });
   if (!['morning', 'evening'].includes(shift || '')) return res.status(400).json({ error: 'shift must be morning or evening' });
 
   try {
     if (team === 'team1') await sendTeam1Briefing(shift as 'morning' | 'evening');
     else if (team === 'team2') await sendTeam2Briefing(shift as 'morning' | 'evening');
-    else if (team === 'roshni') await sendRoshniBriefing(shift as 'morning' | 'evening');
     else await sendSamitaBriefing(shift as 'morning' | 'evening');
     res.json({ ok: true, message: `${team} ${shift} briefing sent.` });
   } catch (e: any) {
@@ -58,19 +56,6 @@ briefingRouter.post('/feedback-survey', async (req: AuthedRequest, res) => {
   try {
     const result = await sendClientFeedbackEmails({ force: !sample, sample });
     res.json({ ok: true, ...result });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message || String(e) });
-  }
-});
-
-// POST /api/briefing/malika-status  — trigger Malika's status report immediately
-briefingRouter.post('/malika-status', async (req: AuthedRequest, res) => {
-  if (req.user!.role !== 'founder') {
-    return res.status(403).json({ error: 'Only founder can trigger this.' });
-  }
-  try {
-    await sendMalikaStatusReport({ force: true });
-    res.json({ ok: true, message: 'Malika status report sent.' });
   } catch (e: any) {
     res.status(500).json({ error: e.message || String(e) });
   }

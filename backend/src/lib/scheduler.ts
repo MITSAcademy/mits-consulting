@@ -12,7 +12,7 @@
  */
 
 import cron from 'node-cron';
-import { sendTeam2Briefing, sendTeam1Briefing, sendSamitaBriefing, sendRoshniBriefing } from './dailyBriefing';
+import { sendTeam2Briefing, sendTeam1Briefing, sendSamitaBriefing } from './dailyBriefing';
 import { runIssueEscalation } from './issueEscalation';
 import { sendPaymentFollowUpReport } from './paymentFollowUpReport';
 import { sendBhavneetDailySheet } from './bhavneetDailySheet';
@@ -91,13 +91,7 @@ export function initScheduler() {
     timezone: 'Asia/Kolkata',
   });
 
-  // Roshni — 8:00 AM IST + 8:00 PM IST (sales pipeline)
-  cron.schedule('0 8 * * *', () => safe('roshni-morning', () => sendRoshniBriefing('morning')), {
-    timezone: 'Asia/Kolkata',
-  });
-  cron.schedule('0 20 * * *', () => safe('roshni-evening', () => sendRoshniBriefing('evening')), {
-    timezone: 'Asia/Kolkata',
-  });
+  // Roshni briefing removed — Mohini has taken over the sales_closer role
 
   // Issue escalation — runs every hour
   cron.schedule('0 * * * *', () => safe('issue-escalation', () => runIssueEscalation()), {
@@ -148,8 +142,7 @@ export function initScheduler() {
   console.log('[scheduler]   Team 2 (Anjali + Taran) → 06:00 + 18:00 IST');
   console.log('[scheduler]   Team 1 (Aman + Kanchan) → 09:00 + 16:00 IST (CC Samita + Vaibhav)');
   console.log('[scheduler]   Samita (team overview)  → 07:00 + 19:00 IST (CC Vaibhav)');
-  console.log('[scheduler]   Roshni (sales pipeline) → 08:00 + 20:00 IST (CC Vaibhav)');
-  console.log('[scheduler]   Payment follow-up report → 12:00 IST (Vaibhav + Samita + Mitali only)');
+console.log('[scheduler]   Payment follow-up report → 12:00 IST (Vaibhav + Samita + Mitali only)');
   console.log('[scheduler]   Daily proactive reminders → 09:30 IST (per-user in-app notifications)');
   console.log('[scheduler]   Mitali daily activity report → 23:30 IST (Mitali + Vaibhav + Samita)');
 }
