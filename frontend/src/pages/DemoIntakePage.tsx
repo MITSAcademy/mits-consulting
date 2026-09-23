@@ -133,6 +133,9 @@ export function DemoIntakePage() {
   // Mine = hosted by me; All Team 2 = all active groups
   const myGroups = allTrainings.filter((t: any) => t.hostedByDefault?.id === user.id);
   const activeGroups = mineOnly ? myGroups : allTrainings;
+  // Client IDs that Bhavneet's team actually hosts — used to scope the Active column
+  const activeTrainingClientIds = new Set(allTrainings.map((t: any) => t.client?.id).filter(Boolean));
+  const myActiveTrainingClientIds = new Set(myGroups.map((t: any) => t.client?.id).filter(Boolean));
 
   const all = (data || []) as any[];
   // "Mine" for demo_intake = clients where I am the intakeOwner
@@ -154,7 +157,16 @@ export function DemoIntakePage() {
     : filtered;
 
   const grouped: Record<string, any[]> = {};
-  STAGES.forEach((s) => (grouped[s.key] = searched.filter((c: any) => c.lifecycle === s.key)));
+  STAGES.forEach((s) => {
+    const byLifecycle = searched.filter((c: any) => c.lifecycle === s.key);
+    // Active column: only show clients that Bhavneet's team actually hosts
+    if (s.key === 'Active' && !isRecruiter) {
+      const scopedIds = mineOnly ? myActiveTrainingClientIds : activeTrainingClientIds;
+      grouped[s.key] = byLifecycle.filter((c: any) => scopedIds.has(c.id));
+    } else {
+      grouped[s.key] = byLifecycle;
+    }
+  });
 
   const title = isRecruiter ? 'Pipeline view' : 'Demo intake';
   const subtitle = isRecruiter
