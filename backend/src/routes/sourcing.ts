@@ -15,36 +15,58 @@ function buildSourcingNotifyHtml(opts: {
   portalUrl: string;
   raisedBy: string;
 }): string {
-  const rowsHtml = opts.rows.map(r => `
-    <tr>
-      <td style="padding:10px 16px;color:#6b7280;font-size:13px;width:36%;vertical-align:top;border-bottom:1px solid #f3f4f6;">${r.label}</td>
-      <td style="padding:10px 16px;color:#111827;font-size:13px;vertical-align:top;border-bottom:1px solid #f3f4f6;">${r.value}</td>
+  const rowsHtml = opts.rows.map((r, i) => `
+    <tr style="background:${i % 2 === 0 ? '#ffffff' : '#f9fafb'};">
+      <td style="padding:11px 18px;color:#6b7280;font-size:13px;font-weight:600;width:34%;vertical-align:top;border-bottom:1px solid #e5e7eb;">${r.label}</td>
+      <td style="padding:11px 18px;color:#111827;font-size:13px;vertical-align:top;border-bottom:1px solid #e5e7eb;">${r.value}</td>
     </tr>`).join('');
-  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f9fafb;font-family:Inter,Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px;">
-<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);">
-  <tr><td style="background:#111827;padding:28px 32px;">
-    <div style="color:#f59e0b;font-size:20px;font-weight:800;letter-spacing:-0.3px;">MITS Consulting Hub</div>
-    <div style="color:#9ca3af;font-size:13px;margin-top:4px;">New Sourcing Request</div>
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Helvetica Neue',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;">
+<tr><td align="center" style="padding:36px 16px;">
+<table width="580" cellpadding="0" cellspacing="0" style="max-width:580px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+
+  <!-- Header -->
+  <tr><td style="background:#111827;padding:24px 32px 22px;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td>
+          <div style="color:#f59e0b;font-size:18px;font-weight:800;letter-spacing:-0.3px;line-height:1.2;">MITS Consulting Hub</div>
+          <div style="color:#9ca3af;font-size:12px;margin-top:3px;letter-spacing:0.4px;text-transform:uppercase;">Sourcing Request</div>
+        </td>
+      </tr>
+    </table>
   </td></tr>
-  <tr><td style="padding:28px 32px 8px;">
-    <div style="font-size:17px;font-weight:700;color:#111827;">Hi ${opts.recipientFirstName},</div>
-    <div style="font-size:15px;font-weight:600;color:#111827;margin-top:16px;">${opts.headline}</div>
-    <div style="font-size:13px;color:#6b7280;margin-top:6px;">${opts.subheadline}</div>
+
+  <!-- Greeting + headline -->
+  <tr><td style="padding:28px 32px 20px;">
+    <div style="font-size:15px;color:#374151;margin-bottom:6px;">Hi <strong>${opts.recipientFirstName}</strong>,</div>
+    <div style="font-size:20px;font-weight:700;color:#111827;line-height:1.3;margin-bottom:8px;">${opts.headline}</div>
+    <div style="font-size:14px;color:#6b7280;line-height:1.6;">${opts.subheadline}</div>
   </td></tr>
-  <tr><td style="padding:16px 32px;">
+
+  <!-- Details table -->
+  <tr><td style="padding:0 32px 24px;">
     <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
       ${rowsHtml}
     </table>
   </td></tr>
-  <tr><td style="padding:8px 32px 28px;">
-    <a href="${opts.portalUrl}" style="display:inline-block;background:#f59e0b;color:#000;font-weight:700;font-size:14px;padding:12px 24px;border-radius:8px;text-decoration:none;">View Sourcing Page</a>
+
+  <!-- CTA -->
+  <tr><td style="padding:4px 32px 32px;">
+    <a href="${opts.portalUrl}" style="display:inline-block;background:#f59e0b;color:#111827;font-weight:700;font-size:14px;padding:13px 28px;border-radius:8px;text-decoration:none;letter-spacing:0.2px;">Open Sourcing Page →</a>
   </td></tr>
+
+  <!-- Footer -->
   <tr><td style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;">
-    <span style="font-size:11px;color:#9ca3af;">MITS Solution · Internal notification · Raised by ${opts.raisedBy}</span>
+    <span style="font-size:11px;color:#9ca3af;">MITS Edge · Internal notification · Raised by ${opts.raisedBy}</span>
   </td></tr>
+
 </table>
-</td></tr></table>
+</td></tr>
+</table>
 </body></html>`;
 }
 
@@ -91,10 +113,19 @@ async function notifySourcing(
   }
 
   const linkLine = link && FRONTEND_BASE ? `\n\nOpen in portal: ${portalUrl}` : '';
+  const detailLines = htmlDetails
+    ? [
+        `Client: ${htmlDetails.clientName}`,
+        htmlDetails.skills ? `Skills: ${htmlDetails.skills}` : null,
+        htmlDetails.notes ? `Notes: ${htmlDetails.notes}` : null,
+        `Raised by: ${htmlDetails.raisedBy}`,
+      ].filter(Boolean).join('\n')
+    : '';
+  const plainBody = `Hi ${firstName},\n\n${body}\n\n${detailLines}${linkLine}\n\n— MITS Consulting Hub`;
   await sendEmail({
     to,
     subject: `[MITS] ${title}`,
-    body: `Hi ${firstName},\n\n${title}\n\n${body}${linkLine}\n\n— MITS Consulting Hub`,
+    body: plainBody,
     htmlBody,
     fromUser,
     skipVaibhavCc: true,
