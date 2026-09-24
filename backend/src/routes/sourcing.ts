@@ -70,8 +70,8 @@ function buildSourcingNotifyHtml(opts: {
 </body></html>`;
 }
 
-/** Send a personal sourcing ping via the recipient's own Gmail App Password.
- *  Falls back to Resend (no Vaibhav CC) if App Password not configured. */
+/** Send a sourcing ping from the raiser's Gmail App Password, CC Samita.
+ *  Falls back to Resend if the raiser has no App Password configured. */
 async function notifySourcing(
   userId: string,
   kind: string,
@@ -79,18 +79,35 @@ async function notifySourcing(
   body: string,
   link: string,
   htmlDetails?: { clientName: string; skills?: string; raisedBy: string; notes?: string },
+  raisedById?: string,
 ) {
   await notify({ userId, kind, title, body, link, email: false });
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true },
-  });
+  const [user, samita] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, gmailAddress: true, sendAsAddress: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: 'u-samita' },
+      select: { email: true, gmailAddress: true, sendAsAddress: true },
+    }),
+  ]);
   const to = user?.sendAsAddress || user?.gmailAddress || user?.email;
   if (!to) return;
-  const appPasswordPlain = user?.smtpAppPassword ? decryptSecret(user.smtpAppPassword) : null;
-  const fromUser = user && appPasswordPlain && user.gmailAddress
-    ? safeBuildFromUser({ id: user.id, name: user.name, gmailAddress: user.gmailAddress, smtpAppPassword: user.smtpAppPassword, sendAsAddress: user.sendAsAddress })
-    : undefined;
+
+  // Send FROM the raiser (Taran/Anjali) using their App Password
+  let fromUser: ReturnType<typeof safeBuildFromUser> | undefined;
+  if (raisedById) {
+    const raiser = await prisma.user.findUnique({
+      where: { id: raisedById },
+      select: { id: true, name: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true },
+    });
+    if (raiser?.smtpAppPassword && raiser.gmailAddress) {
+      fromUser = safeBuildFromUser({ id: raiser.id, name: raiser.name, gmailAddress: raiser.gmailAddress, smtpAppPassword: raiser.smtpAppPassword, sendAsAddress: raiser.sendAsAddress });
+    }
+  }
+
+  const samitaEmail = samita?.sendAsAddress || samita?.gmailAddress || samita?.email;
   const firstName = user?.name?.split(' ')[0] || 'Team';
   const portalUrl = `${FRONTEND_BASE}${link}`;
 
@@ -122,12 +139,14 @@ async function notifySourcing(
       ].filter(Boolean).join('\n')
     : '';
   const plainBody = `Hi ${firstName},\n\n${body}\n\n${detailLines}${linkLine}\n\n— MITS Consulting Hub`;
+  const ccList = [samitaEmail].filter((e): e is string => !!e && e !== to);
   await sendEmail({
     to,
     subject: `[MITS] ${title}`,
     body: plainBody,
     htmlBody,
     fromUser,
+    cc: ccList.length ? ccList.join(', ') : undefined,
     skipVaibhavCc: true,
   });
 }
@@ -292,6 +311,7 @@ sourcingRouter.post('/', async (req: AuthedRequest, res) => {
       : `${req.user!.name} added a new unassigned sourcing request. Open the sourcing page to propose trainers.`,
     `/sourcing`,
     { clientName: r.client.name, skills: skillsRequired, raisedBy: req.user!.name },
+    req.user!.id,
   )));
   res.status(201).json(r);
 });
@@ -327,6 +347,7 @@ sourcingRouter.patch('/:id', async (req: AuthedRequest, res) => {
       `${req.user!.name} routed this client to you.`,
       `/sourcing`,
       { clientName: prior?.client?.name || r.client.name, skills: rSkills, raisedBy: req.user!.name },
+      req.user!.id,
     );
   }
   res.json(r);
