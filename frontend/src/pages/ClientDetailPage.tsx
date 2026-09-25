@@ -4691,7 +4691,7 @@ function HandoverWelcomeModal({ client, onClose }: any) {
             </select>
           </div>
           <div className="text-xs muted bg-bg-input p-2 rounded mt-2">
-            Sends: <em>"Welcome Aboard [Name] — MITS Solution"</em> with MITS Client Playbook link, team intro ({coordinatorName}, Bhavneet, Mitali roles), and service agreement note. CC'd to mc.welcome@mitssolution.com.
+            Sends: <em>"Welcome Aboard [Name] — MITS Edge"</em> with MITS Client Playbook link, team intro ({coordinatorName}, Bhavneet, Mitali roles), and service agreement note. CC'd to mc.welcome@mitssolution.com.
           </div>
         </div>
 
@@ -4858,7 +4858,7 @@ function MitaliWelcomeEmailModal({ client, onClose }: { client: any; onClose: ()
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
   const defaultCoordinator = client.assignedAm?.name || 'Muskan';
   const [coordinatorName, setCoordinatorName] = useState(defaultCoordinator);
-  const [playbookUrl, setPlaybookUrl] = useState('https://drive.google.com/file/d/1v3myXlxmqjctWSL6qqmVofD21IxuGO_7/view?usp=sharing');
+  const [playbookUrl, setPlaybookUrl] = useState('https://drive.google.com/file/d/1IMLyFgMQ-r3ucQqN2UYmFdJOV9WP8FXZ/view?usp=sharing');
   const [agreementUrl, setAgreementUrl] = useState('');
 
   const send = useMutation({
@@ -4877,7 +4877,7 @@ function MitaliWelcomeEmailModal({ client, onClose }: { client: any; onClose: ()
         <div className="rounded-lg px-4 py-3 text-[12px]" style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}>
           <div className="font-semibold mb-1">To: {toEmail || <span className="text-red-400">No email on file</span>}</div>
           <div className="muted">CC: vaibhav.aggarwal@mitssolution.com</div>
-          <div className="mt-1 muted">Subject: Welcome Aboard {client.name} -- MITS Solution</div>
+          <div className="mt-1 muted">Subject: Welcome Aboard {client.name} -- MITS Edge</div>
           <div className="mt-2 text-[11px] muted">Template: welcome message · {coordinatorName || 'Coordinator'} (Coordinator) · Bhavneet (Team Leader) · Mitali (CSM) · escalation ETAs · playbook + agreement links.</div>
         </div>
 
