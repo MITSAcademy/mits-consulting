@@ -4858,7 +4858,7 @@ function MitaliWelcomeEmailModal({ client, onClose }: { client: any; onClose: ()
   const toEmail = client.email || (client.intakeData as any)?.client_email || '';
   const defaultCoordinator = client.assignedAm?.name || 'Muskan';
   const [coordinatorName, setCoordinatorName] = useState(defaultCoordinator);
-  const [playbookUrl, setPlaybookUrl] = useState('https://drive.google.com/file/d/1v3myXlxmqjctWSL6qqmVofD21IxuGO_7/view?usp=sharing');
+  const [playbookUrl, setPlaybookUrl] = useState('https://drive.google.com/file/d/1IMLyFgMQ-r3ucQqN2UYmFdJOV9WP8FXZ/view?usp=sharing');
   const [agreementUrl, setAgreementUrl] = useState('');
 
   const send = useMutation({

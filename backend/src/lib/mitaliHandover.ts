@@ -19,7 +19,7 @@ export interface HandoverVars {
   coordinatorName?: string;
 }
 
-const PLAYBOOK_URL = 'https://drive.google.com/file/d/1v3myXlxmqjctWSL6qqmVofD21IxuGO_7/view?usp=sharing';
+const PLAYBOOK_URL = 'https://drive.google.com/file/d/1IMLyFgMQ-r3ucQqN2UYmFdJOV9WP8FXZ/view?usp=sharing';
 const WEBSITE = 'https://mitssolution.com';
 const MITALI_EMAIL = 'mitagg@mitssolution.com';
 const MITALI_PHONE = '+91 97795 30773';
