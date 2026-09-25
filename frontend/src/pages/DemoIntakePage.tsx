@@ -133,9 +133,6 @@ export function DemoIntakePage() {
   // Mine = hosted by me; All Team 2 = all active groups
   const myGroups = allTrainings.filter((t: any) => t.hostedByDefault?.id === user.id);
   const activeGroups = mineOnly ? myGroups : allTrainings;
-  // Client IDs that Bhavneet's team actually hosts — used to scope the Active column
-  const activeTrainingClientIds = new Set(allTrainings.map((t: any) => t.client?.id).filter(Boolean));
-  const myActiveTrainingClientIds = new Set(myGroups.map((t: any) => t.client?.id).filter(Boolean));
 
   const all = (data || []) as any[];
   // "Mine" for demo_intake = clients where I am the intakeOwner
@@ -157,16 +154,16 @@ export function DemoIntakePage() {
     : filtered;
 
   const grouped: Record<string, any[]> = {};
-  STAGES.forEach((s) => {
-    const byLifecycle = searched.filter((c: any) => c.lifecycle === s.key);
-    // Active column: only show clients that Bhavneet's team actually hosts
-    if (s.key === 'Active' && !isRecruiter) {
-      const scopedIds = mineOnly ? myActiveTrainingClientIds : activeTrainingClientIds;
-      grouped[s.key] = byLifecycle.filter((c: any) => scopedIds.has(c.id));
-    } else {
-      grouped[s.key] = byLifecycle;
-    }
-  });
+  STAGES.forEach((s) => (grouped[s.key] = searched.filter((c: any) => c.lifecycle === s.key)));
+
+  // The Active column mirrors the Active groups panel (one card per active RegularTraining).
+  // Client lifecycle alone undercounts: groups also run for LeverageGranted / SaleWon / Hold
+  // clients, and one client can have several groups.
+  const activeGroupsSearched = searchLower
+    ? activeGroups.filter((t: any) =>
+        (t.client?.name || t.name)?.toLowerCase().includes(searchLower) ||
+        t.trainer?.skills?.toLowerCase().includes(searchLower))
+    : activeGroups;
 
   const title = isRecruiter ? 'Pipeline view' : 'Demo intake';
   const subtitle = isRecruiter
@@ -279,7 +276,8 @@ export function DemoIntakePage() {
 
         <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))' }}>
           {STAGES.map((s) => {
-            const items = grouped[s.key];
+            const isActiveCol = s.key === 'Active';
+            const items = isActiveCol ? activeGroupsSearched : grouped[s.key];
             const isEmpty = items.length === 0;
             return (
               <div
@@ -300,7 +298,21 @@ export function DemoIntakePage() {
                   <Pill color={stageColor(s.key) as any}>{items.length}</Pill>
                 </div>
                 {isEmpty && <div className="text-[10.5px] muted text-center py-4 italic">Empty</div>}
-                {items.map((c: any) => {
+                {isActiveCol && items.map((t: any) => (
+                  <Link
+                    key={t.id}
+                    to={`/regular-trainings/${t.id}`}
+                    className="block rounded-lg p-2 mb-1.5 transition-all hover-lift"
+                    style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-borderSoft)', opacity: 0.85 }}
+                  >
+                    <div className="font-semibold text-xs mb-0.5" style={{ color: 'var(--brand-text)' }}>{t.client?.name || t.name}</div>
+                    <div className="text-[10px] muted mono truncate" title={t.trainer?.skills}>{t.trainer?.name || 'No trainer'}</div>
+                    {t.hostedByDefault && (
+                      <div className="text-[10px] mt-1 font-medium" style={{ color: 'var(--brand-textMuted)' }}>{t.hostedByDefault.name}</div>
+                    )}
+                  </Link>
+                ))}
+                {!isActiveCol && items.map((c: any) => {
                   const skill = (c.intakeData as any)?.detailed_skill_set || c.intakeSkillHint || c.engagementType;
                   // For WithRecruiters, show the assigned recruiter (Aman/Kanchan) not the intake owner
                   const assignedRecruiter = c.sourcingRequests?.[0]?.sentTo?.name;
