@@ -7,9 +7,13 @@ import { Pill } from '@/components/ui/pill';
 import { useAuth } from '@/store/auth';
 import { EmptyState } from '@/components/EmptyState';
 import { LayoutGrid, Search } from 'lucide-react';
+import { useActiveGroups, activeGroupHref } from '@/lib/activeGroups';
 
 const STAGE_ORDER = ['DemoDone', 'FeedbackPending', 'SaleClosing', 'SaleWon', 'Active'];
-const BOARD_STAGES = ['SaleClosing', 'SaleWon', 'Active'];
+// The Active column is built from active groups (RegularTrainings), not lifecycle=Active clients,
+// so it matches the Active groups count on Demo intake. Many lifecycle=Active clients have no
+// running group, and some groups belong to LeverageGranted / SaleWon / Hold clients.
+const BOARD_STAGES = ['SaleClosing', 'SaleWon'];
 
 
 function subStatusPillColor(ss: string): 'amber' | 'green' | 'grey' | 'blue' | 'red' {
@@ -114,9 +118,33 @@ function ClientTile({ c }: { c: any }) {
   );
 }
 
-function TileBoard({ items }: { items: any[] }) {
+function GroupTile({ t, role }: { t: any; role: string }) {
+  return (
+    <Link
+      to={activeGroupHref(t, role)}
+      className="block rounded-lg border p-2.5 mb-1.5 transition-all"
+      style={{ background: 'var(--bg-card)', borderColor: 'var(--brand-borderSoft)', boxShadow: 'var(--shadow-sm)' }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-cardHover)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-card)'; }}
+    >
+      <div className="font-semibold text-xs mb-1 truncate" style={{ color: 'var(--brand-text)' }}>{t.client?.name || t.name}</div>
+      <div className="text-[10px] muted truncate mb-1">{t.trainer?.name || 'No trainer'}</div>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px]" style={{ color: 'var(--brand-textMuted)' }}>
+          {t.hostedByDefault?.name ? `Host · ${t.hostedByDefault.name}` : 'Active — with Mitali'}
+        </span>
+        {t.defaultTimeIst && (
+          <span className="text-[10px] mono" style={{ color: 'var(--brand-textMuted)' }}>{t.defaultTimeIst}</span>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+function TileBoard({ items, groups, role }: { items: any[]; groups: any[]; role: string }) {
   const byCol: Record<string, any[]> = {};
   for (const col of TILE_COLUMNS) byCol[col.key] = [];
+  byCol['Active'] = groups;
   // exclude DP from board — they're dropped
   for (const c of items) {
     if (c.saleClosingSubStatus === 'DP') continue;
@@ -153,7 +181,9 @@ function TileBoard({ items }: { items: any[] }) {
               {clients.length === 0 && (
                 <div className="text-[10px] muted text-center pt-4">Empty</div>
               )}
-              {clients.map((c: any) => <ClientTile key={c.id} c={c} />)}
+              {col.key === 'Active'
+                ? clients.map((t: any) => <GroupTile key={t.id} t={t} role={role} />)
+                : clients.map((c: any) => <ClientTile key={c.id} c={c} />)}
             </div>
           );
         })}
@@ -186,11 +216,14 @@ export function SalesClosingPage() {
     .filter((c: any) => !searchLower || c.name?.toLowerCase().includes(searchLower) || c.skills?.toLowerCase().includes(searchLower))
     .sort((a: any, b: any) => STAGE_ORDER.indexOf(a.lifecycle) - STAGE_ORDER.indexOf(b.lifecycle));
 
+  const groups = useActiveGroups(true)
+    .filter((t: any) => !searchLower || (t.client?.name || t.name)?.toLowerCase().includes(searchLower));
+
   return (
     <>
       <Topbar
         title="My pipeline"
-        subtitle={`${items.length} client${items.length !== 1 ? 's' : ''} across closing stages`}
+        subtitle={`${items.length} client${items.length !== 1 ? 's' : ''} across closing stages · ${groups.length} active group${groups.length !== 1 ? 's' : ''}`}
         actions={
           <div className="relative">
             <Search size={13} className="absolute left-2 top-1/2 -translate-y-1/2 muted pointer-events-none" />
@@ -208,7 +241,7 @@ export function SalesClosingPage() {
         {isLoading && <div className="muted text-sm py-8 text-center">Loading clients…</div>}
 
 
-        {items.length === 0 ? (
+        {items.length === 0 && groups.length === 0 ? (
           <EmptyState
             icon={LayoutGrid}
             tone="gold"
@@ -216,7 +249,7 @@ export function SalesClosingPage() {
             description="Clients in the 'Sale Closing' stage appear here. Great work if you've moved them all through!"
           />
         ) : (
-          <TileBoard items={items} />
+          <TileBoard items={items} groups={groups} role={user.role} />
         )}
       </Page>
     </>

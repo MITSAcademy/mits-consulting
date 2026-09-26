@@ -61,11 +61,15 @@ const READ_ROLES  = ['founder', 'manager', 'lead', 'account_manager', 'demo_lead
 
 function canWrite(role: string) { return WRITE_ROLES.includes(role); }
 function canRead(role: string)  { return READ_ROLES.includes(role); }
+// Demo intake (Anjali/Taran) and sales (Roshni) boards show the active-groups list only —
+// no training detail, sessions or send actions.
+const LIST_ROLES = [...READ_ROLES, 'demo_intake', 'sales_closer'];
+function canList(role: string)  { return LIST_ROLES.includes(role); }
 
 // ── Trainings ─────────────────────────────────────────────────────────────
 
 regularTrainingsRouter.get('/trainings', async (req: AuthedRequest, res) => {
-  if (!canRead(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
+  if (!canList(req.user!.role)) return res.status(403).json({ error: 'Not allowed' });
   const status = (req.query.status as string) || undefined;
   const where: any = {};
   if (status) where.status = status;

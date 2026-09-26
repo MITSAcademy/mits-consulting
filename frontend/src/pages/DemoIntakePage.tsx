@@ -10,6 +10,7 @@ import { Input, Label, Select, Textarea } from '@/components/ui/input';
 import { useState } from 'react';
 import { useUI } from '@/store/ui';
 import { useAuth } from '@/store/auth';
+import { useActiveGroups, activeGroupHref } from '@/lib/activeGroups';
 import { Plus, ChevronDown, ChevronUp, CheckCircle2, Search, Users, Loader2, AlertTriangle } from 'lucide-react';
 
 // readOnly = true means cards are visible but not clickable (another team owns that stage)
@@ -124,12 +125,7 @@ export function DemoIntakePage() {
   });
 
   // Active groups (RegularTrainings) where Anjali/Taran are the coordinator
-  const { data: trainingsData } = useQuery({
-    queryKey: ['demo-intake-active-groups'],
-    queryFn: () => api.get('/regular-trainings/trainings', { params: { status: 'active' } }).then((r) => r.data),
-    enabled: isDemoIntake || ['founder', 'manager', 'demo_lead'].includes(user.role),
-  });
-  const allTrainings = (trainingsData || []) as any[];
+  const allTrainings = useActiveGroups(isDemoIntake || ['founder', 'manager', 'demo_lead'].includes(user.role));
   // Mine = hosted by me; All Team 2 = all active groups
   const myGroups = allTrainings.filter((t: any) => t.hostedByDefault?.id === user.id);
   const activeGroups = mineOnly ? myGroups : allTrainings;
@@ -240,7 +236,7 @@ export function DemoIntakePage() {
                 {activeGroups.map((t: any) => (
                   <Link
                     key={t.id}
-                    to={`/regular-trainings/${t.id}`}
+                    to={activeGroupHref(t, user.role)}
                     className="rounded-lg p-2.5 transition-all hover-lift block"
                     style={{ background: 'var(--bg-input)', border: '1px solid var(--brand-borderSoft)' }}
                   >
@@ -301,7 +297,7 @@ export function DemoIntakePage() {
                 {isActiveCol && items.map((t: any) => (
                   <Link
                     key={t.id}
-                    to={`/regular-trainings/${t.id}`}
+                    to={activeGroupHref(t, user.role)}
                     className="block rounded-lg p-2 mb-1.5 transition-all hover-lift"
                     style={{ background: 'var(--bg-card)', border: '1px solid var(--brand-borderSoft)', opacity: 0.85 }}
                   >
