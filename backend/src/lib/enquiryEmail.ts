@@ -1,14 +1,14 @@
 /**
- * Notifies the sales inbox whenever a new website enquiry comes in via
- * POST /api/enquiries (mitsedge.com webhook). System-initiated — sent
- * from the shared MITS Hub SMTP account, not a staff member's Gmail.
+ * Notifies Vaibhav + Samita whenever a new website enquiry arrives.
+ * Sent from Samita's Gmail App Password (bypasses Resend quota entirely).
+ * Falls back to Resend only if Samita has no App Password configured.
  */
 
-import { sendEmail } from './mailer';
+import { sendEmail, decryptSecret, safeBuildFromUser } from './mailer';
+import { prisma } from './prisma';
 
 const SALES_EMAIL = process.env.ENQUIRY_NOTIFY_EMAIL || 'mc.sales@mitssolution.com';
 const VAIBHAV_EMAIL = 'vaibhav.aggarwal@mitssolution.com';
-const SAMITA_EMAIL = 'samita@mitssolution.com';
 const PORTAL_URL = process.env.PORTAL_URL || 'https://mits-frontend.onrender.com';
 
 function escapeHtml(s: string): string {
@@ -66,15 +66,29 @@ export async function sendEnquiryNotification(enquiry: {
   name: string; email: string | null; phone: string | null; message: string | null; course: string | null;
 }): Promise<void> {
   try {
-    const ccAddresses = [SAMITA_EMAIL, SALES_EMAIL].filter(e => e !== VAIBHAV_EMAIL);
+    // Fetch Samita to send FROM her Gmail App Password (off Resend quota)
+    const samita = await prisma.user.findUnique({
+      where: { id: 'u-samita' },
+      select: { id: true, name: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true, email: true },
+    });
+
+    const fromUser = samita?.smtpAppPassword && samita.gmailAddress
+      ? safeBuildFromUser({ id: samita.id, name: samita.name, gmailAddress: samita.gmailAddress, smtpAppPassword: samita.smtpAppPassword, sendAsAddress: samita.sendAsAddress })
+      : undefined;
+
+    const samitaEmail = samita?.sendAsAddress || samita?.gmailAddress || samita?.email;
+    const ccAddresses = [samitaEmail, SALES_EMAIL].filter((e): e is string => !!e && e !== VAIBHAV_EMAIL);
+
     await sendEmail({
       to: VAIBHAV_EMAIL,
       cc: ccAddresses.join(', ') || undefined,
       subject: `New website enquiry — ${enquiry.name}${enquiry.course ? ` (${enquiry.course})` : ''}`,
       body: `New website enquiry\n\nName: ${enquiry.name}\nEmail: ${enquiry.email || '—'}\nPhone: ${enquiry.phone || '—'}\nCourse: ${enquiry.course || '—'}\nMessage: ${enquiry.message || '—'}\n\nNext steps: call/WhatsApp within 24 hours, log the outcome, schedule a demo if interested.`,
       htmlBody: buildHtml(enquiry),
+      fromUser,
       skipVaibhavCc: true, // already in to:
     });
+    console.log(`[enquiry-email] Sent via ${fromUser ? 'Samita Gmail' : 'Resend'} for enquiry: ${enquiry.name}`);
   } catch (e) {
     console.error('[enquiry-email] Failed to send notification:', e);
   }
