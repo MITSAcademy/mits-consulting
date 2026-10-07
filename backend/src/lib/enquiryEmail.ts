@@ -7,7 +7,8 @@
 import { sendEmail } from './mailer';
 
 const SALES_EMAIL = process.env.ENQUIRY_NOTIFY_EMAIL || 'mc.sales@mitssolution.com';
-const PORTAL_URL = process.env.PORTAL_URL || 'https://hub.mitssolution.com';
+const VAIBHAV_EMAIL = 'vaibhav.aggarwal@mitssolution.com';
+const PORTAL_URL = process.env.PORTAL_URL || 'https://mits-frontend.onrender.com';
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -64,11 +65,14 @@ export async function sendEnquiryNotification(enquiry: {
   name: string; email: string | null; phone: string | null; message: string | null; course: string | null;
 }): Promise<void> {
   try {
+    const ccAddresses = [SALES_EMAIL].filter(e => e !== VAIBHAV_EMAIL);
     await sendEmail({
-      to: SALES_EMAIL,
+      to: VAIBHAV_EMAIL,
+      cc: ccAddresses.join(', ') || undefined,
       subject: `New website enquiry — ${enquiry.name}${enquiry.course ? ` (${enquiry.course})` : ''}`,
       body: `New website enquiry\n\nName: ${enquiry.name}\nEmail: ${enquiry.email || '—'}\nPhone: ${enquiry.phone || '—'}\nCourse: ${enquiry.course || '—'}\nMessage: ${enquiry.message || '—'}\n\nNext steps: call/WhatsApp within 24 hours, log the outcome, schedule a demo if interested.`,
       htmlBody: buildHtml(enquiry),
+      skipVaibhavCc: true, // already in to:
     });
   } catch (e) {
     console.error('[enquiry-email] Failed to send notification:', e);
