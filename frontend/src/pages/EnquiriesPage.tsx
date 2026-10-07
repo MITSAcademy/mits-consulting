@@ -149,11 +149,13 @@ export function EnquiriesPage() {
                               style={{ padding: '4px 7px', borderRadius: 5, border: '1px solid #fbbf24', background: 'transparent', cursor: 'pointer', color: '#fbbf24', fontSize: 11, fontWeight: 600 }}
                             ><UserPlus size={11} /></button>
                           )}
-                          <button
-                            title="Delete"
-                            onClick={() => { if (window.confirm(`Delete enquiry from ${e.name}?`)) remove.mutate(e.id); }}
-                            style={{ padding: '4px 6px', borderRadius: 5, border: '1px solid #f87171', background: 'transparent', cursor: 'pointer', color: '#f87171' }}
-                          ><Trash2 size={11} /></button>
+                          {user.role === 'founder' && (
+                            <button
+                              title="Delete"
+                              onClick={() => { if (window.confirm(`Delete enquiry from ${e.name}?`)) remove.mutate(e.id); }}
+                              style={{ padding: '4px 6px', borderRadius: 5, border: '1px solid #f87171', background: 'transparent', cursor: 'pointer', color: '#f87171' }}
+                            ><Trash2 size={11} /></button>
+                          )}
                         </div>
                       )}
                     </td>

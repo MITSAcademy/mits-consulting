@@ -76,7 +76,7 @@ enquiriesRouter.patch('/:id', requireRole(...ALLOWED), async (req: AuthedRequest
   res.json(enquiry);
 });
 
-enquiriesRouter.delete('/:id', requireRole(...ALLOWED), async (req: AuthedRequest, res) => {
+enquiriesRouter.delete('/:id', requireRole('founder'), async (req: AuthedRequest, res) => {
   await prisma.enquiry.delete({ where: { id: req.params.id } });
   await audit(req.user!.id, req.user!.name, 'ENQUIRY_DELETE', req.params.id);
   res.json({ ok: true });
