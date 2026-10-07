@@ -48,6 +48,18 @@ enquiriesRouter.post('/', submitLimiter, async (req, res) => {
 // Everything below is internal — staff viewing/managing the enquiry inbox.
 enquiriesRouter.use(requireAuth);
 
+// POST /api/enquiries/test-notify — founder only, sends a sample notification email
+enquiriesRouter.post('/test-notify', requireRole('founder'), async (_req, res) => {
+  await sendEnquiryNotification({
+    name: 'Rahul Sharma (Test)',
+    email: 'rahul.sharma@example.com',
+    phone: '9876543210',
+    course: 'Python Full Stack',
+    message: 'I am interested in enrolling for the next batch. Please share details about fees and schedule.',
+  });
+  res.json({ ok: true, message: 'Sample enquiry notification sent.' });
+});
+
 enquiriesRouter.get('/', requireRole(...ALLOWED), async (_req, res) => {
   const enquiries = await prisma.enquiry.findMany({
     orderBy: { createdAt: 'desc' },
