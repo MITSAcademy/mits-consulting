@@ -8,6 +8,7 @@ import { sendEmail } from './mailer';
 
 const SALES_EMAIL = process.env.ENQUIRY_NOTIFY_EMAIL || 'mc.sales@mitssolution.com';
 const VAIBHAV_EMAIL = 'vaibhav.aggarwal@mitssolution.com';
+const SAMITA_EMAIL = 'samita@mitssolution.com';
 const PORTAL_URL = process.env.PORTAL_URL || 'https://mits-frontend.onrender.com';
 
 function escapeHtml(s: string): string {
@@ -65,7 +66,7 @@ export async function sendEnquiryNotification(enquiry: {
   name: string; email: string | null; phone: string | null; message: string | null; course: string | null;
 }): Promise<void> {
   try {
-    const ccAddresses = [SALES_EMAIL].filter(e => e !== VAIBHAV_EMAIL);
+    const ccAddresses = [SAMITA_EMAIL, SALES_EMAIL].filter(e => e !== VAIBHAV_EMAIL);
     await sendEmail({
       to: VAIBHAV_EMAIL,
       cc: ccAddresses.join(', ') || undefined,
