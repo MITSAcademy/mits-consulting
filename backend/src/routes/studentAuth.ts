@@ -293,7 +293,25 @@ studentAuthRouter.get('/me/purchases', requireStudentAuth, async (req: StudentRe
   const purchases = await prisma.studentPurchase.findMany({
     where: { studentId: req.student!.id },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, courseId: true, courseTitle: true, status: true, createdAt: true, paidAt: true },
+    select: {
+      id: true, courseId: true, courseTitle: true, status: true,
+      amount: true, currency: true, createdAt: true, paidAt: true,
+    },
   });
   res.json({ purchases });
+});
+
+// GET /api/student/me/purchases/:id — one purchase, scoped to the caller so a
+// guessed id cannot read someone else's receipt.
+studentAuthRouter.get('/me/purchases/:id', requireStudentAuth, async (req: StudentRequest, res) => {
+  const purchase = await prisma.studentPurchase.findFirst({
+    where: { id: req.params.id, studentId: req.student!.id },
+    select: {
+      id: true, courseId: true, courseTitle: true, status: true,
+      amount: true, currency: true, gateway: true, merchantTxnId: true,
+      gatewayRef: true, createdAt: true, paidAt: true,
+    },
+  });
+  if (!purchase) return res.status(404).json({ error: 'Not found' });
+  res.json({ purchase });
 });
