@@ -62,12 +62,25 @@ export async function sendStudentOtpEmail(
       })
     : undefined;
 
-  await sendEmail({
+  const args = {
     to,
     subject: `${code} is your MITS Edge verification code`,
     body: `Hi ${name},\n\nYour MITS Edge verification code is ${code}.\nIt expires in 10 minutes.\n\nIf you didn't request this, ignore this email. Never share this code with anyone.`,
     htmlBody: buildHtml(name, code, purpose),
-    fromUser,
     skipVaibhavCc: true, // a student's OTP is not internal correspondence
-  });
+  };
+
+  if (fromUser) {
+    try {
+      await sendEmail({ ...args, fromUser });
+      return;
+    } catch (e) {
+      // Samita's App Password can expire or be revoked at any time. That is an
+      // internal mail problem and must not stop a student from signing up, so
+      // fall through to the system sender rather than failing the request.
+      console.error('[student-otp] Gmail send failed, falling back to Resend:', e);
+    }
+  }
+
+  await sendEmail(args);
 }
