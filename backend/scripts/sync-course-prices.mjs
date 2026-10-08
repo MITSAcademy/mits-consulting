@@ -49,5 +49,20 @@ if (ids.size !== courses.length) {
 }
 
 const out = join(dirname(fileURLToPath(import.meta.url)), '../src/lib/courseCatalog.data.json');
+
+// Warn loudly about anything priced far below the catalog — almost always a
+// leftover test price that would otherwise be silently restored to full price
+// (or, worse, left live).
+if (existsSync(out)) {
+  const current = JSON.parse(readFileSync(out, 'utf8'));
+  const byId = new Map(current.map((c) => [c.id, c.amount]));
+  for (const c of courses) {
+    const old = byId.get(c.id);
+    if (old != null && old < 500 && c.amount !== old) {
+      console.warn(`! ${c.id} "${c.title}" was ${old} minor units (test price) and is being reset to ${c.amount}`);
+    }
+  }
+}
+
 writeFileSync(out, `${JSON.stringify(courses, null, 2)}\n`);
 console.log(`Wrote ${courses.length} courses to src/lib/courseCatalog.data.json`);
