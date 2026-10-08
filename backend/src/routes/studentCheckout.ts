@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { requireStudentAuth, StudentRequest } from '../lib/studentAuth';
 import { findCourse } from '../lib/courseCatalog';
+import { sendPurchaseNotification } from '../lib/purchaseEmail';
 import {
   payglocalEnabled,
   initiatePayCollect,
@@ -62,11 +63,34 @@ async function confirmAndSettle(merchantTxnId: string): Promise<void> {
 
   const status = await fetchStatus(purchase.gatewayRef);
   if (isPaidStatus(status)) {
-    await prisma.studentPurchase.updateMany({
+    const settled = await prisma.studentPurchase.updateMany({
       where: { merchantTxnId, status: { not: 'PAID' } },
       data: { status: 'PAID', paidAt: new Date() },
     });
     console.log(`[payglocal] ${merchantTxnId} settled PAID`);
+
+    // The callback, the webhook and the buyer's own polling can all arrive for
+    // the same payment. updateMany's count is the race-safe signal that this
+    // call is the one that flipped it, so the team is notified exactly once.
+    if (settled.count > 0) {
+      const student = await prisma.student.findUnique({
+        where: { id: purchase.studentId },
+        select: { id: true, name: true, email: true, phone: true },
+      });
+      if (student) {
+        await sendPurchaseNotification({
+          studentName: student.name,
+          studentEmail: student.email,
+          studentPhone: student.phone,
+          studentId: student.id,
+          courseTitle: purchase.courseTitle,
+          amount: purchase.amount,
+          currency: purchase.currency,
+          merchantTxnId: purchase.merchantTxnId,
+          gatewayRef: purchase.gatewayRef,
+        });
+      }
+    }
   } else if (isFailedStatus(status)) {
     await prisma.studentPurchase.updateMany({
       where: { merchantTxnId, status: { notIn: ['PAID'] } },
