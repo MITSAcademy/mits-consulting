@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Topbar, Page } from '@/components/layout/AppLayout';
@@ -18,6 +18,7 @@ type Student = {
 };
 
 export function StudentsPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
 
   const { data, isLoading } = useQuery<Student[]>({
@@ -72,10 +73,13 @@ export function StudentsPage() {
               </thead>
               <tbody>
                 {filtered.map((s) => (
-                  <tr key={s.id} className="clickable" style={{ opacity: s.active ? 1 : 0.55 }}>
-                    <td style={{ fontWeight: 600 }}>
-                      <Link to={`/students/${s.id}`}>{s.name}</Link>
-                    </td>
+                  <tr
+                    key={s.id}
+                    className="clickable"
+                    onClick={() => navigate(`/students/${s.id}`)}
+                    style={{ opacity: s.active ? 1 : 0.55 }}
+                  >
+                    <td style={{ fontWeight: 600 }}>{s.name}</td>
                     <td className="text-[12px]">{s.email}</td>
                     <td className="mono text-[12px]">{s.phone || '—'}</td>
                     <td className="text-[12px]">{s.paidPurchaseCount || '—'}</td>
