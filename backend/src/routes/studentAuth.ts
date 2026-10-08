@@ -40,10 +40,12 @@ const otpLimiter = rateLimit({
 const emailField = z.string().trim().toLowerCase().email();
 const passwordField = z.string().min(8, 'Password must be at least 8 characters').max(200);
 
+// Password is optional: the website's signup form only collects details and
+// verifies by OTP, so accounts can start passwordless and set one later.
 const signupSchema = z.object({
   name: z.string().trim().min(1).max(120),
   email: emailField,
-  password: passwordField,
+  password: passwordField.optional(),
   phone: z.string().trim().max(30).optional(),
 });
 const verifyOtpSchema = z.object({ email: emailField, otp: z.string().trim().length(6) });
@@ -81,14 +83,16 @@ studentAuthRouter.post('/signup', otpLimiter, async (req, res) => {
     return res.json({ ok: true, message: 'Check your email for a verification code.' });
   }
 
-  const passwordHash = await hashPassword(password);
+  const passwordHash = password ? await hashPassword(password) : undefined;
   const student = existing
     ? await prisma.student.update({
         where: { id: existing.id },
-        data: { name, passwordHash, phone: phone || null },
+        // Only overwrite the hash when a new password was supplied, so an
+        // unverified retry without one does not wipe an existing password.
+        data: { name, phone: phone || null, ...(passwordHash ? { passwordHash } : {}) },
       })
     : await prisma.student.create({
-        data: { name, email, passwordHash, phone: phone || null },
+        data: { name, email, phone: phone || null, passwordHash: passwordHash ?? null },
       });
 
   const code = await issueOtp(student.id, 'signup');
@@ -253,4 +257,43 @@ studentAuthRouter.get('/me', requireStudentAuth, async (req: StudentRequest, res
   });
   if (!student) return res.status(404).json({ error: 'Not found' });
   res.json({ student });
+});
+
+// POST /api/student/me/password — set or change the signed-in student's password.
+// Accounts created through the website's OTP signup start passwordless, so a
+// current password is only demanded when one already exists.
+studentAuthRouter.post('/me/password', authLimiter, requireStudentAuth, async (req: StudentRequest, res) => {
+  const parsed = z
+    .object({ currentPassword: z.string().max(200).optional(), newPassword: passwordField })
+    .safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.errors[0]?.message || 'Invalid password' });
+  }
+
+  const student = await prisma.student.findUnique({ where: { id: req.student!.id } });
+  if (!student) return res.status(404).json({ error: 'Not found' });
+
+  if (student.passwordHash) {
+    const ok = parsed.data.currentPassword
+      ? await verifyPassword(parsed.data.currentPassword, student.passwordHash)
+      : false;
+    if (!ok) return res.status(403).json({ error: 'Current password is incorrect' });
+  }
+
+  await prisma.student.update({
+    where: { id: student.id },
+    data: { passwordHash: await hashPassword(parsed.data.newPassword) },
+  });
+  res.json({ ok: true });
+});
+
+// GET /api/student/me/purchases — the signed-in student's own courses.
+// Always scoped to the token's student; there is no id parameter to tamper with.
+studentAuthRouter.get('/me/purchases', requireStudentAuth, async (req: StudentRequest, res) => {
+  const purchases = await prisma.studentPurchase.findMany({
+    where: { studentId: req.student!.id },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, courseId: true, courseTitle: true, status: true, createdAt: true, paidAt: true },
+  });
+  res.json({ purchases });
 });
