@@ -53,6 +53,7 @@ import { payoutsRouter } from './routes/payouts';
 import { contactsRouter } from './routes/contacts';
 import { enquiriesRouter } from './routes/enquiries';
 import { studentAuthRouter } from './routes/studentAuth';
+import { studentCheckoutRouter } from './routes/studentCheckout';
 import { studentsRouter } from './routes/students';
 import { resumeSanitiseRouter } from './routes/resumeSanitise';
 import { banksRouter } from './routes/banks';
@@ -170,6 +171,7 @@ app.use('/api/payouts', payoutsRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/enquiries', enquiriesRouter);
 app.use('/api/student', studentAuthRouter); // public — mitsedge.com students
+app.use('/api/student/checkout', studentCheckoutRouter);
 app.use('/api/students', studentsRouter); // staff-facing
 app.use('/api/banks', banksRouter);
 app.use('/api/audit', auditRouter);

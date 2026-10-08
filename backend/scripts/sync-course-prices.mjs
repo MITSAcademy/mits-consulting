@@ -1,4 +1,4 @@
-// Pulls course prices from the mits-web repo into src/lib/courseCatalog.json.
+// Pulls course prices from the mits-web repo into src/lib/courseCatalog.data.json.
 //
 // mits-web owns the catalog: scripts/catalog/*.mjs is the source of truth, and
 // `node scripts/build-course-catalog.mjs` there emits lib/course-prices.json.
@@ -48,6 +48,6 @@ if (ids.size !== courses.length) {
   process.exit(1);
 }
 
-const out = join(dirname(fileURLToPath(import.meta.url)), '../src/lib/courseCatalog.json');
+const out = join(dirname(fileURLToPath(import.meta.url)), '../src/lib/courseCatalog.data.json');
 writeFileSync(out, `${JSON.stringify(courses, null, 2)}\n`);
-console.log(`Wrote ${courses.length} courses to src/lib/courseCatalog.json`);
+console.log(`Wrote ${courses.length} courses to src/lib/courseCatalog.data.json`);
