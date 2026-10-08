@@ -13,6 +13,7 @@ import {
   Building2, History, Settings, LogOut, Moon, Calendar, ChevronsLeft, ChevronsRight,
   TableProperties, CalendarDays, AlertTriangle, Link, BarChart2, BarChart3, ToggleRight,
   Sparkles, X, Bug, Handshake, ShieldAlert, Search, ClipboardCheck, Brain, FileMinus,
+  GraduationCap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -149,6 +150,7 @@ const NAV: NavItem[] = [
   { section: 'sales', page: '/fresh-payments', label: 'Fresh payments', icon: DollarSign, roles: ['founder', 'sales_closer', 'accounts'] },
   { section: 'sales', page: '/contacts', label: 'Contacts', icon: Users, roles: ['founder', 'manager', 'sales_closer'] },
   { section: 'sales', page: '/enquiries', label: 'Website enquiries', icon: Inbox, roles: ['founder', 'manager', 'demo_lead', 'sales_closer'] },
+  { section: 'sales', page: '/students', label: 'Students', icon: GraduationCap, roles: ['founder', 'manager', 'sales_closer'] },
 
   // ── Client success (team-scoped for manager/lead/AM) ─────────────────
   // Payment follow-up: Mitali's primary job + accounts; Bhavneet needs it to export her team's payments

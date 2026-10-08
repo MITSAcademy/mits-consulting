@@ -131,70 +131,70 @@ enum RateModel {
 
 // -------- USERS --------
 model User {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  passwordHash String
-  role         Role
-  reportsToId  String?
-  active       Boolean   @default(true)
-  createdAt    DateTime  @default(now())
+  id                        String    @id @default(cuid())
+  name                      String
+  email                     String    @unique
+  passwordHash              String
+  role                      Role
+  reportsToId               String?
+  active                    Boolean   @default(true)
+  createdAt                 DateTime  @default(now())
   // Phone (E.164 or formatted; shown on outgoing email signature blocks)
-  phone             String?
+  phone                     String?
   // Per-user Google Workspace identity (must be @mitssolution.com)
-  gmailAddress      String?   @unique
-  smtpAppPassword   String?   // encrypted with SMTP_USER_ENCRYPTION_KEY env var
-  smtpConfiguredAt  DateTime?
+  gmailAddress              String?   @unique
+  smtpAppPassword           String? // encrypted with SMTP_USER_ENCRYPTION_KEY env var
+  smtpConfiguredAt          DateTime?
   // Optional "send as" override — useful for shared aliases (Google Groups) like
   // mc.sales@mitssolution.com. Authentication still uses gmailAddress + smtpAppPassword,
   // but the From: header is set to this address. Workspace admin must enable
   // "Send mail as group address" for this to be accepted by Gmail.
-  sendAsAddress     String?
+  sendAsAddress             String?
   // Google SSO linkage — populated on first OAuth login
-  googleId             String?   @unique
-  avatarUrl            String?
+  googleId                  String?   @unique
+  avatarUrl                 String?
   // Google Calendar OAuth — populated when user grants calendar scope
-  googleRefreshToken   String?   // AES-256-GCM encrypted (same key as smtpAppPassword)
+  googleRefreshToken        String? // AES-256-GCM encrypted (same key as smtpAppPassword)
   googleCalendarConnectedAt DateTime?
 
-  reportsTo    User?     @relation("Reports", fields: [reportsToId], references: [id], onDelete: SetNull)
-  reports      User[]    @relation("Reports")
+  reportsTo User?  @relation("Reports", fields: [reportsToId], references: [id], onDelete: SetNull)
+  reports   User[] @relation("Reports")
 
-  createdClients     Client[]         @relation("LeadOwner")
-  intakeClients      Client[]         @relation("IntakeOwner")
-  salesClients       Client[]         @relation("SalesOwner")
-  hostClients        Client[]         @relation("HostOwner")
-  recruitedTrainers  Trainer[]        @relation("Recruiter")
-  trainerLeads       TrainerLead[]
-  sourcingSent       SourcingRequest[] @relation("SourcingSentBy")
-  sourcingTo         SourcingRequest[] @relation("SourcingSentTo")
-  proposalsBy        Proposal[]
-  tasks              Task[]
-  paymentsReceived   Payment[]
-  auditLog           AuditLog[]
-  dailyReports       DailyReport[]
-  comments           Comment[]
-  assignedAmClients  Client[]     @relation("AssignedAm")
-  handoverOwnedClients Client[]   @relation("HandoverOwner")
-  editRequests       EditRequest[]    @relation("EditRequestBy")
-  editReviewed       EditRequest[]    @relation("EditReviewedBy")
-  meetingLinks       MeetingLink[]    @relation("MeetingLinkOwner")
-  outboundMessages   OutboundMessage[]
-  demosConducted     Demo[]
+  createdClients         Client[]               @relation("LeadOwner")
+  intakeClients          Client[]               @relation("IntakeOwner")
+  salesClients           Client[]               @relation("SalesOwner")
+  hostClients            Client[]               @relation("HostOwner")
+  recruitedTrainers      Trainer[]              @relation("Recruiter")
+  trainerLeads           TrainerLead[]
+  sourcingSent           SourcingRequest[]      @relation("SourcingSentBy")
+  sourcingTo             SourcingRequest[]      @relation("SourcingSentTo")
+  proposalsBy            Proposal[]
+  tasks                  Task[]
+  paymentsReceived       Payment[]
+  auditLog               AuditLog[]
+  dailyReports           DailyReport[]
+  comments               Comment[]
+  assignedAmClients      Client[]               @relation("AssignedAm")
+  handoverOwnedClients   Client[]               @relation("HandoverOwner")
+  editRequests           EditRequest[]          @relation("EditRequestBy")
+  editReviewed           EditRequest[]          @relation("EditReviewedBy")
+  meetingLinks           MeetingLink[]          @relation("MeetingLinkOwner")
+  outboundMessages       OutboundMessage[]
+  demosConducted         Demo[]
   notifications          Notification[]
   callLogs               CallLog[]
   feedbackActivities     FeedbackActivity[]
   feedbackPunches        FeedbackPunch[]
-  hostedRegularTrainings RegularTraining[]  @relation("RegularTrainingHost")
-  tempHostedTrainings    RegularTraining[]  @relation("RegularTrainingTempHost")
-  hostedTrainingSessions TrainingSession[]  @relation("TrainingSessionHost")
-  closedIssues           IssueTracker[]     @relation("IssueClosedBy")
-  timesheetEntries       TimesheetEntry[]   @relation("TimesheetEntries")
-  timesheetApprovals     TimesheetEntry[]   @relation("TimesheetApprovals")
-  jobCodesCreated        JobCode[]          @relation("JobCodeCreator")
-  retrospectivesRemoved  Retrospective[]    @relation("RetrospectiveRemovedBy")
-  retrospectivesOwned    Retrospective[]    @relation("RetrospectiveOwner")
-  rolePermissionsUpdated RolePermission[] @relation("RolePermissionUpdatedBy")
+  hostedRegularTrainings RegularTraining[]      @relation("RegularTrainingHost")
+  tempHostedTrainings    RegularTraining[]      @relation("RegularTrainingTempHost")
+  hostedTrainingSessions TrainingSession[]      @relation("TrainingSessionHost")
+  closedIssues           IssueTracker[]         @relation("IssueClosedBy")
+  timesheetEntries       TimesheetEntry[]       @relation("TimesheetEntries")
+  timesheetApprovals     TimesheetEntry[]       @relation("TimesheetApprovals")
+  jobCodesCreated        JobCode[]              @relation("JobCodeCreator")
+  retrospectivesRemoved  Retrospective[]        @relation("RetrospectiveRemovedBy")
+  retrospectivesOwned    Retrospective[]        @relation("RetrospectiveOwner")
+  rolePermissionsUpdated RolePermission[]       @relation("RolePermissionUpdatedBy")
   freelanceFlagged       FreelanceRequirement[] @relation("FreelanceRequirementFlagged")
   freelanceUpdated       FreelanceRequirement[] @relation("FreelanceRequirementUpdated")
   bugReports             BugReport[]            @relation("BugReports")
@@ -209,15 +209,15 @@ model User {
 // by a different role/user (e.g. WithRecruiters → notify the routed recruiter).
 // User opens the bell icon, sees recent items, click marks as read.
 model Notification {
-  id         String    @id @default(cuid())
-  userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  kind       String    // 'StageChange' | 'ProposalReceived' | 'DemoScheduled' | …
-  title      String
-  body       String?
-  link       String?   // e.g. '/clients/<id>'
-  readAt     DateTime?
-  createdAt  DateTime  @default(now())
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String // 'StageChange' | 'ProposalReceived' | 'DemoScheduled' | …
+  title     String
+  body      String?
+  link      String? // e.g. '/clients/<id>'
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([userId, readAt])
   @@index([userId, createdAt])
@@ -225,304 +225,304 @@ model Notification {
 
 // -------- BANK ACCOUNTS --------
 model BankAccount {
-  id        String    @id
-  label     String
-  bank      String
-  last4     String
-  active    Boolean   @default(true)
-  clients   Client[]
-  payments  Payment[]
+  id       String    @id
+  label    String
+  bank     String
+  last4    String
+  active   Boolean   @default(true)
+  clients  Client[]
+  payments Payment[]
 }
 
 // -------- PARTNERS --------
 model Partner {
-  id            String   @id @default(cuid())
-  name          String
-  contact       String?
-  email         String?
-  phone         String?
-  billingCycle  String?
-  paymentTerms  String?
-  notes         String?
-  active        Boolean  @default(true)
-  clients       Client[]
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  name         String
+  contact      String?
+  email        String?
+  phone        String?
+  billingCycle String?
+  paymentTerms String?
+  notes        String?
+  active       Boolean  @default(true)
+  clients      Client[]
+  createdAt    DateTime @default(now())
 }
 
 // -------- TRAINERS --------
 model Trainer {
-  id                  String   @id @default(cuid())
-  seqId               Int?     @unique @default(autoincrement())
-  name                String
-  email               String?
-  phoneCode           String?
-  phoneDigits         String?
-  whatsappGroupName   String?
-  whatsappGroupLink   String?
-  rateModel           RateModel @default(hourly)
-  defaultRateInr      Int      @default(0)
-  paymentMethod       String?
-  upiId               String?
-  bankAccount         String?
+  id                   String    @id @default(cuid())
+  seqId                Int?      @unique @default(autoincrement())
+  name                 String
+  email                String?
+  phoneCode            String?
+  phoneDigits          String?
+  whatsappGroupName    String?
+  whatsappGroupLink    String?
+  rateModel            RateModel @default(hourly)
+  defaultRateInr       Int       @default(0)
+  paymentMethod        String?
+  upiId                String?
+  bankAccount          String?
   // Structured bank details (for payment processing)
-  bankHolderName      String?
-  bankName            String?
-  bankAccountNumber   String?
-  bankIfscCode        String?
-  bankBranchName      String?
-  bankAccountType     String?  // Savings | Current
-  bankChequeUrl       String?  // uploaded cancelled cheque / passbook URL
-  skills              String?
-  experienceYears     Int      @default(0)
+  bankHolderName       String?
+  bankName             String?
+  bankAccountNumber    String?
+  bankIfscCode         String?
+  bankBranchName       String?
+  bankAccountType      String? // Savings | Current
+  bankChequeUrl        String? // uploaded cancelled cheque / passbook URL
+  skills               String?
+  experienceYears      Int       @default(0)
   // Availability — recruiter captures when the trainer can take sessions (IST).
   // availabilitySlots is the canonical multi-slot store, e.g.
   //   [{ "window": "Morning", "fromIst": "07:00", "toIst": "10:00" },
   //    { "window": "Evening", "fromIst": "19:00", "toIst": "22:00" }]
   // The flat *Window / *FromIst / *ToIst fields are kept for legacy/data compat
   // but the UI now reads/writes via availabilitySlots.
-  availabilitySlots   Json?
-  availabilityWindow  String?
-  availableFromIst    String?  // "HH:MM" 24h
-  availableToIst      String?  // "HH:MM" 24h
-  active              Boolean  @default(true)
-  requiresVerification Boolean @default(false)
-  recruitedById       String?
-  recruitedBy         User?    @relation("Recruiter", fields: [recruitedById], references: [id], onDelete: SetNull)
-  createdAt           DateTime @default(now())
+  availabilitySlots    Json?
+  availabilityWindow   String?
+  availableFromIst     String? // "HH:MM" 24h
+  availableToIst       String? // "HH:MM" 24h
+  active               Boolean   @default(true)
+  requiresVerification Boolean   @default(false)
+  recruitedById        String?
+  recruitedBy          User?     @relation("Recruiter", fields: [recruitedById], references: [id], onDelete: SetNull)
+  createdAt            DateTime  @default(now())
 
-  clients        Client[]
-  comments       Comment[]
-  proposals      Proposal[]
-  sessionLogs    SessionLog[]
-  payments       Payment[]
-  tasks          Task[]
+  clients          Client[]
+  comments         Comment[]
+  proposals        Proposal[]
+  sessionLogs      SessionLog[]
+  payments         Payment[]
+  tasks            Task[]
   outboundMessages OutboundMessage[]
   regularTrainings RegularTraining[]
   demos            Demo[]
   issueTrackers    IssueTracker[]
   feedbacks        Feedback[]
 
-  @@index([phoneDigits])  // auto-add dedup lookup
-  @@index([name])         // search + dedup fallback
-  @@index([active])       // pool list filter
+  @@index([phoneDigits]) // auto-add dedup lookup
+  @@index([name]) // search + dedup fallback
+  @@index([active]) // pool list filter
 }
 
 // -------- TRAINER LEADS (recruiter pipeline) --------
 model TrainerLead {
-  id              String  @id @default(cuid())
+  id              String   @id @default(cuid())
   name            String
   skills          String?
   source          String?
-  expectedRateInr Int     @default(0)
-  stage           String  @default("New") // New, Contacted, Vetting, Approved, Rejected
+  expectedRateInr Int      @default(0)
+  stage           String   @default("New") // New, Contacted, Vetting, Approved, Rejected
   notes           String?
   recruiterId     String?
-  recruiter       User?   @relation(fields: [recruiterId], references: [id], onDelete: SetNull)
+  recruiter       User?    @relation(fields: [recruiterId], references: [id], onDelete: SetNull)
   createdAt       DateTime @default(now())
 }
 
 // -------- CLIENTS --------
 model Client {
-  id                       String         @id @default(cuid())
-  seqId                    Int?           @unique @default(autoincrement())
-  name                     String
-  email                    String?
-  phoneCode                String?
-  phoneDigits              String?
-  whatsappGroupName        String?
-  whatsappGroupLink        String?
-  country                  String?
-  engagementType           EngagementType @default(Support)
-  paymentModel             PaymentModel?
-  currency                 Currency       @default(USD)
-  cycleAmount              Int            @default(0)
-  lifecycle                Lifecycle      @default(Lead)
-  funderType               FunderType     @default(Self)
-  partnerId                String?
-  partner                  Partner?       @relation(fields: [partnerId], references: [id], onDelete: SetNull)
-  source                   String?
-  referredBy               String?  // who referred this lead: "Vaibhav"|"Samita"|"Mitali"|"Saikiran"|"Roshni"|"Direct"|"Others"
-  leadOwnerId              String?
-  leadOwner                User?          @relation("LeadOwner", fields: [leadOwnerId], references: [id], onDelete: SetNull)
-  intakeOwnerId            String?
-  intakeOwner              User?          @relation("IntakeOwner", fields: [intakeOwnerId], references: [id], onDelete: SetNull)
-  salesOwnerId             String?
-  salesOwner               User?          @relation("SalesOwner", fields: [salesOwnerId], references: [id], onDelete: SetNull)
-  hostOwnerId              String?
-  hostOwner                User?          @relation("HostOwner", fields: [hostOwnerId], references: [id], onDelete: SetNull)
-  primaryTrainerId         String?
-  primaryTrainer           Trainer?       @relation(fields: [primaryTrainerId], references: [id], onDelete: SetNull)
-  engagementTrainerRateInr Int            @default(0)
-  preferredTimeIst         String?
-  feedbackDay              String?
-  bankAccountId            String?
-  bankAccount              BankAccount?   @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
-  accountNameRaw           String?
-  freshPaymentReceived     Boolean        @default(false)
-  freshPaymentDate         String?
-  freshPaymentAmount       Int            @default(0)
-  cycleStart               String?
-  cycleEnd                 String?
-  nextRenewalDue           String?
-  sessionsPerCycle         Int            @default(0)
-  sessionsUsed             Int            @default(0)
-  churnRisk                String         @default("Green")
-  paymentPendingVaibhav    Boolean        @default(false)
-  pendingVaibhavSince      String?
-  requiresVerification     Boolean        @default(true)
-  intakeData               Json?
-  intakeSkillHint          String?
-  intakeReceivedAt         String?
+  id                          String         @id @default(cuid())
+  seqId                       Int?           @unique @default(autoincrement())
+  name                        String
+  email                       String?
+  phoneCode                   String?
+  phoneDigits                 String?
+  whatsappGroupName           String?
+  whatsappGroupLink           String?
+  country                     String?
+  engagementType              EngagementType @default(Support)
+  paymentModel                PaymentModel?
+  currency                    Currency       @default(USD)
+  cycleAmount                 Int            @default(0)
+  lifecycle                   Lifecycle      @default(Lead)
+  funderType                  FunderType     @default(Self)
+  partnerId                   String?
+  partner                     Partner?       @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  source                      String?
+  referredBy                  String? // who referred this lead: "Vaibhav"|"Samita"|"Mitali"|"Saikiran"|"Roshni"|"Direct"|"Others"
+  leadOwnerId                 String?
+  leadOwner                   User?          @relation("LeadOwner", fields: [leadOwnerId], references: [id], onDelete: SetNull)
+  intakeOwnerId               String?
+  intakeOwner                 User?          @relation("IntakeOwner", fields: [intakeOwnerId], references: [id], onDelete: SetNull)
+  salesOwnerId                String?
+  salesOwner                  User?          @relation("SalesOwner", fields: [salesOwnerId], references: [id], onDelete: SetNull)
+  hostOwnerId                 String?
+  hostOwner                   User?          @relation("HostOwner", fields: [hostOwnerId], references: [id], onDelete: SetNull)
+  primaryTrainerId            String?
+  primaryTrainer              Trainer?       @relation(fields: [primaryTrainerId], references: [id], onDelete: SetNull)
+  engagementTrainerRateInr    Int            @default(0)
+  preferredTimeIst            String?
+  feedbackDay                 String?
+  bankAccountId               String?
+  bankAccount                 BankAccount?   @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  accountNameRaw              String?
+  freshPaymentReceived        Boolean        @default(false)
+  freshPaymentDate            String?
+  freshPaymentAmount          Int            @default(0)
+  cycleStart                  String?
+  cycleEnd                    String?
+  nextRenewalDue              String?
+  sessionsPerCycle            Int            @default(0)
+  sessionsUsed                Int            @default(0)
+  churnRisk                   String         @default("Green")
+  paymentPendingVaibhav       Boolean        @default(false)
+  pendingVaibhavSince         String?
+  requiresVerification        Boolean        @default(true)
+  intakeData                  Json?
+  intakeSkillHint             String?
+  intakeReceivedAt            String?
   // When this client entered their current lifecycle stage. Bumped on every
   // /stage transition. Drives aging analysis in the demo-team report.
   // For old rows that pre-date this column, fall back to createdAt.
-  stageEnteredAt           String?
-  demoDate                 String?
-  demoTimeIst              String?
-  demoActualDate           String?
-  demoActualTimeIst        String?
-  demoOutcome              String?    // Positive | Neutral | Negative
-  demoFeedback             String?
-  demoNextSteps            String?
+  stageEnteredAt              String?
+  demoDate                    String?
+  demoTimeIst                 String?
+  demoActualDate              String?
+  demoActualTimeIst           String?
+  demoOutcome                 String? // Positive | Neutral | Negative
+  demoFeedback                String?
+  demoNextSteps               String?
   // Evidence file (audio recording / screenshot) attached to the last demo —
   // Anjali uploads when sharing with the recruiter (Aman/Kanchan) about why
   // a demo didn't go well.
-  demoEvidenceUrl          String?
-  demoEvidenceKind         String?    // 'Audio' | 'Screenshot' | 'Video'
+  demoEvidenceUrl             String?
+  demoEvidenceKind            String? // 'Audio' | 'Screenshot' | 'Video'
   // Dormant tracking — client went silent / stopped responding
-  dormantSince             String?
-  dormantReason            String?
-  dormantCheckBackOn       String?    // when to follow up
-  dormantResumeFromStage   String?    // stage they were at before going dormant
+  dormantSince                String?
+  dormantReason               String?
+  dormantCheckBackOn          String? // when to follow up
+  dormantResumeFromStage      String? // stage they were at before going dormant
   // Hold tracking — client said "need time to decide" post-demo. Roshni follows up after 3 days.
-  holdSince                String?
-  holdReason               String?
-  holdCheckBackOn          String?    // +3 days from holdSince by default
-  holdResumeFromStage      String?
+  holdSince                   String?
+  holdReason                  String?
+  holdCheckBackOn             String? // +3 days from holdSince by default
+  holdResumeFromStage         String?
   // Post-demo feedback — recorded by Samita after Anjali marks DemoDone
-  postDemoFeedbackBy       String?    // user id of person who recorded it (typically Samita)
-  postDemoFeedbackAt       String?    // ISO date when feedback was recorded
-  postDemoFeedbackNote     String?    // Samita's notes on the post-demo conversation
+  postDemoFeedbackBy          String? // user id of person who recorded it (typically Samita)
+  postDemoFeedbackAt          String? // ISO date when feedback was recorded
+  postDemoFeedbackNote        String? // Samita's notes on the post-demo conversation
   // Skill matrix gating — Anjali must send the skill matrix to client BEFORE scheduling demo
-  skillMatrixSentAt        String?    // ISO date when matrix was sent
-  skillMatrixSentById      String?    // user id of sender
+  skillMatrixSentAt           String? // ISO date when matrix was sent
+  skillMatrixSentById         String? // user id of sender
   // Roshni / sales-closer sub-status overlay on SaleClosing/SaleWon
   // Values: 'RP' (Ready for Payment), 'CP' (Closure Pending — no pickup), 'C' (Complete — client confirmed not starting)
-  saleClosingSubStatus       String?
-  saleClosingSubStatusAt     DateTime?
-  saleClosingSubStatusById   String?
+  saleClosingSubStatus        String?
+  saleClosingSubStatusAt      DateTime?
+  saleClosingSubStatusById    String?
   // Roshni follow-up tracking (mirrors the hold/dormant pattern)
-  roshniNextCallOn           String?   // ISO date — when to call back
-  roshniLastContactAt        String?   // ISO date — last touch
-  roshniLastContactOutcome   String?   // 'NoPickup' | 'Discussed' | 'PaymentPromised' | 'PaidScreenshotPending'
+  roshniNextCallOn            String? // ISO date — when to call back
+  roshniLastContactAt         String? // ISO date — last touch
+  roshniLastContactOutcome    String? // 'NoPickup' | 'Discussed' | 'PaymentPromised' | 'PaidScreenshotPending'
   // Payment confirmation tracking
-  paymentScreenshotUrl       String?
+  paymentScreenshotUrl        String?
   paymentScreenshotReceivedAt String?
-  paymentConfirmationPostedAt String?  // when Roshni posted in payment-confirmation group
+  paymentConfirmationPostedAt String? // when Roshni posted in payment-confirmation group
   // Group rename audit (handover to Mitali team)
-  whatsappGroupRenamedAt     String?   // ISO date
-  whatsappGroupRenamedBy     String?   // user id
+  whatsappGroupRenamedAt      String? // ISO date
+  whatsappGroupRenamedBy      String? // user id
   // Assigned account manager (Mitali picks post-handover — Bhavneet, Kashish, or Muskan)
-  assignedAmId               String?
-  assignedAm                 User?    @relation("AssignedAm", fields: [assignedAmId], references: [id], onDelete: SetNull)
+  assignedAmId                String?
+  assignedAm                  User?          @relation("AssignedAm", fields: [assignedAmId], references: [id], onDelete: SetNull)
   // Payment-terms checklist Roshni walks through on close call.
   // JSON array: [{ key, label, checked, note, checkedAt, checkedBy }]
-  paymentChecklist           Json?
+  paymentChecklist            Json?
   paymentChecklistCompletedAt String?
   // Wizard timestamps — each step in Roshni's close-out journey stamps one of
   // these on completion. Used to lock the next step until the previous is done.
-  engagementLetterSentAt     String?   // ISO date — stamped by POST /engagement-letter
-  engagementLetterFileB64    String?   // base64-encoded PDF uploaded by Roshni (stored in DB, not disk)
-  paymentWaSentAt            String?   // ISO date — manually marked by Roshni ("payment WA sent" button)
-  mitaliIntroSentAt          String?   // ISO date — stamped by POST /handover-to-mitali
+  engagementLetterSentAt      String? // ISO date — stamped by POST /engagement-letter
+  engagementLetterFileB64     String? // base64-encoded PDF uploaded by Roshni (stored in DB, not disk)
+  paymentWaSentAt             String? // ISO date — manually marked by Roshni ("payment WA sent" button)
+  mitaliIntroSentAt           String? // ISO date — stamped by POST /handover-to-mitali
   // For JBT-Employer / Training-Employer paths — captured when sub-status moves
   // to one of the *-EmployerLater outcomes so accounts can chase the invoice.
-  employerName               String?
-  employerCommitDate         String?
+  employerName                String?
+  employerCommitDate          String?
   // Mitali's payment follow-up workspace ("MITS Accounts" sheet).
   // - followupNote: free-form comment ("done", "cad", "1 hour daily", etc.)
   // - paymentPendingMitali: marks a payment as awaiting Mitali's collection (separate from Vaibhav's queue)
   // - lastFeedbackTakenAt / lastLeverageAskedAt: track the two recurring touchpoints she does each cycle
-  followupNote               String?
-  followupNoteAt             String?  // ISO date of last note update
-  lastFeedbackTakenAt        String?  // ISO date — Mitali bumps this when feedback is logged
-  lastLeverageAskedAt        String?  // ISO date — when she asked for testimonial/referral
+  followupNote                String?
+  followupNoteAt              String? // ISO date of last note update
+  lastFeedbackTakenAt         String? // ISO date — Mitali bumps this when feedback is logged
+  lastLeverageAskedAt         String? // ISO date — when she asked for testimonial/referral
   // Payment date tracking for Mitali's follow-up sheet.
   // payDate1 = last paid date, payDate2 = next due date.
   // When a payment comes in: payDate1 ← payDate2, payDate2 ← new due date.
-  isEmployerCall             Boolean  @default(false)  // bulk-invoice employer call (pink highlight)
-  payDate1                   String?  // ISO date — last payment date (= most recent collected)
-  payDate2                   String?  // ISO date — next due date (the date Mitali is chasing)
-  paymentFrequency           String   @default("biweekly")  // "biweekly" | "monthly" | "na"
+  isEmployerCall              Boolean        @default(false) // bulk-invoice employer call (pink highlight)
+  payDate1                    String? // ISO date — last payment date (= most recent collected)
+  payDate2                    String? // ISO date — next due date (the date Mitali is chasing)
+  paymentFrequency            String         @default("biweekly") // "biweekly" | "monthly" | "na"
   // When a client can't pay, Mitali grants leverage — extends payDate2 by max 3 days.
-  leverageUntil              String?  // ISO date — latest date leverage was extended to
-  leverageNote               String?  // why leverage was granted
+  leverageUntil               String? // ISO date — latest date leverage was extended to
+  leverageNote                String? // why leverage was granted
   // Session & meeting details (filled at handover)
-  sessionTimings             String?  // e.g. "Mon/Wed/Fri 9:00 AM IST"
-  meetingPlatform            String?  // Zoom | Teams | Webex | GoogleMeet | Other
-  clientSkillSet             String?  // skills/topics the client is learning
-  clientTimezone             String?  // e.g. "Asia/Kolkata", "America/New_York"
+  sessionTimings              String? // e.g. "Mon/Wed/Fri 9:00 AM IST"
+  meetingPlatform             String? // Zoom | Teams | Webex | GoogleMeet | Other
+  clientSkillSet              String? // skills/topics the client is learning
+  clientTimezone              String? // e.g. "Asia/Kolkata", "America/New_York"
   // Structured handover workflow
-  handoverStatus             String?  // Pending | Done
-  handoverDate               String?  // ISO date of handover call
-  handoverOwnerId            String?
-  handoverOwner              User?    @relation("HandoverOwner", fields: [handoverOwnerId], references: [id], onDelete: SetNull)
-  handoverNotes              String?
+  handoverStatus              String? // Pending | Done
+  handoverDate                String? // ISO date of handover call
+  handoverOwnerId             String?
+  handoverOwner               User?          @relation("HandoverOwner", fields: [handoverOwnerId], references: [id], onDelete: SetNull)
+  handoverNotes               String?
   // Welcome email tracking
-  welcomeEmailSentAt         String?  // ISO date — stamped when welcome email sent
-  welcomeEmailSentById       String?  // who sent it
+  welcomeEmailSentAt          String? // ISO date — stamped when welcome email sent
+  welcomeEmailSentById        String? // who sent it
   // Certificate of completion
-  certificateUrl             String?  // uploaded file URL / base64
-  certificateUploadedAt      String?
-  certificateUploadedById    String?
-  certificateEmailSentAt     String?  // ISO date — stamped when cert email sent
-  feedbackEmailSentAt        String?  // ISO date — last feedback survey email sent (reset each cycle)
-  notes                    String?
-  createdAt                DateTime       @default(now())
+  certificateUrl              String? // uploaded file URL / base64
+  certificateUploadedAt       String?
+  certificateUploadedById     String?
+  certificateEmailSentAt      String? // ISO date — stamped when cert email sent
+  feedbackEmailSentAt         String? // ISO date — last feedback survey email sent (reset each cycle)
+  notes                       String?
+  createdAt                   DateTime       @default(now())
 
-  comments         Comment[]
-  sourcingRequests SourcingRequest[]
-  payments         Payment[]
-  tasks            Task[]
-  sessionLogs      SessionLog[]
-  leverageRequests LeverageRequest[]
-  accountsQueue    AccountsQueueItem[]
-  feedback            Feedback[]
-  feedbackActivities  FeedbackActivity[]
-  outboundMessages    OutboundMessage[]
-  demos               Demo[]
-  callLogs            CallLog[]
-  regularTrainings    RegularTraining[] @relation("RegularTrainingClient")
-  issueTrackers    IssueTracker[]
+  comments              Comment[]
+  sourcingRequests      SourcingRequest[]
+  payments              Payment[]
+  tasks                 Task[]
+  sessionLogs           SessionLog[]
+  leverageRequests      LeverageRequest[]
+  accountsQueue         AccountsQueueItem[]
+  feedback              Feedback[]
+  feedbackActivities    FeedbackActivity[]
+  outboundMessages      OutboundMessage[]
+  demos                 Demo[]
+  callLogs              CallLog[]
+  regularTrainings      RegularTraining[]      @relation("RegularTrainingClient")
+  issueTrackers         IssueTracker[]
   freelanceRequirements FreelanceRequirement[]
-  dateChangeRequests   DateChangeRequest[]
-  feedbackPunches        FeedbackPunch[]
+  dateChangeRequests    DateChangeRequest[]
+  feedbackPunches       FeedbackPunch[]
 
-  @@index([lifecycle])                                    // every kanban/queue filters by stage
-  @@index([nextRenewalDue])                               // RenewalsPage + Roshni queue
-  @@index([saleClosingSubStatus, roshniNextCallOn])       // Roshni follow-ups bucketing
-  @@index([salesOwnerId])                                 // owner-scoped queries
+  @@index([lifecycle]) // every kanban/queue filters by stage
+  @@index([nextRenewalDue]) // RenewalsPage + Roshni queue
+  @@index([saleClosingSubStatus, roshniNextCallOn]) // Roshni follow-ups bucketing
+  @@index([salesOwnerId]) // owner-scoped queries
   @@index([intakeOwnerId])
-  @@index([hostOwnerId])                                  // coordinator dashboard + team-scoped client lists
-  @@index([hostOwnerId, lifecycle])                       // combined filter: coordinator's active clients
+  @@index([hostOwnerId]) // coordinator dashboard + team-scoped client lists
+  @@index([hostOwnerId, lifecycle]) // combined filter: coordinator's active clients
 }
 
 // -------- SOURCING REQUESTS --------
 model SourcingRequest {
-  id        String          @id @default(cuid())
+  id        String         @id @default(cuid())
   clientId  String
-  client    Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  status    SourcingStatus  @default(Open)
+  client    Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status    SourcingStatus @default(Open)
   sentById  String?
-  sentBy    User?           @relation("SourcingSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  sentBy    User?          @relation("SourcingSentBy", fields: [sentById], references: [id], onDelete: SetNull)
   sentToId  String?
-  sentTo    User?           @relation("SourcingSentTo", fields: [sentToId], references: [id], onDelete: SetNull)
+  sentTo    User?          @relation("SourcingSentTo", fields: [sentToId], references: [id], onDelete: SetNull)
   sentAt    String?
   proposals Proposal[]
-  createdAt DateTime        @default(now())
+  createdAt DateTime       @default(now())
 
-  @@index([sentToId, status])    // recruiter queue
-  @@index([clientId, status])    // matrix + auto-close queries
+  @@index([sentToId, status]) // recruiter queue
+  @@index([clientId, status]) // matrix + auto-close queries
 }
 
 enum ConfirmationKind {
@@ -531,132 +531,132 @@ enum ConfirmationKind {
 }
 
 model Proposal {
-  id                String             @id @default(cuid())
-  requestId         String
-  request           SourcingRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  trainerId         String?
-  trainer           Trainer?           @relation(fields: [trainerId], references: [id], onDelete: SetNull)
-  trainerName       String?
-  trainerSkills     String?
-  trainerPhone      String?
-  trainerEmail      String?
-  rateInr           Int                @default(0)
-  experienceYears   Int                @default(0)
+  id                   String             @id @default(cuid())
+  requestId            String
+  request              SourcingRequest    @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  trainerId            String?
+  trainer              Trainer?           @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  trainerName          String?
+  trainerSkills        String?
+  trainerPhone         String?
+  trainerEmail         String?
+  rateInr              Int                @default(0)
+  experienceYears      Int                @default(0)
   // Availability proposed for THIS trainer on THIS request (captured by recruiter,
   // visible to demo intake). Same shape as Trainer.availabilitySlots.
   // [{ "window": "Morning"|"Evening"|…, "fromIst": "07:00", "toIst": "10:00" }]
-  availabilitySlots Json?
+  availabilitySlots    Json?
   // Post-demo per-trainer feedback (captured by Anjali when she moves a client
   // back to recruiters). Each Pass'd trainer gets their own note + optional
   // evidence file so Aman/Kanchan know specifically what went wrong with each.
-  postDemoStatus        String?  // Selected | Shortlisted | Rejected | NotSuitable | NeedAnotherDemo | PendingClientFeedback
-  postDemoNote          String?
-  postDemoEvidenceUrl   String?
-  postDemoEvidenceKind  String?  // 'Audio' | 'Screenshot' | 'Video'
-  notes             String?
-  proposedById      String?
-  proposedBy        User?              @relation(fields: [proposedById], references: [id], onDelete: SetNull)
-  proposedAt        String?
-  verification      VerificationStatus @default(Pending)
-  verificationNotes String?
+  postDemoStatus       String? // Selected | Shortlisted | Rejected | NotSuitable | NeedAnotherDemo | PendingClientFeedback
+  postDemoNote         String?
+  postDemoEvidenceUrl  String?
+  postDemoEvidenceKind String? // 'Audio' | 'Screenshot' | 'Video'
+  notes                String?
+  proposedById         String?
+  proposedBy           User?              @relation(fields: [proposedById], references: [id], onDelete: SetNull)
+  proposedAt           String?
+  verification         VerificationStatus @default(Pending)
+  verificationNotes    String?
   // Compulsory proof of trainer confirmation: audio recording of call OR WhatsApp screenshot.
-  confirmationKind  ConfirmationKind?
-  confirmationUrl   String?
+  confirmationKind     ConfirmationKind?
+  confirmationUrl      String?
   // Optional skill matrix file (legacy — PDF / image / spreadsheet upload, kept for backward compat)
-  skillMatrixUrl    String?
+  skillMatrixUrl       String?
   // Structured skill matrix per the MITS template (rendered into the side-by-side matrix).
   // mustHaveSkills: [{ skill: string, proficiency: number /* 0-5 */ }]
   // softSkills:     [{ item: string, value: string /* "Yes" | "No" | "Installed" | "Active" | … */ }]
-  mustHaveSkills    Json?
-  softSkills        Json?
+  mustHaveSkills       Json?
+  softSkills           Json?
   // Compulsory recruiter notification — the proposal cannot Pass verification until this is set.
   // Stamped automatically by the trainer-outreach email or WhatsApp endpoint.
-  trainerNotifiedAt   String?   // ISO date when Aman/Kanchan notified the trainer
-  trainerNotifiedById String?   // user id who triggered the notification
+  trainerNotifiedAt    String? // ISO date when Aman/Kanchan notified the trainer
+  trainerNotifiedById  String? // user id who triggered the notification
   // Last notify vars — stored on every send so "Already notified" flow can show previous details.
   // Shape: { rateInr, hoursPerSession, paymentClearanceDay, pricingMode, demoCallTime? }
-  lastNotifyVars      Json?
+  lastNotifyVars       Json?
 
   @@index([requestId, verification]) // pass/fail filter per request
-  @@index([trainerId])               // sourcing.ts pass auto-create lookup
+  @@index([trainerId]) // sourcing.ts pass auto-create lookup
 }
 
 // -------- PAYMENTS --------
 model Payment {
-  id              String      @id @default(cuid())
-  clientId        String
-  client          Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  trainerId       String?
-  trainer         Trainer?    @relation(fields: [trainerId], references: [id], onDelete: SetNull)
-  kind            String      // Fresh | Renewal | Other
-  amount          Int
-  currency        Currency
-  paymentDate     String
-  bankAccountId   String?
-  bankAccount     BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
-  paymentMode     String?
-  receivedById    String?
-  receivedBy      User?       @relation(fields: [receivedById], references: [id], onDelete: SetNull)
-  createdAt       DateTime    @default(now())
+  id            String       @id @default(cuid())
+  clientId      String
+  client        Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  trainerId     String?
+  trainer       Trainer?     @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  kind          String // Fresh | Renewal | Other
+  amount        Int
+  currency      Currency
+  paymentDate   String
+  bankAccountId String?
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  paymentMode   String?
+  receivedById  String?
+  receivedBy    User?        @relation(fields: [receivedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
 
-  accountsQueue   AccountsQueueItem[]
+  accountsQueue AccountsQueueItem[]
 
-  @@index([clientId, paymentDate])  // per-client payment history
-  @@index([paymentDate])            // MoneyFlow / metrics aggregation
-  @@index([kind])                   // Fresh vs Renewal filters
+  @@index([clientId, paymentDate]) // per-client payment history
+  @@index([paymentDate]) // MoneyFlow / metrics aggregation
+  @@index([kind]) // Fresh vs Renewal filters
 }
 
 // -------- TASKS --------
 model Task {
-  id              String      @id @default(cuid())
-  clientId        String?
-  client          Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  ownerId         String?
-  owner           User?       @relation(fields: [ownerId], references: [id], onDelete: SetNull)
-  trainerId       String?
-  trainer         Trainer?    @relation(fields: [trainerId], references: [id], onDelete: SetNull)
-  title           String
-  dueDate         String?
-  status          TaskStatus  @default(Pending)
-  priority        String      @default("Normal")
-  estimatedHours  Float       @default(1)
-  type            String      @default("SESSION")
-  engagementRateInr Int       @default(0)
-  completedAt     String?
-  createdAt       DateTime    @default(now())
+  id                String     @id @default(cuid())
+  clientId          String?
+  client            Client?    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  ownerId           String?
+  owner             User?      @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  trainerId         String?
+  trainer           Trainer?   @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  title             String
+  dueDate           String?
+  status            TaskStatus @default(Pending)
+  priority          String     @default("Normal")
+  estimatedHours    Float      @default(1)
+  type              String     @default("SESSION")
+  engagementRateInr Int        @default(0)
+  completedAt       String?
+  createdAt         DateTime   @default(now())
 
-  sessionLogs     SessionLog[]
+  sessionLogs SessionLog[]
 
-  @@index([ownerId, status])    // TasksPage per-owner filter
-  @@index([ownerId, dueDate])   // overdue badge query
+  @@index([ownerId, status]) // TasksPage per-owner filter
+  @@index([ownerId, dueDate]) // overdue badge query
   @@index([clientId])
 }
 
 // -------- SESSION LOGS --------
 model SessionLog {
-  id                  String           @id @default(cuid())
-  trainerId           String
-  trainer             Trainer          @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  clientId            String?
-  client              Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  regularTrainingId   String?
-  regularTraining     RegularTraining? @relation(fields: [regularTrainingId], references: [id], onDelete: SetNull)
-  date                String
-  hours         Float
-  rateSnapshot  Int
-  rateModel     RateModel
-  amountInr     Int
-  status        SessionStatus @default(Logged)
-  taskId        String?
-  task          Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  notes            String?
-  feedback         String?       // positive | neutral | negative
-  proceed          String?       // Yes | No | Hold — payment proceed flag
-  comments         String?       // remarks/issues for payment processing
-  loggedById       String?       // who logged this session
-  sessionHappened  Boolean       @default(true)  // false = client no-show
-  cancelledBy      String?       // 'trainer' | 'client' — only set when sessionHappened=false
-  createdAt        DateTime      @default(now())
+  id                String           @id @default(cuid())
+  trainerId         String
+  trainer           Trainer          @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  clientId          String?
+  client            Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  regularTrainingId String?
+  regularTraining   RegularTraining? @relation(fields: [regularTrainingId], references: [id], onDelete: SetNull)
+  date              String
+  hours             Float
+  rateSnapshot      Int
+  rateModel         RateModel
+  amountInr         Int
+  status            SessionStatus    @default(Logged)
+  taskId            String?
+  task              Task?            @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  notes             String?
+  feedback          String? // positive | neutral | negative
+  proceed           String? // Yes | No | Hold — payment proceed flag
+  comments          String? // remarks/issues for payment processing
+  loggedById        String? // who logged this session
+  sessionHappened   Boolean          @default(true) // false = client no-show
+  cancelledBy       String? // 'trainer' | 'client' — only set when sessionHappened=false
+  createdAt         DateTime         @default(now())
 
   @@index([trainerId, date])
 }
@@ -664,9 +664,9 @@ model SessionLog {
 model TrainerPayWeek {
   id                   String    @id @default(cuid())
   trainerId            String
-  weekStart            String    // YYYY-MM-DD Monday
+  weekStart            String // YYYY-MM-DD Monday
   mitaliAckAt          DateTime?
-  bhavneetVerification String?   // 'Correct' | 'Incorrect' | 'Hold' | 'Issue'
+  bhavneetVerification String? // 'Correct' | 'Incorrect' | 'Hold' | 'Issue'
   // Manual "Days" override for this trainer+week on the Payment Sheet.
   // NULL = use the value derived from the session logs. Set = the sheet shows
   // this many days and bills daysOverride × rate. Never mutates SessionLog.hours.
@@ -680,26 +680,26 @@ model TrainerPayWeek {
 
 // -------- LEVERAGE --------
 model LeverageRequest {
-  id                String         @id @default(cuid())
-  clientId          String
-  client            Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  daysRequested     Int
-  reasonStated      String
-  newCommittedDate  String
-  status            LeverageStatus @default(PendingVaibhav)
-  isAutoApproved    Boolean        @default(false)
-  createdAt         DateTime       @default(now())
+  id               String         @id @default(cuid())
+  clientId         String
+  client           Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  daysRequested    Int
+  reasonStated     String
+  newCommittedDate String
+  status           LeverageStatus @default(PendingVaibhav)
+  isAutoApproved   Boolean        @default(false)
+  createdAt        DateTime       @default(now())
 }
 
 // -------- ACCOUNTS QUEUE --------
 model AccountsQueueItem {
-  id         String         @id @default(cuid())
-  clientId   String
-  client     Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  paymentId  String?
-  payment    Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
-  status     AccountsStatus @default(Pending)
-  createdAt  DateTime       @default(now())
+  id        String         @id @default(cuid())
+  clientId  String
+  client    Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  paymentId String?
+  payment   Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  status    AccountsStatus @default(Pending)
+  createdAt DateTime       @default(now())
 }
 
 // -------- REGULAR TRAININGS (Mitali team's recurring sessions) --------
@@ -713,53 +713,53 @@ model AccountsQueueItem {
 // GATED behind FEATURES_REGULAR_CALLS=true env flag. All routes return 404
 // when the flag is off. No existing tables touched.
 model RegularTraining {
-  id                       String   @id @default(cuid())
-  name                     String                          // "Anita Training", "Okta Training"
+  id                       String    @id @default(cuid())
+  name                     String // "Anita Training", "Okta Training"
   // Optional links into other systems
   clientId                 String?
-  client                   Client?  @relation("RegularTrainingClient", fields: [clientId], references: [id], onDelete: SetNull)
+  client                   Client?   @relation("RegularTrainingClient", fields: [clientId], references: [id], onDelete: SetNull)
   trainerId                String?
-  trainer                  Trainer? @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  trainer                  Trainer?  @relation(fields: [trainerId], references: [id], onDelete: SetNull)
   // Permanent host — the fixed AM who owns this training long-term (Kashish/Muskan)
   hostedByDefaultId        String?
-  hostedByDefault          User?    @relation("RegularTrainingHost", fields: [hostedByDefaultId], references: [id], onDelete: SetNull)
+  hostedByDefault          User?     @relation("RegularTrainingHost", fields: [hostedByDefaultId], references: [id], onDelete: SetNull)
   // Temporary host — who is covering this training this week (defaults to hostedByDefaultId)
   temporaryHostId          String?
-  temporaryHost            User?    @relation("RegularTrainingTempHost", fields: [temporaryHostId], references: [id], onDelete: SetNull)
+  temporaryHost            User?     @relation("RegularTrainingTempHost", fields: [temporaryHostId], references: [id], onDelete: SetNull)
   // Recording metadata — no password ever, just email + folder URL.
-  recordingAccountEmail    String?                         // "jobstraining44@gmail.com"
-  recordingAccountLabel    String?                         // "Account 1", "Trainer recording"
-  recordingFolderUrl       String?                         // Google Drive shareable folder URL
+  recordingAccountEmail    String? // "jobstraining44@gmail.com"
+  recordingAccountLabel    String? // "Account 1", "Trainer recording"
+  recordingFolderUrl       String? // Google Drive shareable folder URL
   // Schedule (freeform — "Mon/Wed/Fri 7-8 PM IST" works fine, no need to model RRule)
   scheduleNotes            String?
-  defaultTimeIst           String?                         // fixed daily call time e.g. "08:00", "21:30"
-  meetingMode              String?                         // Zoom | GoToMeeting | Teams | Google Meet | Phone | Other
-  lastSessionStatus        String?                         // Yes-Proper session | No | Partial — updated inline by AM
-  lastSessionComment       String?                         // comments like "@Kashish:- will connect at 09:00 pm ist"
-  lastClientFeedback       String?                         // feedback from client after session
-  lastTrainerFeedback      String?                         // feedback from trainer after session
-  lastSessionDate          String?                         // ISO date of last session e.g. "2026-06-11"
-  weeklySessionCount       Int?                            // auto-calculated sessions this week, AM can override
-  completedSessionCount    Int      @default(0)            // total completed sessions — auto-incremented on session end
-  ownerTeam                String   @default("demo_team")  // demo_team | coordinator_team — auto-switches at 4 completed sessions
-  demoEscalationRequested  Boolean  @default(false)        // coordinator flagged a trainer issue needing Demo Team intervention
-  coordinatorFlagged       Boolean  @default(false)        // regular team flagged an issue for Bhavneet/Mitali
-  escalationStatus         String?                         // "Work in Progress" | "Not Resolved" | "Resolved"
-  escalationActionsTaken   String?                         // notes logged by demo team on actions taken
-  escalationFlaggedAt      String?                         // ISO date when escalation was first flagged
-  escalationDemoAck        String?                         // acknowledgment/response from demo team
-  escalationDemoAckAt      DateTime?                       // when Samita acknowledged this escalation
-  trainerReplacementReason String?                         // reason recorded when trainer is changed
-  clientMood               String?                         // "happy" | "neutral" | "at_risk"
-  trainerAttendance        String?                         // "present" | "late" | "no_show"
-  dailyNotes               String?                         // what happened today, blockers, next action
-  status                   String   @default("active")     // active | paused | archived
+  defaultTimeIst           String? // fixed daily call time e.g. "08:00", "21:30"
+  meetingMode              String? // Zoom | GoToMeeting | Teams | Google Meet | Phone | Other
+  lastSessionStatus        String? // Yes-Proper session | No | Partial — updated inline by AM
+  lastSessionComment       String? // comments like "@Kashish:- will connect at 09:00 pm ist"
+  lastClientFeedback       String? // feedback from client after session
+  lastTrainerFeedback      String? // feedback from trainer after session
+  lastSessionDate          String? // ISO date of last session e.g. "2026-06-11"
+  weeklySessionCount       Int? // auto-calculated sessions this week, AM can override
+  completedSessionCount    Int       @default(0) // total completed sessions — auto-incremented on session end
+  ownerTeam                String    @default("demo_team") // demo_team | coordinator_team — auto-switches at 4 completed sessions
+  demoEscalationRequested  Boolean   @default(false) // coordinator flagged a trainer issue needing Demo Team intervention
+  coordinatorFlagged       Boolean   @default(false) // regular team flagged an issue for Bhavneet/Mitali
+  escalationStatus         String? // "Work in Progress" | "Not Resolved" | "Resolved"
+  escalationActionsTaken   String? // notes logged by demo team on actions taken
+  escalationFlaggedAt      String? // ISO date when escalation was first flagged
+  escalationDemoAck        String? // acknowledgment/response from demo team
+  escalationDemoAckAt      DateTime? // when Samita acknowledged this escalation
+  trainerReplacementReason String? // reason recorded when trainer is changed
+  clientMood               String? // "happy" | "neutral" | "at_risk"
+  trainerAttendance        String? // "present" | "late" | "no_show"
+  dailyNotes               String? // what happened today, blockers, next action
+  status                   String    @default("active") // active | paused | archived
   notes                    String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
-  sessions                 TrainingSession[]
-  sessionLogs              SessionLog[]
+  sessions    TrainingSession[]
+  sessionLogs SessionLog[]
 
   @@index([status])
   @@index([hostedByDefaultId])
@@ -768,25 +768,25 @@ model RegularTraining {
 
 // Retrospective: record of removed trainings / cancelled calls — never deleted, always traceable.
 model Retrospective {
-  id              String   @id @default(cuid())
+  id          String   @id @default(cuid())
   // What was removed
-  sourceType      String                          // "training" | "call"
-  sourceId        String?                         // original RegularTraining.id or CallLog.id (kept even if source deleted)
-  clientName      String
-  trainerName     String?
+  sourceType  String // "training" | "call"
+  sourceId    String? // original RegularTraining.id or CallLog.id (kept even if source deleted)
+  clientName  String
+  trainerName String?
   // When + by whom
-  removedAt       DateTime @default(now())
-  removedById     String?
-  removedBy       User?    @relation("RetrospectiveRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
+  removedAt   DateTime @default(now())
+  removedById String?
+  removedBy   User?    @relation("RetrospectiveRemovedBy", fields: [removedById], references: [id], onDelete: SetNull)
   // Why
-  reason          String?
+  reason      String?
   // Ownership assignment post-removal
-  ownerId         String?
-  owner           User?    @relation("RetrospectiveOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId     String?
+  owner       User?    @relation("RetrospectiveOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   // Free-form notes
-  comments        String?
+  comments    String?
   // Date of the original training/call
-  sessionDate     String?
+  sessionDate String?
 
   @@index([removedAt])
   @@index([sourceType])
@@ -795,27 +795,27 @@ model Retrospective {
 // One row per occurrence of a regular training — same punch-in/out + feedback
 // flow as CallLog, scoped to a recurring training.
 model TrainingSession {
-  id                       String          @id @default(cuid())
-  regularTrainingId        String
-  regularTraining          RegularTraining @relation(fields: [regularTrainingId], references: [id], onDelete: Cascade)
-  scheduledFor             DateTime
-  hostedById               String?
-  hostedBy                 User?           @relation("TrainingSessionHost", fields: [hostedById], references: [id], onDelete: SetNull)
-  status                   String          @default("scheduled") // scheduled | in_progress | completed | missed | cancelled
-  actualStartAt            DateTime?
-  actualEndAt              DateTime?
-  durationMinutes          Int?
-  meetingLink              String?                         // Zoom/GTM/Teams link for this specific session
-  recordingUrl             String?                         // session-specific recording (if separate from folder)
-  feedback                 String?
-  notes                    String?
-  delayReason              String?
-  timezone                 String?
-  sessionType              String?
-  checklist                Json?
-  trainerFeedbackJson      Json?
-  clientFeedbackJson       Json?
-  createdAt                DateTime        @default(now())
+  id                  String          @id @default(cuid())
+  regularTrainingId   String
+  regularTraining     RegularTraining @relation(fields: [regularTrainingId], references: [id], onDelete: Cascade)
+  scheduledFor        DateTime
+  hostedById          String?
+  hostedBy            User?           @relation("TrainingSessionHost", fields: [hostedById], references: [id], onDelete: SetNull)
+  status              String          @default("scheduled") // scheduled | in_progress | completed | missed | cancelled
+  actualStartAt       DateTime?
+  actualEndAt         DateTime?
+  durationMinutes     Int?
+  meetingLink         String? // Zoom/GTM/Teams link for this specific session
+  recordingUrl        String? // session-specific recording (if separate from folder)
+  feedback            String?
+  notes               String?
+  delayReason         String?
+  timezone            String?
+  sessionType         String?
+  checklist           Json?
+  trainerFeedbackJson Json?
+  clientFeedbackJson  Json?
+  createdAt           DateTime        @default(now())
 
   @@index([regularTrainingId, scheduledFor])
   @@index([hostedById, status, scheduledFor])
@@ -823,31 +823,31 @@ model TrainingSession {
 
 // -------- ISSUE TRACKER --------
 model IssueTracker {
-  id               String    @id @default(cuid())
-  date             String
-  coordinatorId    String?
-  coordinatorName  String?
-  raisedById       String?
-  raisedByName     String?
-  clientId         String?
-  client           Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  trainerId        String?
-  trainer          Trainer?  @relation(fields: [trainerId], references: [id], onDelete: SetNull)
-  title            String
-  description      String?
-  status           String    @default("Open")
-  resolutionNotes  String?
-  closedById       String?
-  closedBy         User?     @relation("IssueClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
-  closedAt         DateTime?
+  id                     String    @id @default(cuid())
+  date                   String
+  coordinatorId          String?
+  coordinatorName        String?
+  raisedById             String?
+  raisedByName           String?
+  clientId               String?
+  client                 Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  trainerId              String?
+  trainer                Trainer?  @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  title                  String
+  description            String?
+  status                 String    @default("Open")
+  resolutionNotes        String?
+  closedById             String?
+  closedBy               User?     @relation("IssueClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closedAt               DateTime?
   // Escalation matrix: Bhavneet (L1) → Mitali (L2) → Vaibhav (L3)
-  escalationLevel  Int       @default(0)  // 0=unescalated, 1=Bhavneet, 2=Mitali, 3=Vaibhav
-  escalatedAt      DateTime?             // when last escalation happened
-  escalationLog    String?               // JSON array of {level, at, reason}
-  acknowledgedByMitaliAt  DateTime?     // Mitali acks operational issues
-  acknowledgedBySamitaAt  DateTime?     // Samita acks demo escalations
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  escalationLevel        Int       @default(0) // 0=unescalated, 1=Bhavneet, 2=Mitali, 3=Vaibhav
+  escalatedAt            DateTime? // when last escalation happened
+  escalationLog          String? // JSON array of {level, at, reason}
+  acknowledgedByMitaliAt DateTime? // Mitali acks operational issues
+  acknowledgedBySamitaAt DateTime? // Samita acks demo escalations
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   @@index([status])
   @@index([coordinatorId])
@@ -860,64 +860,64 @@ model IssueTracker {
 // They host sessions AND make check-in calls to clients. Each call is a row
 // here so we can show "last contact" + count of touchpoints per client.
 model CallLog {
-  id          String   @id @default(cuid())
-  clientId    String
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  byId        String
-  by          User     @relation(fields: [byId], references: [id], onDelete: Cascade)
-  kind        String   @default("checkin")  // checkin | feedback | leverage | escalation
-  activityType        String?   // training | session
-  outcome     String?  // answered | no_pickup | rescheduled | completed | escalated
-  sessionTookPlace    Boolean?  // did the session/training happen on scheduled date?
-  cancellationReason  String?   // mandatory when sessionTookPlace = false
-  durationMinutes Int? // computed from start/end if both set, or set manually
-  notes       String?
+  id                 String   @id @default(cuid())
+  clientId           String
+  client             Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  byId               String
+  by                 User     @relation(fields: [byId], references: [id], onDelete: Cascade)
+  kind               String   @default("checkin") // checkin | feedback | leverage | escalation
+  activityType       String? // training | session
+  outcome            String? // answered | no_pickup | rescheduled | completed | escalated
+  sessionTookPlace   Boolean? // did the session/training happen on scheduled date?
+  cancellationReason String? // mandatory when sessionTookPlace = false
+  durationMinutes    Int? // computed from start/end if both set, or set manually
+  notes              String?
 
   // ── Scheduled + punch-in workflow (Mitali/Bhavneet/AM) ───────────────────
   // status   : scheduled (planned) → in_progress (start clicked) → completed (end clicked) → missed
   // scheduledFor: when the call is/was planned for (date+time IST tz-naïve)
   // actualStartAt / actualEndAt: stamped by punch-in/out buttons
   // feedback: free-form notes the rep captures at end-of-call
-  status        String    @default("completed")  // scheduled | in_progress | completed | missed
+  status        String    @default("completed") // scheduled | in_progress | completed | missed
   scheduledFor  DateTime?
   actualStartAt DateTime?
   actualEndAt   DateTime?
   feedback      String?
 
-  calledAt    DateTime @default(now())  // back-compat — also acts as fallback for "when"
-  createdAt   DateTime @default(now())
+  calledAt  DateTime @default(now()) // back-compat — also acts as fallback for "when"
+  createdAt DateTime @default(now())
 
-  @@index([clientId, calledAt])  // per-client call history (most recent first)
-  @@index([byId, calledAt])      // per-user call log feed
-  @@index([byId, status, scheduledFor])  // "my scheduled calls today" query
+  @@index([clientId, calledAt]) // per-client call history (most recent first)
+  @@index([byId, calledAt]) // per-user call log feed
+  @@index([byId, status, scheduledFor]) // "my scheduled calls today" query
 }
 
 // -------- FEEDBACK --------
 model Feedback {
-  id                  String   @id @default(cuid())
+  id                  String             @id @default(cuid())
   clientId            String
-  client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client              Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
   weekStart           String
   rating              Int
   notes               String?
-  communicationStatus String?  // CallReceived | CallNotReceived | MessageSent
+  communicationStatus String? // CallReceived | CallNotReceived | MessageSent
   trainerId           String?
-  trainer             Trainer? @relation(fields: [trainerId], references: [id], onDelete: SetNull)
-  createdAt           DateTime @default(now())
+  trainer             Trainer?           @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  createdAt           DateTime           @default(now())
   activities          FeedbackActivity[]
 }
 
 model FeedbackActivity {
-  id           String   @id @default(cuid())
-  feedbackId   String
-  feedback     Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
-  clientId     String
-  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  type         String   // Call | Message | Note
-  note         String?
-  loggedById   String
-  loggedBy     User     @relation(fields: [loggedById], references: [id])
-  loggedAt     DateTime @default(now())
+  id         String   @id @default(cuid())
+  feedbackId String
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  clientId   String
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  type       String // Call | Message | Note
+  note       String?
+  loggedById String
+  loggedBy   User     @relation(fields: [loggedById], references: [id])
+  loggedAt   DateTime @default(now())
 
   @@index([feedbackId])
   @@index([clientId])
@@ -943,9 +943,9 @@ model Demo {
   scheduledTimeIst String?
   actualDate       String?
   actualTimeIst    String?
-  outcome          String?    // Positive | Neutral | Negative (overall demo quality)
-  trainerOutcome   String?    // Selected | Shortlisted | Rejected | PendingClientFeedback (per-trainer selection status)
-  feedback         String?    // client feedback about this specific trainer
+  outcome          String? // Positive | Neutral | Negative (overall demo quality)
+  trainerOutcome   String? // Selected | Shortlisted | Rejected | PendingClientFeedback (per-trainer selection status)
+  feedback         String? // client feedback about this specific trainer
   nextSteps        String?
   status           DemoStatus @default(Scheduled)
   conductedById    String?
@@ -953,22 +953,22 @@ model Demo {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  @@index([clientId, status])    // per-client demo history
-  @@index([trainerId])           // trainer demo history
-  @@index([scheduledDate])       // calendar + my-calendar queries
-  @@index([conductedById])       // conducted-by queries
+  @@index([clientId, status]) // per-client demo history
+  @@index([trainerId]) // trainer demo history
+  @@index([scheduledDate]) // calendar + my-calendar queries
+  @@index([conductedById]) // conducted-by queries
 }
 
 // -------- PAYOUT BATCHES --------
 model PayoutBatch {
-  id          String   @id @default(cuid())
-  weekStart   String
-  totalInr    Int      @default(0)
-  status      String   @default("Pending") // Pending, Approved, Paid
-  sessionIds  String[]
-  createdAt   DateTime @default(now())
-  approvedAt  DateTime?
-  paidAt      DateTime?
+  id         String    @id @default(cuid())
+  weekStart  String
+  totalInr   Int       @default(0)
+  status     String    @default("Pending") // Pending, Approved, Paid
+  sessionIds String[]
+  createdAt  DateTime  @default(now())
+  approvedAt DateTime?
+  paidAt     DateTime?
 }
 
 // -------- AUDIT LOG --------
@@ -983,16 +983,16 @@ model AuditLog {
   trainerId String?
   createdAt DateTime @default(now())
 
-  @@index([createdAt])                  // AuditPage default sort
-  @@index([byId, createdAt])            // per-user audit drill-in
-  @@index([action])                     // filter by action type
-  @@index([clientId, createdAt])        // per-client activity feed
-  @@index([trainerId, createdAt])       // per-trainer activity feed
+  @@index([createdAt]) // AuditPage default sort
+  @@index([byId, createdAt]) // per-user audit drill-in
+  @@index([action]) // filter by action type
+  @@index([clientId, createdAt]) // per-client activity feed
+  @@index([trainerId, createdAt]) // per-trainer activity feed
 }
 
 // ── Distributed lock for cron jobs (prevents double-fire on zero-downtime deploy) ──
 model CronLock {
-  key       String   @id  // unique per job+date, e.g. "briefing:team2:morning:2026-06-13"
+  key       String   @id // unique per job+date, e.g. "briefing:team2:morning:2026-06-13"
   createdAt DateTime @default(now())
 }
 
@@ -1000,17 +1000,17 @@ model CronLock {
 // A shared comment log visible to any team member who has read access.
 // Replaces the free-form "comments" column on the sheet with a full history.
 model Comment {
-  id          String   @id @default(cuid())
-  clientId    String?
-  client      Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  trainerId   String?
-  trainer     Trainer? @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  authorId    String?
-  author      User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
-  authorName  String
-  body        String
-  pinned      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  clientId   String?
+  client     Client?  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  trainerId  String?
+  trainer    Trainer? @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String
+  body       String
+  pinned     Boolean  @default(false)
+  createdAt  DateTime @default(now())
 
   @@index([clientId, createdAt])
   @@index([trainerId, createdAt])
@@ -1028,13 +1028,13 @@ model DailyReport {
 
 // -------- RAW LEADS --------
 model RawLead {
-  id         String   @id @default(cuid())
-  raw        String
-  status     String   @default("Pending") // Pending, Processed, Discarded
-  cleanedName String?
+  id           String   @id @default(cuid())
+  raw          String
+  status       String   @default("Pending") // Pending, Processed, Discarded
+  cleanedName  String?
   cleanedPhone String?
   cleanedSkill String?
-  createdAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
 }
 
 // -------- OUTBOUND MESSAGES (email + whatsapp send/log) --------
@@ -1044,38 +1044,38 @@ enum MessageKind {
 }
 
 enum MessageStatus {
-  Queued    // waiting to be sent
-  Sent      // SMTP/API delivered
-  Logged    // wa.me link generated (free-path WhatsApp) — no API send
-  Failed    // SMTP/API error
+  Queued // waiting to be sent
+  Sent // SMTP/API delivered
+  Logged // wa.me link generated (free-path WhatsApp) — no API send
+  Failed // SMTP/API error
 }
 
 model OutboundMessage {
-  id         String        @id @default(cuid())
-  kind       MessageKind
-  templateId String?
-  toEmail    String?
-  toPhone    String?       // E.164-ish digits for wa.me
-  toName     String?
-  subject    String?
-  body       String
-  clientId   String?
-  client     Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  trainerId  String?
-  trainer    Trainer?      @relation(fields: [trainerId], references: [id], onDelete: SetNull)
-  status     MessageStatus @default(Queued)
-  provider   String?       // 'smtp' | 'wa-link' | 'twilio' | 'meta' | etc.
+  id                String        @id @default(cuid())
+  kind              MessageKind
+  templateId        String?
+  toEmail           String?
+  toPhone           String? // E.164-ish digits for wa.me
+  toName            String?
+  subject           String?
+  body              String
+  clientId          String?
+  client            Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  trainerId         String?
+  trainer           Trainer?      @relation(fields: [trainerId], references: [id], onDelete: SetNull)
+  status            MessageStatus @default(Queued)
+  provider          String? // 'smtp' | 'wa-link' | 'twilio' | 'meta' | etc.
   providerMessageId String?
-  errorText  String?
-  sentById   String?
-  sentBy     User?         @relation(fields: [sentById], references: [id], onDelete: SetNull)
-  sentAt     DateTime      @default(now())
+  errorText         String?
+  sentById          String?
+  sentBy            User?         @relation(fields: [sentById], references: [id], onDelete: SetNull)
+  sentAt            DateTime      @default(now())
 }
 
 // -------- EMAIL TEMPLATES --------
 model EmailTemplate {
   id        String   @id
-  kind      String   // Email | WhatsApp
+  kind      String // Email | WhatsApp
   stage     String?
   name      String
   subject   String?
@@ -1086,8 +1086,8 @@ model EmailTemplate {
 // -------- MEETING LINK REPOSITORY --------
 model MeetingLink {
   id        String   @id @default(cuid())
-  label     String                           // e.g. "Muskan Zoom Room"
-  platform  String                           // Zoom | Google Meet | Teams | Webex | Other
+  label     String // e.g. "Muskan Zoom Room"
+  platform  String // Zoom | Google Meet | Teams | Webex | Other
   url       String
   ownerId   String?
   owner     User?    @relation("MeetingLinkOwner", fields: [ownerId], references: [id], onDelete: SetNull)
@@ -1096,19 +1096,19 @@ model MeetingLink {
 
 // -------- LEAD SOURCES --------
 model LeadSource {
-  id    String @id @default(cuid())
-  name  String @unique
+  id   String @id @default(cuid())
+  name String @unique
 }
 
 // -------- ROLE PERMISSIONS --------
 model RolePermission {
-  id        String   @id @default(cuid())
-  resource  String   // e.g. "feedback.read", "payments.read", "tasks.complete"
-  role      String   // e.g. "lead", "account_manager"
-  allowed   Boolean  @default(true)
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  resource    String // e.g. "feedback.read", "payments.read", "tasks.complete"
+  role        String // e.g. "lead", "account_manager"
+  allowed     Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
   updatedById String?
-  updatedBy   User?  @relation("RolePermissionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedBy   User?    @relation("RolePermissionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@unique([resource, role])
   @@index([resource])
@@ -1122,35 +1122,35 @@ model FeatureFlag {
 
 // -------- EDIT REQUESTS --------
 model EditRequest {
-  id          String            @id @default(cuid())
-  entity      String            // "client" | "trainer"
-  entityId    String
-  category    String
-  field       String
-  oldValue    String?
-  newValue    String?
+  id            String            @id @default(cuid())
+  entity        String // "client" | "trainer"
+  entityId      String
+  category      String
+  field         String
+  oldValue      String?
+  newValue      String?
   requestedById String?
-  requestedBy User?             @relation("EditRequestBy", fields: [requestedById], references: [id], onDelete: SetNull)
-  reviewedById String?
-  reviewedBy  User?             @relation("EditReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
-  status      EditRequestStatus @default(Pending)
-  reason      String?
-  createdAt   DateTime          @default(now())
-  reviewedAt  DateTime?
+  requestedBy   User?             @relation("EditRequestBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  reviewedById  String?
+  reviewedBy    User?             @relation("EditReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  status        EditRequestStatus @default(Pending)
+  reason        String?
+  createdAt     DateTime          @default(now())
+  reviewedAt    DateTime?
 }
 
 // -------- TIMESHEET --------
 model JobCode {
-  id          String           @id @default(cuid())
-  code        String           @unique
-  name        String
-  description String?
-  active          Boolean          @default(true)
-  maxHoursPerDay  Float?
-  createdById String?
-  createdBy   User?            @relation("JobCodeCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt   DateTime         @default(now())
-  entries     TimesheetEntry[]
+  id             String           @id @default(cuid())
+  code           String           @unique
+  name           String
+  description    String?
+  active         Boolean          @default(true)
+  maxHoursPerDay Float?
+  createdById    String?
+  createdBy      User?            @relation("JobCodeCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime         @default(now())
+  entries        TimesheetEntry[]
 }
 
 model TimesheetEntry {
@@ -1185,56 +1185,56 @@ model UserFeatureFlag {
 }
 
 model FreelanceRequirement {
-  id          String   @id @default(cuid())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Filled by Regular Team
-  clientName        String
-  skillRequired     String
-  currentTrainer    String?
-  clientTimings     String?   // available timings for demo + sessions
-  trainersUsed      String?   // comma-separated names already tried
+  clientName     String
+  skillRequired  String
+  currentTrainer String?
+  clientTimings  String? // available timings for demo + sessions
+  trainersUsed   String? // comma-separated names already tried
 
   // Filled by Freelance Team — multi-trainer proposals (JSON array)
   // Each entry: { trainerName, trainerPhone, trainerEmail, trainerRecording, trainerTimings, notes }
-  proposals         Json?
+  proposals        Json?
   // Legacy single-trainer fields (kept for backward compat, populated from proposals[0] if needed)
-  trainerName       String?
-  trainerRecording  String?
-  trainerTimings    String?
-  trainerPhone      String?
-  trainerEmail      String?
+  trainerName      String?
+  trainerRecording String?
+  trainerTimings   String?
+  trainerPhone     String?
+  trainerEmail     String?
 
   // Status (updated by Regular Team)
-  status            String    @default("Open")
+  status String @default("Open")
 
   // Priority
-  priority          String    @default("Medium")
+  priority String @default("Medium")
 
   // Long-pending / escalation flag (auto-set after 7 days with no update)
-  isEscalated       Boolean   @default(false)
+  isEscalated Boolean @default(false)
 
   // Meta
-  flaggedById   String?
-  flaggedBy     User?    @relation("FreelanceRequirementFlagged", fields: [flaggedById], references: [id], onDelete: SetNull)
-  clientId      String?
-  client        Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  flaggedById String?
+  flaggedBy   User?   @relation("FreelanceRequirementFlagged", fields: [flaggedById], references: [id], onDelete: SetNull)
+  clientId    String?
+  client      Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
-  comments      FreelanceRequirementComment[]
+  comments FreelanceRequirementComment[]
 
-  lastUpdatedById   String?
-  lastUpdatedBy     User?    @relation("FreelanceRequirementUpdated", fields: [lastUpdatedById], references: [id], onDelete: SetNull)
+  lastUpdatedById String?
+  lastUpdatedBy   User?   @relation("FreelanceRequirementUpdated", fields: [lastUpdatedById], references: [id], onDelete: SetNull)
 }
 
 model FreelanceRequirementComment {
-  id            String   @id @default(cuid())
+  id            String               @id @default(cuid())
   requirementId String
   requirement   FreelanceRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
   authorId      String
   authorName    String
   body          String
-  createdAt     DateTime @default(now())
+  createdAt     DateTime             @default(now())
 }
 
 // -------- DATE CHANGE REQUESTS (payment follow-up approval workflow) --------
@@ -1243,42 +1243,42 @@ model FreelanceRequirementComment {
 // Path B (leverage): fills context form → Vaibhav approves
 // Old dates stay locked until approved.
 model DateChangeRequest {
-  id              String   @id @default(cuid())
+  id              String @id @default(cuid())
   clientId        String
-  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client          Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
   requestedById   String
   requestedByName String
 
-  type            String   // "payment_received" | "leverage"
+  type String // "payment_received" | "leverage"
 
   // Proposed new dates
-  proposedDate1   String?  // proposed payDate1
-  proposedDate2   String?  // proposed payDate2
+  proposedDate1 String? // proposed payDate1
+  proposedDate2 String? // proposed payDate2
 
   // Path A — payment received
   linkedPaymentId  String?
-  screenshotBase64 String?  @db.Text
-  amountExpected   Float?   // expected payment amount
-  amountActual     Float?   // actual amount received
-  paymentDoneDate  String?  // ISO date payment was received
+  screenshotBase64 String? @db.Text
+  amountExpected   Float? // expected payment amount
+  amountActual     Float? // actual amount received
+  paymentDoneDate  String? // ISO date payment was received
 
   // Path B — leverage
-  summary30d      String?  @db.Text  // client summary last 30 days
-  mitaliF15d      String?  // what feedback Mitali took last 15 days
-  bhavneetF15d    String?  // what feedback Bhavneet took last 15 days
-  lastSessionDate String?  // ISO date of last session
-  issueDetail     String?  @db.Text  // min 100 words
-  leverageScreenshot String? @db.Text  // base64
+  summary30d         String? @db.Text // client summary last 30 days
+  mitaliF15d         String? // what feedback Mitali took last 15 days
+  bhavneetF15d       String? // what feedback Bhavneet took last 15 days
+  lastSessionDate    String? // ISO date of last session
+  issueDetail        String? @db.Text // min 100 words
+  leverageScreenshot String? @db.Text // base64
 
   // Approval
-  status          String   @default("pending") // pending | approved | rejected
-  approvedById    String?
-  approvedByName  String?
-  approvedAt      DateTime?
-  rejectionNote   String?
+  status         String    @default("pending") // pending | approved | rejected
+  approvedById   String?
+  approvedByName String?
+  approvedAt     DateTime?
+  rejectionNote  String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([clientId])
   @@index([status])
@@ -1291,8 +1291,8 @@ model FeedbackPunch {
   client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   punchedById String
   punchedBy   User     @relation(fields: [punchedById], references: [id], onDelete: Cascade)
-  date        String   // ISO YYYY-MM-DD (IST)
-  type        String   // 'verbal' | 'written'
+  date        String // ISO YYYY-MM-DD (IST)
+  type        String // 'verbal' | 'written'
   note        String?
   createdAt   DateTime @default(now())
 
@@ -1309,10 +1309,10 @@ model BugReport {
   url          String
   role         String
   description  String
-  screenshot   String?  @db.Text  // base64 PNG
+  screenshot   String?  @db.Text // base64 PNG
   status       String   @default("open") // open | fixing | fixed
   fixCommit    String?
-  issueId      String?  // linked IssueTracker id
+  issueId      String? // linked IssueTracker id
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -1322,30 +1322,30 @@ model BugReport {
 
 // -------- MARKETING CAMPAIGNS --------
 model MarketingCampaign {
-  id              String   @id @default(cuid())
-  name            String                          // internal label e.g. "Aug newsletter"
+  id              String    @id @default(cuid())
+  name            String // internal label e.g. "Aug newsletter"
   subject         String
-  htmlBody        String   @db.Text              // full HTML of the email
-  fromName        String   @default("MITS Consulting")
-  fromEmail       String   @default("sales.mc@mitssolution.com")
+  htmlBody        String    @db.Text // full HTML of the email
+  fromName        String    @default("MITS Consulting")
+  fromEmail       String    @default("sales.mc@mitssolution.com")
   // recipient targeting (stored at draft time; snapshot taken at send time)
-  recipientMode   String   @default("all_active") // all_active | by_lifecycle | individual
-  lifecycles      String[] @default([])           // used when recipientMode=by_lifecycle
-  clientIds       String[] @default([])           // used when recipientMode=individual
+  recipientMode   String    @default("all_active") // all_active | by_lifecycle | individual
+  lifecycles      String[]  @default([]) // used when recipientMode=by_lifecycle
+  clientIds       String[]  @default([]) // used when recipientMode=individual
   // send state
-  status          String   @default("Draft")      // Draft | Sending | Sent | Failed
+  status          String    @default("Draft") // Draft | Sending | Sent | Failed
   sentAt          DateTime?
   sentById        String?
-  sentBy          User?    @relation("CampaignSentBy", fields: [sentById], references: [id], onDelete: SetNull)
-  totalRecipients Int      @default(0)
-  sentCount       Int      @default(0)
-  failedCount     Int      @default(0)
+  sentBy          User?     @relation("CampaignSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  totalRecipients Int       @default(0)
+  sentCount       Int       @default(0)
+  failedCount     Int       @default(0)
   // SMTP provider used
-  provider        String?  // 'brevo' | 'smtp-system'
+  provider        String? // 'brevo' | 'smtp-system'
   createdById     String?
-  createdBy       User?    @relation("CampaignCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdBy       User?     @relation("CampaignCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([status])
   @@index([createdAt])
@@ -1353,51 +1353,109 @@ model MarketingCampaign {
 
 // -------- SECOND BRAIN / KNOWLEDGE BASE --------
 model BrainNote {
-  id          String   @id @default(cuid())
-  title       String
-  content     String   @db.Text
-  category    String   @default("general")  // "general" | "decision" | "sop" | "meeting" | "strategy"
-  tags        String[] @default([])
-  visibleTo   String[] @default([])  // role names; empty = founder only
-  isPinned    Boolean  @default(false)
-  authorId    String
-  author      User     @relation("BrainNoteAuthor", fields: [authorId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @db.Text
+  category  String   @default("general") // "general" | "decision" | "sop" | "meeting" | "strategy"
+  tags      String[] @default([])
+  visibleTo String[] @default([]) // role names; empty = founder only
+  isPinned  Boolean  @default(false)
+  authorId  String
+  author    User     @relation("BrainNoteAuthor", fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // -------- CONTACTS (general contacts, not yet clients) --------
 model Contact {
-  id          String   @id @default(cuid())
-  name        String
-  email       String?
-  phoneCode   String?
-  phoneDigits String?
-  company     String?
-  source      String?  // LinkedIn, Referral, Cold call, WhatsApp, etc.
-  notes       String?  @db.Text
-  addedById   String
-  addedBy     User     @relation("ContactAddedBy", fields: [addedById], references: [id])
+  id                  String   @id @default(cuid())
+  name                String
+  email               String?
+  phoneCode           String?
+  phoneDigits         String?
+  company             String?
+  source              String? // LinkedIn, Referral, Cold call, WhatsApp, etc.
+  notes               String?  @db.Text
+  addedById           String
+  addedBy             User     @relation("ContactAddedBy", fields: [addedById], references: [id])
   convertedToClientId String? // set when Convert is used
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   @@index([createdAt])
 }
 
 // -------- WEBSITE ENQUIRIES (public submissions from mitsedge.com) --------
 model Enquiry {
-  id          String   @id @default(cuid())
-  name        String
-  email       String?
-  phone       String?
-  message     String?  @db.Text
-  course      String?
-  source      String   @default("mitsedge-website")
-  status      String   @default("new") // new | contacted | converted | dismissed
+  id                   String   @id @default(cuid())
+  name                 String
+  email                String?
+  phone                String?
+  message              String?  @db.Text
+  course               String?
+  source               String   @default("mitsedge-website")
+  status               String   @default("new") // new | contacted | converted | dismissed
   convertedToContactId String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   @@index([createdAt])
+}
+
+// -------- STUDENTS (public signups from mitsedge.com — NOT staff) --------
+// Kept entirely separate from `User`: that model is staff-only and its auth
+// middleware looks up prisma.user, so a staff token must never satisfy a
+// student route or vice versa.
+model Student {
+  id            String   @id @default(cuid())
+  email         String   @unique // always stored lowercased
+  name          String
+  phone         String?
+  passwordHash  String? // null when the account is Google-only
+  googleSub     String?  @unique // Google 'sub' claim
+  emailVerified Boolean  @default(false)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  purchases StudentPurchase[]
+  otps      StudentOtp[]
+
+  @@index([createdAt]) // Students list is newest-first
+}
+
+model StudentOtp {
+  id         String    @id @default(cuid())
+  studentId  String
+  student    Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  codeHash   String // bcrypt — the raw OTP is never stored
+  purpose    String // signup | login
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  @@index([studentId, purpose]) // newest unconsumed OTP lookup on verify
+}
+
+// One row per checkout attempt. `courseTitle` and `amount` are snapshotted so
+// later edits to the course catalog cannot rewrite what a student was charged.
+model StudentPurchase {
+  id            String    @id @default(cuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId      Int // matches the id in the generated course catalog
+  courseTitle   String
+  amount        Int // minor units (cents) — never a float
+  currency      String    @default("USD")
+  status        String    @default("PENDING") // PENDING | PAID | FAILED | CANCELLED
+  gateway       String    @default("payglocal")
+  merchantTxnId String    @unique // our idempotency key, generated server-side
+  gatewayRef    String? // PayGlocal gid
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([studentId, createdAt]) // a student's purchase history
+  @@index([status]) // reconciliation sweeps over stuck PENDING rows
 }

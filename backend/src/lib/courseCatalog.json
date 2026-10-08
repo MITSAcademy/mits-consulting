@@ -1,0 +1,722 @@
+[
+  {
+    "id": 1001,
+    "title": "AI & Machine Learning – Career Program",
+    "amount": 200000,
+    "currency": "USD"
+  },
+  {
+    "id": 1016,
+    "title": "Data Science – Career Program",
+    "amount": 200000,
+    "currency": "USD"
+  },
+  {
+    "id": 1032,
+    "title": "Data Science Program",
+    "amount": 130000,
+    "currency": "USD"
+  },
+  {
+    "id": 1079,
+    "title": "Data Science with Python",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1080,
+    "title": "Machine Learning with Scikit-Learn",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1081,
+    "title": "Deep Learning with TensorFlow",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1082,
+    "title": "Natural Language Processing",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1083,
+    "title": "Generative AI & Prompt Engineering",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1084,
+    "title": "Computer Vision with OpenCV",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1086,
+    "title": "AI Ethics & Responsible AI",
+    "amount": 45000,
+    "currency": "USD"
+  },
+  {
+    "id": 1153,
+    "title": "Deep Learning Fundamentals",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1154,
+    "title": "Artificial Intelligence Fundamentals",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1155,
+    "title": "R Programming for Data Analysis",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1018,
+    "title": "Data Analytics – Career Program",
+    "amount": 160000,
+    "currency": "USD"
+  },
+  {
+    "id": 1034,
+    "title": "Data Analytics Program",
+    "amount": 130000,
+    "currency": "USD"
+  },
+  {
+    "id": 1085,
+    "title": "Data Analysis with Pandas",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1095,
+    "title": "Big Data with Hadoop",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1096,
+    "title": "Apache Spark for Big Data",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1097,
+    "title": "Kafka Stream Processing",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1098,
+    "title": "Data Engineering with Apache Airflow",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1099,
+    "title": "Snowflake Data Platform",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1100,
+    "title": "Google BigQuery Analytics",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1015,
+    "title": "Data Visualization – Career Program",
+    "amount": 130000,
+    "currency": "USD"
+  },
+  {
+    "id": 1031,
+    "title": "Data Visualization Essentials",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1101,
+    "title": "Data Warehousing Fundamentals",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1102,
+    "title": "SQL Server BI Stack (SSIS, SSAS, SSRS)",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1103,
+    "title": "SAP BW & SAP HANA",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1104,
+    "title": "Tableau for BI Professionals",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1105,
+    "title": "Advanced Power BI & DAX",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1106,
+    "title": "Dimensional Modeling",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1107,
+    "title": "Informatica PowerCenter ETL",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1108,
+    "title": "Looker & LookML Development",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1109,
+    "title": "Data Visualization with Tableau",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1110,
+    "title": "Power BI for Business Analytics",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1040,
+    "title": "AWS Solutions Architect",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1041,
+    "title": "Microsoft Azure Fundamentals (AZ-900)",
+    "amount": 45000,
+    "currency": "USD"
+  },
+  {
+    "id": 1042,
+    "title": "Google Cloud Platform Essentials",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1021,
+    "title": "n8n AI Agents & Automation – Essential",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1036,
+    "title": "n8n AI Agents & Automation – Advanced",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1048,
+    "title": "DevOps Fundamentals",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1051,
+    "title": "CI/CD with Jenkins & GitHub Actions",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1129,
+    "title": "RPA with UiPath",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1141,
+    "title": "Mobile App Testing",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1143,
+    "title": "Linux Administration",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1144,
+    "title": "Selenium Automation Testing",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1145,
+    "title": "RPA Fundamentals (UiPath, Automation Anywhere, Blue Prism)",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1012,
+    "title": "Cyber Security – Career Program",
+    "amount": 200000,
+    "currency": "USD"
+  },
+  {
+    "id": 1014,
+    "title": "Ethical Hacking – Essential",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1029,
+    "title": "Cyber Security Fundamentals",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1030,
+    "title": "Ethical Hacking Course",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1045,
+    "title": "Cloud Security & Compliance",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1087,
+    "title": "Ethical Hacking & Penetration Testing",
+    "amount": 100000,
+    "currency": "USD"
+  },
+  {
+    "id": 1088,
+    "title": "CompTIA Security+ Prep",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1089,
+    "title": "Network Security Fundamentals",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1090,
+    "title": "Certified Ethical Hacker (CEH) Prep",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1091,
+    "title": "OWASP Web Application Security",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1092,
+    "title": "SOC Analyst Training",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1093,
+    "title": "Digital Forensics & Incident Response",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1094,
+    "title": "Cloud Security for AWS & Azure",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1156,
+    "title": "Penetration Testing",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1002,
+    "title": "Python Full Stack – Career Program",
+    "amount": 200000,
+    "currency": "USD"
+  },
+  {
+    "id": 1005,
+    "title": "Java Full Stack – Career Program",
+    "amount": 200000,
+    "currency": "USD"
+  },
+  {
+    "id": 1017,
+    "title": "MERN Stack – Career Program",
+    "amount": 200000,
+    "currency": "USD"
+  },
+  {
+    "id": 1003,
+    "title": "Python Fundamentals – Essential",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1004,
+    "title": "Core Java – Essential",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1011,
+    "title": "C and C++ Programming – Essential",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1023,
+    "title": "Python Web Developer Bootcamp",
+    "amount": 100000,
+    "currency": "USD"
+  },
+  {
+    "id": 1024,
+    "title": "Python Programming",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1025,
+    "title": "Core Java Programming",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1026,
+    "title": "Java Full Stack Development",
+    "amount": 130000,
+    "currency": "USD"
+  },
+  {
+    "id": 1028,
+    "title": "C and C++ Programming",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1033,
+    "title": "MERN Full Stack Program",
+    "amount": 130000,
+    "currency": "USD"
+  },
+  {
+    "id": 1067,
+    "title": "MEAN Stack Development",
+    "amount": 100000,
+    "currency": "USD"
+  },
+  {
+    "id": 1136,
+    "title": "Blockchain Development with Solidity",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1148,
+    "title": "PHP & MySQL Web Development",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1150,
+    "title": "C# and .NET Development",
+    "amount": 100000,
+    "currency": "USD"
+  },
+  {
+    "id": 1056,
+    "title": "HTML5, CSS3 & JavaScript Fundamentals",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1058,
+    "title": "React.js Complete Guide",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1059,
+    "title": "Vue.js 3 Masterclass",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1060,
+    "title": "Angular Fundamentals",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1061,
+    "title": "Node.js & Express Backend",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1146,
+    "title": "Bootstrap Responsive Web Design",
+    "amount": 45000,
+    "currency": "USD"
+  },
+  {
+    "id": 1147,
+    "title": "Vue.js Essentials",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1149,
+    "title": "WordPress Website Development",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1019,
+    "title": "iOS Development with Swift",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1027,
+    "title": "Android App Development with Kotlin",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1035,
+    "title": "Flutter & Dart – Cross-Platform Apps",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1038,
+    "title": "React Native for Mobile Apps",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1140,
+    "title": "Ionic Cross-Platform App Development",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1073,
+    "title": "MySQL Complete Guide",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1074,
+    "title": "PostgreSQL Essentials",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1075,
+    "title": "MongoDB for Developers",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1078,
+    "title": "Oracle SQL & PL/SQL",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1151,
+    "title": "Microsoft SQL Server",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1152,
+    "title": "Oracle Database Administration (DBA)",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1111,
+    "title": "Business Analysis Fundamentals",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1112,
+    "title": "PMP Certification Preparation",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1113,
+    "title": "Agile & Scrum Master",
+    "amount": 45000,
+    "currency": "USD"
+  },
+  {
+    "id": 1114,
+    "title": "Product Management Essentials",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1115,
+    "title": "Startup Fundamentals",
+    "amount": 45000,
+    "currency": "USD"
+  },
+  {
+    "id": 1116,
+    "title": "Strategic Management",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1117,
+    "title": "HR Management & Analytics",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1118,
+    "title": "Leadership & Management",
+    "amount": 45000,
+    "currency": "USD"
+  },
+  {
+    "id": 1132,
+    "title": "ITIL 4 Foundation",
+    "amount": 45000,
+    "currency": "USD"
+  },
+  {
+    "id": 1157,
+    "title": "SEO – Search Engine Optimization",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1119,
+    "title": "UI/UX Design Fundamentals",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1120,
+    "title": "Figma for Designers",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1121,
+    "title": "Salesforce Administrator",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1122,
+    "title": "Salesforce Developer",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1123,
+    "title": "Sales Cloud Essentials",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1124,
+    "title": "Service Cloud Specialist",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1125,
+    "title": "Marketing Cloud Expert",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1127,
+    "title": "Lightning & LWC Development",
+    "amount": 65000,
+    "currency": "USD"
+  },
+  {
+    "id": 1128,
+    "title": "Salesforce CPQ & Billing",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1130,
+    "title": "SAP S/4HANA Functional",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1131,
+    "title": "ServiceNow Administration",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1133,
+    "title": "Workday HCM Fundamentals",
+    "amount": 50000,
+    "currency": "USD"
+  },
+  {
+    "id": 1134,
+    "title": "MuleSoft Anypoint Platform",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1135,
+    "title": "Pega BPM & Automation",
+    "amount": 80000,
+    "currency": "USD"
+  },
+  {
+    "id": 1142,
+    "title": "Salesforce Fundamentals",
+    "amount": 50000,
+    "currency": "USD"
+  }
+]
