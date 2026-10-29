@@ -17,9 +17,12 @@ function escapeHtml(s: string): string {
 }
 
 export interface PurchaseNotification {
+  buyerName: string;
+  buyerEmail: string;
+  buyerPhone: string;
+  /** Account the purchase was made from — shown only when it is not the buyer. */
   studentName: string;
   studentEmail: string;
-  studentPhone?: string | null;
   studentId: string;
   courseTitle: string;
   amount: number; // minor units
@@ -49,9 +52,10 @@ function buildHtml(p: PurchaseNotification): string {
 
       <tr><td style="padding:28px 32px 8px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #eee;border-radius:6px;">
-          ${row('Student', p.studentName)}
-          ${row('Email', p.studentEmail)}
-          ${p.studentPhone ? row('Phone', p.studentPhone) : ''}
+          ${row('Name', p.buyerName)}
+          ${row('Email', p.buyerEmail)}
+          ${row('Phone', p.buyerPhone)}
+          ${p.studentEmail !== p.buyerEmail ? row('Account', `${p.studentName} (${p.studentEmail})`) : ''}
           ${row('Course', p.courseTitle)}
           ${row('Amount', formatAmount(p.amount, p.currency))}
           ${row('Reference', p.gatewayRef || p.merchantTxnId)}
@@ -91,8 +95,8 @@ export async function sendPurchaseNotification(p: PurchaseNotification): Promise
     const args = {
       to: VAIBHAV_EMAIL,
       cc: cc.join(', ') || undefined,
-      subject: `Course purchased — ${p.studentName} (${formatAmount(p.amount, p.currency)})`,
-      body: `Course purchased\n\nStudent: ${p.studentName}\nEmail: ${p.studentEmail}\nPhone: ${p.studentPhone || '—'}\nCourse: ${p.courseTitle}\nAmount: ${formatAmount(p.amount, p.currency)}\nReference: ${p.gatewayRef || p.merchantTxnId}\n\nOpen in hub: ${PORTAL_URL}/students/${p.studentId}`,
+      subject: `Course purchased — ${p.buyerName} (${formatAmount(p.amount, p.currency)})`,
+      body: `Course purchased\n\nName: ${p.buyerName}\nEmail: ${p.buyerEmail}\nPhone: ${p.buyerPhone}${p.studentEmail !== p.buyerEmail ? `\nAccount: ${p.studentName} (${p.studentEmail})` : ''}\nCourse: ${p.courseTitle}\nAmount: ${formatAmount(p.amount, p.currency)}\nReference: ${p.gatewayRef || p.merchantTxnId}\n\nOpen in hub: ${PORTAL_URL}/students/${p.studentId}`,
       htmlBody: buildHtml(p),
       skipVaibhavCc: true, // already the recipient
     };

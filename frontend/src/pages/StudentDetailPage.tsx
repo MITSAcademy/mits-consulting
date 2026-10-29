@@ -11,6 +11,9 @@ type Purchase = {
   courseId: number;
   courseTitle: string;
   status: string;
+  buyerName?: string;
+  buyerEmail?: string;
+  buyerPhone?: string;
   createdAt: string;
   paidAt?: string | null;
 };
@@ -120,10 +123,17 @@ export function StudentDetailPage() {
                 {s.purchases.map((p) => (
                   <div
                     key={p.id}
-                    className="flex items-center justify-between gap-3 text-[13px]"
+                    className="flex items-start justify-between gap-3 text-[13px]"
                     style={{ borderBottom: '1px solid var(--brand-borderSoft)', paddingBottom: 6 }}
                   >
-                    <span style={{ fontWeight: 600 }}>{p.courseTitle}</span>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>{p.courseTitle}</div>
+                      {p.buyerName && (
+                        <div className="muted text-[11px]">
+                          {p.buyerName} · {p.buyerPhone} · {p.buyerEmail}
+                        </div>
+                      )}
+                    </div>
                     <StatusPill status={p.status} />
                   </div>
                 ))}
@@ -143,6 +153,7 @@ export function StudentDetailPage() {
                   <thead>
                     <tr>
                       <th>Course</th>
+                      <th>Buyer</th>
                       <th>Amount</th>
                       <th>Status</th>
                       <th>Gateway</th>
@@ -154,6 +165,12 @@ export function StudentDetailPage() {
                     {payments.map((p) => (
                       <tr key={p.id}>
                         <td>{p.courseTitle}</td>
+                        <td className="text-[12px]">
+                          <div>{p.buyerName || '—'}</div>
+                          <div className="muted text-[11px]">
+                            {[p.buyerPhone, p.buyerEmail].filter(Boolean).join(' · ') || '—'}
+                          </div>
+                        </td>
                         <td className="mono">{formatAmount(p.amount, p.currency)}</td>
                         <td><StatusPill status={p.status} /></td>
                         <td className="text-[12px]">{p.gateway}</td>

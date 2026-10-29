@@ -295,7 +295,8 @@ studentAuthRouter.get('/me/purchases', requireStudentAuth, async (req: StudentRe
     orderBy: { createdAt: 'desc' },
     select: {
       id: true, courseId: true, courseTitle: true, status: true,
-      amount: true, currency: true, createdAt: true, paidAt: true,
+      amount: true, currency: true, buyerName: true, buyerEmail: true,
+      buyerPhone: true, createdAt: true, paidAt: true,
     },
   });
   res.json({ purchases });
@@ -308,7 +309,8 @@ studentAuthRouter.get('/me/purchases/:id', requireStudentAuth, async (req: Stude
     where: { id: req.params.id, studentId: req.student!.id },
     select: {
       id: true, courseId: true, courseTitle: true, status: true,
-      amount: true, currency: true, gateway: true, merchantTxnId: true,
+      amount: true, currency: true, buyerName: true, buyerEmail: true,
+      buyerPhone: true, gateway: true, merchantTxnId: true,
       gatewayRef: true, createdAt: true, paidAt: true,
     },
   });

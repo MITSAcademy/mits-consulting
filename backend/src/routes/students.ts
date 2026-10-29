@@ -48,7 +48,13 @@ studentsRouter.get('/:id', requireRole(...ALLOWED), async (req, res) => {
       createdAt: true,
       purchases: {
         orderBy: { createdAt: 'desc' },
-        select: { id: true, courseId: true, courseTitle: true, status: true, createdAt: true, paidAt: true },
+        // Buyer contact is deliberately included for non-founders: knowing who
+        // to call is not financial data. Amounts remain founder-only below.
+        select: {
+          id: true, courseId: true, courseTitle: true, status: true,
+          buyerName: true, buyerEmail: true, buyerPhone: true,
+          createdAt: true, paidAt: true,
+        },
       },
     },
   });
@@ -70,6 +76,9 @@ studentsRouter.get('/:id/payments', requireFounder, async (req: AuthedRequest, r
       id: true,
       courseId: true,
       courseTitle: true,
+      buyerName: true,
+      buyerEmail: true,
+      buyerPhone: true,
       amount: true,
       currency: true,
       status: true,

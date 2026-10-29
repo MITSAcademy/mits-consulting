@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma';
 import { requireStudentAuth, StudentRequest } from '../lib/studentAuth';
 import { findCourse } from '../lib/courseCatalog';
 import { sendPurchaseNotification } from '../lib/purchaseEmail';
+import { buyerDetailsSchema, formatPhone, normalisePhone } from '../lib/buyerDetails';
 import {
   payglocalEnabled,
   initiatePayCollect,
@@ -79,9 +80,11 @@ async function confirmAndSettle(merchantTxnId: string): Promise<void> {
       });
       if (student) {
         await sendPurchaseNotification({
+          buyerName: purchase.buyerName,
+          buyerEmail: purchase.buyerEmail,
+          buyerPhone: purchase.buyerPhone,
           studentName: student.name,
           studentEmail: student.email,
-          studentPhone: student.phone,
           studentId: student.id,
           courseTitle: purchase.courseTitle,
           amount: purchase.amount,
@@ -108,6 +111,15 @@ studentCheckoutRouter.post('/payglocal/order', checkoutLimiter, requireStudentAu
   const courseId = Number(req.body?.courseId);
   if (!Number.isInteger(courseId)) return res.status(400).json({ error: 'Course id is required.' });
 
+  // Re-validated here, not just in the browser: this endpoint is reachable
+  // without the form, and a payment with no contact details is unattributable.
+  const buyer = buyerDetailsSchema.safeParse(req.body);
+  if (!buyer.success) {
+    return res.status(400).json({ error: buyer.error.errors[0]?.message || 'Buyer details are required.' });
+  }
+  const { buyerName, buyerEmail } = buyer.data;
+  const buyerPhone = formatPhone(buyer.data.buyerPhone);
+
   // Price comes from our catalog, never from the request — otherwise a buyer
   // edits the amount in the browser and pays $1 for a $2000 course.
   const course = findCourse(courseId);
@@ -123,19 +135,24 @@ studentCheckoutRouter.post('/payglocal/order', checkoutLimiter, requireStudentAu
       courseTitle: course.title,
       amount: course.amount,
       currency: course.currency,
+      buyerName,
+      buyerEmail,
+      buyerPhone,
       merchantTxnId,
     },
   });
 
   try {
-    const { firstName, lastName } = splitName(student.name);
+    const { firstName, lastName } = splitName(buyerName);
     const { redirectUrl, gid } = await initiatePayCollect({
       merchantTxnId,
       amount: course.amount,
       currency: course.currency,
       firstName,
       lastName,
-      email: student.email,
+      email: buyerEmail,
+      phone: normalisePhone(buyerPhone).digits,
+      phoneCountryCode: normalisePhone(buyerPhone).countryCode,
     });
 
     await prisma.studentPurchase.update({ where: { id: purchase.id }, data: { gatewayRef: gid } });

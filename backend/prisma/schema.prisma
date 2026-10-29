@@ -1441,15 +1441,23 @@ model StudentOtp {
 // One row per checkout attempt. `courseTitle` and `amount` are snapshotted so
 // later edits to the course catalog cannot rewrite what a student was charged.
 model StudentPurchase {
-  id            String    @id @default(cuid())
-  studentId     String
-  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  courseId      Int // matches the id in the generated course catalog
-  courseTitle   String
-  amount        Int // minor units (cents) — never a float
-  currency      String    @default("USD")
-  status        String    @default("PENDING") // PENDING | PAID | FAILED | CANCELLED
-  gateway       String    @default("payglocal")
+  id          String  @id @default(cuid())
+  studentId   String
+  student     Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId    Int // matches the id in the generated course catalog
+  courseTitle String
+  amount      Int // minor units (cents) — never a float
+  currency    String  @default("USD")
+  status      String  @default("PENDING") // PENDING | PAID | FAILED | CANCELLED
+  gateway     String  @default("payglocal")
+
+  // Captured at checkout and snapshotted here: the account a purchase is made
+  // from is not reliably who paid, and support needs to reach the actual buyer
+  // from the payment record alone.
+  buyerName  String
+  buyerEmail String
+  buyerPhone String
+
   merchantTxnId String    @unique // our idempotency key, generated server-side
   gatewayRef    String? // PayGlocal gid
   paidAt        DateTime?
@@ -1458,4 +1466,5 @@ model StudentPurchase {
 
   @@index([studentId, createdAt]) // a student's purchase history
   @@index([status]) // reconciliation sweeps over stuck PENDING rows
+  @@index([buyerEmail]) // support looking a payment up from the buyer's email
 }

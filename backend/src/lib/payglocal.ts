@@ -73,6 +73,8 @@ export async function initiatePayCollect(params: {
   firstName: string;
   lastName: string;
   email: string;
+  phone?: string;
+  phoneCountryCode?: string | null;
 }): Promise<InitiateResult> {
   const c = await keys();
 
@@ -89,6 +91,11 @@ export async function initiatePayCollect(params: {
         lastName: params.lastName,
         emailId: params.email,
         addressCountry: 'IN',
+        // Sent so the buyer is identifiable in PayGlocal's own dashboard, not
+        // only in ours.
+        ...(params.phone
+          ? { callingCode: params.phoneCountryCode || '91', phoneNumber: params.phone }
+          : {}),
       },
     },
     merchantCallbackURL: c.callbackUrl,
