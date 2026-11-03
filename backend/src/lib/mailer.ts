@@ -241,6 +241,9 @@ export interface SendEmailArgs {
   skipVaibhavCc?: boolean;
   /** When set, use this as the HTML body verbatim instead of auto-wrapping `body` in <pre>. */
   htmlBody?: string;
+  /** Internal: set by the outbox worker so a failed retry is not re-parked,
+   *  which would grow the queue instead of draining it. */
+  _noPark?: boolean;
 }
 
 export interface SendEmailResult {
@@ -325,6 +328,12 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
           details: `Subject: ${args.subject} | To: ${Array.isArray(args.to) ? args.to.join(', ') : args.to} | Error: ${(smtpErr as any)?.message}`,
         }});
       } catch { /* audit failure is non-fatal */ }
+      // Park it so the notification survives the outage and is retried, rather
+      // than being dropped with only an audit row to show for it.
+      if (!args._noPark) {
+        const { parkEmail } = await import('./emailOutbox');
+        await parkEmail(args, smtpErr);
+      }
       throw smtpErr;
     }
   }
@@ -371,8 +380,19 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     ];
   }
 
-  const info = await tx.sendMail(mailOpts);
-  return { id: info.messageId, provider };
+  try {
+    const info = await tx.sendMail(mailOpts);
+    return { id: info.messageId, provider };
+  } catch (sendErr) {
+    // A chosen transport can still reject at send time (expired App Password
+    // returns 535 here, not when the transport is built). System notifications
+    // are parked; user-initiated mail keeps throwing so the UI can prompt.
+    if (provider === 'smtp-system' && !args._noPark && !args.attachments?.length && !args.icsAttachment) {
+      const { parkEmail } = await import('./emailOutbox');
+      await parkEmail(args, sendErr);
+    }
+    throw sendErr;
+  }
 }
 
 function escapeHtml(s: string) {

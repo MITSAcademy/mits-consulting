@@ -96,6 +96,7 @@ import { brainNotesRouter } from './routes/brainNotes';
 import { demosRouter } from './routes/demos';
 import { marketingCampaignsRouter } from './routes/marketingCampaigns';
 import { prisma } from './lib/prisma';
+import { drainOutbox, outboxHealth } from './lib/emailOutbox';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -139,7 +140,10 @@ app.use('/api', apiLimiter);
 app.get('/api/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true, db: true, ts: Date.now() });
+    // Surface the mail backlog here: a growing pending count or any failed row
+    // means notifications are not reaching anyone.
+    const mail = await outboxHealth().catch(() => null);
+    res.json({ ok: true, db: true, mail, ts: Date.now() });
   } catch (err: any) {
     res.status(503).json({ ok: false, db: false, error: err?.message ?? 'DB unreachable' });
   }
@@ -637,4 +641,19 @@ app.listen(PORT, () => {
     const m = process.memoryUsage();
     console.log(`[mem] rss=${Math.round(m.rss/1024/1024)}MB heap=${Math.round(m.heapUsed/1024/1024)}/${Math.round(m.heapTotal/1024/1024)}MB`);
   }, 5 * 60 * 1000);
+
+  // Retry parked notifications. Runs every minute: the backoff lives in the
+  // rows' nextAttempt, so a frequent tick is cheap and keeps latency low.
+  const drain = async () => {
+    try {
+      const r = await drainOutbox();
+      if (r.sent || r.failed) {
+        console.log(`[outbox] sent=${r.sent} failed=${r.failed} retrying=${r.retrying}`);
+      }
+    } catch (e) {
+      console.error('[outbox] drain failed:', (e as any)?.message);
+    }
+  };
+  drain(); // catch up on anything parked while the process was down
+  setInterval(drain, 60 * 1000);
 });

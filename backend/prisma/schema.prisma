@@ -1468,3 +1468,37 @@ model StudentPurchase {
   @@index([status]) // reconciliation sweeps over stuck PENDING rows
   @@index([buyerEmail]) // support looking a payment up from the buyer's email
 }
+
+// Durable outbox for system notifications. A notification that cannot be
+// delivered right now is parked here and retried, so an enquiry or purchase
+// alert is never lost to a dead mail provider — the previous behaviour wrote
+// one audit row and dropped the mail.
+model EmailOutbox {
+  id        String   @id @default(cuid())
+  to        String
+  cc        String?
+  bcc       String?
+  subject   String
+  body      String
+  htmlBody  String?
+  replyTo   String?
+
+  // 'skipVaibhavCc' and friends are rebuilt from this on retry. Attachments are
+  // deliberately not persisted: every caller that parks mail here sends plain
+  // notifications, and buffering binaries in Postgres would bloat the table.
+  skipVaibhavCc Boolean @default(false)
+
+  // SENDING is a claim held by one worker for the duration of a send, so two
+  // workers cannot deliver the same mail twice; it reverts to PENDING if the
+  // process dies mid-send.
+  status      String    @default("PENDING") // PENDING | SENDING | SENT | FAILED
+  attempts    Int       @default(0)
+  lastError   String?
+  nextAttempt DateTime  @default(now())
+  sentAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, nextAttempt]) // the retry worker's only query
+  @@index([createdAt])
+}
