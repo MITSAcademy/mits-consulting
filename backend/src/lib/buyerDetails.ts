@@ -39,6 +39,22 @@ export function normalisePhone(raw: string): { countryCode: string | null; digit
     : { countryCode: null, digits };
 }
 
+/**
+ * Billing country (ISO 3166 alpha-2) for a dial code, for the gateway's
+ * billingData. +1 is shared by the US and Canada; US is a far closer match for
+ * card issuers' address checks than the fixed India value it replaces.
+ */
+const COUNTRY_BY_DIAL: Record<string, string> = {
+  '1': 'US', '44': 'GB', '91': 'IN', '61': 'AU', '64': 'NZ', '65': 'SG', '971': 'AE', '966': 'SA',
+  '974': 'QA', '965': 'KW', '968': 'OM', '973': 'BH', '353': 'IE', '49': 'DE', '33': 'FR',
+  '31': 'NL', '27': 'ZA', '234': 'NG', '254': 'KE', '60': 'MY', '63': 'PH', '92': 'PK',
+  '880': 'BD', '94': 'LK', '977': 'NP',
+};
+
+export function billingCountryForDial(countryCode: string | null): string | null {
+  return countryCode ? COUNTRY_BY_DIAL[countryCode] ?? null : null;
+}
+
 export function formatPhone(raw: string): string {
   const { countryCode, digits } = normalisePhone(raw);
   return countryCode ? `+${countryCode} ${digits}` : digits;

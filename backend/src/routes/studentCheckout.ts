@@ -3,9 +3,9 @@ import rateLimit from 'express-rate-limit';
 import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { requireStudentAuth, StudentRequest } from '../lib/studentAuth';
-import { findCourse } from '../lib/courseCatalog';
+import { findCourse, isTestPrice, testPricesAllowed } from '../lib/courseCatalog';
 import { sendPurchaseNotification } from '../lib/purchaseEmail';
-import { buyerDetailsSchema, formatPhone, normalisePhone } from '../lib/buyerDetails';
+import { billingCountryForDial, buyerDetailsSchema, formatPhone, normalisePhone } from '../lib/buyerDetails';
 import {
   payglocalEnabled,
   initiatePayCollect,
@@ -125,6 +125,32 @@ studentCheckoutRouter.post('/payglocal/order', checkoutLimiter, requireStudentAu
   const course = findCourse(courseId);
   if (!course) return res.status(404).json({ error: 'Course not found.' });
 
+  // A sub-$5 amount is a leftover test price. Never charge a real buyer that.
+  if (isTestPrice(course) && !testPricesAllowed()) {
+    console.error(`[payglocal] refused order for course ${course.id}: test price ${course.amount} ${course.currency}`);
+    return res.status(409).json({
+      error: 'This course cannot be purchased online right now. Please contact us and we will help you enroll.',
+    });
+  }
+
+  // The website sends the amount it showed the buyer. If the two catalogs have
+  // drifted apart, stop here rather than charge a different amount on the
+  // gateway's page than the one on ours.
+  if (req.body?.expectedAmount != null) {
+    const expected = Number(req.body.expectedAmount);
+    const expectedCurrency = req.body?.expectedCurrency
+      ? String(req.body.expectedCurrency).toUpperCase()
+      : course.currency;
+    if (expected !== course.amount || expectedCurrency !== course.currency) {
+      console.error(
+        `[payglocal] price mismatch for course ${course.id}: page showed ${req.body.expectedAmount} ${expectedCurrency}, catalog has ${course.amount} ${course.currency}`,
+      );
+      return res.status(409).json({
+        error: 'The price of this course has changed. Please refresh the page to see the current fee before paying.',
+      });
+    }
+  }
+
   const student = req.student!;
   const merchantTxnId = newMerchantTxnId();
 
@@ -144,6 +170,7 @@ studentCheckoutRouter.post('/payglocal/order', checkoutLimiter, requireStudentAu
 
   try {
     const { firstName, lastName } = splitName(buyerName);
+    const phone = normalisePhone(buyerPhone);
     const { redirectUrl, gid } = await initiatePayCollect({
       merchantTxnId,
       amount: course.amount,
@@ -151,8 +178,9 @@ studentCheckoutRouter.post('/payglocal/order', checkoutLimiter, requireStudentAu
       firstName,
       lastName,
       email: buyerEmail,
-      phone: normalisePhone(buyerPhone).digits,
-      phoneCountryCode: normalisePhone(buyerPhone).countryCode,
+      phone: phone.digits,
+      phoneCountryCode: phone.countryCode,
+      billingCountry: billingCountryForDial(phone.countryCode),
     });
 
     await prisma.studentPurchase.update({ where: { id: purchase.id }, data: { gatewayRef: gid } });

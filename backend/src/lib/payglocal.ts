@@ -75,6 +75,8 @@ export async function initiatePayCollect(params: {
   email: string;
   phone?: string;
   phoneCountryCode?: string | null;
+  /** ISO alpha-2. Falls back to IN, the previous fixed value. */
+  billingCountry?: string | null;
 }): Promise<InitiateResult> {
   const c = await keys();
 
@@ -90,7 +92,9 @@ export async function initiatePayCollect(params: {
         firstName: params.firstName,
         lastName: params.lastName,
         emailId: params.email,
-        addressCountry: 'IN',
+        // The buyer's own country: a US card sent with an Indian billing
+        // country is more likely to be refused by the issuer's risk checks.
+        addressCountry: params.billingCountry || 'IN',
         // Sent so the buyer is identifiable in PayGlocal's own dashboard, not
         // only in ours.
         ...(params.phone
