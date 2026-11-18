@@ -97,6 +97,7 @@ import { demosRouter } from './routes/demos';
 import { marketingCampaignsRouter } from './routes/marketingCampaigns';
 import { prisma } from './lib/prisma';
 import { drainOutbox, outboxHealth } from './lib/emailOutbox';
+import { testPricedCourses } from './lib/courseCatalog';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -635,6 +636,11 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 app.listen(PORT, () => {
   console.log(`[mits-backend] listening on :${PORT}`);
+  // Checkout refuses these, but say so at boot so a test price is noticed
+  // before a buyer meets the "cannot be purchased" message.
+  for (const c of testPricedCourses()) {
+    console.error(`[checkout] course ${c.id} "${c.title}" is priced at ${c.amount} minor units (test price) and cannot be bought`);
+  }
   initScheduler();
   // Log memory usage every 5 minutes so Render logs show what's growing
   setInterval(() => {

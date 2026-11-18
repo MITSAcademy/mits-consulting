@@ -25,6 +25,30 @@ export function findCourse(id: number): CatalogCourse | undefined {
   return BY_ID.get(id);
 }
 
+/**
+ * The smallest amount checkout will charge (minor units, so $5.00).
+ *
+ * Anything lower is a leftover test price, not a course fee: on 8 Oct course
+ * 1086 was set to $1 to put a live payment through, was never reset, and a
+ * real buyer was charged $1 for a course the website showed at $450. The order
+ * endpoint refuses these unless PAYGLOCAL_ALLOW_TEST_PRICES=true is set for a
+ * deliberate test, so a forgotten test price can no longer reach a customer.
+ */
+export const MIN_CHARGE_MINOR = 500;
+
+export function isTestPrice(course: CatalogCourse): boolean {
+  return course.amount < MIN_CHARGE_MINOR;
+}
+
+export function testPricesAllowed(): boolean {
+  return (process.env.PAYGLOCAL_ALLOW_TEST_PRICES || '').trim() === 'true';
+}
+
+/** Every course priced below the floor, for the startup warning and tests. */
+export function testPricedCourses(): CatalogCourse[] {
+  return [...BY_ID.values()].filter(isTestPrice);
+}
+
 export function catalogSize(): number {
   return BY_ID.size;
 }
