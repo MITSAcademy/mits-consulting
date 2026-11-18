@@ -13,6 +13,7 @@ import {
 } from '../lib/studentAuth';
 import { issueOtp, verifyOtp } from '../lib/studentOtp';
 import { sendStudentOtpEmail } from '../lib/studentOtpEmail';
+import { reconcilePendingPurchases } from './studentCheckout';
 
 export const studentAuthRouter = Router();
 
@@ -290,6 +291,13 @@ studentAuthRouter.post('/me/password', authLimiter, requireStudentAuth, async (r
 // GET /api/student/me/purchases — the signed-in student's own courses.
 // Always scoped to the token's student; there is no id parameter to tamper with.
 studentAuthRouter.get('/me/purchases', requireStudentAuth, async (req: StudentRequest, res) => {
+  // A payment whose callback never arrived is settled here, when the student
+  // looks, rather than staying "pending" until someone notices.
+  try {
+    await reconcilePendingPurchases({ studentId: req.student!.id, maxAgeMs: 7 * 24 * 60 * 60 * 1000, limit: 5 });
+  } catch (e) {
+    console.error('[student] purchase reconcile failed:', e);
+  }
   const purchases = await prisma.studentPurchase.findMany({
     where: { studentId: req.student!.id },
     orderBy: { createdAt: 'desc' },
