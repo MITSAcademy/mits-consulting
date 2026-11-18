@@ -98,6 +98,8 @@ import { marketingCampaignsRouter } from './routes/marketingCampaigns';
 import { prisma } from './lib/prisma';
 import { drainOutbox, outboxHealth } from './lib/emailOutbox';
 import { testPricedCourses } from './lib/courseCatalog';
+import { reconcilePendingPurchases } from './routes/studentCheckout';
+import { payglocalEnabled } from './lib/payglocal';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
@@ -647,6 +649,18 @@ app.listen(PORT, () => {
     const m = process.memoryUsage();
     console.log(`[mem] rss=${Math.round(m.rss/1024/1024)}MB heap=${Math.round(m.heapUsed/1024/1024)}/${Math.round(m.heapTotal/1024/1024)}MB`);
   }, 5 * 60 * 1000);
+
+  // Settle payments whose callback never reached us. Every 5 minutes over the
+  // last 3 days; once at boot over 45 days to pick up older strays.
+  if (payglocalEnabled()) {
+    const DAY = 24 * 60 * 60 * 1000;
+    const sweep = (maxAgeMs: number, limit: number) =>
+      reconcilePendingPurchases({ maxAgeMs, minAgeMs: 2 * 60 * 1000, limit }).catch((e) =>
+        console.error('[payglocal] reconcile sweep failed:', e),
+      );
+    setTimeout(() => sweep(45 * DAY, 100), 30 * 1000);
+    setInterval(() => sweep(3 * DAY, 25), 5 * 60 * 1000);
+  }
 
   // Retry parked notifications. Runs every minute: the backoff lives in the
   // rows' nextAttempt, so a frequent tick is cheap and keeps latency low.

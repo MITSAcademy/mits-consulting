@@ -150,17 +150,92 @@ export async function fetchStatus(gid: string): Promise<string | null> {
   }
 }
 
-/** Reads a transaction reference out of a callback/webhook body. Never trusted on its own. */
-export async function extractIds(rawBody: string): Promise<{ merchantTxnId: string | null; gid: string | null }> {
-  if (!rawBody?.trim()) return { merchantTxnId: null, gid: null };
-  try {
-    const c = await keys();
-    const json = JSON.parse(looksLikeJwe(rawBody) ? await decrypt(rawBody, c.privateKey) : rawBody);
-    return { merchantTxnId: deepString(json, 'merchantTxnId'), gid: deepString(json, 'gid') };
-  } catch (e) {
-    console.warn('[payglocal] could not parse callback body:', e);
-    return { merchantTxnId: null, gid: null };
+const TOKEN_FIELDS = ['x-gl-token', 'x-gl-token-external'];
+
+/**
+ * Turns one string into JSON, whatever wrapping PayGlocal used: plain JSON, a
+ * JWE encrypted for us, or a JWS whose middle segment is the base64url JSON
+ * outcome. The JWS signature is deliberately not what we rely on: the ids read
+ * here are only used to look the payment up, and its real outcome always comes
+ * from the status API.
+ */
+async function decodeToken(value: string, depth = 0): Promise<unknown> {
+  const s = value.trim();
+  if (!s || depth > 2) return null;
+  if (s.startsWith('{') || s.startsWith('[')) {
+    try { return JSON.parse(s); } catch { return null; }
   }
+  const parts = s.split('.');
+  if (parts.length === 5) {
+    try {
+      const c = await keys();
+      return await decodeToken(await decrypt(s, c.privateKey), depth + 1);
+    } catch {
+      return null;
+    }
+  }
+  if (parts.length === 3) {
+    try {
+      return await decodeToken(Buffer.from(parts[1], 'base64url').toString('utf8'), depth + 1);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Reads a transaction reference out of a callback/webhook body. Never trusted
+ * on its own.
+ *
+ * PayGlocal's browser callback is a form post with a single `x-gl-token` field
+ * holding a JWS. The first version of this only understood bare JSON or JWE, so
+ * it found no id in any real callback: every buyer, paid or not, was sent back
+ * to the website with an empty transaction id and shown an error, and the
+ * purchase stayed PENDING. All known shapes are handled here.
+ */
+export async function extractIds(rawBody: string): Promise<{ merchantTxnId: string | null; gid: string | null }> {
+  const body = rawBody?.trim();
+  if (!body) return { merchantTxnId: null, gid: null };
+
+  const candidates: string[] = [body];
+
+  // application/x-www-form-urlencoded: x-gl-token=<jws>
+  if (!body.startsWith('{') && body.includes('=')) {
+    try {
+      const form = new URLSearchParams(body);
+      for (const field of TOKEN_FIELDS) {
+        const v = form.get(field);
+        if (v) candidates.push(v);
+      }
+    } catch {
+      /* not a form body */
+    }
+  }
+
+  // JSON wrapping the token: {"x-gl-token":"<jws>"}
+  if (body.startsWith('{')) {
+    try {
+      const json = JSON.parse(body);
+      for (const field of TOKEN_FIELDS) {
+        const v = deepString(json, field);
+        if (v) candidates.push(v);
+      }
+    } catch {
+      /* handled by decodeToken below */
+    }
+  }
+
+  for (const candidate of candidates) {
+    const json = await decodeToken(candidate);
+    if (!json) continue;
+    const merchantTxnId = deepString(json, 'merchantTxnId');
+    const gid = deepString(json, 'gid');
+    if (merchantTxnId || gid) return { merchantTxnId, gid };
+  }
+
+  console.warn(`[payglocal] no transaction id in callback body (${body.length} chars, starts "${body.slice(0, 24)}")`);
+  return { merchantTxnId: null, gid: null };
 }
 
 export function isPaidStatus(status: string | null): boolean {
@@ -172,7 +247,9 @@ export function isPaidStatus(status: string | null): boolean {
 export function isFailedStatus(status: string | null): boolean {
   if (!status) return false;
   const s = status.toUpperCase();
-  return s.includes('FAIL') || s.includes('DECLINED') || s.includes('CANCEL');
+  // DECLINE, not DECLINED: the issuer outcome is ISSUER_DECLINE, which the
+  // longer word missed, leaving declined payments PENDING forever.
+  return ['FAIL', 'DECLINE', 'CANCEL', 'REJECT', 'ABANDON', 'TIMEOUT', 'EXPIRE', 'ERROR'].some((w) => s.includes(w));
 }
 
 export { verify as verifyJws };

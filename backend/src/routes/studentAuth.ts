@@ -13,6 +13,7 @@ import {
 } from '../lib/studentAuth';
 import { issueOtp, verifyOtp } from '../lib/studentOtp';
 import { sendStudentOtpEmail } from '../lib/studentOtpEmail';
+import { reconcilePendingPurchases } from './studentCheckout';
 
 export const studentAuthRouter = Router();
 
@@ -264,7 +265,13 @@ studentAuthRouter.get('/me', requireStudentAuth, async (req: StudentRequest, res
 // current password is only demanded when one already exists.
 studentAuthRouter.post('/me/password', authLimiter, requireStudentAuth, async (req: StudentRequest, res) => {
   const parsed = z
-    .object({ currentPassword: z.string().max(200).optional(), newPassword: passwordField })
+    .object({
+      currentPassword: z.string().max(200).optional(),
+      // An emailed login code proves the same thing as the current password,
+      // and is the only way back in for someone who has forgotten theirs.
+      otp: z.string().trim().length(6).optional(),
+      newPassword: passwordField,
+    })
     .safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.errors[0]?.message || 'Invalid password' });
@@ -273,7 +280,13 @@ studentAuthRouter.post('/me/password', authLimiter, requireStudentAuth, async (r
   const student = await prisma.student.findUnique({ where: { id: req.student!.id } });
   if (!student) return res.status(404).json({ error: 'Not found' });
 
-  if (student.passwordHash) {
+  // A code that is sent is always checked, even for an account with no
+  // password yet, so a wrong code is never silently accepted.
+  if (parsed.data.otp) {
+    if (!(await verifyOtp(student.id, 'login', parsed.data.otp))) {
+      return res.status(403).json({ error: 'Invalid or expired code' });
+    }
+  } else if (student.passwordHash) {
     const ok = parsed.data.currentPassword
       ? await verifyPassword(parsed.data.currentPassword, student.passwordHash)
       : false;
@@ -290,13 +303,21 @@ studentAuthRouter.post('/me/password', authLimiter, requireStudentAuth, async (r
 // GET /api/student/me/purchases — the signed-in student's own courses.
 // Always scoped to the token's student; there is no id parameter to tamper with.
 studentAuthRouter.get('/me/purchases', requireStudentAuth, async (req: StudentRequest, res) => {
+  // A payment whose callback never arrived is settled here, when the student
+  // looks, rather than staying "pending" until someone notices.
+  try {
+    await reconcilePendingPurchases({ studentId: req.student!.id, maxAgeMs: 7 * 24 * 60 * 60 * 1000, limit: 5 });
+  } catch (e) {
+    console.error('[student] purchase reconcile failed:', e);
+  }
   const purchases = await prisma.studentPurchase.findMany({
     where: { studentId: req.student!.id },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true, courseId: true, courseTitle: true, status: true,
       amount: true, currency: true, buyerName: true, buyerEmail: true,
-      buyerPhone: true, createdAt: true, paidAt: true,
+      buyerPhone: true, merchantTxnId: true, gatewayRef: true,
+      createdAt: true, paidAt: true,
     },
   });
   res.json({ purchases });

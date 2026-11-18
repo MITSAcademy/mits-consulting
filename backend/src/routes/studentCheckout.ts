@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { requireStudentAuth, StudentRequest } from '../lib/studentAuth';
 import { findCourse, isTestPrice, testPricesAllowed } from '../lib/courseCatalog';
-import { sendPurchaseNotification } from '../lib/purchaseEmail';
+import { sendPurchaseNotification, sendBuyerReceipt } from '../lib/purchaseEmail';
 import { billingCountryForDial, buyerDetailsSchema, formatPhone, normalisePhone } from '../lib/buyerDetails';
 import {
   payglocalEnabled,
@@ -50,7 +50,7 @@ function splitName(full: string): { firstName: string; lastName: string } {
  * Both the browser callback and the webhook funnel through here, so a forged
  * body can at most trigger a status lookup it cannot influence.
  */
-async function confirmAndSettle(merchantTxnId: string): Promise<void> {
+export async function confirmAndSettle(merchantTxnId: string): Promise<void> {
   const purchase = await prisma.studentPurchase.findUnique({ where: { merchantTxnId } });
   if (!purchase) {
     console.warn(`[payglocal] outcome for unknown merchantTxnId ${merchantTxnId}`);
@@ -79,6 +79,16 @@ async function confirmAndSettle(merchantTxnId: string): Promise<void> {
         select: { id: true, name: true, email: true, phone: true },
       });
       if (student) {
+        // The buyer gets their own confirmation: the website tells them one is
+        // on its way, and until now nothing was sent to them at all.
+        await sendBuyerReceipt({
+          buyerName: purchase.buyerName,
+          buyerEmail: purchase.buyerEmail,
+          courseTitle: purchase.courseTitle,
+          amount: purchase.amount,
+          currency: purchase.currency,
+          reference: purchase.gatewayRef || purchase.merchantTxnId,
+        });
         await sendPurchaseNotification({
           buyerName: purchase.buyerName,
           buyerEmail: purchase.buyerEmail,
@@ -104,11 +114,52 @@ async function confirmAndSettle(merchantTxnId: string): Promise<void> {
   }
 }
 
+/**
+ * Re-checks purchases that are still PENDING against PayGlocal.
+ *
+ * A callback can be lost (closed tab, dropped connection, a body we could not
+ * read), which used to leave a paid purchase PENDING with nobody told. This is
+ * the safety net: it runs when a student opens their payments, on a timer, and
+ * once at boot over a longer window to pick up older strays.
+ */
+export async function reconcilePendingPurchases(opts: {
+  studentId?: string;
+  maxAgeMs: number;
+  minAgeMs?: number;
+  limit: number;
+}): Promise<number> {
+  const now = Date.now();
+  const pending = await prisma.studentPurchase.findMany({
+    where: {
+      status: 'PENDING',
+      gatewayRef: { not: null },
+      ...(opts.studentId ? { studentId: opts.studentId } : {}),
+      createdAt: { gte: new Date(now - opts.maxAgeMs), lte: new Date(now - (opts.minAgeMs ?? 0)) },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: opts.limit,
+    select: { merchantTxnId: true },
+  });
+  for (const p of pending) {
+    try {
+      await confirmAndSettle(p.merchantTxnId);
+    } catch (e) {
+      console.error(`[payglocal] reconcile failed for ${p.merchantTxnId}:`, e);
+    }
+  }
+  return pending.length;
+}
+
 // POST /api/student/checkout/payglocal/order
 studentCheckoutRouter.post('/payglocal/order', checkoutLimiter, requireStudentAuth, async (req: StudentRequest, res) => {
   if (!payglocalEnabled()) return res.status(503).json({ error: 'Payments are not enabled.' });
 
-  const courseId = Number(req.body?.courseId);
+  // Only a number or a numeric string: Number([1086]) is also 1086.
+  const rawCourseId = req.body?.courseId;
+  const courseId =
+    typeof rawCourseId === 'number' || (typeof rawCourseId === 'string' && /^\d+$/.test(rawCourseId.trim()))
+      ? Number(rawCourseId)
+      : NaN;
   if (!Number.isInteger(courseId)) return res.status(400).json({ error: 'Course id is required.' });
 
   // Re-validated here, not just in the browser: this endpoint is reachable
@@ -272,7 +323,9 @@ studentCheckoutRouter.post(
       console.error('[payglocal] callback handling failed:', e);
     }
     const base = process.env.CHECKOUT_RETURN_URL || 'https://mitsedge.com/checkout/success';
-    res.redirect(302, `${base}${base.includes('?') ? '&' : '?'}txn=${txn ?? ''}`);
+    // With no readable id, send the buyer back without one: the website then
+    // falls back to the order it started, instead of showing an error.
+    res.redirect(302, txn ? `${base}${base.includes('?') ? '&' : '?'}txn=${encodeURIComponent(txn)}` : base);
   },
 );
 

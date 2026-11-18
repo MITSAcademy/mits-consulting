@@ -72,6 +72,65 @@ function buildHtml(p: PurchaseNotification): string {
 </body></html>`;
 }
 
+export interface BuyerReceipt {
+  buyerName: string;
+  buyerEmail: string;
+  courseTitle: string;
+  amount: number; // minor units
+  currency: string;
+  reference: string;
+}
+
+/** Confirmation to the person who paid. Never throws: mail must not undo a payment. */
+export async function sendBuyerReceipt(r: BuyerReceipt): Promise<void> {
+  try {
+    const samita = await prisma.user.findUnique({
+      where: { id: 'u-samita' },
+      select: { id: true, gmailAddress: true, sendAsAddress: true, smtpAppPassword: true },
+    });
+    const fromUser = samita?.smtpAppPassword && samita.gmailAddress
+      ? safeBuildFromUser({
+          id: samita.id,
+          name: 'MITS Edge',
+          gmailAddress: samita.gmailAddress,
+          smtpAppPassword: samita.smtpAppPassword,
+          sendAsAddress: samita.sendAsAddress,
+        })
+      : undefined;
+
+    const amount = formatAmount(r.amount, r.currency);
+    const args = {
+      to: r.buyerEmail,
+      subject: `Payment received: ${r.courseTitle}`,
+      body: `Hi ${r.buyerName},\n\nWe have received your payment of ${amount} for ${r.courseTitle}.\n\nReference: ${r.reference}\n\nOur team will contact you shortly to place you in the next available batch. You can see this payment any time at https://mitsedge.com/payments.\n\nThank you,\nMITS Edge`,
+      htmlBody: `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#f5f5f5;font-family:Arial,'Helvetica Neue',sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;width:100%;background:#ffffff;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">
+<tr><td style="background:#0f5132;padding:20px 32px;color:#ffffff;font-size:17px;font-weight:700;">Payment received</td></tr>
+<tr><td style="padding:28px 32px;color:#1a1a1a;font-size:14px;line-height:1.6;">
+<p style="margin:0 0 14px;">Hi ${escapeHtml(r.buyerName)},</p>
+<p style="margin:0 0 14px;">We have received your payment of <strong>${escapeHtml(amount)}</strong> for <strong>${escapeHtml(r.courseTitle)}</strong>.</p>
+<p style="margin:0 0 14px;color:#555;">Reference: ${escapeHtml(r.reference)}</p>
+<p style="margin:0 0 14px;">Our team will contact you shortly to place you in the next available batch. You can see this payment any time on your <a href="https://mitsedge.com/payments" style="color:#0f5132;">Payments page</a>.</p>
+<p style="margin:0;">Thank you,<br/>MITS Edge</p>
+</td></tr></table></td></tr></table></body></html>`,
+      skipVaibhavCc: true,
+    };
+
+    if (fromUser) {
+      try {
+        await sendEmail({ ...args, fromUser });
+        return;
+      } catch (e) {
+        console.error('[purchase-email] buyer receipt via Gmail failed, falling back:', e);
+      }
+    }
+    await sendEmail(args);
+  } catch (e) {
+    console.error('[purchase-email] Failed to send buyer receipt:', e);
+  }
+}
+
 export async function sendPurchaseNotification(p: PurchaseNotification): Promise<void> {
   try {
     const samita = await prisma.user.findUnique({
