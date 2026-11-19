@@ -80,19 +80,33 @@ export const useAuth = create<AuthState>()(
       exitImpersonation: async () => {
         const real = get().realUser;
         const token = get().realToken;
-        try {
-          if (token) {
-            // Normal path: restore using the stored founder token
-            await api.post('/auth/exit-impersonation', {}, {
+        let restored: User | null = null;
+        if (token) {
+          // Password login keeps the founder token: restore with it.
+          try {
+            const r = await api.post('/auth/exit-impersonation', {}, {
               headers: { Authorization: `Bearer ${token}` },
             });
-          } else if (real?.id) {
-            // Fallback: token was lost (page reload) — server re-issues from founderId
-            await api.post('/auth/exit-impersonation', { founderId: real.id });
-          }
-        } catch {}
-        set({ user: real || null, realUser: null, realToken: token || null });
-        if (!real) window.location.href = '/login';
+            restored = r.data.user;
+          } catch {}
+        }
+        if (!restored) {
+          // Google sign-in (no stored token) or an expired token: the server
+          // restores the founder from the signed "view as" session cookie.
+          try {
+            const r = await api.post('/auth/exit-impersonation');
+            restored = r.data.user;
+          } catch {}
+        }
+        if (!restored) {
+          // Could not restore the founder: the cookie still belongs to the viewed
+          // user, so showing the founder UI would be wrong. Start a clean login.
+          try { await api.post('/auth/logout'); } catch {}
+          set({ user: null, realUser: null, realToken: null });
+          window.location.href = '/login';
+          return;
+        }
+        set({ user: restored, realUser: null, realToken: token || null });
       },
     }),
     {
