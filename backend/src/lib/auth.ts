@@ -68,6 +68,22 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   }
 }
 
+export interface TokenClaims {
+  id: string;
+  /** Set only on "view as" tokens: the founder who started the impersonation. */
+  imp?: string;
+}
+
+/** The session token from the auth cookie, if any. */
+export function readSessionCookie(req: Request): string | undefined {
+  return req.cookies?.[COOKIE_NAME];
+}
+
+/** Verify a token and return its claims; throws if it is invalid or expired. */
+export function decodeToken(token: string): TokenClaims {
+  return jwt.verify(token, JWT_SECRET) as TokenClaims;
+}
+
 export async function verifyAndGetUser(token: string) {
   const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
   return prisma.user.findUnique({ where: { id: decoded.id } });
