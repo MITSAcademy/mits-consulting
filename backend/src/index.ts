@@ -55,6 +55,8 @@ import { enquiriesRouter } from './routes/enquiries';
 import { studentAuthRouter } from './routes/studentAuth';
 import { studentCheckoutRouter } from './routes/studentCheckout';
 import { studentsRouter } from './routes/students';
+import { customPayRouter, customPaymentsRouter } from './routes/customPayments';
+import { reconcilePendingCustomPayments } from './lib/customPayments';
 import { resumeSanitiseRouter } from './routes/resumeSanitise';
 import { banksRouter } from './routes/banks';
 import { auditRouter } from './routes/audit';
@@ -180,6 +182,8 @@ app.use('/api/enquiries', enquiriesRouter);
 app.use('/api/student', studentAuthRouter); // public — mitsedge.com students
 app.use('/api/student/checkout', studentCheckoutRouter);
 app.use('/api/students', studentsRouter); // staff-facing
+app.use('/api/pay', customPayRouter); // public — mitsedge.com/pay, custom-amount payments
+app.use('/api/custom-payments', customPaymentsRouter); // staff-facing
 app.use('/api/banks', banksRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/reports', reportsRouter);
@@ -655,9 +659,9 @@ app.listen(PORT, () => {
   if (payglocalEnabled()) {
     const DAY = 24 * 60 * 60 * 1000;
     const sweep = (maxAgeMs: number, limit: number) =>
-      reconcilePendingPurchases({ maxAgeMs, minAgeMs: 2 * 60 * 1000, limit }).catch((e) =>
-        console.error('[payglocal] reconcile sweep failed:', e),
-      );
+      reconcilePendingPurchases({ maxAgeMs, minAgeMs: 2 * 60 * 1000, limit })
+        .then(() => reconcilePendingCustomPayments({ maxAgeMs, minAgeMs: 2 * 60 * 1000, limit }))
+        .catch((e) => console.error('[payglocal] reconcile sweep failed:', e));
     setTimeout(() => sweep(45 * DAY, 100), 30 * 1000);
     setInterval(() => sweep(3 * DAY, 25), 5 * 60 * 1000);
   }
