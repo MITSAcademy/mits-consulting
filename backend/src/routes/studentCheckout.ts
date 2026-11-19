@@ -6,6 +6,7 @@ import { requireStudentAuth, StudentRequest } from '../lib/studentAuth';
 import { findCourse, isTestPrice, testPricesAllowed } from '../lib/courseCatalog';
 import { sendPurchaseNotification, sendBuyerReceipt } from '../lib/purchaseEmail';
 import { billingCountryForDial, buyerDetailsSchema, formatPhone, normalisePhone } from '../lib/buyerDetails';
+import { confirmAndSettleCustom, isCustomTxnId } from '../lib/customPayments';
 import {
   payglocalEnabled,
   initiatePayCollect,
@@ -51,6 +52,9 @@ function splitName(full: string): { firstName: string; lastName: string } {
  * body can at most trigger a status lookup it cannot influence.
  */
 export async function confirmAndSettle(merchantTxnId: string): Promise<void> {
+  // Custom-amount payments share this callback but are a separate record that
+  // never becomes a course purchase.
+  if (isCustomTxnId(merchantTxnId)) return confirmAndSettleCustom(merchantTxnId);
   const purchase = await prisma.studentPurchase.findUnique({ where: { merchantTxnId } });
   if (!purchase) {
     console.warn(`[payglocal] outcome for unknown merchantTxnId ${merchantTxnId}`);
@@ -299,6 +303,10 @@ async function handleGatewayPost(rawBody: string): Promise<string | null> {
   if (!txnId && gid) {
     const byGid = await prisma.studentPurchase.findFirst({ where: { gatewayRef: gid } });
     txnId = byGid?.merchantTxnId ?? null;
+    if (!txnId) {
+      const customByGid = await prisma.customPayment.findFirst({ where: { gatewayRef: gid } });
+      txnId = customByGid?.merchantTxnId ?? null;
+    }
   }
   if (!txnId) {
     console.warn('[payglocal] callback with no recognizable transaction id');
@@ -321,6 +329,11 @@ studentCheckoutRouter.post(
       txn = await handleGatewayPost(bodyToString(req.body));
     } catch (e) {
       console.error('[payglocal] callback handling failed:', e);
+    }
+    // A custom payment returns to its own result page, not the course one.
+    if (isCustomTxnId(txn)) {
+      const payBase = process.env.CUSTOM_PAY_RETURN_URL || 'https://mitsedge.com/pay/result';
+      return res.redirect(302, `${payBase}${payBase.includes('?') ? '&' : '?'}ref=${encodeURIComponent(txn!)}`);
     }
     const base = process.env.CHECKOUT_RETURN_URL || 'https://mitsedge.com/checkout/success';
     // With no readable id, send the buyer back without one: the website then
